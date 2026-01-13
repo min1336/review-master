@@ -1,0 +1,36 @@
+# Review Summary AI - Dependencies
+# Generated from codebase analysis on 2026-01-13
+#
+# Install with: pip install -r requirements.txt
+
+# ============================================================================
+# Core Data Processing
+# ============================================================================
+pandas==2.3.3
+numpy==2.4.1
+openpyxl==3.1.5          # Excel file reading (.xlsx)
+
+# ============================================================================
+# Machine Learning & NLP
+# ============================================================================
+scikit-learn==1.8.0      # TF-IDF vectorization for keyword extraction
+
+# ============================================================================
+# Visualization
+# ============================================================================
+matplotlib==3.10.8
+seaborn==0.13.2
+
+# ============================================================================
+# AI/LLM Integration
+# ============================================================================
+openai>=1.0.0,<3.0.0     # GPT-4o-mini API for summarization
+tenacity==9.1.2          # Retry logic for API calls
+
+# ============================================================================
+# Development Dependencies (optional)
+# ============================================================================
+# pytest>=7.0.0          # Testing framework
+# pytest-cov>=4.0.0      # Coverage reporting
+# flake8>=6.0.0          # Code linting
+# mypy>=1.0.0            # Type checking
