@@ -5,6 +5,7 @@
 
 import pandas as pd
 import os
+import sys
 import time
 from typing import List, Dict
 from datetime import datetime
@@ -12,6 +13,11 @@ from collections import Counter
 import warnings
 
 warnings.filterwarnings('ignore')
+
+# src 모듈 경로 추가
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.llm.prompts import PromptTemplates
+from src.llm.validator import validate_summary
 
 
 # ============================================================================
@@ -665,6 +671,13 @@ class ReviewPipeline:
             keywords = row['keywords']
             review_count = row['review_count']
 
+            # 지점명 가져오기 (reviews_df에서)
+            branch_name = None
+            if '지점명' in reviews_df.columns:
+                branch_rows = reviews_df[reviews_df['지점번호'] == branch_id]['지점명']
+                if not branch_rows.empty:
+                    branch_name = str(branch_rows.iloc[0])
+
             # TOP 3 키워드
             top3_rows.append({
                 '지점번호': branch_id,
@@ -678,8 +691,8 @@ class ReviewPipeline:
                 reviews_df, branch_id, keywords[:10]
             )
 
-            # AI 요약 생성 (키워드 + 대표 리뷰)
-            summary = self._generate_summary(keywords, review_count, representative_reviews)
+            # AI 요약 생성 (v2: 지점명 전달)
+            summary = self._generate_summary(keywords, review_count, representative_reviews, branch_name)
             summary_rows.append({
                 '지점번호': branch_id,
                 '리뷰수': review_count,
@@ -742,39 +755,38 @@ class ReviewPipeline:
         # 리뷰 길이 제한 (각 100자)
         return [str(r)[:100] for r in all_reviews if r]
 
-    def _generate_summary(self, keywords: List[str], review_count: int, representative_reviews: List[str]) -> str:
-        """LLM으로 요약 생성 (키워드 + 대표 리뷰 기반)"""
+    def _generate_summary(
+        self,
+        keywords: List[str],
+        review_count: int,
+        representative_reviews: List[str],
+        branch_name: str = None
+    ) -> str:
+        """
+        LLM으로 요약 생성 (v2: PromptTemplates 사용 + 검증)
+
+        Args:
+            keywords: 키워드 리스트
+            review_count: 리뷰 수
+            representative_reviews: 대표 리뷰 리스트
+            branch_name: 지점명 (유형 판별용)
+        """
         if not keywords:
-            return f"{', '.join(keywords[:3])} 관련 긍정적인 리뷰가 많습니다."
+            return PromptTemplates.get_default_summary(keywords)
 
-        # 대표 리뷰 포맷팅
-        reviews_text = ""
-        if representative_reviews:
-            reviews_text = "\n\n[대표 리뷰]\n"
-            for idx, review in enumerate(representative_reviews, 1):
-                reviews_text += f"{idx}. \"{review}\"\n"
-
-        system_prompt = """당신은 20년차 베테랑 프리미엄 렌터카 카모아 마케터입니다.
-렌터카 이용 리뷰를 분석하여 서비스의 장점을 극대화한 신뢰감 있는 요약 문구를 작성합니다.
-
-가이드라인:
-1. 핵심 키워드를 자연스럽게 녹여내세요.
-2. 고객에게 확실한 정보 전달을 한다는 뉘앙스를 담아 전문적인 어조를 사용하세요.
-3. 분량은 2~3줄로 명확하게 작성하세요.
-4. 마크다운, 이모지, 특수문자 없이 순수 텍스트만 작성하세요."""
-
-        user_prompt = f"""다음 데이터를 바탕으로 렌터카 지점 요약을 작성해주세요.
-
-- 분석 리뷰 수: {review_count}개
-- 핵심 키워드: {', '.join(keywords[:5])}
-- 대표 리뷰:{reviews_text}
-
-예시:
-가격 대비 가성비가 뛰어난 리조트로, 가족 단위 여행객에게 적합한 환경을 제공합니다. 청결 상태가 양호하며 친절한 서비스가 돋보입니다. 전반적으로 넓고 편안한 공간이 마련되어 있으며, 주변 경관이 아름다워 만족도가 높습니다."""
+        # 프롬프트 생성 (v2: 구조화 + 지점 유형별)
+        system_prompt, user_prompt = PromptTemplates.build_summary_prompt(
+            keywords=keywords,
+            review_count=review_count,
+            representative_reviews=representative_reviews,
+            branch_name=branch_name
+        )
 
         try:
             # Rate Limit 대기
             self.rate_limiter.wait_if_needed()
+
+            result = None
 
             # Gemini 사용
             if self.gemini_model:
@@ -791,16 +803,21 @@ class ReviewPipeline:
                         {"role": "user", "content": user_prompt}
                     ],
                     max_tokens=300,
-                    temperature=0.7
+                    temperature=0.5  # 일관성 향상을 위해 낮춤
                 )
                 result = response.choices[0].message.content.strip()
 
             else:
-                return f"{', '.join(keywords[:3])} 관련 긍정적인 리뷰가 많습니다."
+                return PromptTemplates.get_default_summary(keywords)
 
             # 문장이 잘렸으면 마침표 추가
             if result and not result.endswith(('.', '!', '?', '다', '요', '"')):
                 result += '.'
+
+            # 검증
+            is_valid, errors = validate_summary(result)
+            if not is_valid:
+                print(f"   ⚠️ [{branch_name or '지점'}] 검증 경고: {'; '.join(errors)}")
 
             return result
 
@@ -822,7 +839,7 @@ class ReviewPipeline:
                                 {"role": "user", "content": user_prompt}
                             ],
                             max_tokens=300,
-                            temperature=0.7
+                            temperature=0.5
                         )
                         result = response.choices[0].message.content.strip()
                     if result and not result.endswith(('.', '!', '?', '다', '요', '"')):
@@ -831,7 +848,7 @@ class ReviewPipeline:
                 except:
                     pass
             print(f"⚠️ LLM API 오류: {e}")
-            return f"{', '.join(keywords[:3])} 관련 긍정적인 리뷰가 많습니다."
+            return PromptTemplates.get_default_summary(keywords)
 
     # =========================================================================
     # 메인 실행

@@ -21,7 +21,7 @@ from ..config.settings import get_settings
 from ..config.stopwords import LexiconConfig
 from ..analysis.sentiment import HybridSentimentAnalyzer
 from ..analysis.keywords import KeywordExtractor, KeywordAggregator, WeightCalculator
-from ..llm import OpenAIProvider, GeminiProvider, PromptTemplates
+from ..llm import OpenAIProvider, GeminiProvider, PromptTemplates, validate_summary
 
 
 class BatchPipeline:
@@ -325,13 +325,22 @@ class BatchPipeline:
             keywords = row['keywords']
             review_count = row['review_count']
 
+            # 지점명 가져오기 (reviews_df에서)
+            branch_name = None
+            if '지점명' in reviews_df.columns:
+                branch_rows = reviews_df[reviews_df['지점번호'] == branch_id]['지점명']
+                if not branch_rows.empty:
+                    branch_name = str(branch_rows.iloc[0])
+
             # 대표 리뷰 추출
             representative_reviews = self._get_representative_reviews(
                 reviews_df, branch_id, keywords[:10]
             )
 
-            # AI 요약 생성
-            summary = self._generate_summary(keywords, review_count, representative_reviews)
+            # AI 요약 생성 (v2: 지점명 전달)
+            summary = self._generate_summary(
+                keywords, review_count, representative_reviews, branch_name
+            )
 
             summary_rows.append({
                 '지점번호': branch_id,
@@ -406,9 +415,18 @@ class BatchPipeline:
         self,
         keywords: List[str],
         review_count: int,
-        representative_reviews: List[str]
+        representative_reviews: List[str],
+        branch_name: str = None
     ) -> str:
-        """LLM으로 요약 생성"""
+        """
+        LLM으로 요약 생성 (v2: 지점 유형별 프롬프트 + 검증)
+
+        Args:
+            keywords: 키워드 리스트
+            review_count: 리뷰 수
+            representative_reviews: 대표 리뷰 리스트
+            branch_name: 지점명 (유형 판별용)
+        """
         if not keywords:
             return PromptTemplates.get_default_summary(keywords)
 
@@ -416,20 +434,30 @@ class BatchPipeline:
         if not self.llm_provider or not self.llm_provider.is_available():
             return PromptTemplates.get_default_summary(keywords)
 
-        # 프롬프트 생성
+        # 프롬프트 생성 (v2: 지점명 전달)
         system_prompt, user_prompt = PromptTemplates.build_summary_prompt(
-            keywords, review_count, representative_reviews
+            keywords=keywords,
+            review_count=review_count,
+            representative_reviews=representative_reviews,
+            branch_name=branch_name
         )
 
-        # 요약 생성
+        # 요약 생성 (temperature 0.5로 낮춰 일관성 향상)
         response = self.llm_provider.generate(
             prompt=user_prompt,
             system_prompt=system_prompt,
             max_tokens=300,
-            temperature=0.7
+            temperature=0.5
         )
 
         if response.success:
-            return response.content
+            summary = response.content
+
+            # 검증
+            is_valid, errors = validate_summary(summary)
+            if not is_valid:
+                print(f"   ⚠️ [{branch_name or '지점'}] 검증 경고: {'; '.join(errors)}")
+
+            return summary
 
         return PromptTemplates.get_default_summary(keywords)
