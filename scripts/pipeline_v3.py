@@ -72,7 +72,7 @@ except ImportError:
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'web'))
 try:
-    from supabase_client import upsert_summaries_batch, upsert_reviews_batch
+    from supabase_client import upsert_summaries_batch, upsert_sentiment_stats, upsert_recent_reviews
     SUPABASE_AVAILABLE = True
 except ImportError:
     SUPABASE_AVAILABLE = False
@@ -876,12 +876,34 @@ class ReviewPipeline:
             print(f"✅ 요약 저장 완료: {saved}개 지점")
             self.stats['supabase_saved'] = saved
 
-            # 9-2: 리뷰 저장 (감정태그 포함)
-            print("\n[Step 9-2] 리뷰 저장 (감정태그)")
-            reviews_data = df[['지점번호', '리뷰내용', 'sentiment', 'sentiment_score']].to_dict('records')
-            reviews_saved = upsert_reviews_batch(reviews_data)
-            print(f"✅ 리뷰 저장 완료: {reviews_saved}개")
-            self.stats['reviews_saved'] = reviews_saved
+            # 9-2: 지점별 감정통계 저장
+            print("\n[Step 9-2] 감정통계 저장")
+            sentiment_stats = df.groupby('지점번호')['sentiment'].value_counts().unstack(fill_value=0)
+            stats_data = []
+            for branch_id in sentiment_stats.index:
+                row = sentiment_stats.loc[branch_id]
+                stats_data.append({
+                    'branch_id': int(branch_id),
+                    'positive_count': int(row.get('positive', 0)),
+                    'negative_count': int(row.get('negative', 0)),
+                    'neutral_count': int(row.get('neutral', 0))
+                })
+            stats_saved = upsert_sentiment_stats(stats_data)
+            print(f"✅ 감정통계 저장 완료: {stats_saved}개 지점")
+            self.stats['stats_saved'] = stats_saved
+
+            # 9-3: 최근 리뷰만 저장 (최근 1개월 = 샘플 용도)
+            # 지점당 최근 10개씩만 저장 (디버깅/샘플용)
+            print("\n[Step 9-3] 최근 리뷰 샘플 저장")
+            recent_reviews = []
+            for branch_id in df['지점번호'].unique():
+                branch_df = df[df['지점번호'] == branch_id].tail(10)  # 지점당 최근 10개
+                recent_reviews.extend(branch_df[['지점번호', '리뷰내용', 'sentiment', 'sentiment_score']].to_dict('records'))
+
+            if recent_reviews:
+                reviews_saved = upsert_recent_reviews(recent_reviews)
+                print(f"✅ 최근 리뷰 저장 완료: {reviews_saved}개 (지점당 최대 10개)")
+                self.stats['reviews_saved'] = reviews_saved
         else:
             print("\n⚠️ Supabase 미설정 - DB 저장 건너뜀")
 
@@ -908,7 +930,8 @@ class ReviewPipeline:
         if self.stats.get('supabase_saved'):
             print(f"\n💾 Supabase 저장:")
             print(f"   - 요약: {self.stats['supabase_saved']}개 지점")
-            print(f"   - 리뷰: {self.stats.get('reviews_saved', 0):,}개")
+            print(f"   - 감정통계: {self.stats.get('stats_saved', 0)}개 지점")
+            print(f"   - 최근 리뷰: {self.stats.get('reviews_saved', 0):,}개 (샘플)")
 
 
 if __name__ == '__main__':

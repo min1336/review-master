@@ -25,8 +25,10 @@ from supabase_client import (
     get_scheduler_configs,
     get_scheduler_logs,
     get_last_run,
-    search_reviews_by_tag,
-    get_sentiment_stats
+    get_sentiment_stats,
+    get_all_sentiment_stats,
+    search_recent_reviews,
+    cleanup_old_reviews
 )
 
 # 스케줄러 임포트
@@ -237,25 +239,48 @@ def api_scheduler_last_run():
     return jsonify(last_run)
 
 # ============================================================
-# API: 리뷰 검색 (감정태그)
+# API: 감정태그 통계 및 최근 리뷰
 # ============================================================
 
-@app.route('/api/reviews/search')
-def api_search_reviews():
+@app.route('/api/sentiment/stats')
+def api_sentiment_stats():
     """
-    감정태그로 리뷰 검색
+    지점별 감정태그 통계
+
+    Query Parameters:
+        branch_id: 지점번호 (선택, 없으면 전체 합계)
+
+    Returns:
+        {"positive": n, "negative": n, "neutral": n, "total": n, "positive_ratio": %, "negative_ratio": %}
+    """
+    branch_id = request.args.get('branch_id', type=int)
+    stats = get_sentiment_stats(branch_id)
+    return jsonify(stats)
+
+
+@app.route('/api/sentiment/stats/all')
+def api_all_sentiment_stats():
+    """전체 지점 감정통계 목록"""
+    stats = get_all_sentiment_stats()
+    return jsonify(stats)
+
+
+@app.route('/api/reviews/recent')
+def api_recent_reviews():
+    """
+    최근 리뷰 검색 (1개월치)
 
     Query Parameters:
         sentiment: 'positive', 'negative', 'neutral' (선택)
         branch_id: 지점번호 (선택)
-        limit: 결과 제한 (기본 100)
+        limit: 결과 제한 (기본 100, 최대 1000)
         offset: 페이지네이션 오프셋 (기본 0)
 
     Returns:
         {
             "reviews": [...],
             "total": 1234,
-            "stats": {"positive": 800, "negative": 300, "neutral": 134, "total": 1234}
+            "stats": {"positive": n, "negative": n, ...}
         }
     """
     sentiment = request.args.get('sentiment')
@@ -268,9 +293,9 @@ def api_search_reviews():
         return jsonify({'error': 'Invalid sentiment. Use: positive, negative, neutral'}), 400
 
     if limit > 1000:
-        limit = 1000  # 최대 1000개
+        limit = 1000
 
-    result = search_reviews_by_tag(
+    result = search_recent_reviews(
         sentiment=sentiment,
         branch_id=branch_id,
         limit=limit,
@@ -280,20 +305,22 @@ def api_search_reviews():
     return jsonify(result)
 
 
-@app.route('/api/reviews/stats')
-def api_review_stats():
+@app.route('/api/reviews/cleanup', methods=['POST'])
+def api_cleanup_reviews():
     """
-    리뷰 감정태그 통계
+    오래된 리뷰 삭제 (1개월 이전)
 
-    Query Parameters:
-        branch_id: 지점번호 (선택, 없으면 전체)
+    Body (optional):
+        {"days": 30}  기본 30일
 
     Returns:
-        {"positive": n, "negative": n, "neutral": n, "total": n}
+        {"deleted": n}
     """
-    branch_id = request.args.get('branch_id', type=int)
-    stats = get_sentiment_stats(branch_id)
-    return jsonify(stats)
+    data = request.get_json() or {}
+    days = data.get('days', 30)
+
+    deleted = cleanup_old_reviews(days)
+    return jsonify({'deleted': deleted, 'message': f'{days}일 이전 리뷰 {deleted}개 삭제됨'})
 
 # ============================================================
 # 메인 실행
@@ -311,11 +338,12 @@ if __name__ == '__main__':
     print("  POST /api/summaries/<id>/approve - 승인")
     print("  POST /api/summaries/<id>/publish - 게시")
     print("  GET  /api/stats             - 통계")
-    print("\n리뷰 검색 API:")
-    print("  GET  /api/reviews/search    - 감정태그로 검색")
-    print("       ?sentiment=positive|negative|neutral")
-    print("       &branch_id=123&limit=100&offset=0")
-    print("  GET  /api/reviews/stats     - 감정태그 통계")
+    print("\n감정태그 API:")
+    print("  GET  /api/sentiment/stats       - 지점별 감정통계")
+    print("  GET  /api/sentiment/stats/all   - 전체 지점 통계 목록")
+    print("  GET  /api/reviews/recent        - 최근 리뷰 (1개월)")
+    print("       ?sentiment=positive&branch_id=123")
+    print("  POST /api/reviews/cleanup       - 오래된 리뷰 삭제")
     print("\n스케줄러 API:")
     print("  GET  /api/scheduler/status  - 스케줄러 상태")
     print("  GET  /api/scheduler/config  - 스케줄 설정 조회")

@@ -349,20 +349,118 @@ def get_last_run(config_key: str = None):
 
 
 # ============================================================
-# 리뷰 CRUD (감정태그 검색)
+# 감정태그 통계 CRUD
 # ============================================================
 
-def upsert_reviews_batch(reviews: list) -> int:
+def upsert_sentiment_stats(stats_list: list) -> int:
     """
-    리뷰 일괄 저장 (감정태그 포함)
+    지점별 감정태그 통계 저장
+
+    Args:
+        stats_list: [{
+            'branch_id': int,
+            'positive_count': int,
+            'negative_count': int,
+            'neutral_count': int
+        }, ...]
+
+    Returns:
+        성공 개수
+    """
+    client = get_client()
+    success_count = 0
+
+    for stat in stats_list:
+        try:
+            total = stat['positive_count'] + stat['negative_count'] + stat['neutral_count']
+            positive_ratio = (stat['positive_count'] / total * 100) if total > 0 else 0
+            negative_ratio = (stat['negative_count'] / total * 100) if total > 0 else 0
+
+            client.table('branch_sentiment_stats').upsert({
+                'branch_id': stat['branch_id'],
+                'positive_count': stat['positive_count'],
+                'negative_count': stat['negative_count'],
+                'neutral_count': stat['neutral_count'],
+                'total_count': total,
+                'positive_ratio': round(positive_ratio, 2),
+                'negative_ratio': round(negative_ratio, 2),
+                'updated_at': 'now()'
+            }, on_conflict='branch_id').execute()
+            success_count += 1
+        except Exception as e:
+            print(f"  통계 저장 오류 (지점 {stat.get('branch_id')}): {e}")
+
+    return success_count
+
+
+def get_sentiment_stats(branch_id: int = None) -> dict:
+    """
+    감정태그별 통계 조회
+
+    Args:
+        branch_id: 지점번호 (None이면 전체 합계)
+
+    Returns:
+        {'positive': n, 'negative': n, 'neutral': n, 'total': n, 'positive_ratio': %, 'negative_ratio': %}
+    """
+    client = get_client()
+
+    if branch_id:
+        # 특정 지점
+        result = client.table('branch_sentiment_stats').select('*').eq('branch_id', branch_id).execute()
+        if result.data:
+            row = result.data[0]
+            return {
+                'positive': row['positive_count'],
+                'negative': row['negative_count'],
+                'neutral': row['neutral_count'],
+                'total': row['total_count'],
+                'positive_ratio': float(row['positive_ratio']),
+                'negative_ratio': float(row['negative_ratio'])
+            }
+    else:
+        # 전체 합계
+        result = client.table('branch_sentiment_stats').select('*').execute()
+        if result.data:
+            totals = {'positive': 0, 'negative': 0, 'neutral': 0, 'total': 0}
+            for row in result.data:
+                totals['positive'] += row['positive_count']
+                totals['negative'] += row['negative_count']
+                totals['neutral'] += row['neutral_count']
+                totals['total'] += row['total_count']
+
+            if totals['total'] > 0:
+                totals['positive_ratio'] = round(totals['positive'] / totals['total'] * 100, 2)
+                totals['negative_ratio'] = round(totals['negative'] / totals['total'] * 100, 2)
+            else:
+                totals['positive_ratio'] = 0
+                totals['negative_ratio'] = 0
+            return totals
+
+    return {'positive': 0, 'negative': 0, 'neutral': 0, 'total': 0, 'positive_ratio': 0, 'negative_ratio': 0}
+
+
+def get_all_sentiment_stats() -> list:
+    """전체 지점 감정통계 목록"""
+    client = get_client()
+    result = client.table('branch_sentiment_stats').select('*').order('branch_id').execute()
+    return result.data
+
+
+# ============================================================
+# 최근 리뷰 CRUD (1개월치만 유지)
+# ============================================================
+
+def upsert_recent_reviews(reviews: list) -> int:
+    """
+    최근 리뷰 저장 (1개월치만 유지용)
 
     Args:
         reviews: [{
             'branch_id': int,
             'content': str,
-            'sentiment': str,  # 'positive', 'negative', 'neutral'
+            'sentiment': str,
             'sentiment_score': float,
-            'keywords': list (optional),
             'review_date': str (optional)
         }, ...]
 
@@ -377,7 +475,6 @@ def upsert_reviews_batch(reviews: list) -> int:
     for i in range(0, total, batch_size):
         batch = reviews[i:i + batch_size]
         try:
-            # 배치 삽입
             insert_data = []
             for r in batch:
                 insert_data.append({
@@ -385,15 +482,14 @@ def upsert_reviews_batch(reviews: list) -> int:
                     'content': r.get('content') or r.get('리뷰내용'),
                     'sentiment': r.get('sentiment'),
                     'sentiment_score': r.get('sentiment_score'),
-                    'keywords': r.get('keywords', []),
                     'review_date': r.get('review_date')
                 })
 
-            client.table('reviews').insert(insert_data).execute()
+            client.table('recent_reviews').insert(insert_data).execute()
             success_count += len(batch)
 
             if (i + batch_size) % 500 == 0 or (i + batch_size) >= total:
-                print(f"   리뷰 저장 중: {min(i + batch_size, total)}/{total}")
+                print(f"   최근 리뷰 저장 중: {min(i + batch_size, total)}/{total}")
 
         except Exception as e:
             print(f"  리뷰 저장 오류 (batch {i}): {e}")
@@ -401,14 +497,14 @@ def upsert_reviews_batch(reviews: list) -> int:
     return success_count
 
 
-def search_reviews_by_tag(
+def search_recent_reviews(
     sentiment: str = None,
     branch_id: int = None,
     limit: int = 100,
     offset: int = 0
 ) -> dict:
     """
-    감정태그로 리뷰 검색
+    최근 리뷰 검색 (1개월치)
 
     Args:
         sentiment: 'positive', 'negative', 'neutral' (None이면 전체)
@@ -420,26 +516,22 @@ def search_reviews_by_tag(
         {
             'reviews': [...],
             'total': int,
-            'stats': {'positive': n, 'negative': n, 'neutral': n}
+            'stats': {...}
         }
     """
     client = get_client()
 
-    # 기본 쿼리
-    query = client.table('reviews').select('*', count='exact')
+    query = client.table('recent_reviews').select('*', count='exact')
 
-    # 필터 적용
     if sentiment:
         query = query.eq('sentiment', sentiment)
     if branch_id:
         query = query.eq('branch_id', branch_id)
 
-    # 정렬 및 페이지네이션
     query = query.order('created_at', desc=True).range(offset, offset + limit - 1)
-
     result = query.execute()
 
-    # 통계 조회
+    # 통계는 branch_sentiment_stats에서 조회
     stats = get_sentiment_stats(branch_id)
 
     return {
@@ -449,43 +541,22 @@ def search_reviews_by_tag(
     }
 
 
-def get_sentiment_stats(branch_id: int = None) -> dict:
+def cleanup_old_reviews(days: int = 30) -> int:
     """
-    감정태그별 통계
+    오래된 리뷰 삭제
 
     Args:
-        branch_id: 지점번호 (None이면 전체)
-
-    Returns:
-        {'positive': n, 'negative': n, 'neutral': n, 'total': n}
-    """
-    client = get_client()
-
-    stats = {'positive': 0, 'negative': 0, 'neutral': 0, 'total': 0}
-
-    for sentiment in ['positive', 'negative', 'neutral']:
-        query = client.table('reviews').select('id', count='exact').eq('sentiment', sentiment)
-        if branch_id:
-            query = query.eq('branch_id', branch_id)
-        result = query.execute()
-        stats[sentiment] = result.count or 0
-
-    stats['total'] = stats['positive'] + stats['negative'] + stats['neutral']
-    return stats
-
-
-def delete_reviews_by_branch(branch_id: int) -> int:
-    """
-    지점별 리뷰 삭제 (재처리 전 정리용)
-
-    Args:
-        branch_id: 지점번호
+        days: 보관 기간 (기본 30일)
 
     Returns:
         삭제된 개수
     """
     client = get_client()
-    result = client.table('reviews').delete().eq('branch_id', branch_id).execute()
+    from datetime import datetime, timedelta
+
+    cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
+
+    result = client.table('recent_reviews').delete().lt('created_at', cutoff_date).execute()
     return len(result.data) if result.data else 0
 
 
