@@ -114,3 +114,8 @@ temp/
 
 # Claude Code local config
 .claude/
+.env
+
+# Postman (API 키 노출 방지)
+*.postman_collection.json
+*.postman_environment.json
