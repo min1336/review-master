@@ -81,3 +81,16 @@ Required in `.env`:
 ## Status Workflow
 
 Summaries follow: `draft` -> `approved` -> `published`
+
+## Planning with Files Pattern
+
+복잡한 작업 시 컨텍스트 유지를 위한 3-파일 패턴:
+
+| File | Purpose |
+|------|---------|
+| `docs/task_plan.md` | 작업 계획 & 체크리스트 (결정 전 검토) |
+| `docs/findings.md` | 연구 결과 & 코드 분석 저장 |
+| `docs/progress.md` | 시도 & 실패 기록 (실수 반복 방지) |
+
+**사용 시점**: 다단계 작업, 리팩토링, 연구 작업
+**건너뛸 때**: 단순 쿼리, 빠른 수정
