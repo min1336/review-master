@@ -22,6 +22,7 @@
   - 검증 실패 시 재시도 로직 (max_retries=2)
   - 타입 힌트 강화
   - 파일 로드 에러 처리 강화
+  - run_with_result() 메서드 추가 (PipelineResultDTO 반환)
 """
 import os
 import re
@@ -205,6 +206,49 @@ class BatchPipeline:
         print("="*60)
 
         return self.stats
+
+    def run_with_result(self, input_file: str, output_dir: str = 'output') -> 'PipelineResultDTO':
+        """
+        전체 파이프라인 실행 (PipelineResultDTO 반환)
+
+        run() 메서드와 동일하지만 구조화된 DTO를 반환합니다.
+
+        Args:
+            input_file: 입력 엑셀 파일 경로
+            output_dir: 출력 디렉토리
+
+        Returns:
+            PipelineResultDTO: 실행 결과 DTO
+        """
+        from ..dto import PipelineResultDTO
+
+        started_at = datetime.now()
+
+        try:
+            stats = self.run(input_file, output_dir)
+
+            return PipelineResultDTO(
+                success=True,
+                total_reviews=stats.get('total_reviews', 0),
+                processed_reviews=stats.get('filtered_reviews', 0),
+                total_branches=stats.get('branch_count', 0),
+                summaries_generated=stats.get('summaries_generated', 0),
+                total_duration_seconds=stats.get('elapsed_seconds', 0),
+                started_at=started_at,
+                finished_at=datetime.now()
+            )
+
+        except Exception as e:
+            return PipelineResultDTO(
+                success=False,
+                total_reviews=self.stats.get('total_reviews', 0),
+                processed_reviews=0,
+                total_branches=0,
+                summaries_generated=0,
+                error_message=str(e),
+                started_at=started_at,
+                finished_at=datetime.now()
+            )
 
     def _load_data(self, file_path: str) -> pd.DataFrame:
         """Step 1: 데이터 로드"""
