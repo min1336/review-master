@@ -3,6 +3,10 @@ LLM 출력 검증기
 - 문장 수 검증
 - 글자 수 검증
 - 금지어 검증
+
+v2.0 (2026-01-20):
+- 글자 수 제한 완화: 200자 → 350자 (좋은점 180-220자 + 아쉬운점 60-80자)
+- 문장 수 검증 유연화: 정확히 3개 → 3~8개 허용
 """
 from typing import Tuple, List
 import re
@@ -14,10 +18,11 @@ FORBIDDEN_WORDS = [
     '짱', '굿', '베스트', '넘버원'
 ]
 
-# 검증 기준
-MIN_CHAR_COUNT = 60   # 최소 글자 수
-MAX_CHAR_COUNT = 200  # 최대 글자 수
-EXPECTED_SENTENCES = 3  # 기대 문장 수
+# 검증 기준 (v2.0 업데이트)
+MIN_CHAR_COUNT = 100   # 최소 글자 수
+MAX_CHAR_COUNT = 350   # 최대 글자 수 (좋은점 220자 + 아쉬운점 80자 + 여유)
+MIN_SENTENCES = 3      # 최소 문장 수
+MAX_SENTENCES = 8      # 최대 문장 수
 
 
 def validate_summary(text: str) -> Tuple[bool, List[str]]:
@@ -36,10 +41,12 @@ def validate_summary(text: str) -> Tuple[bool, List[str]]:
     errors = []
     text = text.strip()
 
-    # 1. 문장 수 체크 (마침표 기준)
+    # 1. 문장 수 체크 (마침표 기준) - 범위 허용
     sentences = _count_sentences(text)
-    if sentences != EXPECTED_SENTENCES:
-        errors.append(f"문장 수 오류: {sentences}개 (3개 필요)")
+    if sentences < MIN_SENTENCES:
+        errors.append(f"문장 수 부족: {sentences}개 (최소 {MIN_SENTENCES}개)")
+    elif sentences > MAX_SENTENCES:
+        errors.append(f"문장 수 초과: {sentences}개 (최대 {MAX_SENTENCES}개)")
 
     # 2. 글자 수 체크
     char_count = len(text)
@@ -79,7 +86,7 @@ def _check_forbidden_words(text: str) -> List[str]:
 
 def _has_markdown_or_emoji(text: str) -> bool:
     """마크다운 또는 이모지 포함 여부"""
-    # 마크다운 패턴 (더 엄격하게)
+    # 마크다운 패턴 (엄격하게)
     markdown_patterns = [
         r'\*\*[^*]+\*\*',   # bold: **text**
         r'__[^_]+__',        # bold: __text__
@@ -87,8 +94,8 @@ def _has_markdown_or_emoji(text: str) -> bool:
         r'#+\s+\w',          # heading: # text
         r'\[.+\]\(.+\)',     # link: [text](url)
         r'`[^`]+`',          # code: `code`
-        r'^\s*[-*]\s+',      # bullet list
-        r'^\s*\d+\.\s+',     # numbered list
+        r'^\s*[-*•]\s+',     # bullet list (-, *, •)
+        # r'^\s*\d+\.\s+',   # numbered list - 문단에서 숫자 사용 가능하므로 허용
     ]
 
     for pattern in markdown_patterns:

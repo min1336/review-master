@@ -1,0 +1,1903 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review Summary AI - 운영팀 대시보드 v2</title>
+    <link rel="stylesheet" as="style" crossorigin
+        href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <style>
+        :root {
+            /* Primary Colors */
+            --primary: #0d6ffc;
+            --primary-hover: #0b5ed7;
+            --primary-light: #e3f0ff;
+
+            /* Status Colors */
+            --success: #10b981;
+            --success-light: #d1fae5;
+            --warning: #f59e0b;
+            --warning-light: #fef3c7;
+            --error: #ef4444;
+            --error-light: #fee2e2;
+
+            /* Grey Scale */
+            --grey-1: #1e1e1e;
+            --grey-2: #333333;
+            --grey-3: #555555;
+            --grey-5: #999999;
+            --grey-7: #dddddd;
+            --grey-8: #eeeeee;
+            --grey-9: #f8f8f8;
+            --blue-grey-light: #f1f4f9;
+
+            /* Layout */
+            --max-width: 1200px;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --radius-lg: 16px;
+
+            /* Shadows */
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+            /* Spacing */
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            overflow-y: scroll;
+            /* Force scrollbar */
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+            background: var(--grey-9);
+            color: var(--grey-1);
+            line-height: 1.5;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-bottom: none;
+            padding: 32px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+            position: relative;
+            overflow: hidden;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%);
+            pointer-events: none;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: white;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            letter-spacing: -0.5px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            position: relative;
+            z-index: 1;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Layout */
+        .container {
+            width: 100%;
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: var(--spacing-lg);
+        }
+
+        .inner {
+            width: 100%;
+            max-width: var(--max-width);
+            margin: 0 auto;
+        }
+
+        .grid {
+            display: grid;
+            gap: var(--spacing-lg);
+        }
+
+        .grid-2 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .grid-3 {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .grid-4 {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        @media (max-width: 1200px) {
+            .grid-4 {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .grid-3 {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+
+            .grid-4,
+            .grid-3,
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-sm);
+            padding: var(--spacing-lg);
+            border: 1px solid var(--grey-7);
+            transition: box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-md);
+            padding-bottom: var(--spacing-md);
+            border-bottom: 1px solid var(--grey-8);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--grey-2);
+        }
+
+        /* Stat Cards */
+        .stat-card {
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--card-color, #667eea) 0%, var(--card-color-end, #764ba2) 100%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+            border-color: var(--card-color, #667eea);
+        }
+
+        .stat-card:hover::before {
+            opacity: 1;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--card-color, #667eea) 0%, var(--card-color-end, #764ba2) 100%);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .stat-icon svg {
+            width: 24px;
+            height: 24px;
+            stroke: white;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--grey-5);
+            margin-bottom: 8px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--card-color, #667eea) 0%, var(--card-color-end, #764ba2) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-change {
+            font-size: 13px;
+            margin-top: 8px;
+        }
+
+        .stat-change.positive {
+            color: var(--success);
+        }
+
+        .stat-change.negative {
+            color: var(--error);
+        }
+
+        /* Buttons */
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            height: 40px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 2px 4px rgba(13, 111, 252, 0.2);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--grey-2);
+            border: 1px solid var(--grey-7);
+        }
+
+        .btn-secondary:hover {
+            background: var(--grey-9);
+            border-color: var(--grey-5);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
+            height: 32px;
+        }
+
+        /* AI Summary Button */
+        .btn-ai-summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+            white-space: nowrap;
+        }
+
+        .btn-ai-summary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-ai-summary:active {
+            transform: translateY(0);
+        }
+
+        .btn-ai-summary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Table */
+        /* Table */
+        .table-container {
+            overflow-x: auto;
+            min-height: 70vh;
+            margin: -24px;
+            /* Compensate for card padding */
+            margin-top: 0;
+            padding: 0;
+            border-radius: 0 0 var(--radius) var(--radius);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 14px;
+            table-layout: fixed;
+        }
+
+        th {
+            background: #f8fafc;
+            padding: 16px 24px;
+            text-align: left;
+            font-weight: 700;
+            color: #334155;
+            border-bottom: 2px solid var(--grey-8);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 16px 24px;
+            text-align: left;
+            border-bottom: 1px solid #f1f5f9;
+            color: var(--grey-1);
+            vertical-align: middle;
+            font-size: 15px;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: var(--blue-grey-light);
+        }
+
+        /* Badges */
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1;
+        }
+
+        .badge-grey {
+            background: #f3f4f6;
+            color: var(--grey-3);
+            border: 1px solid #e5e7eb;
+        }
+
+        .badge-success {
+            background: var(--success-light);
+            color: #047857;
+            border: 1px solid #a7f3d0;
+        }
+
+        .badge-warning {
+            background: var(--warning-light);
+            color: #b45309;
+            border: 1px solid #fde68a;
+        }
+
+        .badge-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+        }
+
+        /* Rating */
+        .rating {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 600;
+        }
+
+        .rating-star {
+            color: #fbbf24;
+        }
+
+        /* Region Chart */
+        .region-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .region-name {
+            width: 60px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .region-bar-container {
+            flex: 1;
+            height: 24px;
+            background: var(--grey-8);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .region-bar-fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+
+        .region-count {
+            width: 50px;
+            text-align: right;
+            font-size: 13px;
+            color: var(--grey-5);
+        }
+
+        /* Filters */
+        .filters {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            align-items: center;
+            padding: 24px 24px 0 24px;
+            border-bottom: none;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--grey-2);
+        }
+
+        .filter-select,
+        .search-box input {
+            padding: 8px 12px;
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            color: var(--grey-1);
+            background: white;
+            min-width: 140px;
+            height: 40px;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .filter-select:focus,
+        .search-box input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-light);
+        }
+
+        .search-box {
+            position: relative;
+        }
+
+        .search-box input {
+            padding-left: 36px;
+            width: 250px;
+        }
+
+        .search-box svg {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--grey-5);
+            pointer-events: none;
+        }
+
+        /* Sort Icons */
+        .sort-icon::after {
+            content: '↕';
+            font-size: 12px;
+            margin-left: 4px;
+            color: var(--grey-5);
+            opacity: 0.5;
+        }
+
+        .sort-asc::after {
+            content: '↑';
+            color: var(--primary);
+            opacity: 1;
+        }
+
+        .sort-desc::after {
+            content: '↓';
+            color: var(--primary);
+            opacity: 1;
+        }
+
+
+
+        /* Modal */
+        /* Custom Checkbox */
+        .custom-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            transition: background 0.2s;
+            height: 40px;
+            margin-top: 2px;
+            /* Visual alignment fix */
+        }
+
+        .custom-checkbox:hover {
+            background: var(--grey-9);
+        }
+
+        .custom-checkbox input {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .custom-checkbox span {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--grey-2);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        .modal {
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-xl);
+            max-width: 800px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: scale(0.95);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .modal-overlay.active .modal {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--grey-8);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--grey-1);
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            background: #2D3748;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 100;
+            max-width: 300px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            line-height: 1.4;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--grey-5);
+        }
+
+        /* Summary Preview */
+        .summary-section {
+            margin-bottom: 20px;
+        }
+
+        .summary-section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--grey-5);
+            margin-bottom: 8px;
+        }
+
+        .summary-text {
+            background: var(--grey-9);
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .summary-empty {
+            color: var(--grey-5);
+            font-style: italic;
+        }
+
+        /* Keywords */
+        .keywords {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .keyword {
+            background: var(--primary);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 13px;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: var(--grey-5);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--grey-7);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--grey-3);
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            background: var(--grey-8);
+        }
+
+        .tab.active {
+            background: var(--primary);
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <h1>Review Summary AI - 운영팀 대시보드</h1>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="window.open('/tag-tester', '_blank')">태그 분석 테스트</button>
+            <button class="btn btn-primary" onclick="syncAffiliates()">업체정보 동기화</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Stats Overview -->
+        <div class="grid grid-3" id="stats-grid">
+            <div class="stat-card" style="--card-color: #667eea; --card-color-end: #764ba2;">
+                <div class="stat-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                    </svg>
+                </div>
+                <div class="stat-label">총 지점</div>
+                <div class="stat-value" id="stat-total">-</div>
+            </div>
+            <div class="stat-card" style="--card-color: #f093fb; --card-color-end: #f5576c;">
+                <div class="stat-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z">
+                        </path>
+                    </svg>
+                </div>
+                <div class="stat-label">총 리뷰</div>
+                <div class="stat-value" id="stat-reviews">-</div>
+            </div>
+            <div class="stat-card" style="--card-color: #4facfe; --card-color-end: #00f2fe;">
+                <div class="stat-icon">
+                    <svg viewBox="0 0 24 24">
+                        <polyline points="9 11 12 14 22 4"></polyline>
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                    </svg>
+                </div>
+                <div class="stat-label">게시 완료</div>
+                <div class="stat-value" id="stat-published">-</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div style="margin-top: 24px; max-width: 400px;">
+            <!-- Status Stats -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">상태별 현황</span>
+                </div>
+                <div id="status-stats">
+                    <div class="loading">
+                        <div class="spinner"></div>로딩 중...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Branch Summaries Table -->
+        <div class="card" style="margin-top: 24px;">
+            <div class="filters">
+                <div class="filter-group">
+                    <span class="filter-label">지역</span>
+                    <select class="filter-select" id="filter-region">
+                        <option value="">전체</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <span class="filter-label">상태</span>
+                    <select class="filter-select" id="filter-status">
+                        <option value="">전체</option>
+                        <option value="draft">Draft</option>
+                        <option value="approved">Approved</option>
+                        <option value="published">Published</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="filter-min-reviews" checked>
+                        <span>리뷰 30개 이상</span>
+                    </label>
+                </div>
+
+                <!-- Search (Right aligned) -->
+                <div class="search-box" style="margin-left: auto;">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="7" cy="7" r="5" />
+                        <path d="M12 12l3 3" />
+                    </svg>
+                    <input type="text" id="search-input" placeholder="업체명, 키워드 검색...">
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="table-container">
+                <table>
+                    <colgroup>
+                        <col style="width: 250px;"> <!-- Name (Wider) -->
+                        <col style="width: 35%;"> <!-- Summary -->
+                        <col style="width: 120px;"> <!-- Review Count -->
+                        <col style="width: 250px;"> <!-- Tags -->
+                        <col style="width: 100px;"> <!-- Status -->
+                        <col style="width: 80px;"> <!-- Action -->
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th onclick="handleSort('branch_name')" style="cursor: pointer;">업체명 <span
+                                    id="sort-icon-branch_name" class="sort-icon"></span></th>
+                            <th style="min-width: 200px;">요약</th>
+                            <th onclick="handleSort('review_count')" style="cursor: pointer;">리뷰수 <span
+                                    id="sort-icon-review_count" class="sort-icon"></span></th>
+                            <th>태그</th>
+                            <th>상태</th>
+                            <th>작업</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summaries-table">
+                        <tr>
+                            <td colspan="7" class="loading">
+                                <div class="spinner"></div>로딩 중...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+                <span id="pagination-info" style="font-size: 13px; color: var(--grey-5);">-</span>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-secondary btn-sm" id="prev-btn" onclick="prevPage()">이전</button>
+                    <button class="btn btn-secondary btn-sm" id="next-btn" onclick="nextPage()">다음</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div class="modal-overlay" id="detail-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title">지점 상세</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- Content loaded dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let currentPage = 0;
+        const pageSize = 500;
+        let summaries = [];
+        let regionStats = [];
+
+        let currentSortField = 'review_count';
+        let currentSortOrder = 'desc'; // asc or desc
+
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStats();
+            loadRegionStats();  // 지역 필터 드롭다운용
+            loadSummaries();
+
+            // Event listeners - 필터 변경 시 페이지 리셋
+            document.getElementById('search-input').addEventListener('input', debounce(() => { currentPage = 0; loadSummaries(); }, 300));
+            document.getElementById('filter-region').addEventListener('change', () => { currentPage = 0; loadSummaries(); });
+            document.getElementById('filter-status').addEventListener('change', () => { currentPage = 0; loadSummaries(); });
+            document.getElementById('filter-min-reviews').addEventListener('change', () => { currentPage = 0; loadSummaries(); });
+        });
+
+        // Debounce helper
+        function debounce(fn, ms) {
+            let timer;
+            return function (...args) {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), ms);
+            };
+        }
+
+        // Load Stats
+        async function loadStats() {
+            console.log('loadStats 시작');
+            try {
+                const response = await fetch('/api/v2/stats');
+                console.log('stats response:', response.status);
+                const stats = await response.json();
+                console.log('stats data:', stats);
+
+                document.getElementById('stat-total').textContent = stats.total?.toLocaleString() || '0';
+                document.getElementById('stat-reviews').textContent = stats.total_reviews?.toLocaleString() || '0';
+                document.getElementById('stat-published').textContent = stats.published?.toLocaleString() || '0';
+
+                // Status stats with progress bars
+                const total = stats.total || 1;
+                const draftPct = Math.round((stats.draft || 0) / total * 100);
+                const approvedPct = Math.round((stats.approved || 0) / total * 100);
+                const publishedPct = Math.round((stats.published || 0) / total * 100);
+
+                document.getElementById('status-stats').innerHTML = `
+                    <div style="display: flex; flex-direction: column; gap: 20px; padding: 8px 0;">
+                        <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <svg width="16" height="16" fill="none" stroke="#999" stroke-width="2" viewBox="0 0 24 24">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                    <span style="font-weight: 500;">Draft</span>
+                                </div>
+                                <span class="badge badge-grey">${stats.draft || 0}</span>
+                            </div>
+                            <div style="background: #f0f0f0; height: 6px; border-radius: 3px; overflow: hidden;">
+                                <div style="background: linear-gradient(90deg, #999 0%, #666 100%); height: 100%; width: ${draftPct}%; transition: width 0.6s ease;"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <svg width="16" height="16" fill="none" stroke="#f59e0b" stroke-width="2" viewBox="0 0 24 24">
+                                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                    </svg>
+                                    <span style="font-weight: 500;">Approved</span>
+                                </div>
+                                <span class="badge badge-warning">${stats.approved || 0}</span>
+                            </div>
+                            <div style="background: #fef3c7; height: 6px; border-radius: 3px; overflow: hidden;">
+                                <div style="background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%); height: 100%; width: ${approvedPct}%; transition: width 0.6s ease;"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <svg width="16" height="16" fill="none" stroke="#10b981" stroke-width="2" viewBox="0 0 24 24">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    <span style="font-weight: 500;">Published</span>
+                                </div>
+                                <span class="badge badge-success">${stats.published || 0}</span>
+                            </div>
+                            <div style="background: #d1fae5; height: 6px; border-radius: 3px; overflow: hidden;">
+                                <div style="background: linear-gradient(90deg, #10b981 0%, #059669 100%); height: 100%; width: ${publishedPct}%; transition: width 0.6s ease;"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                console.log('loadStats 완료');
+            } catch (e) {
+                console.error('Stats load error:', e);
+            }
+        }
+
+        // Load Region Stats
+        // Load Region Stats (for filter dropdown only)
+        async function loadRegionStats() {
+            try {
+                const data = await fetch('/api/v2/stats/region').then(r => r.json());
+                regionStats = data;
+
+                // Update filter dropdown
+                const select = document.getElementById('filter-region');
+                data.forEach(r => {
+                    if (r.region && r.region !== '미분류') {
+                        const opt = document.createElement('option');
+                        opt.value = r.region;
+                        opt.textContent = `${r.region} (${r.count})`;
+                        select.appendChild(opt);
+                    }
+                });
+
+                // Calculate total reviews
+                const totalReviews = data.reduce((sum, r) => sum + (r.total_reviews || 0), 0);
+                document.getElementById('stat-reviews').textContent = totalReviews.toLocaleString();
+            } catch (e) {
+                console.error('Region stats error:', e);
+            }
+        }
+
+        // Load Rating Stats
+        async function loadRatingStats() {
+            try {
+                const data = await fetch('/api/v2/stats/rating').then(r => r.json());
+                const dist = data.distribution || {};
+                const total = data.total || 1;
+
+                const html = Object.entries(dist).map(([range, count]) => {
+                    const pct = (count / total * 100).toFixed(1);
+                    return `
+                        <div class="region-bar">
+                            <span class="region-name">${range}</span>
+                            <div class="region-bar-container">
+                                <div class="region-bar-fill" style="width: ${pct}%; background: ${range.includes('4.5') ? '#10b981' : range.includes('4.0') ? '#3b82f6' : '#f59e0b'}"></div>
+                            </div>
+                            <span class="region-count">${count}개</span>
+                        </div>
+                    `;
+                }).join('');
+
+                document.getElementById('rating-chart').innerHTML = `
+                    <div style="margin-bottom: 16px; display: flex; gap: 20px; font-size: 14px;">
+                        <span>최저: <strong>${data.min?.toFixed(2) || '-'}</strong></span>
+                        <span>평균: <strong>${data.avg?.toFixed(2) || '-'}</strong></span>
+                        <span>최고: <strong>${data.max?.toFixed(2) || '-'}</strong></span>
+                    </div>
+                    ${html}
+                `;
+            } catch (e) {
+                console.error('Rating stats error:', e);
+            }
+        }
+
+        // Load Summaries
+        async function loadSummaries() {
+            const keyword = document.getElementById('search-input').value;
+            const region = document.getElementById('filter-region').value;
+            const status = document.getElementById('filter-status').value;
+            const minReviewsChecked = document.getElementById('filter-min-reviews').checked;
+
+            const params = new URLSearchParams({
+                limit: pageSize,
+                offset: currentPage * pageSize
+            });
+
+            if (keyword) params.set('keyword', keyword);
+            if (region) params.set('region', region);
+            if (status) params.set('status', status);
+
+            // 체크박스: 체크됨 = 30개 이상, 체크 안됨 = 전체(0)
+            params.set('min_reviews', minReviewsChecked ? 30 : 0);
+
+            // 정렬 파라미터 적용
+            params.set('sort_by', currentSortField);
+            params.set('order', currentSortOrder);
+            updateSortUI();
+
+            try {
+
+                let data = await fetch(`/api/v2/summaries?${params}`).then(r => r.json());
+
+                // 클라이언트 사이드 정렬 로직 제거됨 (서버 사이드 정렬 사용)
+
+                // 지점별 top3 태그 로드
+                const branchIds = data.map(d => d.branch_id).filter(id => id).join(',');
+                let tagsData = {};
+                if (branchIds) {
+                    try {
+                        tagsData = await fetch(`/api/tags/batch?branch_ids=${branchIds}`).then(r => r.json());
+                    } catch (e) {
+                        console.error('Tags load error:', e);
+                    }
+                }
+
+                // 태그 데이터 병합
+                data.forEach(row => {
+                    row.top_tags = tagsData[String(row.branch_id)] || [];
+                });
+
+                summaries = data;
+                renderTable(data);
+            } catch (e) {
+                console.error('Summaries load error:', e);
+                document.getElementById('summaries-table').innerHTML = '<tr><td colspan="7" style="text-align:center;">로드 실패</td></tr>';
+            }
+        }
+
+        // Sorting Handler
+        function handleSort(field) {
+            if (currentSortField === field) {
+                // Toggle order
+                currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                // New field
+                currentSortField = field;
+                currentSortOrder = 'desc'; // Default to desc for most things
+                if (field === 'branch_name') currentSortOrder = 'asc'; // Exception for name
+            }
+            currentPage = 0;
+            loadSummaries();
+        }
+
+        function updateSortUI() {
+            // Reset all icons
+            document.querySelectorAll('.sort-icon').forEach(el => el.textContent = '');
+
+            // Set current icon
+            const iconEl = document.getElementById(`sort-icon-${currentSortField}`);
+            if (iconEl) {
+                iconEl.textContent = currentSortOrder === 'asc' ? ' ↑' : ' ↓';
+                iconEl.style.color = 'var(--primary)';
+            }
+        }
+
+        // Helper: Get pastel color from string
+        function getKeywordColor(str) {
+            if (!str) return '#e5e7eb'; // default grey
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            // Generate pastel color (high lightness and saturation)
+            const h = Math.abs(hash) % 360;
+            return `hsl(${h}, 70%, 85%)`;
+        }
+
+        // Helper: Get text color (darker version of pastel)
+        function getKeywordTextColor(str) {
+            if (!str) return '#374151';
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const h = Math.abs(hash) % 360;
+            return `hsl(${h}, 80%, 30%)`; // Darker for text
+        }
+
+        // Helper: Render stars
+        // Helper: Render stars
+        function getStarRating(rating) {
+            if (rating === undefined || rating === null) return '-';
+            const numRating = Number(rating);
+            if (isNaN(numRating)) return '-';
+
+            const fullStars = Math.floor(numRating);
+            const hasHalfStar = numRating % 1 >= 0.5;
+            let html = '<div class="rating" style="display:inline-flex; align-items:center;">';
+
+            for (let i = 0; i < 5; i++) {
+                if (i < fullStars) {
+                    html += '<span class="rating-star" style="color:#F59E0B;">★</span>';
+                } else if (i === fullStars && hasHalfStar) {
+                    html += '<span class="rating-star" style="background: linear-gradient(90deg, #F59E0B 50%, #DDDDDD 50%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">★</span>';
+                } else {
+                    html += '<span class="rating-star" style="color:#DDDDDD;">★</span>';
+                }
+            }
+            html += `<span style="margin-left: 4px; color: var(--grey-4); font-weight: normal; font-size: 12px;">(${numRating.toFixed(1)})</span>`;
+            html += '</div>';
+            return html;
+        }
+
+        function renderTable(data) {
+            if (!data.length) {
+                document.getElementById('summaries-table').innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--grey-5);">데이터 없음</td></tr>';
+                document.getElementById('pagination-info').textContent = '0개 지점';
+                return;
+            }
+
+            const html = data.map(row => {
+                // 요약 미리보기 (60자 제한)
+                const summaryPreview = row.summary_all
+                    ? (row.summary_all.length > 60 ? row.summary_all.substring(0, 60) + '...' : row.summary_all)
+                    : '<span style="color: var(--grey-5); font-style: italic;">요약 없음</span>';
+
+                return `
+                <tr style="vertical-align: middle;">
+                    <td>
+                        <div style="font-weight: 600; margin-bottom: 4px;">${row.branch_name || '-'}</div>
+                        <div>${getStarRating(row.avg_rating)}</div>
+                    </td>
+                    <td style="font-size: 13px; color: var(--grey-3); line-height: 1.5;">${summaryPreview}</td>
+                    <td style="text-align: center; font-weight: 600; font-size: 15px;">${row.review_count?.toLocaleString() || 0}</td>
+                    <td>
+                        <div class="keywords" style="display: flex; flex-wrap: wrap; gap: 4px;">
+                            ${(() => {
+                        const tags = row.top_tags || [];
+                        if (!tags.length) {
+                            return '<span style="color: var(--grey-5); font-style: italic;">-</span>';
+                        }
+                        return tags.map(t =>
+                            `<span class="keyword" style="background: ${getKeywordColor(t.name)}; color: ${getKeywordTextColor(t.name)};">${t.name}</span>`
+                        ).join('');
+                    })()}
+                        </div>
+                    </td>
+                    <td style="text-align: center;">
+                        <span class="badge ${row.status === 'published' ? 'badge-success' : row.status === 'approved' ? 'badge-warning' : 'badge-grey'}">
+                            ${row.status || 'draft'}
+                        </span>
+                    </td>
+                    <td style="text-align: center;">
+                        <button class="btn btn-secondary btn-sm" onclick="showDetail(${row.branch_id})">상세</button>
+                    </td>
+                </tr>
+            `;
+            }).join('');
+
+            document.getElementById('summaries-table').innerHTML = html;
+            document.getElementById('pagination-info').textContent = `${currentPage * pageSize + 1}-${currentPage * pageSize + data.length}개 표시`;
+        }
+
+        // Pagination
+        function prevPage() {
+            if (currentPage > 0) {
+                currentPage--;
+                loadSummaries();
+            }
+        }
+
+        function nextPage() {
+            if (summaries.length === pageSize) {
+                currentPage++;
+                loadSummaries();
+            }
+        }
+
+        // Status mappings
+        const statusClassMap = {
+            'draft': 'grey',
+            'approved': 'warning',
+            'published': 'success'
+        };
+        const statusLabelMap = {
+            'draft': '보류',
+            'approved': '승인',
+            'published': '게시'
+        };
+
+        // Show Detail Modal
+        async function showDetail(branchId) {
+            document.getElementById('detail-modal').classList.add('active');
+            document.getElementById('modal-body').innerHTML = '<div class="loading"><div class="spinner"></div>로딩 중...</div>';
+
+            try {
+                const data = await fetch(`/api/v2/summaries/${branchId}`).then(r => r.json());
+
+                document.getElementById('modal-title').textContent = `${data.branch_name || '지점 ' + branchId}`;
+
+                const html = `
+                    <div class="modal-header-content" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
+                        <div style="flex: 1;">
+                            <div style="font-size: 14px; color: var(--grey-5); margin-bottom: 4px;">ID: ${data.branch_id}</div>
+                            <h2 style="font-size: 24px; font-weight: 700; color: var(--grey-1); margin: 0;">${data.branch_name}</h2>
+                            <!-- 지역 표시/수정 -->
+                            <div id="region-display" style="font-size: 14px; color: var(--grey-3); margin-top: 4px;">${data.region || '지역 정보 없음'}</div>
+                            <input type="text" id="region-input" value="${data.region || ''}" placeholder="지역 입력 (예: 서울 강남구)"
+                                style="display: none; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 14px; width: 100%; max-width: 300px;">
+                        </div>
+                        <div>
+                            <span class="badge badge-${statusClassMap[data.status] || 'grey'}" style="font-size: 14px; padding: 6px 12px;">
+                                ${statusLabelMap[data.status] || data.status}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Tags -->
+                    <div style="margin-bottom: 24px;">
+                        <div style="font-size: 14px; font-weight: 600; color: var(--grey-3); margin-bottom: 8px;">태그</div>
+                        <div class="keywords" id="tags-display" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <span class="summary-empty">로딩 중...</span>
+                        </div>
+                        <!-- 태그 수정 영역 -->
+                        <div id="edit-area-tags" style="display: none; margin-top: 12px;">
+                            <div style="font-size: 12px; color: var(--grey-5); margin-bottom: 8px;">클릭하여 선택/해제 (선택 안해도 됨):</div>
+                            <div id="tag-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;"></div>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input type="text" id="custom-tag-input" placeholder="커스텀 태그 입력"
+                                    style="padding: 6px 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 13px; width: 150px;">
+                                <button class="btn btn-secondary btn-sm" onclick="addCustomTag()">+ 추가</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stats Grid -->
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 32px;">
+                        <div style="background: var(--grey-9); padding: 16px; border-radius: var(--radius);">
+                            <div style="font-size: 13px; color: var(--grey-5);">총 리뷰 수</div>
+                            <div style="font-size: 20px; font-weight: 700; color: var(--grey-1); margin-top: 4px;">${data.review_count?.toLocaleString() || 0}건</div>
+                        </div>
+                        <div style="background: var(--grey-9); padding: 16px; border-radius: var(--radius);">
+                            <div style="font-size: 13px; color: var(--grey-5);">평균 평점</div>
+                            <div style="font-size: 20px; font-weight: 700; color: var(--grey-1); margin-top: 4px;">⭐ ${data.avg_rating?.toFixed(2) || '0.0'}</div>
+                        </div>
+                    </div>
+
+                    <!-- Summary Tabs with AI Button -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <div class="tabs" style="display: flex; gap: 8px;">
+                            <div class="tab active" onclick="showSummaryTab(this, 'all')" style="padding: 8px 16px; cursor: pointer; font-weight: 500; font-size: 13px; border-radius: 20px; background: var(--grey-2); color: white; transition: all 0.2s;">전체</div>
+                            <div class="tab" onclick="showSummaryTab(this, '1y')" style="padding: 8px 16px; cursor: pointer; font-weight: 500; font-size: 13px; border-radius: 20px; background: var(--grey-8); color: var(--grey-3); transition: all 0.2s;">1년</div>
+                            <div class="tab" onclick="showSummaryTab(this, '6m')" style="padding: 8px 16px; cursor: pointer; font-weight: 500; font-size: 13px; border-radius: 20px; background: var(--grey-8); color: var(--grey-3); transition: all 0.2s;">6개월</div>
+                            <div class="tab" onclick="showSummaryTab(this, '3m')" style="padding: 8px 16px; cursor: pointer; font-weight: 500; font-size: 13px; border-radius: 20px; background: var(--grey-8); color: var(--grey-3); transition: all 0.2s;">3개월</div>
+                            <div class="tab" onclick="showSummaryTab(this, '1m')" style="padding: 8px 16px; cursor: pointer; font-weight: 500; font-size: 13px; border-radius: 20px; background: var(--grey-8); color: var(--grey-3); transition: all 0.2s;">1개월</div>
+                        </div>
+                        <button class="btn-ai-summary" onclick="regenerateSummary(${data.branch_id})" title="현재 선택된 기간의 요약을 AI로 재생성합니다">
+                            ✨ AI 요약
+                        </button>
+                    </div>
+
+                    <!-- Summary Content -->
+                    <div id="summary-content" style="min-height: 200px; background: white; border-radius: 0 0 var(--radius) var(--radius);">
+                        ${['all', '1y', '6m', '3m', '1m'].map(period => `
+                            <div class="summary-panel" id="panel-${period}" style="display: ${period === 'all' ? 'block' : 'none'};">
+                                <div class="summary-text" id="summary-text-${period}" style="font-size: 15px; line-height: 1.7; color: var(--grey-2); white-space: pre-wrap;">${data['summary_' + period] || '<span class="summary-empty" style="color: var(--grey-5); font-style: italic;">작성된 요약이 없습니다.</span>'}</div>
+                                <textarea id="edit-summary-${period}" style="display: none; width: 100%; min-height: 120px; padding: 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 14px; line-height: 1.6; resize: vertical; font-family: inherit;">${data['summary_' + period] || ''}</textarea>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <!-- 하단 버튼 영역 -->
+                    <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--grey-8);">
+                        <!-- 보기 모드: 수정 버튼 + 상태 버튼 -->
+                        <div id="view-mode-buttons" style="display: flex; justify-content: space-between; align-items: center;">
+                            <button class="btn btn-secondary" onclick="enterEditMode()">✏️ 수정</button>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-secondary btn-sm" onclick="updateStatus(${data.branch_id}, 'draft')">보류</button>
+                                <button class="btn btn-secondary btn-sm" onclick="updateStatus(${data.branch_id}, 'approved')">승인</button>
+                                <button class="btn btn-primary btn-sm" onclick="updateStatus(${data.branch_id}, 'published')">게시</button>
+                            </div>
+                        </div>
+                        <!-- 수정 모드: 저장/취소 버튼 -->
+                        <div id="edit-mode-buttons" style="display: none; justify-content: flex-end; gap: 12px;">
+                            <button class="btn btn-secondary" onclick="cancelEditMode()">취소</button>
+                            <button class="btn btn-primary" onclick="saveAllChanges(${data.branch_id})">💾 저장</button>
+                        </div>
+                    </div>
+    `;
+
+                document.getElementById('modal-body').innerHTML = html;
+
+                // 태그 로드 (data 객체 전달, branch_tags fallback 포함)
+                loadBranchTags(data, branchId);
+            } catch (e) {
+                document.getElementById('modal-body').innerHTML = '<div style="color: var(--error);">로드 실패</div>';
+            }
+        }
+
+        // 전역 변수
+        let currentSelectedTags = [];
+        let originalTags = [];
+        let isEditMode = false;
+        let currentSummaryPeriod = 'all';  // 현재 선택된 요약 기간
+        const DEFAULT_TAGS = ['고객응대', '차량상태', '가성비', '반납/픽업', '위치/접근성', '서비스', '보험/보장'];
+
+        // 지점 태그 로드 (keywords 배열 사용, 없으면 branch_tags에서 fallback)
+        async function loadBranchTags(data, branchId) {
+            // 1. keywords 배열 확인
+            if (data.keywords && data.keywords.length > 0) {
+                currentSelectedTags = [...data.keywords];
+            }
+            // 2. keyword_1,2,3 확인
+            else if (data.keyword_1 || data.keyword_2 || data.keyword_3) {
+                currentSelectedTags = [data.keyword_1, data.keyword_2, data.keyword_3].filter(t => t);
+            }
+            // 3. branch_tags에서 top3 가져오기 (fallback)
+            else {
+                try {
+                    const tagsData = await fetch(`/api/tags/batch?branch_ids=${branchId}`).then(r => r.json());
+                    const tags = tagsData[String(branchId)] || [];
+                    currentSelectedTags = tags.map(t => t.name);
+                } catch (e) {
+                    currentSelectedTags = [];
+                }
+            }
+
+            originalTags = [...currentSelectedTags];
+            updateTagsDisplay();
+        }
+
+        // 태그 표시 업데이트
+        function updateTagsDisplay() {
+            const display = document.getElementById('tags-display');
+            if (currentSelectedTags.length > 0) {
+                display.innerHTML = currentSelectedTags.map(t =>
+                    `<span class="keyword" style="background: ${getKeywordColor(t)}; color: ${getKeywordTextColor(t)};">${t}</span>`
+                ).join('');
+            } else {
+                display.innerHTML = '<span class="summary-empty">태그 없음</span>';
+            }
+        }
+
+        // 수정 모드 진입
+        function enterEditMode() {
+            isEditMode = true;
+            originalTags = [...currentSelectedTags];
+
+            // 버튼 전환
+            document.getElementById('view-mode-buttons').style.display = 'none';
+            document.getElementById('edit-mode-buttons').style.display = 'flex';
+
+            // 지역 수정 활성화
+            document.getElementById('region-display').style.display = 'none';
+            document.getElementById('region-input').style.display = 'block';
+
+            // 태그 수정 활성화
+            document.getElementById('tags-display').style.display = 'none';
+            document.getElementById('edit-area-tags').style.display = 'block';
+            renderTagSelector();
+
+            // 요약 수정 활성화 (현재 보이는 패널만)
+            ['all', '1y', '6m', '3m', '1m'].forEach(period => {
+                const textEl = document.getElementById('summary-text-' + period);
+                const editEl = document.getElementById('edit-summary-' + period);
+                if (textEl) textEl.style.display = 'none';
+                if (editEl) editEl.style.display = 'block';
+            });
+        }
+
+        // 수정 모드 취소
+        function cancelEditMode() {
+            isEditMode = false;
+            currentSelectedTags = [...originalTags];
+
+            // 버튼 전환
+            document.getElementById('view-mode-buttons').style.display = 'flex';
+            document.getElementById('edit-mode-buttons').style.display = 'none';
+
+            // 지역 표시 복원
+            document.getElementById('region-display').style.display = 'block';
+            document.getElementById('region-input').style.display = 'none';
+
+            // 태그 표시 복원
+            document.getElementById('tags-display').style.display = 'flex';
+            document.getElementById('edit-area-tags').style.display = 'none';
+            updateTagsDisplay();
+
+            // 요약 표시 복원
+            ['all', '1y', '6m', '3m', '1m'].forEach(period => {
+                const textEl = document.getElementById('summary-text-' + period);
+                const editEl = document.getElementById('edit-summary-' + period);
+                if (textEl) textEl.style.display = 'block';
+                if (editEl) editEl.style.display = 'none';
+            });
+        }
+
+        // 태그 선택기 렌더링 (기본 태그 + 커스텀 태그)
+        function renderTagSelector() {
+            const selector = document.getElementById('tag-selector');
+
+            // 모든 태그 (기본 + 커스텀)
+            const allTags = [...new Set([...DEFAULT_TAGS, ...currentSelectedTags])];
+
+            selector.innerHTML = allTags.map(tag => {
+                const isSelected = currentSelectedTags.includes(tag);
+                const isCustom = !DEFAULT_TAGS.includes(tag);
+                const bg = isSelected ? getKeywordColor(tag) : 'var(--grey-8)';
+                const color = isSelected ? getKeywordTextColor(tag) : 'var(--grey-3)';
+                const border = isSelected ? '2px solid var(--primary)' : '2px solid transparent';
+                const deleteBtn = isCustom ? `<span onclick="event.stopPropagation(); removeCustomTag('${tag}')" style="margin-left: 4px; font-size: 10px;">✕</span>` : '';
+                return `<span class="keyword" onclick="toggleTag('${tag}')"
+                    style="background: ${bg}; color: ${color}; border: ${border}; cursor: pointer; user-select: none;"
+                    data-tag="${tag}">${tag}${deleteBtn}</span>`;
+            }).join('');
+        }
+
+        // 태그 토글 (선택/해제)
+        function toggleTag(tagName) {
+            const idx = currentSelectedTags.indexOf(tagName);
+            if (idx > -1) {
+                currentSelectedTags.splice(idx, 1);
+            } else {
+                currentSelectedTags.push(tagName);
+            }
+            renderTagSelector();
+        }
+
+        // 커스텀 태그 추가
+        function addCustomTag() {
+            const input = document.getElementById('custom-tag-input');
+            const tagName = input.value.trim();
+            if (!tagName) return;
+            if (currentSelectedTags.includes(tagName)) {
+                alert('이미 존재하는 태그입니다.');
+                return;
+            }
+            currentSelectedTags.push(tagName);
+            input.value = '';
+            renderTagSelector();
+        }
+
+        // 커스텀 태그 삭제
+        function removeCustomTag(tagName) {
+            const idx = currentSelectedTags.indexOf(tagName);
+            if (idx > -1) {
+                currentSelectedTags.splice(idx, 1);
+            }
+            renderTagSelector();
+        }
+
+        // 모든 변경사항 저장
+        async function saveAllChanges(branchId) {
+            const region = document.getElementById('region-input').value.trim();
+            const summaries_data = {};
+            ['all', '1y', '6m', '3m', '1m'].forEach(period => {
+                const el = document.getElementById('edit-summary-' + period);
+                if (el) summaries_data['summary_' + period] = el.value;
+            });
+
+            try {
+                const response = await fetch(`/api/v2/summaries/${branchId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        region: region,
+                        keywords: currentSelectedTags,
+                        ...summaries_data
+                    })
+                });
+
+                if (response.ok) {
+                    // 모달 UI 업데이트
+                    document.getElementById('region-display').textContent = region || '지역 정보 없음';
+                    updateTagsDisplay();
+                    ['all', '1y', '6m', '3m', '1m'].forEach(period => {
+                        const textEl = document.getElementById('summary-text-' + period);
+                        const editEl = document.getElementById('edit-summary-' + period);
+                        if (textEl && editEl) {
+                            textEl.innerHTML = editEl.value || '<span class="summary-empty" style="color: var(--grey-5); font-style: italic;">작성된 요약이 없습니다.</span>';
+                        }
+                    });
+
+                    // 대시보드 테이블 즉시 업데이트 (타입 변환 포함)
+                    const rowIdx = summaries.findIndex(r => Number(r.branch_id) === Number(branchId));
+                    if (rowIdx > -1) {
+                        summaries[rowIdx].region = region;
+                        summaries[rowIdx].top_tags = currentSelectedTags.map(t => ({ name: t }));
+                        summaries[rowIdx].summary_all = summaries_data.summary_all;
+                        renderTable(summaries);
+                    }
+
+                    // 수정 모드 종료
+                    cancelEditMode();
+
+                    alert('✅ 저장되었습니다.');
+                } else {
+                    alert('저장 실패');
+                }
+            } catch (e) {
+                console.error('Save error:', e);
+                alert('저장 중 오류 발생');
+            }
+        }
+
+        function showSummaryTab(el, period) {
+            // 현재 선택된 기간 업데이트
+            currentSummaryPeriod = period;
+
+            // 모든 탭 비활성화 스타일
+            document.querySelectorAll('.tabs .tab').forEach(t => {
+                t.classList.remove('active');
+                t.style.background = 'var(--grey-8)';
+                t.style.color = 'var(--grey-3)';
+            });
+
+            // 선택된 탭 활성화 스타일
+            el.classList.add('active');
+            el.style.background = 'var(--grey-2)';
+            el.style.color = 'white';
+
+            // 패널 전환
+            document.querySelectorAll('.summary-panel').forEach(p => p.style.display = 'none');
+            const panel = document.getElementById('panel-' + period);
+            if (panel) panel.style.display = 'block';
+        }
+
+        // AI 요약 재생성
+        async function regenerateSummary(branchId) {
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            const periodLabels = {
+                'all': '전체',
+                '1y': '1년',
+                '6m': '6개월',
+                '3m': '3개월',
+                '1m': '1개월'
+            };
+
+            // 확인 대화상자
+            if (!confirm(`[${periodLabels[currentSummaryPeriod]}] 기간의 요약을 AI로 재생성하시겠습니까?\n\n기존 요약이 덮어씌워집니다.`)) {
+                return;
+            }
+
+            try {
+                // 로딩 상태
+                btn.innerHTML = '⏳ 생성 중...';
+                btn.disabled = true;
+                btn.style.opacity = '0.7';
+
+                const response = await fetch(`/api/v2/summaries/${branchId}/regenerate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ period: currentSummaryPeriod })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // 요약 텍스트 업데이트
+                    const textEl = document.getElementById(`summary-text-${currentSummaryPeriod}`);
+                    const editEl = document.getElementById(`edit-summary-${currentSummaryPeriod}`);
+
+                    if (textEl) textEl.innerHTML = result.summary;
+                    if (editEl) editEl.value = result.summary;
+
+                    showToast(`✨ [${periodLabels[currentSummaryPeriod]}] 요약이 재생성되었습니다`, 'success');
+                } else {
+                    throw new Error(result.error || '요약 생성 실패');
+                }
+            } catch (error) {
+                console.error('Regenerate error:', error);
+                showToast('❌ 요약 생성 실패: ' + error.message, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('detail-modal').classList.remove('active');
+        }
+
+        // 기간별 수정 모드 토글
+        function togglePeriodEdit(period) {
+            const textEl = document.getElementById('summary-text-' + period);
+            const editArea = document.getElementById('edit-area-' + period);
+            const editBtn = document.getElementById('edit-btn-' + period);
+
+            if (editArea.style.display === 'none') {
+                textEl.style.display = 'none';
+                editArea.style.display = 'block';
+                editBtn.textContent = '📖 보기';
+            } else {
+                cancelPeriodEdit(period);
+            }
+        }
+
+        // 기간별 수정 취소
+        function cancelPeriodEdit(period) {
+            const textEl = document.getElementById('summary-text-' + period);
+            const editArea = document.getElementById('edit-area-' + period);
+            const editBtn = document.getElementById('edit-btn-' + period);
+
+            textEl.style.display = 'block';
+            editArea.style.display = 'none';
+            editBtn.textContent = '✏️ 수정';
+        }
+
+        // 기간별 요약 저장
+        async function savePeriodSummary(branchId, period) {
+            const textarea = document.getElementById('edit-summary-' + period);
+            const editedSummary = textarea.value;
+
+            // 필드명 매핑
+            const fieldMap = {
+                'all': 'summary_all',
+                '1y': 'summary_1y',
+                '6m': 'summary_6m',
+                '3m': 'summary_3m',
+                '1m': 'summary_1m'
+            };
+
+            const fieldName = fieldMap[period];
+            if (!fieldName) {
+                alert('잘못된 기간입니다.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/v2/summaries/${branchId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [fieldName]: editedSummary })
+                });
+
+                if (!response.ok) throw new Error('저장 실패');
+
+                alert('✅ 요약이 저장되었습니다.');
+
+                // UI 업데이트
+                const textEl = document.getElementById('summary-text-' + period);
+                textEl.innerHTML = editedSummary || '<span class="summary-empty">요약 없음</span>';
+                cancelPeriodEdit(period);
+                loadSummaries();
+            } catch (e) {
+                alert('❌ 저장 실패: ' + e.message);
+            }
+        }
+
+        // Keyword Edit Functions
+        function toggleKeywordEdit() {
+            const display = document.getElementById('keywords-display');
+            const editArea = document.getElementById('edit-area-keywords');
+            const editBtn = document.getElementById('edit-btn-keywords');
+
+            if (editArea.style.display === 'none') {
+                display.style.display = 'none';
+                editArea.style.display = 'block';
+                editBtn.style.display = 'none';
+            } else {
+                cancelKeywordEdit();
+            }
+        }
+
+        function cancelKeywordEdit() {
+            const display = document.getElementById('keywords-display');
+            const editArea = document.getElementById('edit-area-keywords');
+            const editBtn = document.getElementById('edit-btn-keywords');
+
+            display.style.display = 'flex';
+            editArea.style.display = 'none';
+            editBtn.style.display = 'inline-flex';
+        }
+
+        async function saveKeywords(branchId) {
+            const input = document.getElementById('edit-keywords-input').value.trim();
+
+            // Parse keywords from # tags
+            const keywords = input
+                .split('#')
+                .map(k => k.trim())
+                .filter(k => k.length > 0);  // 개수 제한 제거
+
+            const data = {
+                keywords: keywords,  // JSON 배열로 저장
+                // 하위 호환성을 위해 keyword_1,2,3도 저장
+                keyword_1: keywords[0] || null,
+                keyword_2: keywords[1] || null,
+                keyword_3: keywords[2] || null
+            };
+
+            try {
+                const response = await fetch(`/api/v2/summaries/${branchId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) throw new Error('저장 실패');
+
+                alert(`✅ 키워드 ${keywords.length}개가 저장되었습니다.`);
+
+                // UI 업데이트
+                const displayEl = document.getElementById('keywords-display');
+                let html = '';
+                if (keywords.length > 0) {
+                    html = keywords.map(k => `<span class="keyword">${k}</span>`).join('');
+                } else {
+                    html = '<span class="summary-empty">키워드 없음</span>';
+                }
+                displayEl.innerHTML = html;
+
+                cancelKeywordEdit();
+                loadSummaries();
+            } catch (e) {
+                alert('❌ 저장 실패: ' + e.message);
+            }
+        }
+
+        // Update Status
+        async function updateStatus(branchId, status) {
+            try {
+                const response = await fetch(`/api/v2/summaries/${branchId}/status`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || '상태 변경 실패');
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    alert(`✅ 상태가 ${status}로 변경되었습니다.`);
+                    closeModal();
+                    await loadStats();
+                    await loadSummaries();
+                } else {
+                    throw new Error('상태 변경 실패');
+                }
+            } catch (e) {
+                console.error('Status update error:', e);
+                alert('❌ 상태 변경 실패: ' + e.message);
+            }
+        }
+
+        // Sync Affiliates
+        async function syncAffiliates() {
+            if (!confirm('Carmore API에서 업체 정보를 동기화하시겠습니까?')) return;
+
+            try {
+                const res = await fetch('/api/carmore/sync/affiliates', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    alert(`동기화 완료: ${data.success}개 업체`);
+                    loadSummaries();
+                } else {
+                    alert('동기화 실패: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('동기화 실패: ' + e.message);
+            }
+        }
+
+        // Click outside modal to close
+        document.getElementById('detail-modal').addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal-overlay')) closeModal();
+        });
+    </script>
+</body>
+
+</html>

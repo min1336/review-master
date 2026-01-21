@@ -11,9 +11,13 @@ class Settings(BaseSettings):
 
     # LLM 설정
     llm_provider: Literal["openai", "gemini"] = "openai"
+
+    # OpenAI 설정
     openai_api_key: str = ""
     openai_model: str = "gpt-3.5-turbo"
     openai_rpm: int = 3500
+
+    # Gemini 설정
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash-preview-05-20"
     gemini_rpm: int = 1000

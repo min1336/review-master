@@ -29,6 +29,7 @@ except ImportError:
     pass
 
 from scripts.weight_calculator import WeightCalculator, KeywordScoreManager
+from src.api import CarmoreAPIClient
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -87,9 +88,11 @@ class IncrementalPipeline:
         self.keyword_manager = KeywordScoreManager(self.weight_calculator)
         self.mecab = None
         self.supabase_client = None
+        self.api_client = None
 
         self._init_mecab()
         self._init_supabase()
+        self._init_api_client()
 
     def _init_mecab(self):
         """MeCab 초기화"""
@@ -108,6 +111,17 @@ class IncrementalPipeline:
             logger.info("Supabase 연결 완료")
         except Exception as e:
             logger.warning(f"Supabase 연결 실패: {e}")
+
+    def _init_api_client(self):
+        """Carmore API 클라이언트 초기화"""
+        try:
+            self.api_client = CarmoreAPIClient()
+            if self.api_client.health_check():
+                logger.info("Carmore API 연결 완료")
+            else:
+                logger.warning("Carmore API 연결 실패 - 헬스체크 실패")
+        except Exception as e:
+            logger.warning(f"Carmore API 초기화 실패: {e}")
 
     # =========================================================================
     # 전처리
@@ -482,20 +496,167 @@ class IncrementalPipeline:
     # API 연동 (Carmore)
     # =========================================================================
 
-    def fetch_new_reviews_from_api(self, since: Optional[datetime] = None) -> List[Dict]:
+    def fetch_new_reviews_from_api(
+        self,
+        since: Optional[datetime] = None,
+        branch_ids: Optional[List[int]] = None
+    ) -> List[Dict]:
         """
         Carmore API에서 신규 리뷰 조회
 
         Args:
             since: 이 시점 이후의 리뷰만 조회
+            branch_ids: 특정 지점만 조회 (None이면 전체 조회)
 
         Returns:
-            리뷰 목록
+            리뷰 목록 (파이프라인 형식으로 변환됨)
         """
-        # TODO: 실제 Carmore API 연동
-        # 현재는 플레이스홀더
-        logger.warning("Carmore API 연동 미구현 - 빈 목록 반환")
-        return []
+        if not self.api_client:
+            logger.error("API 클라이언트 미초기화")
+            return []
+
+        all_reviews = []
+
+        # 지점 목록 결정
+        if branch_ids:
+            target_branches = branch_ids
+        else:
+            # 전체 제휴사에서 지점 목록 가져오기
+            affiliates_response = self.api_client.get_affiliates(location_type="PARTNERS")
+            if not affiliates_response.success:
+                logger.error(f"제휴사 목록 조회 실패: {affiliates_response.error}")
+                return []
+
+            target_branches = []
+            affiliates = affiliates_response.data
+            if isinstance(affiliates, list):
+                for aff in affiliates:
+                    branch_id = aff.get('affiliateBranchIndex') or aff.get('branchIndex') or aff.get('id')
+                    if branch_id:
+                        target_branches.append(branch_id)
+
+            logger.info(f"총 {len(target_branches)}개 지점에서 리뷰 조회 예정")
+
+        # 각 지점별 리뷰 조회
+        for branch_id in target_branches:
+            try:
+                response = self.api_client.get_reviews(
+                    branch_id=branch_id,
+                    review_type="PARTNERS",
+                    page=1,
+                    page_size=100
+                )
+
+                if not response.success:
+                    logger.warning(f"지점 {branch_id} 리뷰 조회 실패: {response.error}")
+                    continue
+
+                reviews_data = response.data
+                reviews = []
+
+                # Carmore API 응답 형식: {"reviews": [...], ...}
+                if isinstance(reviews_data, list):
+                    reviews = reviews_data
+                elif isinstance(reviews_data, dict):
+                    reviews = reviews_data.get('reviews', [])
+
+                # 리뷰 형식 변환 및 필터링
+                for review in reviews:
+                    converted = self._convert_api_review(review, branch_id)
+                    if converted:
+                        # since 이후 리뷰만 필터
+                        if since:
+                            review_date = converted.get('등록일시')
+                            if review_date:
+                                if isinstance(review_date, str):
+                                    review_date = datetime.fromisoformat(review_date.replace('Z', '+00:00'))
+                                if review_date <= since:
+                                    continue
+                        all_reviews.append(converted)
+
+            except Exception as e:
+                logger.error(f"지점 {branch_id} 처리 중 에러: {e}")
+                continue
+
+        logger.info(f"총 {len(all_reviews)}개 리뷰 조회 완료")
+        return all_reviews
+
+    def _convert_api_review(self, api_review: Dict, branch_id: int) -> Optional[Dict]:
+        """
+        API 응답 형식을 파이프라인 형식으로 변환
+
+        Carmore API 리뷰 응답 형식:
+        {
+            "companyName": "업체명",
+            "branchName": "지점명",
+            "branchEvaluation": 5,
+            "carEvaluation": 5,
+            "takeEvaluation": 5,
+            "writer": "작성자",
+            "opinion": "리뷰 내용",
+            "recommend": 0,
+            "createdAt": "2025-04-22T06:56:40.000Z",
+            "reservation": {"carModel": "차종명", ...}
+        }
+
+        Args:
+            api_review: API 응답 리뷰 데이터
+            branch_id: 지점 ID
+
+        Returns:
+            파이프라인 형식의 리뷰 딕셔너리
+        """
+        try:
+            # Carmore API 필드 매핑
+            content = api_review.get('opinion') or ''
+
+            # 빈 리뷰 또는 짧은 리뷰 필터링
+            if not content or len(content.strip()) < 5:
+                return None
+
+            # 작성일시
+            created_at = api_review.get('createdAt') or datetime.now().isoformat()
+
+            # 추천 수 (도움돼요)
+            helpful_count = api_review.get('recommend') or 0
+
+            # 평점 (지점평점 사용, 없으면 평균 계산)
+            branch_eval = api_review.get('branchEvaluation') or 0
+            car_eval = api_review.get('carEvaluation') or 0
+            take_eval = api_review.get('takeEvaluation') or 0
+
+            if branch_eval:
+                rating = float(branch_eval)
+            elif car_eval or take_eval:
+                evals = [e for e in [branch_eval, car_eval, take_eval] if e]
+                rating = sum(evals) / len(evals) if evals else 0.0
+            else:
+                rating = 0.0
+
+            # 지점명 (응답에 포함됨)
+            branch_name = api_review.get('branchName') or ''
+            company_name = api_review.get('companyName') or ''
+
+            # 차종 정보 (reservation에 포함)
+            reservation = api_review.get('reservation') or {}
+            car_model = reservation.get('carModel') or ''
+
+            return {
+                '리뷰번호': None,  # API 응답에 리뷰 ID가 없음
+                '지점번호': branch_id,
+                '지점명': f"{company_name} {branch_name}".strip(),
+                '리뷰내용': content.strip(),
+                '등록일시': created_at,
+                '리뷰상태': 'normal',
+                '도움돼요수': helpful_count,
+                '지점평점(친절/편의성)': rating,
+                '차종': car_model,
+                '작성자': api_review.get('writer') or ''
+            }
+
+        except Exception as e:
+            logger.warning(f"리뷰 변환 실패: {e}")
+            return None
 
     def run(self) -> Dict:
         """

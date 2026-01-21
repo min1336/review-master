@@ -49,6 +49,7 @@ tenacity==9.1.2             # Retry logic for API calls
 torch>=2.0.0                # PyTorch (CPU version for lightweight)
 transformers>=4.35.0        # Hugging Face Transformers
 accelerate>=0.25.0          # Model loading optimization
+sentence-transformers>=2.2.0  # Embedding-based tag classification
 
 # ============================================================================
 # Utilities

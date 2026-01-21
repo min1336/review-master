@@ -21,13 +21,13 @@ class KeywordAggregator:
         self,
         extractor: Optional[KeywordExtractor] = None,
         weight_calculator: Optional[WeightCalculator] = None,
-        use_weights: bool = True
+        use_weights: bool = False
     ):
         """
         Args:
             extractor: 키워드 추출기 (기본값: 새로 생성)
-            weight_calculator: 가중치 계산기 (기본값: 새로 생성)
-            use_weights: 가중치 사용 여부 (기본값: True)
+            weight_calculator: 가중치 계산기 (deprecated, 사용 안함)
+            use_weights: 가중치 사용 여부 (기본값: False - 단순 빈도 기반)
         """
         self.extractor = extractor or KeywordExtractor()
         self.weight_calculator = weight_calculator or WeightCalculator()

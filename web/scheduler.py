@@ -1,8 +1,24 @@
 """
-Review Summary AI 스케줄러 모듈
-- APScheduler 기반
-- Supabase에서 설정 로드
+Review Summary AI 스케줄러 모듈 v2
+
+기능:
+- APScheduler 기반 백그라운드 스케줄링
+- 데이터 분석 기반 스케줄 설정 (scheduler_config.py)
+- 갱신 조건 자동 검사 (update_checker.py)
 - 시즌별 동적 스케줄링
+
+스케줄링 기준 (데이터 분석 결과):
+- 성수기(6-8월): 주 1회 (일요일) - 일평균 113건
+- 환절기(3-5, 9-10월): 격주 (1일, 15일) - 일평균 95건
+- 비수기(11-2월): 월 1회 (1일) - 일평균 80건
+
+갱신 조건:
+- 신규: 30건 이상 리뷰, 요약 없음
+- 갱신: 50건 증가 OR 30% 증가
+
+실행 모드:
+- 🐇 증분 (Incremental): 자동 스케줄 실행 (API 신규 리뷰만)
+- 🦣 배치 (Batch): 관리자 수동 실행 전용 (Excel 전체)
 """
 
 import os
@@ -10,6 +26,7 @@ import sys
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Dict, List, Optional
 
 # 프로젝트 경로 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -23,8 +40,16 @@ from supabase_client import (
     get_current_season_config,
     create_scheduler_log,
     update_scheduler_log,
-    get_all_summaries
+    get_all_branch_summaries
 )
+
+# 스케줄러 설정 및 갱신 체커
+try:
+    from src.config.scheduler_config import get_scheduler_config, SchedulerConfig
+    from src.pipeline.update_checker import UpdateChecker, BranchUpdateInfo
+    HAS_UPDATE_CHECKER = True
+except ImportError:
+    HAS_UPDATE_CHECKER = False
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -32,12 +57,35 @@ logger = logging.getLogger('scheduler')
 
 
 class ReviewScheduler:
-    """리뷰 요약 스케줄러"""
+    """
+    리뷰 요약 스케줄러 v2
+
+    주요 기능:
+    1. 시즌별 자동 스케줄링 (성수기/환절기/비수기)
+    2. 스마트 갱신 (신규/갱신 대상만 처리)
+    3. Supabase 연동 로깅
+
+    사용법:
+        scheduler = get_scheduler()
+        scheduler.start()
+
+        # 즉시 실행 (스마트 모드)
+        scheduler.run_smart()
+
+        # 전체 배치 실행
+        scheduler.run_batch()
+    """
 
     def __init__(self, app=None):
         self.scheduler = BackgroundScheduler(timezone='Asia/Seoul')
         self.app = app
         self._setup_listeners()
+
+        # 스케줄러 설정 로드
+        if HAS_UPDATE_CHECKER:
+            self.sched_config = get_scheduler_config()
+        else:
+            self.sched_config = None
 
     def _setup_listeners(self):
         """스케줄러 이벤트 리스너 설정"""
@@ -124,10 +172,9 @@ class ReviewScheduler:
                         update_scheduler_log(log_id, status='skipped', error_message=f'현재 월({current_month})은 해당 시즌 아님')
                     return
 
-            # 파이프라인 실행 (기본: 증분 모드)
-            # batch_mode 설정이 있으면 배치 모드로 실행
-            use_incremental = not config.get('batch_mode', False)
-            result = self._execute_pipeline(use_incremental=use_incremental)
+            # 파이프라인 실행 (자동 스케줄: 증분 모드만)
+            # ⚠️ 배치 모드는 관리자 수동 실행만 허용
+            result = self._execute_pipeline(use_incremental=True)
 
             # 로그 업데이트
             if log_id:
@@ -181,11 +228,10 @@ class ReviewScheduler:
     def _execute_batch_pipeline(self) -> dict:
         """배치 파이프라인 실행 (Excel 기반 - 전체 처리)"""
         try:
-            # pipeline_v3.py import
-            from scripts.pipeline_v3 import ReviewPipeline
+            from src.pipeline.batch_pipeline import BatchPipeline
 
             # 파이프라인 실행
-            pipeline = ReviewPipeline(min_reviews=30, use_deep_learning=False)
+            pipeline = BatchPipeline(min_reviews=30)
 
             # 입력 파일 찾기
             data_dir = Path(__file__).parent.parent / 'data'
@@ -199,13 +245,11 @@ class ReviewScheduler:
             output_dir = Path(__file__).parent.parent / 'output'
 
             logger.info(f"입력 파일: {input_file}")
-            pipeline.run(str(input_file), str(output_dir))
+            stats = pipeline.run(str(input_file), str(output_dir))
 
-            # 결과 통계
-            summaries = get_all_summaries(limit=1000)
             return {
-                'branch_count': len(summaries),
-                'success_count': len(summaries),
+                'branch_count': stats.get('branch_count', 0),
+                'success_count': stats.get('summaries_generated', 0),
                 'fail_count': 0,
                 'mode': 'batch'
             }
@@ -266,8 +310,14 @@ class ReviewScheduler:
             self._run_pipeline_job(config)
 
     def run_batch(self):
-        """배치 파이프라인 실행 (Excel 전체 처리 - 초기 1회용)"""
-        logger.info("[배치] Excel 전체 처리 시작")
+        """
+        배치 파이프라인 실행 (Excel 전체 처리)
+
+        ⚠️ 관리자 수동 실행 전용!
+        - 자동 스케줄에서는 실행되지 않음
+        - API: POST /api/scheduler/trigger/batch
+        """
+        logger.info("[배치] Excel 전체 처리 시작 (관리자 수동 실행)")
 
         log = create_scheduler_log('batch_full')
         log_id = log['id'] if log else None
@@ -320,6 +370,190 @@ class ReviewScheduler:
             if log_id:
                 update_scheduler_log(log_id, status='failed', error_message=str(e))
             raise
+
+    def run_smart(self, max_branches: int = None) -> dict:
+        """
+        스마트 파이프라인 실행 (신규/갱신 대상만 처리)
+
+        데이터 분석 기반 갱신 조건:
+        - 신규: 30건 이상 리뷰, 요약 없음
+        - 갱신: 50건 증가 OR 30% 증가
+
+        Args:
+            max_branches: 최대 처리 지점 수 (None: 전체)
+
+        Returns:
+            실행 결과 딕셔너리
+        """
+        if not HAS_UPDATE_CHECKER:
+            logger.warning("[스마트] update_checker 모듈 없음, 증분 모드로 대체")
+            return self.run_incremental()
+
+        logger.info("[스마트] 갱신 대상 탐지 시작")
+
+        log = create_scheduler_log('smart')
+        log_id = log['id'] if log else None
+
+        try:
+            import pandas as pd
+
+            # 1. 리뷰 데이터 로드
+            data_dir = Path(__file__).parent.parent / 'data'
+            input_files = list(data_dir.glob('리뷰리스트*.xlsx'))
+
+            if not input_files:
+                raise FileNotFoundError("리뷰 데이터 파일을 찾을 수 없습니다")
+
+            input_file = max(input_files, key=lambda x: x.stat().st_mtime)
+            logger.info(f"[스마트] 입력 파일: {input_file.name}")
+
+            reviews_df = pd.read_excel(input_file)
+
+            # 2. 갱신 대상 탐지
+            checker = UpdateChecker(self.sched_config)
+            checker.load_current_counts(reviews_df)
+            checker.load_from_supabase()
+
+            queue = checker.get_processing_queue(max_items=max_branches)
+
+            if not queue:
+                logger.info("[스마트] 갱신 대상 없음")
+                if log_id:
+                    update_scheduler_log(log_id, status='completed',
+                                        branch_count=0, success_count=0, fail_count=0)
+                return {'mode': 'smart', 'branch_count': 0, 'message': '갱신 대상 없음'}
+
+            # 3. 대상 지점 처리
+            new_count = sum(1 for b in queue if b.is_new)
+            update_count = len(queue) - new_count
+            logger.info(f"[스마트] 처리 대상: {len(queue)}개 (신규: {new_count}, 갱신: {update_count})")
+
+            # 대상 지점 ID 목록
+            target_branch_ids = [b.branch_id for b in queue]
+
+            # 4. 선택적 파이프라인 실행
+            result = self._execute_smart_pipeline(reviews_df, target_branch_ids)
+
+            if log_id:
+                update_scheduler_log(
+                    log_id,
+                    branch_count=len(queue),
+                    success_count=result.get('success_count', 0),
+                    fail_count=result.get('fail_count', 0),
+                    status='completed'
+                )
+
+            logger.info(f"[스마트] 완료: {result}")
+            return result
+
+        except Exception as e:
+            logger.error(f"[스마트] 실패: {e}")
+            if log_id:
+                update_scheduler_log(log_id, status='failed', error_message=str(e))
+            raise
+
+    def _execute_smart_pipeline(
+        self,
+        reviews_df,
+        target_branch_ids: List[int]
+    ) -> dict:
+        """
+        선택적 파이프라인 실행 (지정된 지점만)
+
+        Args:
+            reviews_df: 전체 리뷰 데이터프레임
+            target_branch_ids: 처리할 지점 ID 목록
+
+        Returns:
+            실행 결과
+        """
+        from src.pipeline.batch_pipeline import BatchPipeline
+
+        # 대상 지점만 필터링
+        filtered_df = reviews_df[reviews_df['지점번호'].isin(target_branch_ids)]
+
+        if filtered_df.empty:
+            return {'mode': 'smart', 'success_count': 0, 'fail_count': 0}
+
+        # 임시 파일로 저장
+        temp_dir = Path(__file__).parent.parent / 'output' / 'temp'
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        temp_file = temp_dir / f'smart_batch_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+
+        filtered_df.to_excel(temp_file, index=False)
+
+        try:
+            # 파이프라인 실행
+            pipeline = BatchPipeline(min_reviews=self.sched_config.new_summary.min_reviews)
+            output_dir = Path(__file__).parent.parent / 'output'
+
+            stats = pipeline.run(str(temp_file), str(output_dir))
+
+            return {
+                'mode': 'smart',
+                'branch_count': len(target_branch_ids),
+                'success_count': stats.get('summaries_generated', 0),
+                'fail_count': len(target_branch_ids) - stats.get('summaries_generated', 0)
+            }
+
+        finally:
+            # 임시 파일 정리
+            if temp_file.exists():
+                temp_file.unlink()
+
+    def get_update_report(self) -> dict:
+        """
+        갱신 현황 리포트 조회
+
+        Returns:
+            현황 리포트 딕셔너리
+        """
+        if not HAS_UPDATE_CHECKER:
+            return {'error': 'update_checker 모듈 없음'}
+
+        try:
+            import pandas as pd
+
+            data_dir = Path(__file__).parent.parent / 'data'
+            input_files = list(data_dir.glob('리뷰리스트*.xlsx'))
+
+            if not input_files:
+                return {'error': '리뷰 데이터 파일 없음'}
+
+            input_file = max(input_files, key=lambda x: x.stat().st_mtime)
+            reviews_df = pd.read_excel(input_file)
+
+            checker = UpdateChecker(self.sched_config)
+            checker.load_current_counts(reviews_df)
+            checker.load_from_supabase()
+
+            return checker.get_summary_report()
+
+        except Exception as e:
+            return {'error': str(e)}
+
+    def load_season_schedules(self):
+        """시즌별 스케줄 자동 로드 (scheduler_config 기반)"""
+        if not self.sched_config:
+            logger.warning("scheduler_config 없음, DB 설정 사용")
+            return self.load_schedules_from_db()
+
+        logger.info("시즌별 스케줄 로드 (scheduler_config 기반)")
+
+        for key, season in self.sched_config.seasons.items():
+            job_id = f"season_{key}"
+            months_str = ','.join(map(str, season.months))
+
+            config = {
+                'config_key': job_id,
+                'cron_expression': season.cron_expression,
+                'is_enabled': True,
+                'description': season.description,
+                'months': months_str
+            }
+
+            self._add_or_update_job(config)
+            logger.info(f"  - {job_id}: {season.cron_expression} ({season.name})")
 
     def run_test(self):
         """테스트 실행 (파이프라인 없이 로그만 남김)"""
