@@ -11,7 +11,5 @@ services:
       - LLM_PROVIDER
       - SUPABASE_URL
       - SUPABASE_KEY
-      - IP_WHITELIST_ENABLED
-      - IP_WHITELIST
     cpus: "0.5"
     mem_limit: "512m"

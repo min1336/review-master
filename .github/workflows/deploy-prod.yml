@@ -16,11 +16,6 @@ on:
   push:
     branches:
       - main
-      - feat/AI-52
-
-  pull_request:
-    branches:
-      - feat/AI-52
 
 concurrency:
   group: "deploy-prod-${{ github.ref }}"
@@ -203,8 +198,6 @@ jobs:
             printf 'LLM_PROVIDER=%s\n' "$LLM_PROVIDER" >> .env
             printf 'SUPABASE_URL=%s\n' "$SUPABASE_URL" >> .env
             printf 'SUPABASE_KEY=%s\n' "$SUPABASE_KEY" >> .env
-            printf 'IP_WHITELIST_ENABLED=%s\n' "$IP_WHITELIST_ENABLED" >> .env
-            printf 'IP_WHITELIST=%s\n' "$IP_WHITELIST" >> .env
             echo "✅ .env created"
             
             # GitHub Container Registry 로그인
