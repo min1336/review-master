@@ -7,6 +7,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 # 프로젝트 경로 설정
 APP_DIR = Path(__file__).parent
@@ -57,6 +58,9 @@ app.include_router(api_router, prefix="/api")
 
 # 페이지 라우터 (/)
 app.include_router(pages_router)
+
+# Static 파일 서빙 (/static/*)
+app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 
 
 # ============================================================
