@@ -27,9 +27,50 @@ class SummaryService:
         limit: int = 50,
         offset: int = 0,
         sort_by: str = 'branch_id',
-        order: str = 'asc'
+        order: str = 'asc',
+        review_date_from: Optional[datetime] = None,
+        review_date_to: Optional[datetime] = None
     ) -> List[dict]:
-        """요약 목록 조회"""
+        """
+        요약 목록 조회 (날짜 범위 필터링 지원)
+
+        Args:
+            status: 상태 필터 (draft, approved, published)
+            region: 지역 필터
+            keyword: 키워드 검색
+            min_rating: 최소 평점
+            max_rating: 최대 평점
+            min_reviews: 최소 리뷰 수
+            limit: 조회 개수
+            offset: 페이징 오프셋
+            sort_by: 정렬 필드
+            order: 정렬 방향 (asc, desc)
+            review_date_from: 시작일 - 이 기간에 리뷰가 있는 업체만 표시
+            review_date_to: 종료일 - 이 기간에 리뷰가 있는 업체만 표시
+
+        Returns:
+            List[dict]: 요약 목록
+
+        Note:
+            - 날짜 필터 적용 시: 해당 기간에 리뷰가 있는 업체만 반환
+            - 날짜 필터 없을 시: 전체 업체 반환
+            - 결과가 비어있으면 로그 기록 및 빈 목록 반환
+        """
+        import logging
+
+        # 날짜 필터가 있으면 해당 기간에 리뷰가 있는 지점만 조회
+        branch_ids_filter = None
+        if review_date_from or review_date_to:
+            branch_ids_filter = await self.uow.summaries.get_branch_ids_by_date_range(
+                review_date_from=review_date_from,
+                review_date_to=review_date_to
+            )
+
+            # 결과가 비어있으면 로그 + 빈 목록 반환
+            if not branch_ids_filter:
+                logging.info(f"날짜 필터 결과 없음: {review_date_from} ~ {review_date_to}")
+                return []
+
         if keyword or min_rating or max_rating:
             summaries = await self.uow.summaries.search(
                 keyword=keyword,
@@ -39,6 +80,9 @@ class SummaryService:
                 min_reviews=min_reviews,
                 limit=limit
             )
+            # 날짜 필터 적용 (검색 결과에서 필터링)
+            if branch_ids_filter is not None:
+                summaries = [s for s in summaries if s.branch_id in branch_ids_filter]
         else:
             summaries = await self.uow.summaries.get_all_with_filters(
                 status=status,
@@ -49,6 +93,9 @@ class SummaryService:
                 sort_by=sort_by,
                 order=order
             )
+            # 날짜 필터 적용 (전체 결과에서 필터링)
+            if branch_ids_filter is not None:
+                summaries = [s for s in summaries if s.branch_id in branch_ids_filter]
 
         # Pydantic 모델을 dict로 변환
         return [s.model_dump() if hasattr(s, 'model_dump') else s for s in summaries]
@@ -397,18 +444,36 @@ class SummaryService:
         branch_id: int,
         car_model: Optional[str] = None,
         sentiment: Optional[str] = None,
+        review_date_from: Optional[datetime] = None,
+        review_date_to: Optional[datetime] = None,
         limit: int = 100,
         offset: int = 0
     ) -> dict:
         """
         지점별 원본 리뷰 목록 조회 (필터링 지원)
 
-        branch_reviews 테이블에서 페이징된 리뷰 목록 반환
+        Args:
+            branch_id: 지점 ID (필수)
+            car_model: 차량 모델 필터
+            sentiment: 감정 필터 (positive, neutral, negative)
+            review_date_from: 시작일 - 이 날짜 이후 리뷰만 조회
+            review_date_to: 종료일 - 이 날짜 이전 리뷰만 조회
+            limit: 조회 개수 (기본 100)
+            offset: 페이징 오프셋
+
+        Returns:
+            dict: {
+                reviews: list - 리뷰 목록,
+                total: int - 전체 개수,
+                car_models: list - 차량 모델 목록
+            }
         """
         result = await self.uow.branch_reviews.get_by_branch(
             branch_id=branch_id,
             car_model=car_model,
             sentiment=sentiment,
+            review_date_from=review_date_from,
+            review_date_to=review_date_to,
             limit=limit,
             offset=offset
         )

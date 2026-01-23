@@ -3,8 +3,13 @@
 
 Router: /api/v2
 담당: HTTP 요청/응답 처리만 (비즈니스 로직은 Service에서)
+
+주요 엔드포인트:
+- GET /summaries: 업체 목록 조회 (날짜 필터링 지원)
+- GET /summaries/{branch_id}/reviews: 지점별 리뷰 목록 (날짜 필터링 지원)
 """
 from typing import Optional
+from datetime import datetime
 
 from fastapi import APIRouter, Query, HTTPException, Depends
 
@@ -27,9 +32,35 @@ async def api_summaries(
     offset: int = Query(0, ge=0),
     sort_by: str = Query("branch_id"),
     order: str = Query("asc", pattern="^(asc|desc)$"),
+    review_date_from: Optional[str] = Query(
+        None,
+        description="시작일 (YYYY-MM-DD) - 이 기간에 리뷰가 있는 업체만 표시"
+    ),
+    review_date_to: Optional[str] = Query(
+        None,
+        description="종료일 (YYYY-MM-DD) - 이 기간에 리뷰가 있는 업체만 표시"
+    ),
     service: SummaryService = Depends(get_summary_service)
 ):
-    """통합 요약 목록"""
+    """
+    통합 요약 목록 조회
+
+    날짜 필터 사용 시:
+    - review_date_from ~ review_date_to 기간에 리뷰가 있는 업체만 반환
+    - 종료일은 해당일 23:59:59까지 포함
+    """
+    # 날짜 문자열 → datetime 파싱
+    parsed_date_from = None
+    parsed_date_to = None
+
+    if review_date_from:
+        parsed_date_from = datetime.strptime(review_date_from, "%Y-%m-%d")
+    if review_date_to:
+        # 종료일은 해당일 전체를 포함하도록 23:59:59로 설정
+        parsed_date_to = datetime.strptime(review_date_to, "%Y-%m-%d").replace(
+            hour=23, minute=59, second=59
+        )
+
     return await service.get_summaries(
         status=status,
         region=region,
@@ -40,7 +71,9 @@ async def api_summaries(
         limit=limit,
         offset=offset,
         sort_by=sort_by,
-        order=order
+        order=order,
+        review_date_from=parsed_date_from,
+        review_date_to=parsed_date_to
     )
 
 
@@ -160,6 +193,14 @@ async def api_branch_reviews(
     branch_id: int,
     car_model: Optional[str] = Query(None, description="차량 모델 필터"),
     sentiment: Optional[str] = Query(None, description="감정 필터 (positive, neutral, negative)"),
+    review_date_from: Optional[str] = Query(
+        None,
+        description="시작일 (YYYY-MM-DD) - 이 날짜 이후 리뷰만 조회"
+    ),
+    review_date_to: Optional[str] = Query(
+        None,
+        description="종료일 (YYYY-MM-DD) - 이 날짜 이전 리뷰만 조회"
+    ),
     limit: int = Query(100, ge=1, le=500, description="조회 개수"),
     offset: int = Query(0, ge=0, description="오프셋"),
     service: SummaryService = Depends(get_summary_service)
@@ -168,12 +209,29 @@ async def api_branch_reviews(
     지점별 리뷰 목록 조회 (필터링 지원)
 
     branch_reviews 테이블에서 원본 리뷰를 조회합니다.
-    car_model, sentiment로 필터링 가능.
+
+    필터 옵션:
+    - car_model: 차량 모델
+    - sentiment: 감정 (positive, neutral, negative)
+    - review_date_from ~ review_date_to: 날짜 범위 (종료일은 23:59:59까지 포함)
     """
+    # 날짜 파싱
+    parsed_date_from = None
+    parsed_date_to = None
+
+    if review_date_from:
+        parsed_date_from = datetime.strptime(review_date_from, "%Y-%m-%d")
+    if review_date_to:
+        parsed_date_to = datetime.strptime(review_date_to, "%Y-%m-%d").replace(
+            hour=23, minute=59, second=59
+        )
+
     result = await service.get_branch_reviews(
         branch_id=branch_id,
         car_model=car_model,
         sentiment=sentiment,
+        review_date_from=parsed_date_from,
+        review_date_to=parsed_date_to,
         limit=limit,
         offset=offset
     )

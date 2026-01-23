@@ -1,5 +1,9 @@
 """
 리뷰 Repository (recent_reviews, branch_reviews 테이블)
+
+이 모듈은 리뷰 데이터에 대한 CRUD 작업을 담당합니다.
+- ReviewRepository: recent_reviews 테이블 (최근 리뷰 캐시)
+- BranchReviewRepository: branch_reviews 테이블 (원본 리뷰)
 """
 from typing import Optional, List
 from datetime import datetime, timedelta
@@ -158,18 +162,45 @@ class BranchReviewRepository(BaseRepository[Review]):
         branch_id: Optional[int] = None,
         car_model: Optional[str] = None,
         sentiment: Optional[str] = None,
+        review_date_from: Optional[datetime] = None,
+        review_date_to: Optional[datetime] = None,
         limit: int = 100,
         offset: int = 0
     ) -> dict:
-        """원본 리뷰 조회 (필터링 지원)"""
+        """
+        원본 리뷰 조회 (필터링 지원)
+
+        Args:
+            branch_id: 지점 ID
+            car_model: 차량 모델 필터
+            sentiment: 감정 필터 (positive, neutral, negative)
+            review_date_from: 시작일 (이 날짜 이후 리뷰만 조회)
+            review_date_to: 종료일 (이 날짜 이전 리뷰만 조회)
+            limit: 조회 개수 (기본 100)
+            offset: 페이징 오프셋
+
+        Returns:
+            dict: {
+                reviews: list - 리뷰 목록,
+                total: int - 전체 개수,
+                car_models: list - 차량 모델 목록
+            }
+        """
         query = self._client.table(self.table_name).select('*', count='exact')
 
+        # 기본 필터
         if branch_id:
             query = query.eq('branch_id', branch_id)
         if car_model:
             query = query.eq('car_model', car_model)
         if sentiment:
             query = query.eq('sentiment', sentiment)
+
+        # 날짜 범위 필터
+        if review_date_from:
+            query = query.gte('review_date', review_date_from.isoformat())
+        if review_date_to:
+            query = query.lte('review_date', review_date_to.isoformat())
 
         query = query.order('review_date', desc=True).range(offset, offset + limit - 1)
         result = await query.execute()

@@ -1,7 +1,13 @@
 """
 지점 요약 Repository (branch_summaries 테이블)
+
+이 모듈은 지점 요약 데이터에 대한 CRUD 작업을 담당합니다.
+- 요약 목록 조회 (필터링, 정렬, 페이징)
+- 날짜 범위로 지점 ID 조회
+- 통계 조회
 """
 from typing import Optional, List
+from datetime import datetime
 from models.summary import Summary
 from .base import BaseRepository
 
@@ -151,3 +157,35 @@ class SummaryRepository(BaseRepository[Summary]):
         result = await self._client.table(self.table_name) \
             .delete().eq('branch_id', branch_id).execute()
         return len(result.data) > 0 if result.data else False
+
+    async def get_branch_ids_by_date_range(
+        self,
+        review_date_from: Optional[datetime] = None,
+        review_date_to: Optional[datetime] = None
+    ) -> List[int]:
+        """
+        해당 기간에 리뷰가 있는 지점 ID 목록 반환
+
+        Args:
+            review_date_from: 시작일 (이 날짜 이후 리뷰)
+            review_date_to: 종료일 (이 날짜 이전 리뷰)
+
+        Returns:
+            List[int]: branch_id 목록 (예: [101, 205, 312, ...])
+                       해당 기간에 리뷰가 1개 이상 있는 지점들
+
+        Note:
+            - branch_reviews 테이블에서 조회
+            - 중복 제거하여 반환
+        """
+        query = self._client.table('branch_reviews').select('branch_id')
+
+        if review_date_from:
+            query = query.gte('review_date', review_date_from.isoformat())
+        if review_date_to:
+            query = query.lte('review_date', review_date_to.isoformat())
+
+        result = await query.execute()
+
+        # 중복 제거하여 반환
+        return list(set(r['branch_id'] for r in result.data if r.get('branch_id')))

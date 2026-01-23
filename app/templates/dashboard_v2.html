@@ -7,6 +7,8 @@
     <title>Review Summary AI - 운영팀 대시보드 v2</title>
     <link rel="stylesheet" as="style" crossorigin
         href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <!-- Flatpickr Date Range Picker -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <style>
         :root {
             /* Primary Colors */
@@ -560,6 +562,52 @@
             pointer-events: none;
         }
 
+        /* Date Range Picker */
+        .date-range-filter {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .date-range-input {
+            padding: 8px 12px;
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            color: var(--grey-1);
+            background: white;
+            width: 220px;
+            height: 40px;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .date-range-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-light);
+        }
+
+        .date-range-input::placeholder {
+            color: var(--grey-5);
+        }
+
+        .btn-clear-date {
+            padding: 8px 12px;
+            background: var(--grey-8);
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            color: var(--grey-3);
+            cursor: pointer;
+            height: 40px;
+            transition: all 0.2s;
+        }
+
+        .btn-clear-date:hover {
+            background: var(--grey-7);
+        }
+
         /* Sort Icons */
         .sort-icon::after {
             content: '↕';
@@ -874,6 +922,15 @@
                     </select>
                 </div>
 
+                <!-- 기간 필터 -->
+                <div class="filter-group date-range-filter">
+                    <span class="filter-label">기간</span>
+                    <input type="text" id="filter-date-range" class="date-range-input"
+                           placeholder="날짜 범위 선택..." readonly>
+                    <button class="btn-clear-date" id="btn-clear-date"
+                            onclick="clearDateFilter()" style="display: none;">초기화</button>
+                </div>
+
                 <!-- Search (Right aligned) -->
                 <div class="search-box" style="margin-left: auto;">
                     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -941,6 +998,10 @@
         </div>
     </div>
 
+    <!-- Flatpickr JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+
     <script>
         // State
         let currentPage = 0;
@@ -951,11 +1012,17 @@
         let currentSortField = 'review_count';
         let currentSortOrder = 'desc'; // asc or desc
 
+        // 날짜 필터 상태 변수
+        let dateRangePicker = null;
+        let selectedDateFrom = null;
+        let selectedDateTo = null;
+
         // Init
         document.addEventListener('DOMContentLoaded', () => {
             loadStats();
             loadRegionStats();  // 지역 필터 드롭다운용
             loadSummaries();
+            initDateRangePicker();  // 날짜 선택기 초기화
 
             // Event listeners - 필터 변경 시 페이지 리셋
             document.getElementById('search-input').addEventListener('input', debounce(() => { currentPage = 0; loadSummaries(); }, 300));
@@ -970,6 +1037,67 @@
                 clearTimeout(timer);
                 timer = setTimeout(() => fn.apply(this, args), ms);
             };
+        }
+
+        /**
+         * 날짜 선택기 초기화
+         * - Flatpickr 범위 선택 모드 사용
+         * - 한국어 로케일
+         * - 최대 날짜: 오늘
+         */
+        function initDateRangePicker() {
+            dateRangePicker = flatpickr('#filter-date-range', {
+                mode: 'range',
+                locale: 'ko',
+                dateFormat: 'Y-m-d',
+                maxDate: 'today',
+                onChange: function(selectedDates, dateStr) {
+                    if (selectedDates.length === 2) {
+                        selectedDateFrom = formatDateForAPI(selectedDates[0]);
+                        selectedDateTo = formatDateForAPI(selectedDates[1]);
+                        document.getElementById('btn-clear-date').style.display = 'inline-block';
+                        currentPage = 0;
+                        loadSummaries();
+                    }
+                },
+                onClose: function(selectedDates) {
+                    // 단일 날짜 선택 시 해당 날짜만 필터링
+                    if (selectedDates.length === 1) {
+                        selectedDateFrom = formatDateForAPI(selectedDates[0]);
+                        selectedDateTo = selectedDateFrom;
+                        document.getElementById('btn-clear-date').style.display = 'inline-block';
+                        currentPage = 0;
+                        loadSummaries();
+                    }
+                }
+            });
+        }
+
+        /**
+         * Date 객체를 API 형식(YYYY-MM-DD)으로 변환
+         */
+        function formatDateForAPI(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        /**
+         * 날짜 필터 초기화
+         * - 선택된 날짜 제거
+         * - 초기화 버튼 숨김
+         * - 목록 새로고침
+         */
+        function clearDateFilter() {
+            if (dateRangePicker) {
+                dateRangePicker.clear();
+            }
+            selectedDateFrom = null;
+            selectedDateTo = null;
+            document.getElementById('btn-clear-date').style.display = 'none';
+            currentPage = 0;
+            loadSummaries();
         }
 
         // Load Stats
@@ -1118,6 +1246,10 @@
             if (keyword) params.set('keyword', keyword);
             if (region) params.set('region', region);
             if (status) params.set('status', status);
+
+            // 날짜 범위 필터
+            if (selectedDateFrom) params.set('review_date_from', selectedDateFrom);
+            if (selectedDateTo) params.set('review_date_to', selectedDateTo);
 
             // 전체 지점 표시 (필터 없음)
             params.set('min_reviews', 0);
@@ -2092,6 +2224,10 @@
                 let url = `/api/v2/summaries/${branchId}/reviews?limit=${reviewsPageSize}&offset=${offset}`;
                 if (carModel) url += `&car_model=${encodeURIComponent(carModel)}`;
                 if (sentiment) url += `&sentiment=${encodeURIComponent(sentiment)}`;
+
+                // 메인 화면의 날짜 필터 적용
+                if (selectedDateFrom) url += `&review_date_from=${selectedDateFrom}`;
+                if (selectedDateTo) url += `&review_date_to=${selectedDateTo}`;
 
                 const response = await fetch(url);
                 const data = await response.json();
