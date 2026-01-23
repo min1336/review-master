@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -20,6 +20,7 @@ class Summary(BaseModel):
     summary_6m: Optional[str] = None
     summary_3m: Optional[str] = None
     summary_1m: Optional[str] = None
+    pending_summaries: Optional[Dict[str, Any]] = None  # AI 생성 대기 중인 요약
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

@@ -1394,12 +1394,28 @@
 
                     <!-- Summary Content -->
                     <div id="summary-content" style="min-height: 200px; background: white; border-radius: 0 0 var(--radius) var(--radius);">
-                        ${['all', '1y', '6m', '3m', '1m'].map(period => `
+                        ${['all', '1y', '6m', '3m', '1m'].map(period => {
+                            const pendingSummaries = data.pending_summaries || {};
+                            const hasPending = !!pendingSummaries[period];
+                            return `
                             <div class="summary-panel" id="panel-${period}" style="display: ${period === 'all' ? 'block' : 'none'};">
+                                <!-- 현재 요약 -->
                                 <div class="summary-text" id="summary-text-${period}" style="font-size: 15px; line-height: 1.7; color: var(--grey-2); white-space: pre-wrap;">${data['summary_' + period] || '<span class="summary-empty" style="color: var(--grey-5); font-style: italic;">작성된 요약이 없습니다.</span>'}</div>
                                 <textarea id="edit-summary-${period}" style="display: none; width: 100%; min-height: 120px; padding: 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 14px; line-height: 1.6; resize: vertical; font-family: inherit;">${data['summary_' + period] || ''}</textarea>
+
+                                <!-- 신규 생성 요약 (pending) -->
+                                <div id="pending-section-${period}" class="pending-summary-section" style="display: ${hasPending ? 'block' : 'none'}; margin-top: 16px; padding: 16px; background: var(--primary-light); border: 2px dashed var(--primary); border-radius: var(--radius-sm);">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                        <span style="font-size: 13px; font-weight: 600; color: var(--primary);">✨ 신규 생성 요약</span>
+                                        <div style="display: flex; gap: 8px;">
+                                            <button class="btn btn-primary btn-sm" onclick="applyPendingSummary(${data.branch_id}, '${period}')" style="font-size: 12px; padding: 4px 12px;">변경</button>
+                                            <button class="btn btn-secondary btn-sm" onclick="discardPendingSummary(${data.branch_id}, '${period}')" style="font-size: 12px; padding: 4px 12px;">취소</button>
+                                        </div>
+                                    </div>
+                                    <div id="pending-text-${period}" style="font-size: 14px; line-height: 1.6; color: var(--grey-2); white-space: pre-wrap;">${pendingSummaries[period] || ''}</div>
+                                </div>
                             </div>
-                        `).join('')}
+                        `}).join('')}
                     </div>
 
                     <!-- 하단 버튼 영역 -->
@@ -1705,7 +1721,7 @@
             };
 
             // 확인 대화상자
-            if (!confirm(`[${periodLabels[currentSummaryPeriod]}] 기간의 요약을 AI로 재생성하시겠습니까?\n\n기존 요약이 덮어씌워집니다.`)) {
+            if (!confirm(`[${periodLabels[currentSummaryPeriod]}] 기간의 요약을 AI로 재생성하시겠습니까?\n\n새 요약이 생성되며, "변경" 버튼을 눌러야 적용됩니다.`)) {
                 return;
             }
 
@@ -1724,14 +1740,16 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    // 요약 텍스트 업데이트
-                    const textEl = document.getElementById(`summary-text-${currentSummaryPeriod}`);
-                    const editEl = document.getElementById(`edit-summary-${currentSummaryPeriod}`);
+                    // pending 섹션에 새 요약 표시
+                    const pendingSection = document.getElementById(`pending-section-${currentSummaryPeriod}`);
+                    const pendingText = document.getElementById(`pending-text-${currentSummaryPeriod}`);
 
-                    if (textEl) textEl.innerHTML = result.summary;
-                    if (editEl) editEl.value = result.summary;
+                    if (pendingSection && pendingText) {
+                        pendingText.innerHTML = result.summary;
+                        pendingSection.style.display = 'block';
+                    }
 
-                    showToast(`✨ [${periodLabels[currentSummaryPeriod]}] 요약이 재생성되었습니다`, 'success');
+                    showToast(`✨ [${periodLabels[currentSummaryPeriod]}] 새 요약이 생성되었습니다. "변경" 버튼으로 적용하세요.`, 'success');
                 } else {
                     throw new Error(result.error || '요약 생성 실패');
                 }
@@ -1742,6 +1760,74 @@
                 btn.innerHTML = originalText;
                 btn.disabled = false;
                 btn.style.opacity = '1';
+            }
+        }
+
+        // 대기 중인 요약 적용
+        async function applyPendingSummary(branchId, period) {
+            const periodLabels = { 'all': '전체', '1y': '1년', '6m': '6개월', '3m': '3개월', '1m': '1개월' };
+
+            if (!confirm(`[${periodLabels[period]}] 새 요약을 적용하시겠습니까?\n\n기존 요약이 새 요약으로 대체됩니다.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/v2/summaries/${branchId}/apply-pending`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ period })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // 메인 요약 업데이트
+                    const textEl = document.getElementById(`summary-text-${period}`);
+                    const editEl = document.getElementById(`edit-summary-${period}`);
+                    const pendingSection = document.getElementById(`pending-section-${period}`);
+
+                    if (textEl) textEl.innerHTML = result.applied;
+                    if (editEl) editEl.value = result.applied;
+                    if (pendingSection) pendingSection.style.display = 'none';
+
+                    showToast(`✅ [${periodLabels[period]}] 요약이 적용되었습니다`, 'success');
+                } else {
+                    throw new Error(result.error || '적용 실패');
+                }
+            } catch (error) {
+                console.error('Apply error:', error);
+                showToast('❌ 적용 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 대기 중인 요약 취소
+        async function discardPendingSummary(branchId, period) {
+            const periodLabels = { 'all': '전체', '1y': '1년', '6m': '6개월', '3m': '3개월', '1m': '1개월' };
+
+            if (!confirm(`[${periodLabels[period]}] 새 요약을 취소하시겠습니까?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/v2/summaries/${branchId}/discard-pending`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ period })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    const pendingSection = document.getElementById(`pending-section-${period}`);
+                    if (pendingSection) pendingSection.style.display = 'none';
+
+                    showToast(`🗑️ [${periodLabels[period]}] 새 요약이 취소되었습니다`, 'success');
+                } else {
+                    throw new Error(result.error || '취소 실패');
+                }
+            } catch (error) {
+                console.error('Discard error:', error);
+                showToast('❌ 취소 실패: ' + error.message, 'error');
             }
         }
 

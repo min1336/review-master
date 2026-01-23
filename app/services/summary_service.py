@@ -166,8 +166,8 @@ class SummaryService:
 
     async def regenerate_summary(self, branch_id: int, period: str = 'all') -> str:
         """AI 요약 재생성"""
-        from services.llm import get_provider
-        from services.llm.prompts import SummaryPromptBuilder
+        from infrastructure.llm import get_provider
+        from infrastructure.llm.prompts import PromptTemplates
 
         summary = await self.uow.summaries.get_by_branch_id(branch_id)
         if not summary:
@@ -206,17 +206,62 @@ class SummaryService:
 
         generated_summary = response.content if hasattr(response, 'content') else str(response)
 
-        # 저장
+        # pending_summaries에 저장 (바로 덮어쓰지 않음)
+        existing_pending = summary_data.get('pending_summaries') or {}
+        existing_pending[period] = generated_summary
+
+        await self.uow.summaries.upsert_by_branch_id({
+            'branch_id': branch_id,
+            'pending_summaries': existing_pending
+        })
+
+        return generated_summary
+
+    async def apply_pending_summary(self, branch_id: int, period: str) -> dict:
+        """대기 중인 요약을 적용 (pending → main)"""
+        summary = await self.uow.summaries.get_by_branch_id(branch_id)
+        if not summary:
+            raise ValueError(f"지점 {branch_id}을(를) 찾을 수 없습니다")
+
+        summary_data = summary.model_dump()
+        pending = summary_data.get('pending_summaries') or {}
+
+        if period not in pending:
+            raise ValueError(f"대기 중인 {period} 요약이 없습니다")
+
+        # pending → main 필드로 이동
         field_map = {
             'all': 'summary_all', '1y': 'summary_1y', '6m': 'summary_6m',
             '3m': 'summary_3m', '1m': 'summary_1m'
         }
+
+        new_summary = pending.pop(period)
+
         await self.uow.summaries.upsert_by_branch_id({
             'branch_id': branch_id,
-            field_map[period]: generated_summary
+            field_map[period]: new_summary,
+            'pending_summaries': pending  # 적용한 항목 제거
         })
 
-        return generated_summary
+        return {'applied': new_summary, 'period': period}
+
+    async def discard_pending_summary(self, branch_id: int, period: str) -> dict:
+        """대기 중인 요약 취소 (삭제)"""
+        summary = await self.uow.summaries.get_by_branch_id(branch_id)
+        if not summary:
+            raise ValueError(f"지점 {branch_id}을(를) 찾을 수 없습니다")
+
+        summary_data = summary.model_dump()
+        pending = summary_data.get('pending_summaries') or {}
+
+        if period in pending:
+            del pending[period]
+            await self.uow.summaries.upsert_by_branch_id({
+                'branch_id': branch_id,
+                'pending_summaries': pending
+            })
+
+        return {'discarded': period}
 
     async def get_branch_detail(
         self,

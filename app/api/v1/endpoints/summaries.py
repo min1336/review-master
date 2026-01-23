@@ -85,16 +85,50 @@ async def api_regenerate_summary(
     data: RegenerateRequest = None,
     service: SummaryService = Depends(get_summary_service)
 ):
-    """AI 요약 재생성"""
+    """AI 요약 재생성 (pending에 저장, 바로 적용 안 됨)"""
     period = data.period if data else "all"
 
     try:
         summary = await service.regenerate_summary(branch_id, period)
-        return {'success': True, 'summary': summary, 'period': period}
+        return {'success': True, 'summary': summary, 'period': period, 'pending': True}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/summaries/{branch_id}/apply-pending")
+async def api_apply_pending_summary(
+    branch_id: int,
+    data: RegenerateRequest = None,
+    service: SummaryService = Depends(get_summary_service)
+):
+    """대기 중인 요약 적용 (pending → main)"""
+    period = data.period if data else "all"
+
+    try:
+        result = await service.apply_pending_summary(branch_id, period)
+        return {'success': True, **result}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/summaries/{branch_id}/discard-pending")
+async def api_discard_pending_summary(
+    branch_id: int,
+    data: RegenerateRequest = None,
+    service: SummaryService = Depends(get_summary_service)
+):
+    """대기 중인 요약 취소 (삭제)"""
+    period = data.period if data else "all"
+
+    try:
+        result = await service.discard_pending_summary(branch_id, period)
+        return {'success': True, **result}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/stats")
