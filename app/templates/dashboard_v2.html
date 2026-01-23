@@ -983,7 +983,7 @@
         async function loadStats() {
             console.log('loadStats 시작');
             try {
-                const response = await fetch('/api/v2/stats');
+                const response = await fetch('/review/api/v2/stats');
                 console.log('stats response:', response.status);
                 const stats = await response.json();
                 console.log('stats data:', stats);
@@ -1056,7 +1056,7 @@
         // Load Region Stats (for filter dropdown only)
         async function loadRegionStats() {
             try {
-                const data = await fetch('/api/v2/stats/region').then(r => r.json());
+                const data = await fetch('/review/api/v2/stats/region').then(r => r.json());
                 regionStats = data;
 
                 // Update filter dropdown
@@ -1081,7 +1081,7 @@
         // Load Rating Stats
         async function loadRatingStats() {
             try {
-                const data = await fetch('/api/v2/stats/rating').then(r => r.json());
+                const data = await fetch('/review/api/v2/stats/rating').then(r => r.json());
                 const dist = data.distribution || {};
                 const total = data.total || 1;
 
@@ -1137,7 +1137,7 @@
 
             try {
 
-                let data = await fetch(`/api/v2/summaries?${params}`).then(r => r.json());
+                let data = await fetch(`/review/api/v2/summaries?${params}`).then(r => r.json());
 
                 // 클라이언트 사이드 정렬 로직 제거됨 (서버 사이드 정렬 사용)
 
@@ -1146,7 +1146,7 @@
                 let tagsData = {};
                 if (branchIdList.length > 0) {
                     try {
-                        tagsData = await fetch('/api/tags/batch', {
+                        tagsData = await fetch('/review/api/tags/batch', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ branch_ids: branchIdList })
@@ -1327,7 +1327,7 @@
             document.getElementById('modal-body').innerHTML = '<div class="loading"><div class="spinner"></div>로딩 중...</div>';
 
             try {
-                const data = await fetch(`/api/v2/summaries/${branchId}`).then(r => r.json());
+                const data = await fetch(`/review/api/v2/summaries/${branchId}`).then(r => r.json());
 
                 document.getElementById('modal-title').textContent = `${data.branch_name || '지점 ' + branchId}`;
 
@@ -1450,7 +1450,7 @@
             // 3. branch_tags에서 top3 가져오기 (fallback)
             else {
                 try {
-                    const tagsData = await fetch('/api/tags/batch', {
+                    const tagsData = await fetch('/review/api/tags/batch', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ branch_ids: [branchId] })
@@ -1596,7 +1596,7 @@
             });
 
             try {
-                const response = await fetch(`/api/v2/summaries/${branchId}`, {
+                const response = await fetch(`/review/api/v2/summaries/${branchId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1685,7 +1685,7 @@
                 btn.disabled = true;
                 btn.style.opacity = '0.7';
 
-                const response = await fetch(`/api/v2/summaries/${branchId}/regenerate`, {
+                const response = await fetch(`/review/api/v2/summaries/${branchId}/regenerate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ period: currentSummaryPeriod })
@@ -1766,7 +1766,7 @@
             }
 
             try {
-                const response = await fetch(`/api/v2/summaries/${branchId}`, {
+                const response = await fetch(`/review/api/v2/summaries/${branchId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ [fieldName]: editedSummary })
@@ -1829,7 +1829,7 @@
             };
 
             try {
-                const response = await fetch(`/api/v2/summaries/${branchId}`, {
+                const response = await fetch(`/review/api/v2/summaries/${branchId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
@@ -1859,7 +1859,7 @@
         // Update Status
         async function updateStatus(branchId, status) {
             try {
-                const response = await fetch(`/api/v2/summaries/${branchId}/status`, {
+                const response = await fetch(`/review/api/v2/summaries/${branchId}/status`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status })
@@ -1890,7 +1890,7 @@
             if (!confirm('Carmore API에서 업체 정보를 동기화하시겠습니까?')) return;
 
             try {
-                const res = await fetch('/api/carmore/sync/affiliates', { method: 'POST' });
+                const res = await fetch('/review/api/carmore/sync/affiliates', { method: 'POST' });
                 const data = await res.json();
 
                 if (data.success) {
