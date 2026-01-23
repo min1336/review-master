@@ -346,3 +346,25 @@ class SummaryService:
             'summaries': summaries_output,
             'reviews': reviews_output
         }
+
+    async def get_branch_reviews(
+        self,
+        branch_id: int,
+        car_model: Optional[str] = None,
+        sentiment: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> dict:
+        """
+        지점별 원본 리뷰 목록 조회 (필터링 지원)
+
+        branch_reviews 테이블에서 페이징된 리뷰 목록 반환
+        """
+        result = await self.uow.branch_reviews.get_by_branch(
+            branch_id=branch_id,
+            car_model=car_model,
+            sentiment=sentiment,
+            limit=limit,
+            offset=offset
+        )
+        return result

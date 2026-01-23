@@ -121,6 +121,31 @@ async def api_rating_stats(
     return await service.get_rating_stats()
 
 
+@router.get("/summaries/{branch_id}/reviews")
+async def api_branch_reviews(
+    branch_id: int,
+    car_model: Optional[str] = Query(None, description="차량 모델 필터"),
+    sentiment: Optional[str] = Query(None, description="감정 필터 (positive, neutral, negative)"),
+    limit: int = Query(100, ge=1, le=500, description="조회 개수"),
+    offset: int = Query(0, ge=0, description="오프셋"),
+    service: SummaryService = Depends(get_summary_service)
+):
+    """
+    지점별 리뷰 목록 조회 (필터링 지원)
+
+    branch_reviews 테이블에서 원본 리뷰를 조회합니다.
+    car_model, sentiment로 필터링 가능.
+    """
+    result = await service.get_branch_reviews(
+        branch_id=branch_id,
+        car_model=car_model,
+        sentiment=sentiment,
+        limit=limit,
+        offset=offset
+    )
+    return result
+
+
 @router.get("/summaries/{branch_id}/detail")
 async def api_branch_detail(
     branch_id: int,

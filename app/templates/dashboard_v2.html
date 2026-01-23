@@ -1404,9 +1404,12 @@
 
                     <!-- 하단 버튼 영역 -->
                     <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--grey-8);">
-                        <!-- 보기 모드: 수정 버튼 + 상태 버튼 -->
+                        <!-- 보기 모드: 수정/리뷰 버튼 + 상태 버튼 -->
                         <div id="view-mode-buttons" style="display: flex; justify-content: space-between; align-items: center;">
-                            <button class="btn btn-secondary" onclick="enterEditMode()">✏️ 수정</button>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-secondary" onclick="enterEditMode()">✏️ 수정</button>
+                                <button class="btn btn-secondary" onclick="toggleReviews(${data.branch_id})" id="btn-toggle-reviews">📋 리뷰 보기</button>
+                            </div>
                             <div style="display: flex; gap: 8px;">
                                 <button class="btn btn-secondary btn-sm" onclick="updateStatus(${data.branch_id}, 'draft')">보류</button>
                                 <button class="btn btn-secondary btn-sm" onclick="updateStatus(${data.branch_id}, 'approved')">승인</button>
@@ -1417,6 +1420,33 @@
                         <div id="edit-mode-buttons" style="display: none; justify-content: flex-end; gap: 12px;">
                             <button class="btn btn-secondary" onclick="cancelEditMode()">취소</button>
                             <button class="btn btn-primary" onclick="saveAllChanges(${data.branch_id})">💾 저장</button>
+                        </div>
+                    </div>
+
+                    <!-- 리뷰 목록 (버튼 클릭 시 확장) -->
+                    <div id="reviews-section" style="display: none; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--grey-8);">
+                        <div style="font-size: 14px; font-weight: 600; color: var(--grey-3); margin-bottom: 12px;">
+                            📋 리뷰 목록 <span id="reviews-count" style="font-weight: normal; color: var(--grey-5);"></span>
+                        </div>
+                        <!-- 필터 영역 -->
+                        <div id="reviews-filters" style="display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+                            <select id="filter-car-model" onchange="applyFilters(${data.branch_id})" style="padding: 6px 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 13px; background: white;">
+                                <option value="">🚗 전체 차량</option>
+                            </select>
+                            <select id="filter-sentiment" onchange="applyFilters(${data.branch_id})" style="padding: 6px 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 13px; background: white;">
+                                <option value="">💬 전체 감정</option>
+                                <option value="positive">😊 긍정</option>
+                                <option value="neutral">😐 중립</option>
+                                <option value="negative">😞 부정</option>
+                            </select>
+                        </div>
+                        <div id="reviews-list" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); background: var(--grey-9);">
+                            <div class="loading"><div class="spinner"></div>로딩 중...</div>
+                        </div>
+                        <div style="margin-top: 12px; display: flex; justify-content: center; gap: 8px;">
+                            <button class="btn btn-secondary btn-sm" onclick="loadMoreReviews(${data.branch_id}, 'prev')" id="reviews-prev-btn" disabled>이전</button>
+                            <span id="reviews-page-info" style="font-size: 13px; color: var(--grey-5); line-height: 32px;">-</span>
+                            <button class="btn btn-secondary btn-sm" onclick="loadMoreReviews(${data.branch_id}, 'next')" id="reviews-next-btn">다음</button>
                         </div>
                     </div>
     `;
@@ -1908,6 +1938,153 @@
         document.getElementById('detail-modal').addEventListener('click', (e) => {
             if (e.target.classList.contains('modal-overlay')) closeModal();
         });
+
+        // ============================================================
+        // 리뷰 목록 기능
+        // ============================================================
+        let reviewsCurrentPage = 0;
+        const reviewsPageSize = 20;
+        let reviewsTotal = 0;
+        let reviewsVisible = false;
+        let reviewsCarModelsLoaded = false;
+
+        // 리뷰 섹션 토글
+        async function toggleReviews(branchId) {
+            const section = document.getElementById('reviews-section');
+            const btn = document.getElementById('btn-toggle-reviews');
+
+            if (reviewsVisible) {
+                section.style.display = 'none';
+                btn.textContent = '📋 리뷰 보기';
+                reviewsVisible = false;
+            } else {
+                section.style.display = 'block';
+                btn.textContent = '📋 리뷰 숨기기';
+                reviewsVisible = true;
+                reviewsCurrentPage = 0;
+                reviewsCarModelsLoaded = false;
+                // 필터 초기화
+                const carSelect = document.getElementById('filter-car-model');
+                const sentSelect = document.getElementById('filter-sentiment');
+                if (carSelect) carSelect.value = '';
+                if (sentSelect) sentSelect.value = '';
+                await loadReviews(branchId);
+            }
+        }
+
+        // 필터 적용
+        function applyFilters(branchId) {
+            reviewsCurrentPage = 0;
+            loadReviews(branchId);
+        }
+
+        // 감정 아이콘 반환
+        function getSentimentIcon(sentiment) {
+            switch (sentiment) {
+                case 'positive': return '😊';
+                case 'negative': return '😞';
+                case 'neutral': return '😐';
+                default: return '';
+            }
+        }
+
+        // 리뷰 로드
+        async function loadReviews(branchId) {
+            const listEl = document.getElementById('reviews-list');
+            listEl.innerHTML = '<div class="loading"><div class="spinner"></div>로딩 중...</div>';
+
+            try {
+                const offset = reviewsCurrentPage * reviewsPageSize;
+                const carModel = document.getElementById('filter-car-model')?.value || '';
+                const sentiment = document.getElementById('filter-sentiment')?.value || '';
+
+                let url = `/api/v2/summaries/${branchId}/reviews?limit=${reviewsPageSize}&offset=${offset}`;
+                if (carModel) url += `&car_model=${encodeURIComponent(carModel)}`;
+                if (sentiment) url += `&sentiment=${encodeURIComponent(sentiment)}`;
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                reviewsTotal = data.total || 0;
+                const reviews = data.reviews || [];
+                const carModels = data.car_models || [];
+
+                // 차량 모델 드롭다운 채우기 (최초 1회)
+                if (!reviewsCarModelsLoaded && carModels.length > 0) {
+                    const carSelect = document.getElementById('filter-car-model');
+                    if (carSelect) {
+                        carSelect.innerHTML = '<option value="">🚗 전체 차량</option>' +
+                            carModels.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+                    }
+                    reviewsCarModelsLoaded = true;
+                }
+
+                document.getElementById('reviews-count').textContent = `(총 ${reviewsTotal.toLocaleString()}건)`;
+
+                if (reviews.length === 0) {
+                    listEl.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--grey-5);">리뷰가 없습니다.</div>';
+                } else {
+                    listEl.innerHTML = reviews.map((r, idx) => `
+                        <div style="padding: 16px; border-bottom: 1px solid var(--grey-8); ${idx % 2 === 0 ? '' : 'background: var(--grey-9);'}">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <span style="font-size: 12px; color: var(--grey-5);">
+                                    #${r.review_id || (offset + idx + 1)}
+                                    ${r.sentiment ? `<span style="margin-left: 4px;">${getSentimentIcon(r.sentiment)}</span>` : ''}
+                                </span>
+                                <span style="font-size: 12px; color: var(--grey-5);">${formatDate(r.review_date)}</span>
+                            </div>
+                            <div style="font-size: 14px; line-height: 1.6; color: var(--grey-2);">${escapeHtml(r.content || '-')}</div>
+                            ${r.rating_service || r.rating_car || r.car_model ? `
+                                <div style="margin-top: 8px; font-size: 12px; color: var(--grey-5);">
+                                    ${r.rating_service ? `친절: ${r.rating_service}` : ''}
+                                    ${r.rating_car ? ` 차량: ${r.rating_car}` : ''}
+                                    ${r.car_model ? ` | ${r.car_model}` : ''}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('');
+                }
+
+                // 페이징 UI 업데이트
+                const totalPages = Math.ceil(reviewsTotal / reviewsPageSize);
+                document.getElementById('reviews-page-info').textContent = `${reviewsCurrentPage + 1} / ${totalPages || 1}`;
+                document.getElementById('reviews-prev-btn').disabled = reviewsCurrentPage === 0;
+                document.getElementById('reviews-next-btn').disabled = (reviewsCurrentPage + 1) >= totalPages;
+
+            } catch (e) {
+                console.error('Reviews load error:', e);
+                listEl.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--error);">로드 실패</div>';
+            }
+        }
+
+        // 리뷰 페이징
+        function loadMoreReviews(branchId, direction) {
+            if (direction === 'prev' && reviewsCurrentPage > 0) {
+                reviewsCurrentPage--;
+            } else if (direction === 'next') {
+                reviewsCurrentPage++;
+            }
+            loadReviews(branchId);
+        }
+
+        // 날짜 포맷
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            try {
+                const d = new Date(dateStr);
+                return d.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            } catch {
+                return dateStr;
+            }
+        }
+
+        // HTML 이스케이프
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
     </script>
 </body>
 

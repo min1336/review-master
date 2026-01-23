@@ -155,21 +155,40 @@ class BranchReviewRepository(BaseRepository[Review]):
     async def get_by_branch(
         self,
         branch_id: Optional[int] = None,
+        car_model: Optional[str] = None,
+        sentiment: Optional[str] = None,
         limit: int = 100,
         offset: int = 0
     ) -> dict:
-        """원본 리뷰 조회"""
+        """원본 리뷰 조회 (필터링 지원)"""
         query = self._client.table(self.table_name).select('*', count='exact')
 
         if branch_id:
             query = query.eq('branch_id', branch_id)
+        if car_model:
+            query = query.eq('car_model', car_model)
+        if sentiment:
+            query = query.eq('sentiment', sentiment)
 
         query = query.order('review_date', desc=True).range(offset, offset + limit - 1)
         result = await query.execute()
 
+        # 차량 모델 목록 조회 (distinct)
+        car_models = []
+        if branch_id:
+            car_query = await self._client.table(self.table_name) \
+                .select('car_model') \
+                .eq('branch_id', branch_id) \
+                .execute()
+            car_models = sorted(set(
+                r['car_model'] for r in car_query.data
+                if r.get('car_model')
+            ))
+
         return {
             'reviews': result.data,
-            'total': result.count or 0
+            'total': result.count or 0,
+            'car_models': car_models
         }
 
     async def get_stats(self) -> List[dict]:
