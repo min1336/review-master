@@ -1,0 +1,17 @@
+services:
+  api-server:
+    image: ${API_IMAGE:-ghcr.io/teamo2dev/review-api:latest}
+    container_name: review-api
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OPENAI_API_KEY
+      - LLM_PROVIDER
+      - SUPABASE_URL
+      - SUPABASE_KEY
+      - IP_WHITELIST_ENABLED
+      - IP_WHITELIST
+    cpus: "0.5"
+    mem_limit: "512m"

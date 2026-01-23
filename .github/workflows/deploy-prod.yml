@@ -1,0 +1,239 @@
+name: Deploy to Production Server
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_infra_deploy:
+        description: "Force infra deploy (use when GitHub Secrets changed)"
+        required: false
+        default: "false"
+        type: choice
+        options: [ "false", "true" ]
+      reason:
+        description: "Reason for manual deploy"
+        required: false
+        type: string
+  push:
+    branches:
+      - main
+      - feat/AI-52
+
+  pull_request:
+    branches:
+      - feat/AI-52
+
+concurrency:
+  group: "deploy-prod-${{ github.ref }}"
+  cancel-in-progress: false
+
+env:
+  image_name: "review-api"
+  default_directory: "review-tm2"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get Github Actions IP
+        id: ip
+        uses: haythem/public-ip@v1.2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Add Github Actions IP to Security group
+        run: |
+          aws ec2 authorize-security-group-ingress \
+            --group-id ${{ secrets.AWS_TM2_BASTION_SG }} \
+            --protocol tcp \
+            --port ${{ secrets.AWS_TM2_BASTION_PORT }} \
+            --cidr ${{ steps.ip.outputs.ipv4 }}/32 2>&1 | grep -v "already exists" || true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.image_name }}:latest
+            ghcr.io/${{ github.repository_owner }}/${{ env.image_name }}:prod-${{ github.sha }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ env.image_name }}:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ env.image_name }}:buildcache,mode=max
+
+      - name: Debug SSH Configuration
+        run: |
+          echo "🔍 SSH 디버깅 정보:"
+          echo "================================"
+          echo "Bastion Host: ${{ secrets.AWS_TM2_BASTION_HOST }}"
+          echo "Bastion Username: ${{ secrets.AWS_TM2_BASTION_USERNAME }}"
+          echo "Bastion Port: ${{ secrets.AWS_TM2_BASTION_PORT }}"
+          echo "Production Host: ${{ secrets.PROD_SERVER_HOST }}"
+          echo "Production Username: ${{ secrets.PROD_SERVER_USER }}"
+          echo "Production Port: ${{ secrets.PROD_SERVER_PORT }}"
+          echo "================================"
+          
+          # SSH 키 형식 확인
+          echo ""
+          echo "🔑 SSH 키 형식 확인:"
+          echo "Bastion Key 첫 줄:"
+          echo "${{ secrets.AWS_TM2_BASTION_KEY }}" | head -n 1
+          echo "Bastion Key 마지막 줄:"
+          echo "${{ secrets.AWS_TM2_BASTION_KEY }}" | tail -n 1
+          echo "Bastion Key 줄 수:"
+          echo "${{ secrets.AWS_TM2_BASTION_KEY }}" | wc -l
+          
+          echo ""
+          echo "Production Key 첫 줄:"
+          echo "${{ secrets.PROD_SERVER_KEY }}" | head -n 1
+          echo "Production Key 마지막 줄:"
+          echo "${{ secrets.PROD_SERVER_KEY }}" | tail -n 1
+          echo "Production Key 줄 수:"
+          echo "${{ secrets.PROD_SERVER_KEY }}" | wc -l
+          echo "================================"
+      - name: Test Bastion Host Connection
+        run: |
+          echo "🔌 Bastion Host 연결 테스트..."
+          
+          # SSH 키를 임시 파일로 저장
+          printf '%s\n' "${{ secrets.AWS_TM2_BASTION_KEY }}" > /tmp/bastion_key
+          chmod 600 /tmp/bastion_key
+          
+          # SSH 연결 테스트 (verbose 모드)
+          ssh -vvv -i /tmp/bastion_key \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o ConnectTimeout=10 \
+            ${{ secrets.AWS_TM2_BASTION_USERNAME }}@${{ secrets.AWS_TM2_BASTION_HOST }} \
+            "echo 'Bastion Host 연결 성공!'" || echo "❌ Bastion Host 연결 실패"
+          
+          # 임시 파일 삭제
+          rm -f /tmp/bastion_key
+
+      - name: Test Production Server Connection via Bastion
+        run: |
+          echo "🔌 Production Server 연결 테스트 (Bastion 경유)..."
+          
+          # SSH 키를 임시 파일로 저장
+          printf '%s\n' "${{ secrets.AWS_TM2_BASTION_KEY }}" > /tmp/bastion_key
+          printf '%s\n' "${{ secrets.PROD_SERVER_KEY }}" > /tmp/prod_key
+          chmod 600 /tmp/bastion_key /tmp/prod_key
+          
+          # ProxyJump를 사용한 연결 테스트
+          ssh -vvv -i /tmp/prod_key \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o ProxyCommand="ssh -i /tmp/bastion_key -W %h:%p -o StrictHostKeyChecking=no ${{ secrets.AWS_TM2_BASTION_USERNAME }}@${{ secrets.AWS_TM2_BASTION_HOST }}" \
+            ${{ secrets.PROD_SERVER_USER }}@${{ secrets.PROD_SERVER_HOST }} \
+            "echo 'Production Server 연결 성공!'" || echo "❌ Production Server 연결 실패"
+          
+          # 임시 파일 삭제
+          rm -f /tmp/bastion_key /tmp/prod_key
+
+      - name: Copy deployment files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_KEY }}
+          port: ${{ secrets.PROD_SERVER_PORT }}
+          proxy_host: ${{ secrets.AWS_TM2_BASTION_HOST }}
+          proxy_username: ${{ secrets.AWS_TM2_BASTION_USERNAME }}
+          proxy_key: ${{ secrets.AWS_TM2_BASTION_KEY }}
+          proxy_port: ${{ secrets.AWS_TM2_BASTION_PORT }}
+          source: "docker-compose.prod.yml"
+          target: "/home/${{ secrets.PROD_SERVER_USER }}/${{ env.default_directory }}/"
+          debug: true
+
+      - name: Deploy to Production Server
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          IP_WHITELIST_ENABLED: ${{ secrets.IP_WHITELIST_ENABLED }}
+          IP_WHITELIST: ${{ secrets.IP_WHITELIST }}
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_KEY }}
+          port: ${{ secrets.PROD_SERVER_PORT }}
+          proxy_host: ${{ secrets.AWS_TM2_BASTION_HOST }}
+          proxy_username: ${{ secrets.AWS_TM2_BASTION_USERNAME }}
+          proxy_key: ${{ secrets.AWS_TM2_BASTION_KEY }}
+          proxy_port: ${{ secrets.AWS_TM2_BASTION_PORT }}
+          debug: true
+          script_stop: true
+          envs: GCP_SERVICE_ACCOUNT_JSON,OPENAI_API_KEY,LLM_PROVIDER,SUPABASE_URL,SUPABASE_KEY,IP_WHITELIST_ENABLED,IP_WHITELIST
+          script: |
+            echo "🚀 배포 시작..."
+            
+            mkdir -p /home/${{ secrets.PROD_SERVER_USER }}/${{ env.default_directory }}
+            # 작업 디렉토리로 이동 (필수)
+            cd /home/${{ secrets.PROD_SERVER_USER }}/${{ env.default_directory }}
+            echo "현재 디렉토리: $(pwd)"
+            echo "사용자: $(whoami)"
+            
+            # .env 생성 (GitHub Secrets 주입)
+            umask 077
+            : > .env
+            printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY" >> .env
+            printf 'LLM_PROVIDER=%s\n' "$LLM_PROVIDER" >> .env
+            printf 'SUPABASE_URL=%s\n' "$SUPABASE_URL" >> .env
+            printf 'SUPABASE_KEY=%s\n' "$SUPABASE_KEY" >> .env
+            printf 'IP_WHITELIST_ENABLED=%s\n' "$IP_WHITELIST_ENABLED" >> .env
+            printf 'IP_WHITELIST=%s\n' "$IP_WHITELIST" >> .env
+            echo "✅ .env created"
+            
+            # GitHub Container Registry 로그인
+            if ! echo ${{ secrets.GHCR_PAT }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin; then
+              echo "❌ GHCR login failed! Check GHCR_PAT secret."
+              exit 1
+            fi
+            
+            if ! docker pull ghcr.io/${{ github.repository_owner }}/${{ env.image_name }}:latest; then
+              echo "❌ Failed to pull API Docker image!"
+              exit 1
+            fi
+            
+            docker compose --env-file .env -f docker-compose.prod.yml up -d
+
+      - name: Remove Github Actions IP From Security Group
+        if: always()
+        run: |
+          aws ec2 revoke-security-group-ingress \
+            --group-id ${{ secrets.AWS_TM2_BASTION_SG }} \
+            --protocol tcp \
+            --port ${{ secrets.AWS_TM2_BASTION_PORT }} \
+            --cidr ${{ steps.ip.outputs.ipv4 }}/32 2>&1 | grep -v "does not exist" || true
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ Production deployment successful!"
+          else
+            echo "❌ Production deployment failed!"
+          fi
