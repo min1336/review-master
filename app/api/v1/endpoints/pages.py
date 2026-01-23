@@ -1,0 +1,36 @@
+"""
+페이지 라우터 - HTML 템플릿 렌더링
+
+역할:
+- 대시보드 메인 페이지 (/)
+- 태그 테스터 페이지 (/tag-tester)
+"""
+from pathlib import Path
+
+from fastapi import APIRouter, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+
+router = APIRouter(tags=["pages"])
+
+# 템플릿 디렉토리 설정
+_templates_dir = Path(__file__).parent.parent.parent.parent / "templates"
+templates = Jinja2Templates(directory=str(_templates_dir))
+
+
+@router.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    """메인 대시보드"""
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard_v2.html"
+    )
+
+
+@router.get("/tag-tester", response_class=HTMLResponse)
+async def tag_tester(request: Request):
+    """태그 분석 테스트 페이지"""
+    return templates.TemplateResponse(
+        request=request,
+        name="tag_tester.html"
+    )

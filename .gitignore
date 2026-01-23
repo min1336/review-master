@@ -25,13 +25,22 @@ wheels/
 *.egg
 
 # ============================================================================
-# Virtual Environments
+# Virtual Environments & Package Managers
 # ============================================================================
 venv/
 .venv/
 ENV/
 env/
+
+# uv (uv.lock은 커밋해야 함!)
+.uv/
+
+# ============================================================================
+# Environment Variables (NEVER commit!)
+# ============================================================================
 .env
+.env.local
+.env.*.local
 
 # ============================================================================
 # IDE & Editors
@@ -51,7 +60,6 @@ env/
 # Jupyter Notebooks
 # ============================================================================
 .ipynb_checkpoints/
-*.ipynb_checkpoints
 
 # ============================================================================
 # Testing & Coverage
@@ -67,11 +75,12 @@ coverage.xml
 .hypothesis/
 
 # ============================================================================
-# Type Checking
+# Type Checking & Linting
 # ============================================================================
 .mypy_cache/
 .dmypy.json
 dmypy.json
+.ruff_cache/
 
 # ============================================================================
 # Documentation
@@ -83,27 +92,19 @@ site/
 # OS Generated Files
 # ============================================================================
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
+ehthumbs.db
 
 # ============================================================================
 # Project Specific
 # ============================================================================
-# API Keys and Secrets (NEVER commit these!)
-*.env
+# Secrets (NEVER commit!)
 secrets.json
 credentials.json
 **/api_key*
-**/*secret*
 
-# Cache directory
+# Cache & Logs
 cache/
-
-# Log files
 *.log
 logs/
 
@@ -111,11 +112,15 @@ logs/
 tmp/
 temp/
 *.tmp
+*~lock.*
 
-# Claude Code local config
-.claude/
-.env
+# Output files (generated)
+output/*.xlsx
+output/*.txt
 
-# Postman (API 키 노출 방지)
-*.postman_collection.json
-*.postman_environment.json
+# Data files (too large / sensitive)
+data/*.xlsx
+data/*.npz
+
+# setting
+.claude/settings.local.json
