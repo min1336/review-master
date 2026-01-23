@@ -141,7 +141,8 @@ class BranchReviewRepository(BaseRepository[Review]):
                         'rating_convenience': r.get('rating_convenience') or r.get('인수/반납편의성'),
                         'review_date': r.get('review_date') or r.get('등록일시'),
                         'car_model': r.get('car_model') or r.get('차량모델'),
-                        'rent_type': r.get('rent_type') or r.get('렌트타입')
+                        'rent_type': r.get('rent_type') or r.get('렌트타입'),
+                        'sentiment': r.get('sentiment')  # 감정 (positive, neutral, negative)
                     })
 
                 await self._client.table(self.table_name) \
