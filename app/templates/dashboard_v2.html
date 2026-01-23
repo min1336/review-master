@@ -873,12 +873,6 @@
                         <option value="published">Published</option>
                     </select>
                 </div>
-                <div class="filter-group">
-                    <label class="custom-checkbox">
-                        <input type="checkbox" id="filter-min-reviews" checked>
-                        <span>리뷰 30개 이상</span>
-                    </label>
-                </div>
 
                 <!-- Search (Right aligned) -->
                 <div class="search-box" style="margin-left: auto;">
@@ -967,7 +961,6 @@
             document.getElementById('search-input').addEventListener('input', debounce(() => { currentPage = 0; loadSummaries(); }, 300));
             document.getElementById('filter-region').addEventListener('change', () => { currentPage = 0; loadSummaries(); });
             document.getElementById('filter-status').addEventListener('change', () => { currentPage = 0; loadSummaries(); });
-            document.getElementById('filter-min-reviews').addEventListener('change', () => { currentPage = 0; loadSummaries(); });
         });
 
         // Debounce helper
@@ -1116,7 +1109,6 @@
             const keyword = document.getElementById('search-input').value;
             const region = document.getElementById('filter-region').value;
             const status = document.getElementById('filter-status').value;
-            const minReviewsChecked = document.getElementById('filter-min-reviews').checked;
 
             const params = new URLSearchParams({
                 limit: pageSize,
@@ -1127,8 +1119,8 @@
             if (region) params.set('region', region);
             if (status) params.set('status', status);
 
-            // 체크박스: 체크됨 = 30개 이상, 체크 안됨 = 전체(0)
-            params.set('min_reviews', minReviewsChecked ? 30 : 0);
+            // 전체 지점 표시 (필터 없음)
+            params.set('min_reviews', 0);
 
             // 정렬 파라미터 적용
             params.set('sort_by', currentSortField);
