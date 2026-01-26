@@ -3,6 +3,7 @@
 
 pydantic-settings를 사용하여 .env 파일에서 설정을 로드합니다.
 """
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -19,7 +20,7 @@ class Settings(BaseSettings):
     """애플리케이션 설정"""
 
     # LLM 설정
-    llm_provider: Literal["openai", "gemini"] = "openai"
+    llm_provider: Literal["openai"] = "openai"
 
     # OpenAI 설정
     openai_api_key: str = ""
@@ -56,3 +57,41 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """설정 싱글톤 (캐시됨)"""
     return Settings()
+
+
+class BranchType(Enum):
+    """지점 유형"""
+    AIRPORT = "airport"
+    CITY = "city"
+    TOURIST = "tourist"
+    DEFAULT = "default"
+
+
+REGION_CONFIG = {
+    "airport_keywords": [
+        "공항", "인천공항", "김포공항", "제주공항", "김해공항", "대구공항"
+    ],
+    "tourist_keywords": [
+        "제주", "부산", "강릉", "속초", "여수", "경주", "전주"
+    ],
+    "region_emphasis": {
+        "제주": ["여행", "드라이브", "관광", "해안도로", "렌트"],
+        "제주공항": ["픽업", "셔틀", "관광", "드라이브"],
+        "부산": ["해운대", "관광", "여행"],
+        "인천": ["공항", "픽업", "셔틀", "국제선"],
+        "인천공항": ["픽업", "셔틀", "국제선", "심야"],
+        "김포": ["공항", "픽업", "셔틀", "국내선"],
+        "김포공항": ["픽업", "셔틀", "국내선", "빠른"],
+        "김해": ["공항", "픽업", "부산권"],
+        "김해공항": ["픽업", "셔틀", "부산권"],
+        "대구공항": ["픽업", "대구권"],
+        "강남": ["접근성", "주차", "비즈니스"],
+        "서울": ["접근성", "주차", "교통"],
+    },
+    "regions": [
+        "인천공항", "김포공항", "제주공항", "김해공항", "대구공항",
+        "제주", "부산", "인천", "김포", "김해", "대구", "광주", "대전",
+        "강릉", "속초", "여수", "경주", "전주",
+        "강남", "서울", "경기"
+    ]
+}

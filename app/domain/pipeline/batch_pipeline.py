@@ -27,7 +27,7 @@ from core.config import get_settings
 from core.stopwords import LexiconConfig
 
 from analysis import KeywordExtractor, KeywordAggregator, WeightCalculator
-from services.llm import OpenAIProvider, GeminiProvider, PromptTemplates, validate_summary
+from services.llm import OpenAIProvider, SummaryPromptBuilder, validate_summary
 
 # 기간별 요약 설정
 PERIOD_CONFIGS = {
@@ -39,7 +39,7 @@ PERIOD_CONFIGS = {
 }
 
 # 타입 별칭
-LLMProvider = Union[OpenAIProvider, GeminiProvider]
+LLMProvider = Union[OpenAIProvider]
 
 # 순환 참조 방지를 위한 TYPE_CHECKING
 if TYPE_CHECKING:
@@ -125,12 +125,6 @@ class BatchPipeline:
                 api_key=settings.openai_api_key,
                 model=settings.openai_model,
                 rpm=settings.openai_rpm
-            )
-        elif settings.llm_provider == 'gemini':
-            self.llm_provider = GeminiProvider(
-                api_key=settings.gemini_api_key,
-                model=settings.gemini_model,
-                rpm=settings.gemini_rpm
             )
         else:
             self.llm_provider = None
@@ -664,37 +658,19 @@ class BatchPipeline:
             branch_df: 지점별 리뷰 데이터프레임 (평점 기반 통계용)
         """
         if not keywords:
-            return PromptTemplates.get_default_summary(keywords)
+            return SummaryPromptBuilder.get_default_summary(keywords)
 
         # LLM Provider 미설정
         if not self.llm_provider or not self.llm_provider.is_available():
-            return PromptTemplates.get_default_summary(keywords)
+            return SummaryPromptBuilder.get_default_summary(keywords)
 
-        # 태그+감정 데이터 조회
-        tag_sentiment_data = self._get_tag_sentiment_for_branch(branch_id) if branch_id else {}
-
-        # 감정 통계 계산 (평점 기반 우선, 없으면 키워드 기반)
-        summary_stats = self._calculate_sentiment_stats(branch_df, tag_sentiment_data)
-
-        # 프롬프트 생성 (v4: 태그+감정 정보 포함)
-        if tag_sentiment_data and self.use_embedding_tags:
-            system_prompt, user_prompt = PromptTemplates.build_summary_prompt_with_tags(
-                keywords=keywords,
-                review_count=review_count,
-                tag_sentiment_data=tag_sentiment_data,
-                representative_reviews=representative_reviews,
-                branch_name=branch_name,
-                top_helpful_reviews=top_helpful_reviews,
-                summary_stats=summary_stats
-            )
-        else:
-            # 폴백: 기존 프롬프트 (v3)
-            system_prompt, user_prompt = PromptTemplates.build_summary_prompt(
-                keywords=keywords,
-                review_count=review_count,
-                representative_reviews=representative_reviews,
-                branch_name=branch_name
-            )
+        # 프롬프트 생성
+        system_prompt, user_prompt = SummaryPromptBuilder.create_summary_prompt(
+            keywords=keywords,
+            review_count=review_count,
+            representative_reviews=representative_reviews,
+            branch_name=branch_name
+        )
 
         last_summary = None
         last_errors = []
@@ -730,7 +706,7 @@ class BatchPipeline:
             print(f"   ⚠️ [{branch_name or '지점'}] 검증 경고 (재시도 {max_retries}회 후): {'; '.join(last_errors)}")
             return last_summary
 
-        return PromptTemplates.get_default_summary(keywords)
+        return SummaryPromptBuilder.get_default_summary(keywords)
 
     # =========================================================================
     # 기간별 요약 생성 (Step 8 확장)

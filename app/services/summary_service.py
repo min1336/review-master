@@ -167,7 +167,7 @@ class SummaryService:
     async def regenerate_summary(self, branch_id: int, period: str = 'all') -> str:
         """AI 요약 재생성"""
         from services.llm import get_provider
-        from services.llm.prompts import PromptTemplates
+        from services.llm.prompts import SummaryPromptBuilder
 
         summary = await self.uow.summaries.get_by_branch_id(branch_id)
         if not summary:
@@ -178,41 +178,6 @@ class SummaryService:
         review_count = summary_data.get('review_count', 0)
         keywords = summary_data.get('keywords') or []
 
-        # 태그 감정 데이터 조회
-        tag_sentiment_data = {}
-        try:
-            tags_result = await self.uow.summaries._client.table('branch_tags').select(
-                'tag_id, count, tags(name, sentiment)'
-            ).eq('branch_id', branch_id).eq('period_type', 'all').execute()
-
-            for row in tags_result.data:
-                tag_info = row.get('tags', {})
-                tag_name = tag_info.get('name')
-                sentiment = tag_info.get('sentiment', 'neutral')
-                count = row.get('count', 0)
-
-                if tag_name:
-                    if tag_name not in tag_sentiment_data:
-                        tag_sentiment_data[tag_name] = {'positive': 0, 'negative': 0, 'neutral': 0}
-                    tag_sentiment_data[tag_name][sentiment] = count
-        except Exception:
-            pass
-
-        # 평점 기반 감정 비율 추정
-        avg_rating = summary_data.get('avg_rating', 4.5)
-        if avg_rating >= 4.0:
-            positive_ratio, negative_ratio = 85, 5
-        elif avg_rating >= 3.5:
-            positive_ratio, negative_ratio = 70, 15
-        else:
-            positive_ratio, negative_ratio = 50, 30
-
-        summary_stats = {
-            'positive': positive_ratio,
-            'negative': negative_ratio,
-            'neutral': 100 - positive_ratio - negative_ratio
-        }
-
         period_labels = {
             'all': '전체 기간', '1y': '최근 1년', '6m': '최근 6개월',
             '3m': '최근 3개월', '1m': '최근 1개월'
@@ -220,21 +185,12 @@ class SummaryService:
         period_label = period_labels.get(period, '전체 기간')
 
         # 프롬프트 생성
-        if tag_sentiment_data:
-            system_prompt, user_prompt = PromptTemplates.build_summary_prompt_with_tags(
-                keywords=keywords[:10] if keywords else ['리뷰'],
-                review_count=review_count,
-                tag_sentiment_data=tag_sentiment_data,
-                branch_name=branch_name,
-                summary_stats=summary_stats
-            )
-        else:
-            system_prompt, user_prompt = PromptTemplates.build_summary_prompt(
-                keywords=keywords[:10] if keywords else ['리뷰'],
-                review_count=review_count,
-                representative_reviews=[],
-                branch_name=branch_name
-            )
+        system_prompt, user_prompt = SummaryPromptBuilder.create_summary_prompt(
+            keywords=keywords[:10] if keywords else ['리뷰'],
+            review_count=review_count,
+            representative_reviews=[],
+            branch_name=branch_name
+        )
 
         user_prompt = f"[분석 기간: {period_label}]\n\n" + user_prompt
 

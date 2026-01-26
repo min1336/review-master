@@ -334,8 +334,6 @@ class IncrementalPipeline:
 
         if self.keyword_manager.detect_significant_change(branch_id, old_keywords):
             logger.info(f"지점 {branch_id}: 키워드 변화 감지 → 요약 재생성 예정")
-            # TODO: 요약 재생성 로직 (Gemini API 호출)
-            # 현재는 플래그만 설정
             self._mark_summary_for_update(branch_id)
 
     def _mark_summary_for_update(self, branch_id: int):

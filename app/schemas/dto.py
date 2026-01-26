@@ -211,7 +211,7 @@ class PipelineConfigDTO:
     n_jobs: int = -1                   # -1 = 모든 CPU 사용
     
     # LLM 설정
-    llm_provider: str = "gemini"       # "openai" or "gemini"
+    llm_provider: str = "openai"       # "openai"
     max_tokens: int = 300
     temperature: float = 0.7
     
