@@ -1,6 +1,154 @@
-// State
+// ============================================================
+// Constants (상수)
+// ============================================================
+const CONFIG = {
+    EXTERNAL_URLS: {
+        CARMORE_REVIEW_BASE: 'https://dev-admin.carmore.kr/partners/Reviewmanage'
+    },
+    PAGINATION: {
+        DEFAULT_PAGE_SIZE: 500,
+        REVIEWS_PAGE_SIZE: 20
+    },
+    VALIDATION: {
+        REVIEW_ID_PATTERN: /^[a-zA-Z0-9_-]+$/
+    }
+};
+
+// ============================================================
+// Validation (유효성 검증)
+// ============================================================
+
+/**
+ * 리뷰 ID 유효성 검증 (빈 값만 체크)
+ * @param {string|number|null|undefined} reviewId - 검증할 리뷰 ID
+ * @returns {boolean} 유효 여부
+ */
+function isValidReviewId(reviewId) {
+    if (reviewId === null || reviewId === undefined || reviewId === '') {
+        return false;
+    }
+    return true;
+}
+
+// ============================================================
+// Security (보안 유틸리티)
+// ============================================================
+
+/**
+ * 외부 리뷰 링크 HTML 생성 (XSS/URL 인젝션 방지)
+ * @param {string|number} reviewId - 리뷰 ID (예약번호)
+ * @returns {string} 안전한 HTML 앵커 태그 또는 빈 문자열
+ */
+function createReviewLinkHtml(reviewId) {
+    if (!isValidReviewId(reviewId)) {
+        return '';
+    }
+
+    const encodedId = encodeURIComponent(String(reviewId));
+    const escapedId = escapeHtml(String(reviewId));
+    const reviewUrl = buildCarmoreReviewUrl(encodedId);
+
+    return `<a href="${reviewUrl}" target="_blank" rel="noopener noreferrer" class="review-link" title="Carmore 관리자에서 리뷰 보기">#${escapedId}</a>`;
+}
+
+/**
+ * Carmore 리뷰 관리 URL 생성
+ * @param {string} reservationId - 예약번호 (URL 인코딩된 값)
+ * @returns {string} 전체 URL
+ */
+function buildCarmoreReviewUrl(reservationId) {
+    const today = new Date();
+    const threeMonthsAgo = new Date(today);
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+    const endDate = formatDateForAPI(today);
+    const startDate = formatDateForAPI(threeMonthsAgo);
+
+    const params = new URLSearchParams({
+        sp: 'reservation_idx',
+        ratingthan: '0',
+        sv: reservationId,
+        ratingless: '5',
+        startdate: startDate,
+        enddate: endDate
+    });
+
+    return `${CONFIG.EXTERNAL_URLS.CARMORE_REVIEW_BASE}?${params.toString()}`;
+}
+
+// ============================================================
+// Render (렌더링)
+// ============================================================
+
+/**
+ * 단일 리뷰 아이템 HTML 렌더링
+ * @param {Object} reviewData - 리뷰 데이터 객체
+ * @param {string} [reviewData.review_id] - 리뷰 ID
+ * @param {string} [reviewData.content] - 리뷰 내용
+ * @param {string} [reviewData.sentiment] - 감정 (positive/neutral/negative)
+ * @param {string} [reviewData.review_date] - 리뷰 작성일
+ * @param {number} [reviewData.rating_service] - 서비스 평점
+ * @param {number} [reviewData.rating_car] - 차량 평점
+ * @param {string} [reviewData.car_model] - 차량 모델
+ * @param {number} index - 현재 인덱스
+ * @param {number} pageOffset - 페이지 오프셋
+ * @returns {string} 렌더링된 HTML 문자열
+ */
+function renderReviewItem(reviewData, index, pageOffset) {
+    const reviewLink = createReviewLinkHtml(reviewData.review_id)
+        || `<span>#${pageOffset + index + 1}</span>`;
+    const sentimentIcon = reviewData.sentiment
+        ? getSentimentIcon(reviewData.sentiment)
+        : '';
+    const escapedContent = escapeHtml(reviewData.content || '-');
+    const formattedDate = formatDate(reviewData.review_date);
+    const footerHtml = renderReviewFooter(reviewData);
+
+    return `
+        <div class="review-item">
+            <div class="review-item__header">
+                <span class="review-item__meta">
+                    ${reviewLink}
+                    ${sentimentIcon ? `<span class="review-item__sentiment">${sentimentIcon}</span>` : ''}
+                </span>
+                <span class="review-item__meta">${formattedDate}</span>
+            </div>
+            <div class="review-item__content">${escapedContent}</div>
+            ${footerHtml}
+        </div>
+    `;
+}
+
+/**
+ * 리뷰 푸터 (평점, 차량 정보) HTML 렌더링
+ * @param {Object} reviewData - 리뷰 데이터 객체
+ * @returns {string} 푸터 HTML 또는 빈 문자열
+ */
+function renderReviewFooter(reviewData) {
+    const metaParts = [];
+
+    if (reviewData.rating_service) {
+        metaParts.push(`친절: ${reviewData.rating_service}`);
+    }
+    if (reviewData.rating_car) {
+        metaParts.push(`차량: ${reviewData.rating_car}`);
+    }
+    if (reviewData.car_model) {
+        metaParts.push(escapeHtml(reviewData.car_model));
+    }
+
+    if (metaParts.length === 0) {
+        return '';
+    }
+
+    return `<div class="review-item__footer">${metaParts.join(' | ')}</div>`;
+}
+
+// ============================================================
+// State (전역 상태)
+// ============================================================
 let currentPage = 0;
-const pageSize = 500;
+const pageSize = CONFIG.PAGINATION.DEFAULT_PAGE_SIZE;
 let summaries = [];
 let regionStats = [];
 
@@ -1225,6 +1373,11 @@ async function loadReviews(branchId) {
         const response = await fetch(url);
         const data = await response.json();
 
+        // 디버깅: API 응답 확인
+        console.log('📋 리뷰 API 응답:', data);
+        console.log('📋 첫 번째 리뷰 데이터:', data.reviews?.[0]);
+        console.log('📋 review_id 필드:', data.reviews?.[0]?.review_id);
+
         reviewsTotal = data.total || 0;
         const reviews = data.reviews || [];
         const carModels = data.car_models || [];
@@ -1242,27 +1395,9 @@ async function loadReviews(branchId) {
         document.getElementById('reviews-count').textContent = `(총 ${reviewsTotal.toLocaleString()}건)`;
 
         if (reviews.length === 0) {
-            listEl.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--grey-5);">리뷰가 없습니다.</div>';
+            listEl.innerHTML = '<div class="review-item" style="text-align: center;">리뷰가 없습니다.</div>';
         } else {
-            listEl.innerHTML = reviews.map((r, idx) => `
-                <div style="padding: 16px; border-bottom: 1px solid var(--grey-8); ${idx % 2 === 0 ? '' : 'background: var(--grey-9);'}">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span style="font-size: 12px; color: var(--grey-5);">
-                            #${r.review_id || (offset + idx + 1)}
-                            ${r.sentiment ? `<span style="margin-left: 4px;">${getSentimentIcon(r.sentiment)}</span>` : ''}
-                        </span>
-                        <span style="font-size: 12px; color: var(--grey-5);">${formatDate(r.review_date)}</span>
-                    </div>
-                    <div style="font-size: 14px; line-height: 1.6; color: var(--grey-2);">${escapeHtml(r.content || '-')}</div>
-                    ${r.rating_service || r.rating_car || r.car_model ? `
-                        <div style="margin-top: 8px; font-size: 12px; color: var(--grey-5);">
-                            ${r.rating_service ? `친절: ${r.rating_service}` : ''}
-                            ${r.rating_car ? ` 차량: ${r.rating_car}` : ''}
-                            ${r.car_model ? ` | ${r.car_model}` : ''}
-                        </div>
-                    ` : ''}
-                </div>
-            `).join('');
+            listEl.innerHTML = reviews.map((r, idx) => renderReviewItem(r, idx, offset)).join('');
         }
 
         // 페이징 UI 업데이트

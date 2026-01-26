@@ -815,3 +815,57 @@ tr:hover td {
     background: var(--primary);
     color: white;
 }
+
+/* Review Link */
+.review-link {
+    color: var(--primary);
+    text-decoration: none;
+    cursor: pointer;
+    transition: text-decoration 0.2s ease, color 0.2s ease;
+}
+
+.review-link:hover {
+    text-decoration: underline;
+    color: var(--primary-hover);
+}
+
+.review-link:visited {
+    color: #7c3aed;
+}
+
+/* Review Item */
+.review-item {
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--grey-8);
+}
+
+.review-item:nth-child(even) {
+    background: var(--grey-9);
+}
+
+.review-item__header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-sm);
+}
+
+.review-item__meta {
+    font-size: 12px;
+    color: var(--grey-5);
+}
+
+.review-item__content {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--grey-2);
+}
+
+.review-item__footer {
+    margin-top: var(--spacing-sm);
+    font-size: 12px;
+    color: var(--grey-5);
+}
+
+.review-item__sentiment {
+    margin-left: var(--spacing-xs);
+}
