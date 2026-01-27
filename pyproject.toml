@@ -44,7 +44,6 @@ dev = [
 target-version = "py312"
 line-length = 88
 
-
 exclude = [
     ".bzr",
     ".direnv",
@@ -88,8 +87,12 @@ select = [
 ]
 
 ignore = [
-
+    "B008",  # FastAPI Depends 패턴 허용
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"app/main.py" = ["E402"]  # sys.path 설정 후 import 필요
+"app/infrastructure/llm/prompts.py" = ["E501"]  # 한국어 예시 텍스트
 [tool.ruff.lint.isort]
 required-imports = ["from __future__ import annotations"]
 

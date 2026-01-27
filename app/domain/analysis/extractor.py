@@ -1,9 +1,16 @@
 """
 키워드 추출기 (MeCab 기반)
 """
+
+from __future__ import annotations
+
 import re
-from typing import List, Set, Optional
+from typing import TYPE_CHECKING
+
 from core.stopwords import LexiconConfig
+
+if TYPE_CHECKING:
+    from .chunker import ClauseChunker
 
 
 class KeywordExtractor:
@@ -16,9 +23,9 @@ class KeywordExtractor:
 
     def __init__(
         self,
-        stopwords: Set[str] = None,
+        stopwords: set[str] = None,
         min_length: int = 2,
-        pos_tags: List[str] = None
+        pos_tags: list[str] = None,
     ):
         """
         Args:
@@ -28,7 +35,8 @@ class KeywordExtractor:
         """
         self.stopwords = stopwords or LexiconConfig.STOP_WORDS
         self.min_length = min_length
-        self.pos_tags = pos_tags or ['NNG', 'NNP', 'VA', 'XR']  # XR(어근) 추가: 깨끗, 저렴 등
+        # XR(어근) 추가: 깨끗, 저렴 등
+        self.pos_tags = pos_tags or ["NNG", "NNP", "VA", "XR"]
 
         # MeCab 초기화 (지연 로딩)
         self._mecab = None
@@ -40,6 +48,7 @@ class KeywordExtractor:
         if self._mecab_available is None:
             try:
                 import mecab
+
                 self._mecab = mecab.MeCab()
                 self._mecab_available = True
             except ImportError:
@@ -53,7 +62,7 @@ class KeywordExtractor:
         _ = self.mecab  # 초기화 트리거
         return self._mecab_available
 
-    def extract(self, text: str) -> List[str]:
+    def extract(self, text: str) -> list[str]:
         """
         텍스트에서 키워드 추출
 
@@ -77,7 +86,7 @@ class KeywordExtractor:
         # 정규식 폴백
         return self._extract_with_regex(text)
 
-    def _extract_with_mecab(self, text: str) -> List[str]:
+    def _extract_with_mecab(self, text: str) -> list[str]:
         """MeCab을 사용한 키워드 추출"""
         try:
             keywords = []
@@ -86,20 +95,23 @@ class KeywordExtractor:
                 word = token.surface
 
                 # 지정된 품사만 추출
-                if any(pos.startswith(tag) for tag in self.pos_tags):
-                    if len(word) >= self.min_length and word not in self.stopwords:
-                        keywords.append(word)
+                is_target_pos = any(pos.startswith(tag) for tag in self.pos_tags)
+                is_valid = len(word) >= self.min_length and word not in self.stopwords
+                if is_target_pos and is_valid:
+                    keywords.append(word)
 
             return keywords
         except Exception:
             return self._extract_with_regex(text)
 
-    def _extract_with_regex(self, text: str) -> List[str]:
+    def _extract_with_regex(self, text: str) -> list[str]:
         """정규식을 사용한 폴백 키워드 추출"""
-        words = re.findall(r'[가-힣]{2,}', text)
-        return [w for w in words if w not in self.stopwords and len(w) >= self.min_length]
+        words = re.findall(r"[가-힣]{2,}", text)
+        return [
+            w for w in words if w not in self.stopwords and len(w) >= self.min_length
+        ]
 
-    def extract_batch(self, texts: List[str]) -> List[List[str]]:
+    def extract_batch(self, texts: list[str]) -> list[list[str]]:
         """
         배치 키워드 추출
 
@@ -112,11 +124,8 @@ class KeywordExtractor:
         return [self.extract(text) for text in texts]
 
     def extract_batch_parallel(
-        self,
-        texts: List[str],
-        n_jobs: int = -1,
-        verbose: int = 0
-    ) -> List[List[str]]:
+        self, texts: list[str], n_jobs: int = -1, verbose: int = 0
+    ) -> list[list[str]]:
         """
         병렬 배치 키워드 추출 (joblib 사용)
 
@@ -135,8 +144,9 @@ class KeywordExtractor:
             return self.extract_batch(texts)
 
         # 정규식 폴백 함수 (MeCab이 워커에서 초기화 안될 수 있음)
-        def extract_single(text: str, stopwords: set, min_length: int) -> List[str]:
+        def extract_single(text: str, stopwords: set, min_length: int) -> list[str]:
             import re
+
             if not text or not isinstance(text, str):
                 return []
             text = text.strip()
@@ -146,18 +156,24 @@ class KeywordExtractor:
             # MeCab 시도
             try:
                 import mecab
+
                 m = mecab.MeCab()
                 keywords = []
                 for token in m.parse(text):
                     pos = token.pos
                     word = token.surface
-                    if pos.startswith('NNG') or pos.startswith('NNP') or pos.startswith('VA'):
-                        if len(word) >= min_length and word not in stopwords:
-                            keywords.append(word)
+                    is_target_pos = (
+                        pos.startswith("NNG")
+                        or pos.startswith("NNP")
+                        or pos.startswith("VA")
+                    )
+                    is_valid = len(word) >= min_length and word not in stopwords
+                    if is_target_pos and is_valid:
+                        keywords.append(word)
                 return keywords
-            except:
+            except Exception:
                 # 정규식 폴백
-                words = re.findall(r'[가-힣]{2,}', text)
+                words = re.findall(r"[가-힣]{2,}", text)
                 return [w for w in words if w not in stopwords and len(w) >= min_length]
 
         return Parallel(n_jobs=n_jobs, verbose=verbose)(
@@ -165,17 +181,17 @@ class KeywordExtractor:
             for text in texts
         )
 
-    def add_stopwords(self, words: Set[str]):
+    def add_stopwords(self, words: set[str]):
         """불용어 추가"""
         self.stopwords = self.stopwords | words
 
-    def remove_stopwords(self, words: Set[str]):
+    def remove_stopwords(self, words: set[str]):
         """불용어 제거"""
         self.stopwords = self.stopwords - words
 
     # ========== 청킹 지원 메서드 ==========
 
-    def extract_from_chunks(self, chunks: List[str]) -> List[List[str]]:
+    def extract_from_chunks(self, chunks: list[str]) -> list[list[str]]:
         """
         청크별 키워드 추출
 
@@ -187,11 +203,7 @@ class KeywordExtractor:
         """
         return [self.extract(chunk) for chunk in chunks]
 
-    def extract_with_chunking(
-        self,
-        text: str,
-        chunker: 'ClauseChunker' = None
-    ) -> dict:
+    def extract_with_chunking(self, text: str, chunker: ClauseChunker = None) -> dict:
         """
         텍스트를 청킹 후 키워드 추출
 
@@ -207,15 +219,12 @@ class KeywordExtractor:
             }
         """
         if not text or not text.strip():
-            return {
-                'chunks': [],
-                'keywords_per_chunk': [],
-                'flat_keywords': []
-            }
+            return {"chunks": [], "keywords_per_chunk": [], "flat_keywords": []}
 
         # 청커 초기화
         if chunker is None:
             from .chunker import ClauseChunker
+
             chunker = ClauseChunker()
 
         # 청킹
@@ -234,16 +243,14 @@ class KeywordExtractor:
                     flat_keywords.append(kw)
 
         return {
-            'chunks': chunks,
-            'keywords_per_chunk': keywords_per_chunk,
-            'flat_keywords': flat_keywords
+            "chunks": chunks,
+            "keywords_per_chunk": keywords_per_chunk,
+            "flat_keywords": flat_keywords,
         }
 
     def extract_batch_with_chunking(
-        self,
-        texts: List[str],
-        chunker: 'ClauseChunker' = None
-    ) -> List[dict]:
+        self, texts: list[str], chunker: ClauseChunker = None
+    ) -> list[dict]:
         """
         배치 텍스트 청킹 + 키워드 추출
 
@@ -256,6 +263,7 @@ class KeywordExtractor:
         """
         if chunker is None:
             from .chunker import ClauseChunker
+
             chunker = ClauseChunker()
 
         return [self.extract_with_chunking(text, chunker) for text in texts]

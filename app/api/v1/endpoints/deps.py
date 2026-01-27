@@ -8,17 +8,30 @@ Usage:
 
     @router.get("/summaries")
     async def api_summaries(
-        service: SummaryService = Depends(get_summary_service)
+        service: SummaryService = Depends(get_summary_service),
     ):
         return await service.get_summaries()
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from fastapi import Depends
+from repository.session import get_client
 from supabase import AsyncClient
 
-from crud.session import get_client
-from crud import UnitOfWork
-
+if TYPE_CHECKING:
+    from repository.affiliate_repository import AffiliateRepository
+    from repository.branch_tag_repository import BranchTagRepository
+    from repository.review_repository import BranchReviewRepository
+    from repository.sentiment_repository import SentimentRepository
+    from repository.summary_repository import SummaryRepository
+    from repository.tag_repository import TagRepository
+    from services.carmore_service import CarmoreService
+    from services.sentiment_service import SentimentService
+    from services.summary_service import SummaryService
+    from services.tag_service import TagService
 
 # ============================================================
 # Database Client
@@ -31,40 +44,94 @@ async def get_db_client() -> AsyncClient:
 
 
 # ============================================================
-# UnitOfWork (권장)
+# Repositories
 # ============================================================
 
 
-async def get_uow(client: AsyncClient = Depends(get_db_client)) -> UnitOfWork:
-    """UnitOfWork 의존성 - 여러 Repository 묶음"""
-    return UnitOfWork(client)
+async def get_summary_repo(
+    client: AsyncClient = Depends(get_db_client),
+) -> SummaryRepository:
+    from repository.summary_repository import SummaryRepository
+
+    return SummaryRepository(client)
+
+
+async def get_branch_tag_repo(
+    client: AsyncClient = Depends(get_db_client),
+) -> BranchTagRepository:
+    from repository.branch_tag_repository import BranchTagRepository
+
+    return BranchTagRepository(client)
+
+
+async def get_review_repo(
+    client: AsyncClient = Depends(get_db_client),
+) -> BranchReviewRepository:
+    from repository.review_repository import BranchReviewRepository
+
+    return BranchReviewRepository(client)
+
+
+async def get_tag_repo(
+    client: AsyncClient = Depends(get_db_client),
+) -> TagRepository:
+    from repository.tag_repository import TagRepository
+
+    return TagRepository(client)
+
+
+async def get_sentiment_repo(
+    client: AsyncClient = Depends(get_db_client),
+) -> SentimentRepository:
+    from repository.sentiment_repository import SentimentRepository
+
+    return SentimentRepository(client)
+
+
+async def get_affiliate_repo(
+    client: AsyncClient = Depends(get_db_client),
+) -> AffiliateRepository:
+    from repository.affiliate_repository import AffiliateRepository
+
+    return AffiliateRepository(client)
 
 
 # ============================================================
 # Services
-# 순환 참조 방지를 위해 함수 내부에서 import
 # ============================================================
 
 
-async def get_summary_service(uow: UnitOfWork = Depends(get_uow)):
-    """SummaryService 의존성"""
+async def get_summary_service(
+    summary_repo: SummaryRepository = Depends(get_summary_repo),
+    branch_tag_repo: BranchTagRepository = Depends(get_branch_tag_repo),
+    review_repo: BranchReviewRepository = Depends(get_review_repo),
+) -> SummaryService:
     from services.summary_service import SummaryService
-    return SummaryService(uow)
+
+    return SummaryService(summary_repo, branch_tag_repo, review_repo)
 
 
-async def get_tag_service(uow: UnitOfWork = Depends(get_uow)):
-    """TagService 의존성"""
+async def get_tag_service(
+    tag_repo: TagRepository = Depends(get_tag_repo),
+    branch_tag_repo: BranchTagRepository = Depends(get_branch_tag_repo),
+) -> TagService:
     from services.tag_service import TagService
-    return TagService(uow)
+
+    return TagService(tag_repo, branch_tag_repo)
 
 
-async def get_sentiment_service(uow: UnitOfWork = Depends(get_uow)):
-    """SentimentService 의존성"""
+async def get_sentiment_service(
+    sentiment_repo: SentimentRepository = Depends(get_sentiment_repo),
+    review_repo: BranchReviewRepository = Depends(get_review_repo),
+) -> SentimentService:
     from services.sentiment_service import SentimentService
-    return SentimentService(uow)
+
+    return SentimentService(sentiment_repo, review_repo)
 
 
-async def get_carmore_service(uow: UnitOfWork = Depends(get_uow)):
-    """CarmoreService 의존성"""
+async def get_carmore_service(
+    affiliate_repo: AffiliateRepository = Depends(get_affiliate_repo),
+) -> CarmoreService:
     from services.carmore_service import CarmoreService
-    return CarmoreService(uow)
+
+    return CarmoreService(affiliate_repo)

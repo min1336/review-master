@@ -9,10 +9,12 @@ Usage:
             self.service = service
 """
 
+from __future__ import annotations
+
+from .carmore_service import CarmoreService
+from .sentiment_service import SentimentService
 from .summary_service import SummaryService
 from .tag_service import TagService
-from .sentiment_service import SentimentService
-from .carmore_service import CarmoreService
 
 __all__ = [
     "SummaryService",

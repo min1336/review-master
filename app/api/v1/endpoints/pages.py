@@ -5,6 +5,9 @@
 - 대시보드 메인 페이지 (/)
 - 태그 테스터 페이지 (/tag-tester)
 """
+
+from __future__ import annotations
+
 from pathlib import Path
 
 from fastapi import APIRouter, Request
@@ -21,16 +24,10 @@ templates = Jinja2Templates(directory=str(_templates_dir))
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """메인 대시보드"""
-    return templates.TemplateResponse(
-        request=request,
-        name="dashboard_v2.html"
-    )
+    return templates.TemplateResponse(request=request, name="dashboard_v2.html")
 
 
 @router.get("/tag-tester", response_class=HTMLResponse)
 async def tag_tester(request: Request):
     """태그 분석 테스트 페이지"""
-    return templates.TemplateResponse(
-        request=request,
-        name="tag_tester.html"
-    )
+    return templates.TemplateResponse(request=request, name="tag_tester.html")

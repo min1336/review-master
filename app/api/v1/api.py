@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from fastapi import APIRouter
-from .endpoints import summaries, tags, sentiment
+
+from .endpoints import sentiment, summaries, tags
 
 api_router = APIRouter()
 

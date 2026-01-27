@@ -2,32 +2,37 @@
 DB 엔티티 Pydantic 모델
 Repository에서 반환되는 타입으로 사용
 """
-from typing import Optional, List, Dict, Any
+
+from __future__ import annotations
+
 from datetime import datetime
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel
 
 
 class Summary(BaseModel):
     """branch_summaries 테이블 엔티티"""
-    id: Optional[int] = None
+
+    id: int | None = None
     branch_id: int
-    branch_name: Optional[str] = None
-    region: Optional[str] = None
+    branch_name: str | None = None
+    region: str | None = None
     status: str = "draft"
-    review_count: Optional[int] = 0
-    avg_rating: Optional[float] = None
-    keywords: Optional[List[str]] = None
-    keyword_1: Optional[str] = None
-    keyword_2: Optional[str] = None
-    keyword_3: Optional[str] = None
-    summary_all: Optional[str] = None
-    summary_1y: Optional[str] = None
-    summary_6m: Optional[str] = None
-    summary_3m: Optional[str] = None
-    summary_1m: Optional[str] = None
-    pending_summaries: Optional[Dict[str, Any]] = None  # AI 생성 대기 중인 요약
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    review_count: int | None = 0
+    avg_rating: float | None = None
+    keywords: list[str] | None = None
+    keyword_1: str | None = None
+    keyword_2: str | None = None
+    keyword_3: str | None = None
+    summary_all: str | None = None
+    summary_1y: str | None = None
+    summary_6m: str | None = None
+    summary_3m: str | None = None
+    summary_1m: str | None = None
+    pending_summaries: dict[str, Any] | None = None  # AI 생성 대기 중인 요약
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -35,14 +40,15 @@ class Summary(BaseModel):
 
 class Category(BaseModel):
     """categories 테이블 엔티티"""
-    id: Optional[int] = None
+
+    id: int | None = None
     name: str
-    description: Optional[str] = ""
-    color: Optional[str] = "#667eea"
-    display_order: Optional[int] = 0
+    description: str | None = ""
+    color: str | None = "#667eea"
+    display_order: int | None = 0
     is_active: bool = True
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -50,17 +56,18 @@ class Category(BaseModel):
 
 class Tag(BaseModel):
     """tags 테이블 엔티티"""
-    id: Optional[int] = None
+
+    id: int | None = None
     name: str
-    group_name: Optional[str] = None
-    category_id: Optional[int] = None
-    color: Optional[str] = "#667eea"
+    group_name: str | None = None
+    category_id: int | None = None
+    color: str | None = "#667eea"
     sentiment: str = "positive"
     is_active: bool = True
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
     # 조인 데이터
-    categories: Optional[Category] = None
+    categories: Category | None = None
 
     class Config:
         from_attributes = True
@@ -68,14 +75,15 @@ class Tag(BaseModel):
 
 class KeywordMapping(BaseModel):
     """keyword_tag_mappings 테이블 엔티티"""
-    id: Optional[int] = None
+
+    id: int | None = None
     keyword: str
     tag_id: int
     is_auto: bool = True
     confidence: float = 1.0
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
     # 조인 데이터
-    tags: Optional[Tag] = None
+    tags: Tag | None = None
 
     class Config:
         from_attributes = True
@@ -83,16 +91,17 @@ class KeywordMapping(BaseModel):
 
 class BranchTag(BaseModel):
     """branch_tags 테이블 엔티티"""
-    id: Optional[int] = None
+
+    id: int | None = None
     branch_id: int
     tag_id: int
     period_type: str = "all"
     count: int = 0
-    weighted_score: Optional[float] = 0
-    rank: Optional[int] = None
-    created_at: Optional[datetime] = None
+    weighted_score: float | None = 0
+    rank: int | None = None
+    created_at: datetime | None = None
     # 조인 데이터
-    tags: Optional[Tag] = None
+    tags: Tag | None = None
 
     class Config:
         from_attributes = True
@@ -100,15 +109,16 @@ class BranchTag(BaseModel):
 
 class Review(BaseModel):
     """recent_reviews 테이블 엔티티"""
-    id: Optional[int] = None
+
+    id: int | None = None
     branch_id: int
-    review_id: Optional[str] = None
-    content: Optional[str] = None
-    rating: Optional[float] = None
-    sentiment: Optional[str] = None
-    keywords: Optional[List[str]] = None
-    review_date: Optional[datetime] = None
-    created_at: Optional[datetime] = None
+    review_id: str | None = None
+    content: str | None = None
+    rating: float | None = None
+    sentiment: str | None = None
+    keywords: list[str] | None = None
+    review_date: datetime | None = None
+    created_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -116,17 +126,18 @@ class Review(BaseModel):
 
 class SentimentStats(BaseModel):
     """sentiment_stats 테이블 엔티티"""
-    id: Optional[int] = None
+
+    id: int | None = None
     branch_id: int
     period_type: str = "all"
     positive_count: int = 0
     negative_count: int = 0
     neutral_count: int = 0
     total_count: int = 0
-    positive_ratio: Optional[float] = None
-    negative_ratio: Optional[float] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    positive_ratio: float | None = None
+    negative_ratio: float | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -134,15 +145,16 @@ class SentimentStats(BaseModel):
 
 class Affiliate(BaseModel):
     """affiliates 테이블 엔티티"""
-    id: Optional[int] = None
+
+    id: int | None = None
     branch_id: int
-    name: Optional[str] = None
-    address: Optional[str] = None
-    phone: Optional[str] = None
-    region: Optional[str] = None
+    name: str | None = None
+    address: str | None = None
+    phone: str | None = None
+    region: str | None = None
     is_active: bool = True
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True

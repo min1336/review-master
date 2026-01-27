@@ -42,7 +42,7 @@ async function apiRequest(url, options = {}) {
  * @returns {Promise<Object>} 통계 데이터
  */
 export async function fetchStats() {
-    return apiRequest('/api/v2/stats');
+    return apiRequest('/review/api/v2/stats');
 }
 
 /**
@@ -50,7 +50,7 @@ export async function fetchStats() {
  * @returns {Promise<Array>} 지역 통계 목록
  */
 export async function fetchRegionStats() {
-    return apiRequest('/api/v2/stats/region');
+    return apiRequest('/review/api/v2/stats/region');
 }
 
 /**
@@ -58,7 +58,7 @@ export async function fetchRegionStats() {
  * @returns {Promise<Object>} 평점 분포
  */
 export async function fetchRatingStats() {
-    return apiRequest('/api/v2/stats/rating');
+    return apiRequest('/review/api/v2/stats/rating');
 }
 
 // ============================================================
@@ -100,7 +100,7 @@ function buildSummariesParams(filters = {}) {
  */
 export async function fetchSummaries(filters = {}) {
     const params = buildSummariesParams(filters);
-    return apiRequest(`/api/v2/summaries?${params}`);
+    return apiRequest(`/review/api/v2/summaries?${params}`);
 }
 
 /**
@@ -109,7 +109,7 @@ export async function fetchSummaries(filters = {}) {
  * @returns {Promise<Object>} 요약 상세
  */
 export async function fetchSummaryDetail(branchId) {
-    return apiRequest(`/api/v2/summaries/${branchId}`);
+    return apiRequest(`/review/api/v2/summaries/${branchId}`);
 }
 
 /**
@@ -119,7 +119,7 @@ export async function fetchSummaryDetail(branchId) {
  * @returns {Promise<Object>} 수정 결과
  */
 export async function updateSummary(branchId, data) {
-    return apiRequest(`/api/v2/summaries/${branchId}`, {
+    return apiRequest(`/review/api/v2/summaries/${branchId}`, {
         method: 'PUT',
         body: JSON.stringify(data)
     });
@@ -132,7 +132,7 @@ export async function updateSummary(branchId, data) {
  * @returns {Promise<Object>} 변경 결과
  */
 export async function updateStatus(branchId, status) {
-    return apiRequest(`/api/v2/summaries/${branchId}/status`, {
+    return apiRequest(`/review/api/v2/summaries/${branchId}/status`, {
         method: 'PUT',
         body: JSON.stringify({ status })
     });
@@ -145,7 +145,7 @@ export async function updateStatus(branchId, status) {
  * @returns {Promise<Object>} 생성된 요약
  */
 export async function regenerateSummary(branchId, period = 'all') {
-    return apiRequest(`/api/v2/summaries/${branchId}/regenerate`, {
+    return apiRequest(`/review/api/v2/summaries/${branchId}/regenerate`, {
         method: 'POST',
         body: JSON.stringify({ period })
     });
@@ -158,7 +158,7 @@ export async function regenerateSummary(branchId, period = 'all') {
  * @returns {Promise<Object>} 적용 결과
  */
 export async function applyPendingSummary(branchId, period) {
-    return apiRequest(`/api/v2/summaries/${branchId}/apply-pending`, {
+    return apiRequest(`/review/api/v2/summaries/${branchId}/apply-pending`, {
         method: 'POST',
         body: JSON.stringify({ period })
     });
@@ -171,7 +171,7 @@ export async function applyPendingSummary(branchId, period) {
  * @returns {Promise<Object>} 취소 결과
  */
 export async function discardPendingSummary(branchId, period) {
-    return apiRequest(`/api/v2/summaries/${branchId}/discard-pending`, {
+    return apiRequest(`/review/api/v2/summaries/${branchId}/discard-pending`, {
         method: 'POST',
         body: JSON.stringify({ period })
     });
@@ -204,7 +204,7 @@ export async function fetchBranchReviews(branchId, options = {}) {
     if (dateFilter.from) params.set('review_date_from', dateFilter.from);
     if (dateFilter.to) params.set('review_date_to', dateFilter.to);
 
-    return apiRequest(`/api/v2/summaries/${branchId}/reviews?${params}`);
+    return apiRequest(`/review/api/v2/summaries/${branchId}/reviews?${params}`);
 }
 
 // ============================================================
@@ -221,7 +221,7 @@ export async function fetchBranchTagsBatch(branchIds) {
         return {};
     }
 
-    return apiRequest('/api/tags/batch', {
+    return apiRequest('/review/api/tags/batch', {
         method: 'POST',
         body: JSON.stringify({ branch_ids: branchIds })
     });
@@ -236,7 +236,7 @@ export async function fetchBranchTagsBatch(branchIds) {
  * @returns {Promise<Object>} 동기화 결과
  */
 export async function syncAffiliates() {
-    return apiRequest('/api/carmore/sync/affiliates', {
+    return apiRequest('/review/api/carmore/sync/affiliates', {
         method: 'POST'
     });
 }

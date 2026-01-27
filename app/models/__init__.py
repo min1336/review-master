@@ -1,8 +1,10 @@
-from .summary import Summary
+from __future__ import annotations
+
+from .affiliate import Affiliate, CarModel
 from .review import Review
-from .tag import Tag, Category, KeywordMapping, BranchTag
 from .sentiment import SentimentStats
-from .affiliate import Affiliate
+from .summary import Summary
+from .tag import BranchTag, Category, KeywordMapping, Tag
 
 __all__ = [
     "Summary",
@@ -13,4 +15,5 @@ __all__ = [
     "BranchTag",
     "SentimentStats",
     "Affiliate",
+    "CarModel",
 ]

@@ -87,9 +87,8 @@
                     <span class="filter-label">상태</span>
                     <select class="filter-select" id="filter-status">
                         <option value="">전체</option>
-                        <option value="draft">Draft</option>
-                        <option value="approved">Approved</option>
-                        <option value="published">Published</option>
+                        <option value="draft">보류</option>
+                        <option value="published">게시</option>
                     </select>
                 </div>
 
@@ -98,7 +97,7 @@
                     <span class="filter-label">기간</span>
                     <input type="text" id="filter-date-range" class="date-range-input" placeholder="날짜 범위 선택..."
                         readonly>
-                    <button class="btn-clear-date" id="btn-clear-date" onclick="clearDateFilter()"
+                    <button class="btn-clear-date" id="btn-clear-date" onclick="window.dashboardHandlers.clearDateFilter()"
                         style="display: none;">초기화</button>
                 </div>
 
@@ -161,7 +160,7 @@
         <div class="modal">
             <div class="modal-header">
                 <h3 id="modal-title">지점 상세</h3>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
+                <button class="modal-close" onclick="window.dashboardHandlers.closeModal()">&times;</button>
             </div>
             <div class="modal-body" id="modal-body">
                 <!-- Content loaded dynamically -->

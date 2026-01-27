@@ -1,19 +1,22 @@
 """
 LLM Provider 추상 클래스
 """
+
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
 class LLMResponse:
     """LLM 응답"""
+
     content: str
     model: str
     tokens_used: int = 0
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class LLMProvider(ABC):
@@ -25,7 +28,7 @@ class LLMProvider(ABC):
         prompt: str,
         system_prompt: str = None,
         max_tokens: int = 300,
-        temperature: float = 0.7
+        temperature: float = 0.7,
     ) -> LLMResponse:
         """
         텍스트 생성

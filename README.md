@@ -1,5 +1,4 @@
 # Review Summary AI
-
 Carmore 렌트카 리뷰 AI 요약 시스템
 
 ## Overview

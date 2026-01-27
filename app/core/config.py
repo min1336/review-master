@@ -3,33 +3,42 @@
 
 pydantic-settings를 사용하여 .env 파일에서 설정을 로드합니다.
 """
+
+from __future__ import annotations
+
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic_settings import BaseSettings
-from dotenv import load_dotenv
+from pydantic import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# 환경변수 로드 (프로젝트 루트의 .env)
-env_path = Path(__file__).parent.parent.parent / '.env'
-load_dotenv(env_path)
+# 프로젝트 루트 디렉토리 (app의 상위 디렉토리)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+ENV_FILE = PROJECT_ROOT / ".env"
 
 
 class Settings(BaseSettings):
     """애플리케이션 설정"""
 
+    model_config = SettingsConfigDict(
+        env_file=str(ENV_FILE),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
     # LLM 설정
     llm_provider: Literal["openai"] = "openai"
 
     # OpenAI 설정
-    openai_api_key: str = ""
+    openai_api_key: SecretStr = SecretStr("")
     openai_model: str = "gpt-4o-mini"
     openai_rpm: int = 3500
 
     # Supabase 설정
     supabase_url: str = ""
-    supabase_key: str = ""
+    supabase_key: SecretStr = SecretStr("")
 
     # 파이프라인 설정
     min_reviews_per_branch: int = 30
@@ -47,11 +56,6 @@ class Settings(BaseSettings):
     # App
     debug: bool = False
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"
-
 
 @lru_cache
 def get_settings() -> Settings:
@@ -61,6 +65,7 @@ def get_settings() -> Settings:
 
 class BranchType(Enum):
     """지점 유형"""
+
     AIRPORT = "airport"
     CITY = "city"
     TOURIST = "tourist"
@@ -69,11 +74,14 @@ class BranchType(Enum):
 
 REGION_CONFIG = {
     "airport_keywords": [
-        "공항", "인천공항", "김포공항", "제주공항", "김해공항", "대구공항"
+        "공항",
+        "인천공항",
+        "김포공항",
+        "제주공항",
+        "김해공항",
+        "대구공항",
     ],
-    "tourist_keywords": [
-        "제주", "부산", "강릉", "속초", "여수", "경주", "전주"
-    ],
+    "tourist_keywords": ["제주", "부산", "강릉", "속초", "여수", "경주", "전주"],
     "region_emphasis": {
         "제주": ["여행", "드라이브", "관광", "해안도로", "렌트"],
         "제주공항": ["픽업", "셔틀", "관광", "드라이브"],
@@ -89,9 +97,26 @@ REGION_CONFIG = {
         "서울": ["접근성", "주차", "교통"],
     },
     "regions": [
-        "인천공항", "김포공항", "제주공항", "김해공항", "대구공항",
-        "제주", "부산", "인천", "김포", "김해", "대구", "광주", "대전",
-        "강릉", "속초", "여수", "경주", "전주",
-        "강남", "서울", "경기"
-    ]
+        "인천공항",
+        "김포공항",
+        "제주공항",
+        "김해공항",
+        "대구공항",
+        "제주",
+        "부산",
+        "인천",
+        "김포",
+        "김해",
+        "대구",
+        "광주",
+        "대전",
+        "강릉",
+        "속초",
+        "여수",
+        "경주",
+        "전주",
+        "강남",
+        "서울",
+        "경기",
+    ],
 }

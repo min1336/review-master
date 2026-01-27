@@ -3,9 +3,10 @@
 
 렌터카 지점 리뷰 요약을 위한 프롬프트 생성기
 """
-from typing import List, Optional
 
-from app.core.config import BranchType, REGION_CONFIG
+from __future__ import annotations
+
+from app.core.config import REGION_CONFIG, BranchType
 
 
 class SummaryPromptBuilder:
@@ -112,7 +113,7 @@ class SummaryPromptBuilder:
         return BranchType.CITY
 
     @classmethod
-    def extract_region(cls, branch_name: str) -> Optional[str]:
+    def extract_region(cls, branch_name: str) -> str | None:
         """
         업체명에서 지역명 추출
 
@@ -145,10 +146,10 @@ class SummaryPromptBuilder:
     @classmethod
     def create_summary_prompt(
         cls,
-        keywords: List[str],
+        keywords: list[str],
         review_count: int,
-        representative_reviews: Optional[List[str]] = None,
-        branch_name: Optional[str] = None
+        representative_reviews: list[str] | None = None,
+        branch_name: str | None = None,
     ) -> tuple:
         """
         요약 프롬프트 생성
@@ -167,7 +168,9 @@ class SummaryPromptBuilder:
 
         # 지역 추출
         region = cls.extract_region(branch_name)
-        region_emphasis = REGION_CONFIG["region_emphasis"].get(region, []) if region else []
+        region_emphasis = (
+            REGION_CONFIG["region_emphasis"].get(region, []) if region else []
+        )
 
         # 시스템 프롬프트 = 기본 + 유형별 예시
         system_prompt = cls.SUMMARY_SYSTEM + cls.get_examples_for_type(branch_type)
@@ -192,7 +195,7 @@ class SummaryPromptBuilder:
 <data>
 - 지점명: {branch_name or "미지정"}
 - 분석 리뷰 수: {review_count}개
-- 핵심 키워드: {', '.join(keywords[:5])}{region_text}
+- 핵심 키워드: {", ".join(keywords[:5])}{region_text}
 </data>
 
 <representative_reviews>
@@ -204,7 +207,7 @@ class SummaryPromptBuilder:
         return system_prompt, user_prompt
 
     @classmethod
-    def get_default_summary(cls, keywords: List[str]) -> str:
+    def get_default_summary(cls, keywords: list[str]) -> str:
         """기본 요약 (LLM 실패시)"""
         if keywords:
             return f"{', '.join(keywords[:3])} 관련 긍정적인 리뷰가 많습니다."

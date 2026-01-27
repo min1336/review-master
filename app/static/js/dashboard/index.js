@@ -386,7 +386,7 @@ function buildDetailModalHtml(data) {
                     </div>
                 `).join('')}
             </div>
-            <button class="btn-ai-summary" onclick="window.dashboardHandlers.regenerateSummary(${data.branch_id})" title="AI 요약 재생성">
+            <button class="btn-ai-summary" onclick="window.dashboardHandlers.regenerateSummary(${data.branch_id}, event)" title="AI 요약 재생성">
                 ✨ AI 요약
             </button>
         </div>
@@ -425,7 +425,6 @@ function buildDetailModalHtml(data) {
                 </div>
                 <div style="display: flex; gap: 8px;">
                     <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.updateStatus(${data.branch_id}, 'draft')">보류</button>
-                    <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.updateStatus(${data.branch_id}, 'approved')">승인</button>
                     <button class="btn btn-primary btn-sm" onclick="window.dashboardHandlers.updateStatus(${data.branch_id}, 'published')">게시</button>
                 </div>
             </div>
@@ -640,8 +639,9 @@ function showSummaryTab(tabEl, period) {
 /**
  * AI 요약 재생성
  * @param {number} branchId - 지점 ID
+ * @param {Event} e - 클릭 이벤트
  */
-async function regenerateSummary(branchId) {
+async function regenerateSummary(branchId, e) {
     const { editMode } = state.getState();
     const period = editMode.currentPeriod;
 
@@ -649,7 +649,7 @@ async function regenerateSummary(branchId) {
         return;
     }
 
-    const btn = event.target;
+    const btn = e?.target || e?.currentTarget;
     const originalText = btn.innerHTML;
 
     try {

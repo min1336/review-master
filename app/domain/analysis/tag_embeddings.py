@@ -2,10 +2,12 @@
 태그 대표 임베딩 관리
 사전 계산된 임베딩을 저장/로드하여 성능 최적화
 """
-import os
+
+from __future__ import annotations
+
 import logging
+import os
 from pathlib import Path
-from typing import Dict, Optional
 
 import numpy as np
 
@@ -16,28 +18,50 @@ logger = logging.getLogger(__name__)
 # 각 태그를 잘 표현하는 키워드와 문맥을 포함
 # v2.1: 차량상태 → 차량외관/차량청결, 반납/픽업 + 배차/시간 세분화
 TAG_DESCRIPTIONS = {
-    '고객응대': "직원 친절 응대 설명 안내 배웅 배려 상담 도움 감사 인사 미소 고객 만족 인상 표정 웃음",
-    '차량외관': "차량 외관 외부 외형 스크래치 흠집 긁힘 찌그러짐 파손 도색 페인트 범퍼 휠 타이어 유리 세차",
-    '차량청결': "청결 청소 깨끗 지저분 더러운 냄새 담배 악취 먼지 얼룩 이물질 쓰레기 실내 내부 시트 바닥 에어컨냄새",
-    '가성비': "가격 저렴 합리적 가성비 할인 비용 요금 싼 싸다 비싸 적정 경제적 부담 렌트비",
-    '위치/접근성': "위치 접근 가까운 공항 역 터미널 교통 편리 거리 도보 이동 찾기 주변 근처",
-    '서비스': "주차 대기실 셔틀버스 시설 화장실 편의 휴게실 음료 커피 와이파이 충전 예약 확정 변경 취소 앱 사이트 문자 연락 확인 알림 카카오톡",
-    '반납/픽업': "반납 픽업 인수 수령 전달 인계 차량인도 반환 절차 간편 서류",
-    '배차/시간': "배차 차종 차량변경 대기 지연 늦게 늦음 빨리 재촉 독촉 시간 약속시간 출발 도착 기다림 펑크 노쇼",
-    '보험/보장': "보험 보장 면책 면책금 자기부담 자기부담금 완전자차 자차 대인 대물 사고 보상 보험료 책임 커버 안심 슈퍼 사고접수 사고처리 손해 배상",
+    "고객응대": (
+        "직원 친절 응대 설명 안내 배웅 배려 상담 도움 감사 인사 미소 "
+        "고객 만족 인상 표정 웃음"
+    ),
+    "차량외관": (
+        "차량 외관 외부 외형 스크래치 흠집 긁힘 찌그러짐 파손 도색 "
+        "페인트 범퍼 휠 타이어 유리 세차"
+    ),
+    "차량청결": (
+        "청결 청소 깨끗 지저분 더러운 냄새 담배 악취 먼지 얼룩 이물질 "
+        "쓰레기 실내 내부 시트 바닥 에어컨냄새"
+    ),
+    "가성비": (
+        "가격 저렴 합리적 가성비 할인 비용 요금 싼 싸다 비싸 적정 경제적 부담 렌트비"
+    ),
+    "위치/접근성": (
+        "위치 접근 가까운 공항 역 터미널 교통 편리 거리 도보 이동 찾기 주변 근처"
+    ),
+    "서비스": (
+        "주차 대기실 셔틀버스 시설 화장실 편의 휴게실 음료 커피 "
+        "와이파이 충전 예약 확정 변경 취소 앱 사이트 문자 연락 확인 알림 카카오톡"
+    ),
+    "반납/픽업": "반납 픽업 인수 수령 전달 인계 차량인도 반환 절차 간편 서류",
+    "배차/시간": (
+        "배차 차종 차량변경 대기 지연 늦게 늦음 빨리 재촉 독촉 시간 "
+        "약속시간 출발 도착 기다림 펑크 노쇼"
+    ),
+    "보험/보장": (
+        "보험 보장 면책 면책금 자기부담 자기부담금 완전자차 자차 대인 "
+        "대물 사고 보상 보험료 책임 커버 안심 슈퍼 사고접수 사고처리 손해 배상"
+    ),
 }
 
 # 태그 그룹별 색상 (UI용)
 TAG_COLORS = {
-    '고객응대': '#10b981',   # 녹색
-    '차량외관': '#3b82f6',   # 파란색
-    '차량청결': '#0ea5e9',   # 하늘색
-    '가성비': '#f59e0b',     # 주황색
-    '위치/접근성': '#8b5cf6', # 보라색
-    '서비스': '#ec4899',     # 분홍색
-    '반납/픽업': '#06b6d4',  # 청록색
-    '배차/시간': '#14b8a6',  # 민트색
-    '보험/보장': '#ef4444',  # 빨간색
+    "고객응대": "#10b981",  # 녹색
+    "차량외관": "#3b82f6",  # 파란색
+    "차량청결": "#0ea5e9",  # 하늘색
+    "가성비": "#f59e0b",  # 주황색
+    "위치/접근성": "#8b5cf6",  # 보라색
+    "서비스": "#ec4899",  # 분홍색
+    "반납/픽업": "#06b6d4",  # 청록색
+    "배차/시간": "#14b8a6",  # 민트색
+    "보험/보장": "#ef4444",  # 빨간색
 }
 
 
@@ -51,7 +75,7 @@ class TagEmbeddingManager:
 
     DEFAULT_CACHE_PATH = "data/tag_embeddings.npz"
 
-    def __init__(self, model=None, cache_path: Optional[str] = None):
+    def __init__(self, model=None, cache_path: str | None = None):
         """
         Args:
             model: SentenceTransformer 모델 (지연 로딩 시 None)
@@ -59,13 +83,13 @@ class TagEmbeddingManager:
         """
         self.model = model
         self.cache_path = cache_path or self.DEFAULT_CACHE_PATH
-        self._embeddings: Optional[Dict[str, np.ndarray]] = None
+        self._embeddings: dict[str, np.ndarray] | None = None
 
     def set_model(self, model):
         """모델 설정 (지연 로딩용)"""
         self.model = model
 
-    def compute_embeddings(self) -> Dict[str, np.ndarray]:
+    def compute_embeddings(self) -> dict[str, np.ndarray]:
         """
         각 태그 그룹의 대표 임베딩 계산
 
@@ -73,7 +97,8 @@ class TagEmbeddingManager:
             {태그명: 임베딩벡터} 딕셔너리
         """
         if self.model is None:
-            raise RuntimeError("모델이 설정되지 않았습니다. set_model()을 먼저 호출하세요.")
+            msg = "모델이 설정되지 않았습니다. set_model()을 먼저 호출하세요."
+            raise RuntimeError(msg)
 
         logger.info("태그 임베딩 계산 중...")
 
@@ -84,14 +109,14 @@ class TagEmbeddingManager:
         # 배치로 한번에 인코딩
         vectors = self.model.encode(descriptions, convert_to_numpy=True)
 
-        for tag, vector in zip(tags, vectors):
+        for tag, vector in zip(tags, vectors, strict=False):
             embeddings[tag] = vector
             logger.debug(f"  {tag}: shape={vector.shape}")
 
         logger.info(f"태그 임베딩 계산 완료: {len(embeddings)}개 그룹")
         return embeddings
 
-    def save(self, embeddings: Optional[Dict[str, np.ndarray]] = None) -> bool:
+    def save(self, embeddings: dict[str, np.ndarray] | None = None) -> bool:
         """
         임베딩을 파일로 저장
 
@@ -120,7 +145,7 @@ class TagEmbeddingManager:
             logger.error(f"태그 임베딩 저장 실패: {e}")
             return False
 
-    def load(self) -> Optional[Dict[str, np.ndarray]]:
+    def load(self) -> dict[str, np.ndarray] | None:
         """
         저장된 임베딩 로드
 
@@ -141,7 +166,7 @@ class TagEmbeddingManager:
             logger.error(f"태그 임베딩 로드 실패: {e}")
             return None
 
-    def get_or_compute(self) -> Dict[str, np.ndarray]:
+    def get_or_compute(self) -> dict[str, np.ndarray]:
         """
         캐시가 있으면 로드, 없으면 계산 후 저장
 
@@ -173,7 +198,7 @@ class TagEmbeddingManager:
 
     def get_tag_color(self, tag_name: str) -> str:
         """태그 색상 반환"""
-        return TAG_COLORS.get(tag_name, '#6b7280')  # 기본: 회색
+        return TAG_COLORS.get(tag_name, "#6b7280")  # 기본: 회색
 
     def clear_cache(self) -> bool:
         """캐시 삭제"""

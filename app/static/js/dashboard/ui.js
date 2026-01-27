@@ -66,12 +66,10 @@ export function renderStats(stats) {
     if (statusStats) {
         const total = stats.total || 1;
         const draftPct = Math.round((stats.draft || 0) / total * 100);
-        const approvedPct = Math.round((stats.approved || 0) / total * 100);
         const publishedPct = Math.round((stats.published || 0) / total * 100);
 
         statusStats.innerHTML = renderStatusBars({
             draft: { count: stats.draft || 0, pct: draftPct },
-            approved: { count: stats.approved || 0, pct: approvedPct },
             published: { count: stats.published || 0, pct: publishedPct }
         });
     }
@@ -86,7 +84,6 @@ function renderStatusBars(data) {
     return `
         <div style="display: flex; flex-direction: column; gap: 20px; padding: 8px 0;">
             ${renderStatusBar('Draft', data.draft, '#999', '#666', '#f0f0f0')}
-            ${renderStatusBar('Approved', data.approved, '#f59e0b', '#d97706', '#fef3c7')}
             ${renderStatusBar('Published', data.published, '#10b981', '#059669', '#d1fae5')}
         </div>
     `;
@@ -107,17 +104,12 @@ function renderStatusBar(label, data, colorStart, colorEnd, bgColor) {
             <circle cx="12" cy="12" r="10"></circle>
             <polyline points="12 6 12 12 16 14"></polyline>
         </svg>`,
-        'Approved': `<svg width="16" height="16" fill="none" stroke="${colorStart}" stroke-width="2" viewBox="0 0 24 24">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-        </svg>`,
         'Published': `<svg width="16" height="16" fill="none" stroke="${colorStart}" stroke-width="2" viewBox="0 0 24 24">
             <polyline points="20 6 9 17 4 12"></polyline>
         </svg>`
     };
 
-    const badgeClass = label === 'Draft' ? 'badge-grey' :
-                       label === 'Approved' ? 'badge-warning' : 'badge-success';
+    const badgeClass = label === 'Draft' ? 'badge-grey' : 'badge-success';
 
     return `
         <div>
@@ -197,7 +189,7 @@ function renderTableRow(row, onDetailClick) {
                 </div>
             </td>
             <td style="text-align: center;">
-                <span class="badge ${row.status === 'published' ? 'badge-success' : row.status === 'approved' ? 'badge-warning' : 'badge-grey'}">
+                <span class="badge ${row.status === 'published' ? 'badge-success' : 'badge-grey'}">
                     ${row.status || 'draft'}
                 </span>
             </td>

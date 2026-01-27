@@ -1,31 +1,28 @@
-"""
-LLM 출력 검증기
-- 문장 수 검증
-- 글자 수 검증
-- 금지어 검증
+from __future__ import annotations
 
-v2.0 (2026-01-20):
-- 글자 수 제한 완화: 200자 → 350자 (좋은점 180-220자 + 아쉬운점 60-80자)
-- 문장 수 검증 유연화: 정확히 3개 → 3~8개 허용
-"""
-from typing import Tuple, List
 import re
-
 
 # 금지어 목록
 FORBIDDEN_WORDS = [
-    '최고', '완벽', '강력추천', '무조건', '대박',
-    '짱', '굿', '베스트', '넘버원'
+    "최고",
+    "완벽",
+    "강력추천",
+    "무조건",
+    "대박",
+    "짱",
+    "굿",
+    "베스트",
+    "넘버원",
 ]
 
 # 검증 기준 (v2.0 업데이트)
-MIN_CHAR_COUNT = 100   # 최소 글자 수
-MAX_CHAR_COUNT = 350   # 최대 글자 수 (좋은점 220자 + 아쉬운점 80자 + 여유)
-MIN_SENTENCES = 3      # 최소 문장 수
-MAX_SENTENCES = 8      # 최대 문장 수
+MIN_CHAR_COUNT = 100  # 최소 글자 수
+MAX_CHAR_COUNT = 350  # 최대 글자 수 (좋은점 220자 + 아쉬운점 80자 + 여유)
+MIN_SENTENCES = 3  # 최소 문장 수
+MAX_SENTENCES = 8  # 최대 문장 수
 
 
-def validate_summary(text: str) -> Tuple[bool, List[str]]:
+def validate_summary(text: str) -> tuple[bool, list[str]]:
     """
     요약 출력 검증
 
@@ -70,11 +67,11 @@ def validate_summary(text: str) -> Tuple[bool, List[str]]:
 def _count_sentences(text: str) -> int:
     """마침표 기준 문장 수 카운트"""
     # 마침표로 끝나는 문장 카운트
-    sentences = [s.strip() for s in text.split('.') if s.strip()]
+    sentences = [s.strip() for s in text.split(".") if s.strip()]
     return len(sentences)
 
 
-def _check_forbidden_words(text: str) -> List[str]:
+def _check_forbidden_words(text: str) -> list[str]:
     """금지어 포함 여부 체크"""
     found = []
     text_lower = text.lower()
@@ -88,13 +85,13 @@ def _has_markdown_or_emoji(text: str) -> bool:
     """마크다운 또는 이모지 포함 여부"""
     # 마크다운 패턴 (엄격하게)
     markdown_patterns = [
-        r'\*\*[^*]+\*\*',   # bold: **text**
-        r'__[^_]+__',        # bold: __text__
-        r'(?<!\w)\*[^*]+\*(?!\w)',  # italic: *text* (단어 경계)
-        r'#+\s+\w',          # heading: # text
-        r'\[.+\]\(.+\)',     # link: [text](url)
-        r'`[^`]+`',          # code: `code`
-        r'^\s*[-*•]\s+',     # bullet list (-, *, •)
+        r"\*\*[^*]+\*\*",  # bold: **text**
+        r"__[^_]+__",  # bold: __text__
+        r"(?<!\w)\*[^*]+\*(?!\w)",  # italic: *text* (단어 경계)
+        r"#+\s+\w",  # heading: # text
+        r"\[.+\]\(.+\)",  # link: [text](url)
+        r"`[^`]+`",  # code: `code`
+        r"^\s*[-*•]\s+",  # bullet list (-, *, •)
         # r'^\s*\d+\.\s+',   # numbered list - 문단에서 숫자 사용 가능하므로 허용
     ]
 
@@ -105,23 +102,23 @@ def _has_markdown_or_emoji(text: str) -> bool:
     # 이모지 체크 (정확한 유니코드 이모지 범위만)
     emoji_pattern = re.compile(
         "["
-        "\U0001F600-\U0001F64F"  # emoticons (smileys)
-        "\U0001F300-\U0001F5FF"  # symbols & pictographs
-        "\U0001F680-\U0001F6FF"  # transport & map
-        "\U0001F1E0-\U0001F1FF"  # flags
-        "\U0001F900-\U0001F9FF"  # supplemental symbols
-        "\U0001FA00-\U0001FA6F"  # chess symbols
-        "\U0001FA70-\U0001FAFF"  # symbols extended-A
-        "\U00002600-\U000026FF"  # misc symbols (sun, moon, etc.)
-        "\U00002700-\U000027BF"  # dingbats (arrows, etc.)
+        "\U0001f600-\U0001f64f"  # emoticons (smileys)
+        "\U0001f300-\U0001f5ff"  # symbols & pictographs
+        "\U0001f680-\U0001f6ff"  # transport & map
+        "\U0001f1e0-\U0001f1ff"  # flags
+        "\U0001f900-\U0001f9ff"  # supplemental symbols
+        "\U0001fa00-\U0001fa6f"  # chess symbols
+        "\U0001fa70-\U0001faff"  # symbols extended-A
+        "\U00002600-\U000026ff"  # misc symbols (sun, moon, etc.)
+        "\U00002700-\U000027bf"  # dingbats (arrows, etc.)
         "]+",
-        flags=re.UNICODE
+        flags=re.UNICODE,
     )
 
     return bool(emoji_pattern.search(text))
 
 
-def validate_and_log(text: str, branch_name: str = None) -> Tuple[bool, str]:
+def validate_and_log(text: str, branch_name: str = None) -> tuple[bool, str]:
     """
     검증 및 로그용 결과 반환
 

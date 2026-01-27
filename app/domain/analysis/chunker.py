@@ -2,8 +2,10 @@
 절 단위 청킹 모듈
 리뷰 텍스트를 접속사/연결어미 기준으로 분리
 """
+
+from __future__ import annotations
+
 import re
-from typing import List
 
 
 class ClauseChunker:
@@ -18,30 +20,44 @@ class ClauseChunker:
 
     # 접속사 패턴
     CONJUNCTIONS = [
-        '그리고', '하지만', '그런데', '그래서', '또한', '그러나',
-        '그렇지만', '그러므로', '따라서', '반면', '대신', '다만',
-        '또', '게다가', '더구나', '뿐만아니라', '아울러'
+        "그리고",
+        "하지만",
+        "그런데",
+        "그래서",
+        "또한",
+        "그러나",
+        "그렇지만",
+        "그러므로",
+        "따라서",
+        "반면",
+        "대신",
+        "다만",
+        "또",
+        "게다가",
+        "더구나",
+        "뿐만아니라",
+        "아울러",
     ]
 
     # 연결어미 패턴 (문장 끝에서 분리점 역할)
     CONNECTIVE_PATTERNS = [
-        r'(?<=[가-힣])고\s+',       # -고
-        r'(?<=[가-힣])지만\s+',     # -지만
-        r'(?<=[가-힣])는데\s+',     # -는데
-        r'(?<=[가-힣])어서\s+',     # -어서
-        r'(?<=[가-힣])아서\s+',     # -아서
-        r'(?<=[가-힣])면서\s+',     # -면서
-        r'(?<=[가-힣])니까\s+',     # -니까
-        r'(?<=[가-힣])며\s+',       # -며
-        r'(?<=[가-힣])ㄴ데\s+',     # -ㄴ데
-        r'(?<=[가-힣])으며\s+',     # -으며
+        r"(?<=[가-힣])고\s+",  # -고
+        r"(?<=[가-힣])지만\s+",  # -지만
+        r"(?<=[가-힣])는데\s+",  # -는데
+        r"(?<=[가-힣])어서\s+",  # -어서
+        r"(?<=[가-힣])아서\s+",  # -아서
+        r"(?<=[가-힣])면서\s+",  # -면서
+        r"(?<=[가-힣])니까\s+",  # -니까
+        r"(?<=[가-힣])며\s+",  # -며
+        r"(?<=[가-힣])ㄴ데\s+",  # -ㄴ데
+        r"(?<=[가-힣])으며\s+",  # -으며
     ]
 
     def __init__(
         self,
         min_chunk_length: int = 3,
         use_punctuation: bool = False,
-        keep_delimiter: bool = True
+        keep_delimiter: bool = True,
     ):
         """
         Args:
@@ -54,19 +70,17 @@ class ClauseChunker:
         self.keep_delimiter = keep_delimiter
 
         # 접속사 패턴 컴파일
-        conjunction_pattern = '|'.join(
-            rf'\s+{conj}\s+' for conj in self.CONJUNCTIONS
-        )
+        conjunction_pattern = "|".join(rf"\s+{conj}\s+" for conj in self.CONJUNCTIONS)
         self._conjunction_regex = re.compile(conjunction_pattern)
 
         # 연결어미 패턴 컴파일
-        connective_pattern = '|'.join(self.CONNECTIVE_PATTERNS)
+        connective_pattern = "|".join(self.CONNECTIVE_PATTERNS)
         self._connective_regex = re.compile(connective_pattern)
 
         # 문장부호 패턴
-        self._punctuation_regex = re.compile(r'[.!?]\s+|,\s+')
+        self._punctuation_regex = re.compile(r"[.!?]\s+|,\s+")
 
-    def chunk(self, text: str) -> List[str]:
+    def chunk(self, text: str) -> list[str]:
         """
         텍스트를 절 단위로 분리
 
@@ -111,7 +125,7 @@ class ClauseChunker:
 
         return result
 
-    def _split_by_conjunctions(self, text: str) -> List[str]:
+    def _split_by_conjunctions(self, text: str) -> list[str]:
         """접속사 기준 분리"""
         if self.keep_delimiter:
             # 접속사를 유지하면서 분리
@@ -129,7 +143,7 @@ class ClauseChunker:
         else:
             return [p.strip() for p in self._conjunction_regex.split(text) if p.strip()]
 
-    def _split_by_connectives(self, text: str) -> List[str]:
+    def _split_by_connectives(self, text: str) -> list[str]:
         """연결어미 기준 분리"""
         # 연결어미 위치 찾기
         matches = list(self._connective_regex.finditer(text))
@@ -142,7 +156,7 @@ class ClauseChunker:
 
         for match in matches:
             # 연결어미까지 포함한 청크
-            chunk = text[last_end:match.end()].strip()
+            chunk = text[last_end : match.end()].strip()
             if chunk:
                 result.append(chunk)
             last_end = match.end()
@@ -155,12 +169,12 @@ class ClauseChunker:
 
         return result if result else [text]
 
-    def _split_by_punctuation(self, text: str) -> List[str]:
+    def _split_by_punctuation(self, text: str) -> list[str]:
         """문장부호 기준 분리"""
         parts = self._punctuation_regex.split(text)
         return [p.strip() for p in parts if p.strip()]
 
-    def chunk_batch(self, texts: List[str]) -> List[List[str]]:
+    def chunk_batch(self, texts: list[str]) -> list[list[str]]:
         """
         배치 청킹
 
@@ -172,7 +186,7 @@ class ClauseChunker:
         """
         return [self.chunk(text) for text in texts]
 
-    def chunk_with_metadata(self, text: str) -> List[dict]:
+    def chunk_with_metadata(self, text: str) -> list[dict]:
         """
         메타데이터와 함께 청킹
 
@@ -190,12 +204,7 @@ class ClauseChunker:
                 start = current_pos
             end = start + len(chunk)
 
-            result.append({
-                'text': chunk,
-                'index': i,
-                'start': start,
-                'end': end
-            })
+            result.append({"text": chunk, "index": i, "start": start, "end": end})
             current_pos = end
 
         return result

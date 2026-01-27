@@ -48,7 +48,6 @@ export const CONFIG = Object.freeze({
  */
 export const STATUS_CLASS_MAP = Object.freeze({
     'draft': 'grey',
-    'approved': 'warning',
     'published': 'success'
 });
 
@@ -58,7 +57,6 @@ export const STATUS_CLASS_MAP = Object.freeze({
  */
 export const STATUS_LABEL_MAP = Object.freeze({
     'draft': '보류',
-    'approved': '승인',
     'published': '게시'
 });
 

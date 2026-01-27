@@ -17,15 +17,20 @@
     #   {'aspect': '차량청결', 'sentiment': 'negative', ...}
     # ]
 """
-import re
+
+from __future__ import annotations
+
 import logging
-from typing import List, Dict, Tuple, Optional
+import re
 from dataclasses import dataclass
 
 from .chunker import ClauseChunker
 from .patterns import (
-    NEGATIVE_REGEX, POSITIVE_REGEX, DOUBLE_NEGATION_REGEX,
-    POSITIVE_EXCEPTION_REGEX, GENERAL_POSITIVE_KEYWORDS
+    DOUBLE_NEGATION_REGEX,
+    GENERAL_POSITIVE_KEYWORDS,
+    NEGATIVE_REGEX,
+    POSITIVE_EXCEPTION_REGEX,
+    POSITIVE_REGEX,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,11 +39,12 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AspectOpinion:
     """Aspect-Opinion-Sentiment 결과"""
-    aspect: str           # 태그명 (고객응대, 차량청결 등)
-    opinion: str          # 원문에서 추출한 의견 표현
-    sentiment: str        # positive, negative, neutral
-    confidence: float     # 신뢰도 (0.0 ~ 1.0)
-    keywords: List[str]   # 매칭된 키워드들
+
+    aspect: str  # 태그명 (고객응대, 차량청결 등)
+    opinion: str  # 원문에서 추출한 의견 표현
+    sentiment: str  # positive, negative, neutral
+    confidence: float  # 신뢰도 (0.0 ~ 1.0)
+    keywords: list[str]  # 매칭된 키워드들
 
 
 class RuleBasedABSA:
@@ -58,85 +64,274 @@ class RuleBasedABSA:
 
     # 문맥 필요 키워드: 키워드 → (태그, 필요 문맥 키워드들)
     CONTEXT_REQUIRED_KEYWORDS = {
-        '늦': ('배차/시간', ['배차', '차량', '픽업', '도착', '출발', '시간', '대기', '기다']),
-        '빨리': ('배차/시간', ['배차', '차량', '픽업', '처리', '배달', '대기']),
-        '빠르': ('배차/시간', ['배차', '차량', '픽업', '처리', '배달', '대기']),
+        "늦": (
+            "배차/시간",
+            ["배차", "차량", "픽업", "도착", "출발", "시간", "대기", "기다"],
+        ),
+        "빨리": ("배차/시간", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
+        "빠르": ("배차/시간", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
     }
 
     ASPECT_KEYWORDS = {
-        '고객응대': [
-            '직원', '사장', '사장님', '알바', '스태프',
-            '응대', '안내', '설명', '인사', '배웅', '친절', '불친절', '태도',
-            '상담', '도움', '배려', '미소', '표정'
+        "고객응대": [
+            "직원",
+            "사장",
+            "사장님",
+            "알바",
+            "스태프",
+            "응대",
+            "안내",
+            "설명",
+            "인사",
+            "배웅",
+            "친절",
+            "불친절",
+            "태도",
+            "상담",
+            "도움",
+            "배려",
+            "미소",
+            "표정",
         ],
-        '차량외관': [
-            '외관', '외부', '외형', '겉', '바디',
-            '스크래치', '흠집', '긁힘', '찍힘', '찌그러짐', '파손', '깨진',
-            '범퍼', '휠', '바퀴', '타이어', '유리', '창문', '미러', '사이드미러',
-            '도색', '페인트', '광택', '세차',
-            '브레이크', '제동', '핸들', '엔진', '시동',
-            '오래된', '낡은', '연식', '노후', '빵꾸', '펑크'
+        "차량외관": [
+            "외관",
+            "외부",
+            "외형",
+            "겉",
+            "바디",
+            "스크래치",
+            "흠집",
+            "긁힘",
+            "찍힘",
+            "찌그러짐",
+            "파손",
+            "깨진",
+            "범퍼",
+            "휠",
+            "바퀴",
+            "타이어",
+            "유리",
+            "창문",
+            "미러",
+            "사이드미러",
+            "도색",
+            "페인트",
+            "광택",
+            "세차",
+            "브레이크",
+            "제동",
+            "핸들",
+            "엔진",
+            "시동",
+            "오래된",
+            "낡은",
+            "연식",
+            "노후",
+            "빵꾸",
+            "펑크",
         ],
-        '차량청결': [
-            '내부', '실내', '시트', '좌석', '바닥', '매트', '트렁크',
-            '청결', '청소', '깨끗', '지저분', '더러', '더럽', '드러',
-            '냄새', '담배', '악취', '퀴퀴', '쩔어', '냄새나', '공기',
-            '먼지', '얼룩', '이물질', '쓰레기', '머리카락',
-            '에어컨', '히터', '송풍구'
+        "차량청결": [
+            "내부",
+            "실내",
+            "시트",
+            "좌석",
+            "바닥",
+            "매트",
+            "트렁크",
+            "청결",
+            "청소",
+            "깨끗",
+            "지저분",
+            "더러",
+            "더럽",
+            "드러",
+            "냄새",
+            "담배",
+            "악취",
+            "퀴퀴",
+            "쩔어",
+            "냄새나",
+            "공기",
+            "먼지",
+            "얼룩",
+            "이물질",
+            "쓰레기",
+            "머리카락",
+            "에어컨",
+            "히터",
+            "송풍구",
         ],
-        '가성비': [
-            '가격', '가성비', '비용', '요금', '돈', '금액', '원',
-            '저렴', '싼', '싸', '비싸', '비싼', '적정', '합리',
-            '할인', '쿠폰', '이벤트', '혜택', '프로모션',
-            '호구', '호갱', '바가지', '폭리',
-            '추가비용', '추가금', '부담금', '수리비', '면책금'
+        "가성비": [
+            "가격",
+            "가성비",
+            "비용",
+            "요금",
+            "돈",
+            "금액",
+            "원",
+            "저렴",
+            "싼",
+            "싸",
+            "비싸",
+            "비싼",
+            "적정",
+            "합리",
+            "할인",
+            "쿠폰",
+            "이벤트",
+            "혜택",
+            "프로모션",
+            "호구",
+            "호갱",
+            "바가지",
+            "폭리",
+            "추가비용",
+            "추가금",
+            "부담금",
+            "수리비",
+            "면책금",
         ],
-        '위치/접근성': [
-            '위치', '장소', '접근', '거리', '가까', '멀', '먼',
-            '공항', '역', '터미널', '정류장', '버스', '지하철',
-            '교통', '도보', '걸어', '찾기', '찾아', '헤매',
-            '주변', '근처', '앞', '옆', '건물'
+        "위치/접근성": [
+            "위치",
+            "장소",
+            "접근",
+            "거리",
+            "가까",
+            "멀",
+            "먼",
+            "공항",
+            "역",
+            "터미널",
+            "정류장",
+            "버스",
+            "지하철",
+            "교통",
+            "도보",
+            "걸어",
+            "찾기",
+            "찾아",
+            "헤매",
+            "주변",
+            "근처",
+            "앞",
+            "옆",
+            "건물",
         ],
-        '서비스': [
-            '셔틀', '셔틀버스', '픽업버스', '무료셔틀',
-            '대기실', '휴게실', '라운지', '화장실',
-            '주차', '주차장', '발렛',
-            '와이파이', 'wifi', '충전', '충전기',
-            '음료', '커피', '다과', '간식',
-            '예약', '예약확정', '문의', '상담', '전화', '카톡', '문자', '앱'
+        "서비스": [
+            "셔틀",
+            "셔틀버스",
+            "픽업버스",
+            "무료셔틀",
+            "대기실",
+            "휴게실",
+            "라운지",
+            "화장실",
+            "주차",
+            "주차장",
+            "발렛",
+            "와이파이",
+            "wifi",
+            "충전",
+            "충전기",
+            "음료",
+            "커피",
+            "다과",
+            "간식",
+            "예약",
+            "예약확정",
+            "문의",
+            "상담",
+            "전화",
+            "카톡",
+            "문자",
+            "앱",
         ],
-        '반납/픽업': [
-            '반납', '픽업', '인수', '수령', '전달', '인계', '반환',
-            '출차', '입차', '수거',
-            '대여', '렌트', '렌탈', '빌리', '빌렸', '빌려',
-            '서류', '계약서', '면허', '면허증',
-            '절차', '과정', '프로세스', '간편', '간단', '복잡'
+        "반납/픽업": [
+            "반납",
+            "픽업",
+            "인수",
+            "수령",
+            "전달",
+            "인계",
+            "반환",
+            "출차",
+            "입차",
+            "수거",
+            "대여",
+            "렌트",
+            "렌탈",
+            "빌리",
+            "빌렸",
+            "빌려",
+            "서류",
+            "계약서",
+            "면허",
+            "면허증",
+            "절차",
+            "과정",
+            "프로세스",
+            "간편",
+            "간단",
+            "복잡",
         ],
-        '배차/시간': [
-            '배차', '차종', '차량변경', '대차', '차종변경', '배정',
-            '배달', '딜리버리', '탁송',
-            '대기', '기다', '지연',
-            '약속', '예약시간', '도착시간',
-            '재촉', '독촉', '급하', '서두르',
-            '노쇼', '취소', '변경'
+        "배차/시간": [
+            "배차",
+            "차종",
+            "차량변경",
+            "대차",
+            "차종변경",
+            "배정",
+            "배달",
+            "딜리버리",
+            "탁송",
+            "대기",
+            "기다",
+            "지연",
+            "약속",
+            "예약시간",
+            "도착시간",
+            "재촉",
+            "독촉",
+            "급하",
+            "서두르",
+            "노쇼",
+            "취소",
+            "변경",
         ],
-        '보험/보장': [
-            '보험', '보장', '면책', '자기부담', '자차', '대인', '대물',
-            '완전자차', '슈퍼', '풀커버', '안심',
-            '사고', '접수', '처리', '보상', '배상', '손해',
-            '긁', '부딪', '충돌', '파손'
-        ]
+        "보험/보장": [
+            "보험",
+            "보장",
+            "면책",
+            "자기부담",
+            "자차",
+            "대인",
+            "대물",
+            "완전자차",
+            "슈퍼",
+            "풀커버",
+            "안심",
+            "사고",
+            "접수",
+            "처리",
+            "보상",
+            "배상",
+            "손해",
+            "긁",
+            "부딪",
+            "충돌",
+            "파손",
+        ],
     }
 
     # 긍정 키워드 + 없다 → 부정
     POSITIVE_NEGATION_PATTERNS = [
-        (r'친절.{0,5}없', 'negative'),
-        (r'설명.{0,5}없', 'negative'),
-        (r'안내.{0,5}없', 'negative'),
-        (r'배려.{0,5}없', 'negative'),
+        (r"친절.{0,5}없", "negative"),
+        (r"설명.{0,5}없", "negative"),
+        (r"안내.{0,5}없", "negative"),
+        (r"배려.{0,5}없", "negative"),
     ]
 
-    def __init__(self, chunker: Optional[ClauseChunker] = None):
+    def __init__(self, chunker: ClauseChunker | None = None):
         """
         초기화
 
@@ -151,7 +346,7 @@ class RuleBasedABSA:
             for kw in keywords:
                 self._keyword_to_aspect[kw] = aspect
 
-    def analyze(self, review: str) -> List[Dict]:
+    def analyze(self, review: str) -> list[dict]:
         """
         단일 리뷰 ABSA 분석
 
@@ -179,11 +374,11 @@ class RuleBasedABSA:
 
         return [self._to_dict(r) for r in merged]
 
-    def analyze_batch(self, reviews: List[str]) -> List[List[Dict]]:
+    def analyze_batch(self, reviews: list[str]) -> list[list[dict]]:
         """배치 분석"""
         return [self.analyze(review) for review in reviews]
 
-    def _analyze_clause(self, clause: str) -> List[AspectOpinion]:
+    def _analyze_clause(self, clause: str) -> list[AspectOpinion]:
         """단일 절 분석"""
         results = []
 
@@ -198,17 +393,19 @@ class RuleBasedABSA:
 
         # 3. 각 Aspect에 대해 결과 생성
         for aspect, keywords in found_aspects.items():
-            results.append(AspectOpinion(
-                aspect=aspect,
-                opinion=clause,
-                sentiment=sentiment,
-                confidence=confidence,
-                keywords=keywords
-            ))
+            results.append(
+                AspectOpinion(
+                    aspect=aspect,
+                    opinion=clause,
+                    sentiment=sentiment,
+                    confidence=confidence,
+                    keywords=keywords,
+                )
+            )
 
         return results
 
-    def _find_aspects(self, text: str) -> Dict[str, List[str]]:
+    def _find_aspects(self, text: str) -> dict[str, list[str]]:
         """텍스트에서 Aspect 키워드 찾기"""
         found = {}  # {aspect: [keywords]}
         text_lower = text.lower()
@@ -225,7 +422,10 @@ class RuleBasedABSA:
                 found[aspect].append(keyword)
 
         # 2. 문맥 필요 키워드 처리
-        for keyword, (aspect, context_keywords) in self.CONTEXT_REQUIRED_KEYWORDS.items():
+        for keyword, (
+            aspect,
+            context_keywords,
+        ) in self.CONTEXT_REQUIRED_KEYWORDS.items():
             if keyword in text_lower:
                 has_context = any(ctx in text_lower for ctx in context_keywords)
                 if has_context:
@@ -236,16 +436,16 @@ class RuleBasedABSA:
 
         return found
 
-    def _determine_sentiment(self, text: str) -> Tuple[str, float]:
+    def _determine_sentiment(self, text: str) -> tuple[str, float]:
         """감정 판단 (patterns.py 사용)"""
 
         # 1. 긍정 예외 체크 (오탐 방지)
         if POSITIVE_EXCEPTION_REGEX.search(text):
-            return 'positive', 0.8
+            return "positive", 0.8
 
         # 2. 이중부정 체크 (최우선)
         if DOUBLE_NEGATION_REGEX.search(text):
-            return 'positive', 0.95
+            return "positive", 0.95
 
         # 3. 긍정+부정 체크 (친절+없다 = 부정)
         for pattern, sentiment in self.POSITIVE_NEGATION_PATTERNS:
@@ -257,40 +457,66 @@ class RuleBasedABSA:
         negative_matches = len(NEGATIVE_REGEX.findall(text))
 
         # "없" 특수 처리 - 앞 단어에 따라 판단
-        if '없' in text:
-            neg_keywords = ['불편', '불만', '문제', '걱정', '아쉬', '냄새', '흠']
+        if "없" in text:
+            neg_keywords = ["불편", "불만", "문제", "걱정", "아쉬", "냄새", "흠"]
             for nk in neg_keywords:
-                if nk in text and '없' in text[text.find(nk):text.find(nk)+10]:
+                if nk in text and "없" in text[text.find(nk) : text.find(nk) + 10]:
                     positive_matches += 1
                     negative_matches = max(0, negative_matches - 1)
 
         # 5. 결과 판단
         if positive_matches > negative_matches:
             confidence = min(0.95, 0.6 + 0.1 * (positive_matches - negative_matches))
-            return 'positive', confidence
+            return "positive", confidence
         elif negative_matches > positive_matches:
             confidence = min(0.95, 0.6 + 0.1 * (negative_matches - positive_matches))
-            return 'negative', confidence
+            return "negative", confidence
         elif positive_matches > 0:
-            return 'positive', 0.5
+            return "positive", 0.5
         elif negative_matches > 0:
-            return 'negative', 0.5
+            return "negative", 0.5
         else:
             return self._infer_sentiment_from_context(text)
 
-    def _infer_sentiment_from_context(self, text: str) -> Tuple[str, float]:
+    def _infer_sentiment_from_context(self, text: str) -> tuple[str, float]:
         """패턴 매칭 실패 시 맥락 기반 감정 추론"""
         weak_positive = [
-            '요', '네요', '습니다', '에요', '세요',
-            '^^', '~', '!', 'ㅎㅎ', 'ㅋㅋ',
-            '잘', '편', '쉽', '빠', '넓', '깔끔',
-            '감사', '고마', '덕분', '좋',
+            "요",
+            "네요",
+            "습니다",
+            "에요",
+            "세요",
+            "^^",
+            "~",
+            "!",
+            "ㅎㅎ",
+            "ㅋㅋ",
+            "잘",
+            "편",
+            "쉽",
+            "빠",
+            "넓",
+            "깔끔",
+            "감사",
+            "고마",
+            "덕분",
+            "좋",
         ]
 
         weak_negative = [
-            '..', ';;;', 'ㅜ', 'ㅠ', ';;',
-            '좀', '근데', '다만', '그런데',
-            '힘들', '어렵', '불', '안',
+            "..",
+            ";;;",
+            "ㅜ",
+            "ㅠ",
+            ";;",
+            "좀",
+            "근데",
+            "다만",
+            "그런데",
+            "힘들",
+            "어렵",
+            "불",
+            "안",
         ]
 
         pos_score = sum(1 for p in weak_positive if p in text)
@@ -300,13 +526,13 @@ class RuleBasedABSA:
             pos_score += 1
 
         if pos_score > neg_score:
-            return 'positive', 0.4
+            return "positive", 0.4
         elif neg_score > pos_score:
-            return 'negative', 0.4
+            return "negative", 0.4
         else:
-            return 'positive', 0.3
+            return "positive", 0.3
 
-    def _merge_results(self, results: List[AspectOpinion]) -> List[AspectOpinion]:
+    def _merge_results(self, results: list[AspectOpinion]) -> list[AspectOpinion]:
         """중복 Aspect 병합"""
         merged = {}
 
@@ -321,7 +547,7 @@ class RuleBasedABSA:
                         opinion=f"{existing.opinion} / {r.opinion}",
                         sentiment=r.sentiment,
                         confidence=r.confidence,
-                        keywords=list(set(existing.keywords + r.keywords))
+                        keywords=list(set(existing.keywords + r.keywords)),
                     )
                 else:
                     merged[r.aspect] = AspectOpinion(
@@ -329,19 +555,19 @@ class RuleBasedABSA:
                         opinion=f"{existing.opinion} / {r.opinion}",
                         sentiment=existing.sentiment,
                         confidence=existing.confidence,
-                        keywords=list(set(existing.keywords + r.keywords))
+                        keywords=list(set(existing.keywords + r.keywords)),
                     )
 
         return list(merged.values())
 
-    def _to_dict(self, ao: AspectOpinion) -> Dict:
+    def _to_dict(self, ao: AspectOpinion) -> dict:
         """AspectOpinion → dict 변환"""
         return {
-            'aspect': ao.aspect,
-            'opinion': ao.opinion,
-            'sentiment': ao.sentiment,
-            'confidence': ao.confidence,
-            'keywords': ao.keywords
+            "aspect": ao.aspect,
+            "opinion": ao.opinion,
+            "sentiment": ao.sentiment,
+            "confidence": ao.confidence,
+            "keywords": ao.keywords,
         }
 
     # =========================================================================
@@ -349,10 +575,8 @@ class RuleBasedABSA:
     # =========================================================================
 
     def classify_review(
-        self,
-        review: str,
-        keywords: List[str] = None
-    ) -> Dict[str, Dict[str, List[str]]]:
+        self, review: str, keywords: list[str] = None
+    ) -> dict[str, dict[str, list[str]]]:
         """
         HybridClassifier 호환 API
 
@@ -367,67 +591,69 @@ class RuleBasedABSA:
             }
         """
         from collections import defaultdict
-        result = defaultdict(lambda: {'positive': [], 'negative': [], 'neutral': []})
+
+        result = defaultdict(lambda: {"positive": [], "negative": [], "neutral": []})
 
         # ABSA 분석 수행
         absa_results = self.analyze(review)
 
         # 결과 변환
         for item in absa_results:
-            aspect = item['aspect']
-            sentiment = item['sentiment']
-            keywords_found = item.get('keywords', [])
+            aspect = item["aspect"]
+            sentiment = item["sentiment"]
+            keywords_found = item.get("keywords", [])
 
             for kw in keywords_found:
                 if kw not in result[aspect][sentiment]:
                     result[aspect][sentiment].append(kw)
 
         # 빈 태그 제거
-        return {tag: sentiments for tag, sentiments in result.items()
-                if any(sentiments.values())}
+        return {
+            tag: sentiments
+            for tag, sentiments in result.items()
+            if any(sentiments.values())
+        }
 
     # =========================================================================
     # 유틸리티 메서드
     # =========================================================================
 
-    def get_aspect_summary(self, results: List[Dict]) -> Dict[str, Dict]:
+    def get_aspect_summary(self, results: list[dict]) -> dict[str, dict]:
         """분석 결과를 Aspect별로 요약"""
         summary = {}
 
         for r in results:
-            aspect = r['aspect']
-            sentiment = r['sentiment']
+            aspect = r["aspect"]
+            sentiment = r["sentiment"]
 
             if aspect not in summary:
                 summary[aspect] = {
-                    'positive': 0,
-                    'negative': 0,
-                    'neutral': 0,
-                    'opinions': []
+                    "positive": 0,
+                    "negative": 0,
+                    "neutral": 0,
+                    "opinions": [],
                 }
 
             summary[aspect][sentiment] += 1
-            summary[aspect]['opinions'].append(r['opinion'])
+            summary[aspect]["opinions"].append(r["opinion"])
 
         return summary
 
-    def format_results(self, results: List[Dict]) -> str:
+    def format_results(self, results: list[dict]) -> str:
         """결과를 보기 좋게 포맷팅"""
         if not results:
             return "분석 결과 없음"
 
         lines = []
         for r in results:
-            sentiment_symbol = {
-                'positive': '+',
-                'negative': '-',
-                'neutral': '0'
-            }.get(r['sentiment'], '?')
+            sentiment_symbol = {"positive": "+", "negative": "-", "neutral": "0"}.get(
+                r["sentiment"], "?"
+            )
 
             lines.append(
                 f"  [{r['aspect']}]({sentiment_symbol}) {r['opinion'][:50]}..."
-                if len(r['opinion']) > 50 else
-                f"  [{r['aspect']}]({sentiment_symbol}) {r['opinion']}"
+                if len(r["opinion"]) > 50
+                else f"  [{r['aspect']}]({sentiment_symbol}) {r['opinion']}"
             )
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
