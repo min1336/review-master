@@ -25,7 +25,7 @@ class ReviewDTO:
     """
     리뷰 원본 데이터 전송 객체
 
-    엑셀에서 로드한 리뷰 데이터를 타입 안전하게 전달합니다.
+    DB에서 로드한 리뷰 데이터를 타입 안전하게 전달합니다.
 
     Example:
         >>> review = ReviewDTO(
@@ -45,6 +45,9 @@ class ReviewDTO:
     created_at: datetime | None = None
     like_count: int = 0
     is_blind: bool = False
+    car_model: str = ""
+    company_name: str = ""
+    status: str = "normal"
 
     def is_valid(self) -> bool:
         """리뷰가 유효한지 검사"""
@@ -52,6 +55,7 @@ class ReviewDTO:
             self.content is not None
             and len(self.content.strip()) >= 5
             and not self.is_blind
+            and self.status not in ["블라인드", "삭제", "blind", "deleted"]
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -65,6 +69,115 @@ class ReviewDTO:
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "like_count": self.like_count,
             "is_blind": self.is_blind,
+            "car_model": self.car_model,
+            "company_name": self.company_name,
+            "status": self.status,
+        }
+
+    @classmethod
+    def from_db_row(cls, row: dict[str, Any]) -> "ReviewDTO":
+        """DB row에서 ReviewDTO 생성"""
+        created_at = row.get("review_date") or row.get("created_at")
+        if isinstance(created_at, str):
+            try:
+                created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            except ValueError:
+                created_at = None
+
+        return cls(
+            id=row.get("id") or row.get("review_id") or 0,
+            branch_id=row.get("branch_id") or 0,
+            content=row.get("content") or "",
+            branch_name=row.get("branch_name") or "",
+            rating=row.get("rating_service") or row.get("rating") or None,
+            created_at=created_at,
+            like_count=row.get("helpful_count") or row.get("like_count") or 0,
+            is_blind=row.get("is_blind", False),
+            car_model=row.get("car_model") or "",
+            company_name=row.get("company_name") or "",
+            status=row.get("status") or "normal",
+        )
+
+
+@dataclass
+class ProcessedReviewDTO:
+    """
+    처리된 리뷰 DTO
+
+    키워드 추출 및 감정 분석이 완료된 리뷰입니다.
+    """
+
+    review: ReviewDTO
+    keywords: list[str] = field(default_factory=list)
+    sentiment: Literal["positive", "neutral", "negative"] = "neutral"
+    sentiment_score: float = 0.5
+    is_negative_filtered: bool = False
+
+    @property
+    def branch_id(self) -> int:
+        return self.review.branch_id
+
+    @property
+    def content(self) -> str:
+        return self.review.content
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            **self.review.to_dict(),
+            "keywords": self.keywords,
+            "sentiment": self.sentiment,
+            "sentiment_score": self.sentiment_score,
+            "is_negative_filtered": self.is_negative_filtered,
+        }
+
+
+@dataclass
+class BranchKeywordsDTO:
+    """
+    지점별 키워드 집계 DTO
+    """
+
+    branch_id: int
+    branch_name: str = ""
+    keywords: list[str] = field(default_factory=list)
+    review_count: int = 0
+    keyword_counts: dict[str, int] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "branch_id": self.branch_id,
+            "branch_name": self.branch_name,
+            "keywords": self.keywords,
+            "review_count": self.review_count,
+            "keyword_counts": self.keyword_counts,
+        }
+
+
+@dataclass
+class IncrementalStatsDTO:
+    """
+    증분 파이프라인 통계 DTO
+    """
+
+    total: int = 0
+    filtered: int = 0
+    processed: int = 0
+    positive: int = 0
+    negative: int = 0
+    neutral: int = 0
+    keywords_extracted: int = 0
+    branches_updated: set[int] = field(default_factory=set)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total": self.total,
+            "filtered": self.filtered,
+            "processed": self.processed,
+            "positive": self.positive,
+            "negative": self.negative,
+            "neutral": self.neutral,
+            "keywords_extracted": self.keywords_extracted,
+            "branches_updated": list(self.branches_updated),
         }
 
 
@@ -669,6 +782,9 @@ class CleanupResultDTO:
 __all__ = [
     # Review
     "ReviewDTO",
+    "ProcessedReviewDTO",
+    "BranchKeywordsDTO",
+    "IncrementalStatsDTO",
     # Sentiment
     "SentimentDTO",
     # Summary Request/Response
