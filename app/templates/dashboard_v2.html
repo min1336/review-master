@@ -9,8 +9,891 @@
         href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <!-- Flatpickr Date Range Picker -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <!-- Dashboard CSS -->
-    <link rel="stylesheet" href="/static/css/dashboard.css">
+
+    <!-- Dashboard CSS (Inlined) -->
+    <style>
+        :root {
+            /* Primary Colors */
+            --primary: #0d6ffc;
+            --primary-hover: #0b5ed7;
+            --primary-light: #e3f0ff;
+
+            /* Status Colors */
+            --success: #10b981;
+            --success-light: #d1fae5;
+            --warning: #f59e0b;
+            --warning-light: #fef3c7;
+            --error: #ef4444;
+            --error-light: #fee2e2;
+
+            /* Grey Scale */
+            --grey-1: #1e1e1e;
+            --grey-2: #333333;
+            --grey-3: #555555;
+            --grey-5: #999999;
+            --grey-7: #dddddd;
+            --grey-8: #eeeeee;
+            --grey-9: #f8f8f8;
+            --blue-grey-light: #f1f4f9;
+
+            /* Layout */
+            --max-width: 1200px;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --radius-lg: 16px;
+
+            /* Shadows */
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+            /* Spacing */
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            overflow-y: scroll;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+            background: var(--grey-9);
+            color: var(--grey-1);
+            line-height: 1.5;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-bottom: none;
+            padding: 32px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+            position: relative;
+            overflow: hidden;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%);
+            pointer-events: none;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: white;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            letter-spacing: -0.5px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            position: relative;
+            z-index: 1;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Layout */
+        .container {
+            width: 100%;
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: var(--spacing-lg);
+        }
+
+        .inner {
+            width: 100%;
+            max-width: var(--max-width);
+            margin: 0 auto;
+        }
+
+        .grid {
+            display: grid;
+            gap: var(--spacing-lg);
+        }
+
+        .grid-2 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .grid-3 {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .grid-4 {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        @media (max-width: 1200px) {
+            .grid-4 {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .grid-3 {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+
+            .grid-4,
+            .grid-3,
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-sm);
+            padding: var(--spacing-lg);
+            border: 1px solid var(--grey-7);
+            transition: box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-md);
+            padding-bottom: var(--spacing-md);
+            border-bottom: 1px solid var(--grey-8);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--grey-2);
+        }
+
+        /* Stat Cards */
+        .stat-card {
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--card-color, #667eea) 0%, var(--card-color-end, #764ba2) 100%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+            border-color: var(--card-color, #667eea);
+        }
+
+        .stat-card:hover::before {
+            opacity: 1;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--card-color, #667eea) 0%, var(--card-color-end, #764ba2) 100%);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .stat-icon svg {
+            width: 24px;
+            height: 24px;
+            stroke: white;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--grey-5);
+            margin-bottom: 8px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--card-color, #667eea) 0%, var(--card-color-end, #764ba2) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-change {
+            font-size: 13px;
+            margin-top: 8px;
+        }
+
+        .stat-change.positive {
+            color: var(--success);
+        }
+
+        .stat-change.negative {
+            color: var(--error);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            height: 40px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 2px 4px rgba(13, 111, 252, 0.2);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--grey-2);
+            border: 1px solid var(--grey-7);
+        }
+
+        .btn-secondary:hover {
+            background: var(--grey-9);
+            border-color: var(--grey-5);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
+            height: 32px;
+        }
+
+        /* AI Summary Button */
+        .btn-ai-summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+            white-space: nowrap;
+        }
+
+        .btn-ai-summary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-ai-summary:active {
+            transform: translateY(0);
+        }
+
+        .btn-ai-summary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Table */
+        .table-container {
+            overflow-x: auto;
+            min-height: 70vh;
+            margin: -24px;
+            margin-top: 0;
+            padding: 0;
+            border-radius: 0 0 var(--radius) var(--radius);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 14px;
+            table-layout: fixed;
+        }
+
+        th {
+            background: #f8fafc;
+            padding: 16px 24px;
+            text-align: left;
+            font-weight: 700;
+            color: #334155;
+            border-bottom: 2px solid var(--grey-8);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 16px 24px;
+            text-align: left;
+            border-bottom: 1px solid #f1f5f9;
+            color: var(--grey-1);
+            vertical-align: middle;
+            font-size: 15px;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: var(--blue-grey-light);
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1;
+        }
+
+        .badge-grey {
+            background: #f3f4f6;
+            color: var(--grey-3);
+            border: 1px solid #e5e7eb;
+        }
+
+        .badge-success {
+            background: var(--success-light);
+            color: #047857;
+            border: 1px solid #a7f3d0;
+        }
+
+        .badge-warning {
+            background: var(--warning-light);
+            color: #b45309;
+            border: 1px solid #fde68a;
+        }
+
+        .badge-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+        }
+
+        /* Rating */
+        .rating {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 600;
+        }
+
+        .rating-star {
+            color: #fbbf24;
+        }
+
+        /* Region Chart */
+        .region-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .region-name {
+            width: 60px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .region-bar-container {
+            flex: 1;
+            height: 24px;
+            background: var(--grey-8);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .region-bar-fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+
+        .region-count {
+            width: 50px;
+            text-align: right;
+            font-size: 13px;
+            color: var(--grey-5);
+        }
+
+        /* Filters */
+        .filters {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            align-items: center;
+            padding: 24px 24px 0 24px;
+            border-bottom: none;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--grey-2);
+        }
+
+        .filter-select,
+        .search-box input {
+            padding: 8px 12px;
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            color: var(--grey-1);
+            background: white;
+            min-width: 140px;
+            height: 40px;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .filter-select:focus,
+        .search-box input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-light);
+        }
+
+        .search-box {
+            position: relative;
+        }
+
+        .search-box input {
+            padding-left: 36px;
+            width: 250px;
+        }
+
+        .search-box svg {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--grey-5);
+            pointer-events: none;
+        }
+
+        /* Date Range Picker */
+        .date-range-filter {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .date-range-input {
+            padding: 8px 12px;
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            color: var(--grey-1);
+            background: white;
+            width: 220px;
+            height: 40px;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .date-range-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-light);
+        }
+
+        .date-range-input::placeholder {
+            color: var(--grey-5);
+        }
+
+        .btn-clear-date {
+            padding: 8px 12px;
+            background: var(--grey-8);
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            color: var(--grey-3);
+            cursor: pointer;
+            height: 40px;
+            transition: all 0.2s;
+        }
+
+        .btn-clear-date:hover {
+            background: var(--grey-7);
+        }
+
+        /* Sort Icons */
+        .sort-icon::after {
+            content: '↕';
+            font-size: 12px;
+            margin-left: 4px;
+            color: var(--grey-5);
+            opacity: 0.5;
+        }
+
+        .sort-asc::after {
+            content: '↑';
+            color: var(--primary);
+            opacity: 1;
+        }
+
+        .sort-desc::after {
+            content: '↓';
+            color: var(--primary);
+            opacity: 1;
+        }
+
+        /* Custom Checkbox */
+        .custom-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            transition: background 0.2s;
+            height: 40px;
+            margin-top: 2px;
+        }
+
+        .custom-checkbox:hover {
+            background: var(--grey-9);
+        }
+
+        .custom-checkbox input {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .custom-checkbox span {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--grey-2);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        .modal {
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-xl);
+            max-width: 800px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: scale(0.95);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .modal-overlay.active .modal {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--grey-8);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--grey-1);
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            background: #2D3748;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 100;
+            max-width: 300px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            line-height: 1.4;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--grey-5);
+        }
+
+        /* Summary Preview */
+        .summary-section {
+            margin-bottom: 20px;
+        }
+
+        .summary-section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--grey-5);
+            margin-bottom: 8px;
+        }
+
+        .summary-text {
+            background: var(--grey-9);
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .summary-empty {
+            color: var(--grey-5);
+            font-style: italic;
+        }
+
+        /* Keywords */
+        .keywords {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .keyword {
+            background: var(--primary);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 13px;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: var(--grey-5);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--grey-7);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--grey-3);
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            background: var(--grey-8);
+        }
+
+        .tab.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        /* Review Link */
+        .review-link {
+            color: var(--primary);
+            text-decoration: none;
+            cursor: pointer;
+            transition: text-decoration 0.2s ease, color 0.2s ease;
+        }
+
+        .review-link:hover {
+            text-decoration: underline;
+            color: var(--primary-hover);
+        }
+
+        .review-link:visited {
+            color: #7c3aed;
+        }
+
+        /* Review Item */
+        .review-item {
+            padding: var(--spacing-md);
+            border-bottom: 1px solid var(--grey-8);
+        }
+
+        .review-item:nth-child(even) {
+            background: var(--grey-9);
+        }
+
+        .review-item__header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .review-item__meta {
+            font-size: 12px;
+            color: var(--grey-5);
+        }
+
+        .review-item__content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--grey-2);
+        }
+
+        .review-item__footer {
+            margin-top: var(--spacing-sm);
+            font-size: 12px;
+            color: var(--grey-5);
+        }
+
+        .review-item__sentiment {
+            margin-left: var(--spacing-xs);
+        }
+
+        /* Toast Animation */
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+    </style>
 </head>
 
 <body>
@@ -172,8 +1055,1478 @@
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
 
-    <!-- Dashboard JavaScript (ES6 Module) -->
-    <script type="module" src="/static/js/dashboard.js"></script>
+    <!-- Dashboard JavaScript (Inlined - All modules merged) -->
+    <script>
+    (function() {
+        'use strict';
+
+        // ============================================================
+        // CONFIG (config.js)
+        // ============================================================
+
+        const CONFIG = Object.freeze({
+            EXTERNAL_URLS: {
+                CARMORE_REVIEW_BASE: 'https://dev-admin.carmore.kr/partners/Reviewmanage'
+            },
+            PAGINATION: {
+                DEFAULT_PAGE_SIZE: 500,
+                REVIEWS_PAGE_SIZE: 20
+            },
+            VALIDATION: {
+                REVIEW_ID_PATTERN: /^[a-zA-Z0-9_-]+$/
+            }
+        });
+
+        const STATUS_CLASS_MAP = Object.freeze({
+            'draft': 'grey',
+            'published': 'success'
+        });
+
+        const STATUS_LABEL_MAP = Object.freeze({
+            'draft': '보류',
+            'published': '게시'
+        });
+
+        const DEFAULT_TAGS = Object.freeze([
+            '고객응대',
+            '차량상태',
+            '가성비',
+            '반납/픽업',
+            '위치/접근성',
+            '서비스',
+            '보험/보장'
+        ]);
+
+        const PERIOD_LABELS = Object.freeze({
+            'all': '전체',
+            '1y': '1년',
+            '6m': '6개월',
+            '3m': '3개월',
+            '1m': '1개월'
+        });
+
+        // ============================================================
+        // UTILS (utils.js)
+        // ============================================================
+
+        function isValidReviewId(reviewId) {
+            return reviewId !== null && reviewId !== undefined && reviewId !== '';
+        }
+
+        function formatDateForAPI(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            try {
+                const d = new Date(dateStr);
+                return d.toLocaleDateString('ko-KR', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                });
+            } catch {
+                return dateStr;
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function buildCarmoreReviewUrl(reservationId) {
+            const today = new Date();
+            const threeMonthsAgo = new Date(today);
+            threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+            const endDate = formatDateForAPI(today);
+            const startDate = formatDateForAPI(threeMonthsAgo);
+
+            const params = new URLSearchParams({
+                sp: 'reservation_idx',
+                ratingthan: '0',
+                sv: reservationId,
+                ratingless: '5',
+                startdate: startDate,
+                enddate: endDate
+            });
+
+            return `${CONFIG.EXTERNAL_URLS.CARMORE_REVIEW_BASE}?${params.toString()}`;
+        }
+
+        function getKeywordColor(str) {
+            if (!str) return '#e5e7eb';
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const h = Math.abs(hash) % 360;
+            return `hsl(${h}, 70%, 85%)`;
+        }
+
+        function getKeywordTextColor(str) {
+            if (!str) return '#374151';
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const h = Math.abs(hash) % 360;
+            return `hsl(${h}, 80%, 30%)`;
+        }
+
+        function getStarRating(rating) {
+            if (rating === undefined || rating === null) return '-';
+            const numRating = Number(rating);
+            if (isNaN(numRating)) return '-';
+
+            const fullStars = Math.floor(numRating);
+            const hasHalfStar = numRating % 1 >= 0.5;
+            let html = '<div class="rating" style="display:inline-flex; align-items:center;">';
+
+            for (let i = 0; i < 5; i++) {
+                if (i < fullStars) {
+                    html += '<span class="rating-star" style="color:#F59E0B;">★</span>';
+                } else if (i === fullStars && hasHalfStar) {
+                    html += '<span class="rating-star" style="background: linear-gradient(90deg, #F59E0B 50%, #DDDDDD 50%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">★</span>';
+                } else {
+                    html += '<span class="rating-star" style="color:#DDDDDD;">★</span>';
+                }
+            }
+            html += `<span style="margin-left: 4px; color: var(--grey-4); font-weight: normal; font-size: 12px;">(${numRating.toFixed(1)})</span>`;
+            html += '</div>';
+            return html;
+        }
+
+        function getSentimentIcon(sentiment) {
+            switch (sentiment) {
+                case 'positive': return '😊';
+                case 'negative': return '😞';
+                case 'neutral': return '😐';
+                default: return '';
+            }
+        }
+
+        function debounce(fn, ms) {
+            let timer;
+            return function (...args) {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), ms);
+            };
+        }
+
+        function showToast(message, type = 'info', duration = 3000) {
+            const existingToast = document.querySelector('.toast-notification');
+            if (existingToast) existingToast.remove();
+
+            const bgColors = {
+                success: '#10b981',
+                error: '#ef4444',
+                info: '#3b82f6'
+            };
+
+            const toast = document.createElement('div');
+            toast.className = 'toast-notification';
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 24px;
+                right: 24px;
+                padding: 16px 24px;
+                background: ${bgColors[type] || bgColors.info};
+                color: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 2000;
+                animation: slideIn 0.3s ease;
+                font-size: 14px;
+                font-weight: 500;
+            `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+
+        // ============================================================
+        // STATE (state.js)
+        // ============================================================
+
+        const state = {
+            pagination: {
+                currentPage: 0,
+                pageSize: CONFIG.PAGINATION.DEFAULT_PAGE_SIZE
+            },
+            sort: {
+                field: 'review_count',
+                order: 'desc'
+            },
+            dateFilter: {
+                picker: null,
+                from: null,
+                to: null
+            },
+            editMode: {
+                isActive: false,
+                selectedTags: [],
+                originalTags: [],
+                currentPeriod: 'all'
+            },
+            reviews: {
+                currentPage: 0,
+                pageSize: CONFIG.PAGINATION.REVIEWS_PAGE_SIZE,
+                total: 0,
+                visible: false,
+                carModelsLoaded: false
+            },
+            summaries: [],
+            regionStats: []
+        };
+
+        // State getters
+        function getState() { return state; }
+        function getPagination() { return state.pagination; }
+        function getSort() { return state.sort; }
+        function getDateFilter() { return state.dateFilter; }
+        function getEditMode() { return state.editMode; }
+        function getReviews() { return state.reviews; }
+        function getSummaries() { return state.summaries; }
+
+        // State setters
+        function setCurrentPage(page) { state.pagination.currentPage = Math.max(0, page); }
+        function stateNextPage() { state.pagination.currentPage++; }
+        function statePrevPage() { if (state.pagination.currentPage > 0) state.pagination.currentPage--; }
+        function resetPage() { state.pagination.currentPage = 0; }
+
+        function setSort(field, order) {
+            if (state.sort.field === field && !order) {
+                state.sort.order = state.sort.order === 'asc' ? 'desc' : 'asc';
+            } else {
+                state.sort.field = field;
+                state.sort.order = order || (field === 'branch_name' ? 'asc' : 'desc');
+            }
+        }
+
+        function setDateFilter(from, to) {
+            state.dateFilter.from = from;
+            state.dateFilter.to = to;
+        }
+
+        function stateClearDateFilter() {
+            state.dateFilter.from = null;
+            state.dateFilter.to = null;
+        }
+
+        function setDatePicker(picker) { state.dateFilter.picker = picker; }
+
+        function enterEditModeState() {
+            state.editMode.isActive = true;
+            state.editMode.originalTags = [...state.editMode.selectedTags];
+        }
+
+        function exitEditModeState(restore = false) {
+            state.editMode.isActive = false;
+            if (restore) {
+                state.editMode.selectedTags = [...state.editMode.originalTags];
+            }
+        }
+
+        function setSelectedTags(tags) { state.editMode.selectedTags = [...tags]; }
+        function stateToggleTag(tag) {
+            const idx = state.editMode.selectedTags.indexOf(tag);
+            if (idx > -1) {
+                state.editMode.selectedTags.splice(idx, 1);
+            } else {
+                state.editMode.selectedTags.push(tag);
+            }
+        }
+
+        function addTag(tag) {
+            if (state.editMode.selectedTags.includes(tag)) return false;
+            state.editMode.selectedTags.push(tag);
+            return true;
+        }
+
+        function removeTag(tag) {
+            const idx = state.editMode.selectedTags.indexOf(tag);
+            if (idx > -1) state.editMode.selectedTags.splice(idx, 1);
+        }
+
+        function setCurrentPeriod(period) { state.editMode.currentPeriod = period; }
+        function commitTags() { state.editMode.originalTags = [...state.editMode.selectedTags]; }
+        function setReviewsPage(page) { state.reviews.currentPage = Math.max(0, page); }
+
+        function resetReviews() {
+            state.reviews.currentPage = 0;
+            state.reviews.total = 0;
+            state.reviews.visible = false;
+            state.reviews.carModelsLoaded = false;
+        }
+
+        function toggleReviewsVisibility() {
+            state.reviews.visible = !state.reviews.visible;
+            if (state.reviews.visible) {
+                state.reviews.currentPage = 0;
+                state.reviews.carModelsLoaded = false;
+            }
+            return state.reviews.visible;
+        }
+
+        function setReviewsTotal(total) { state.reviews.total = total; }
+        function markCarModelsLoaded() { state.reviews.carModelsLoaded = true; }
+        function setSummaries(data) { state.summaries = data; }
+
+        function updateSummaryState(branchId, updates) {
+            const idx = state.summaries.findIndex(s => Number(s.branch_id) === Number(branchId));
+            if (idx > -1) {
+                state.summaries[idx] = { ...state.summaries[idx], ...updates };
+            }
+        }
+
+        function setRegionStats(data) { state.regionStats = data; }
+
+        // ============================================================
+        // API (api.js)
+        // ============================================================
+
+        async function apiRequest(url, options = {}) {
+            const response = await fetch(url, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                },
+                ...options
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.error || error.detail || `HTTP ${response.status}`);
+            }
+
+            return response.json();
+        }
+
+        async function fetchStats() {
+            return apiRequest('/review/api/v2/stats');
+        }
+
+        async function fetchRegionStats() {
+            return apiRequest('/review/api/v2/stats/region');
+        }
+
+        function buildSummariesParams(filters = {}) {
+            const params = new URLSearchParams({
+                limit: state.pagination.pageSize,
+                offset: state.pagination.currentPage * state.pagination.pageSize,
+                sort_by: state.sort.field,
+                order: state.sort.order,
+                min_reviews: 0
+            });
+
+            if (filters.keyword) params.set('keyword', filters.keyword);
+            if (filters.region) params.set('region', filters.region);
+            if (filters.status) params.set('status', filters.status);
+            if (state.dateFilter.from) params.set('review_date_from', state.dateFilter.from);
+            if (state.dateFilter.to) params.set('review_date_to', state.dateFilter.to);
+
+            return params;
+        }
+
+        async function fetchSummaries(filters = {}) {
+            const params = buildSummariesParams(filters);
+            return apiRequest(`/review/api/v2/summaries?${params}`);
+        }
+
+        async function fetchSummaryDetail(branchId) {
+            return apiRequest(`/review/api/v2/summaries/${branchId}`);
+        }
+
+        async function apiUpdateSummary(branchId, data) {
+            return apiRequest(`/review/api/v2/summaries/${branchId}`, {
+                method: 'PUT',
+                body: JSON.stringify(data)
+            });
+        }
+
+        async function apiUpdateStatus(branchId, status) {
+            return apiRequest(`/review/api/v2/summaries/${branchId}/status`, {
+                method: 'PUT',
+                body: JSON.stringify({ status })
+            });
+        }
+
+        async function apiRegenerateSummary(branchId, period = 'all') {
+            return apiRequest(`/review/api/v2/summaries/${branchId}/regenerate`, {
+                method: 'POST',
+                body: JSON.stringify({ period })
+            });
+        }
+
+        async function apiApplyPendingSummary(branchId, period) {
+            return apiRequest(`/review/api/v2/summaries/${branchId}/apply-pending`, {
+                method: 'POST',
+                body: JSON.stringify({ period })
+            });
+        }
+
+        async function apiDiscardPendingSummary(branchId, period) {
+            return apiRequest(`/review/api/v2/summaries/${branchId}/discard-pending`, {
+                method: 'POST',
+                body: JSON.stringify({ period })
+            });
+        }
+
+        async function fetchBranchReviews(branchId, options = {}) {
+            const params = new URLSearchParams({
+                limit: options.limit || 20,
+                offset: options.offset || 0
+            });
+
+            if (options.carModel) params.set('car_model', options.carModel);
+            if (options.sentiment) params.set('sentiment', options.sentiment);
+            if (state.dateFilter.from) params.set('review_date_from', state.dateFilter.from);
+            if (state.dateFilter.to) params.set('review_date_to', state.dateFilter.to);
+
+            return apiRequest(`/review/api/v2/summaries/${branchId}/reviews?${params}`);
+        }
+
+        async function fetchBranchTagsBatch(branchIds) {
+            if (!branchIds || branchIds.length === 0) return {};
+            return apiRequest('/review/api/tags/batch', {
+                method: 'POST',
+                body: JSON.stringify({ branch_ids: branchIds })
+            });
+        }
+
+        async function apiSyncAffiliates() {
+            return apiRequest('/review/api/carmore/sync/affiliates', {
+                method: 'POST'
+            });
+        }
+
+        // ============================================================
+        // UI (ui.js)
+        // ============================================================
+
+        const elements = {};
+
+        function getElement(id) {
+            if (!elements[id]) {
+                elements[id] = document.getElementById(id);
+            }
+            return elements[id];
+        }
+
+        function renderStats(stats) {
+            const statTotal = getElement('stat-total');
+            const statReviews = getElement('stat-reviews');
+            const statPublished = getElement('stat-published');
+            const statusStats = getElement('status-stats');
+
+            if (statTotal) statTotal.textContent = stats.total?.toLocaleString() || '0';
+            if (statReviews) statReviews.textContent = stats.total_reviews?.toLocaleString() || '0';
+            if (statPublished) statPublished.textContent = stats.published?.toLocaleString() || '0';
+
+            if (statusStats) {
+                const total = stats.total || 1;
+                const draftPct = Math.round((stats.draft || 0) / total * 100);
+                const publishedPct = Math.round((stats.published || 0) / total * 100);
+
+                statusStats.innerHTML = renderStatusBars({
+                    draft: { count: stats.draft || 0, pct: draftPct },
+                    published: { count: stats.published || 0, pct: publishedPct }
+                });
+            }
+        }
+
+        function renderStatusBars(data) {
+            return `
+                <div style="display: flex; flex-direction: column; gap: 20px; padding: 8px 0;">
+                    ${renderStatusBar('Draft', data.draft, '#999', '#666', '#f0f0f0')}
+                    ${renderStatusBar('Published', data.published, '#10b981', '#059669', '#d1fae5')}
+                </div>
+            `;
+        }
+
+        function renderStatusBar(label, data, colorStart, colorEnd, bgColor) {
+            const icons = {
+                'Draft': `<svg width="16" height="16" fill="none" stroke="${colorStart}" stroke-width="2" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>`,
+                'Published': `<svg width="16" height="16" fill="none" stroke="${colorStart}" stroke-width="2" viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>`
+            };
+
+            const badgeClass = label === 'Draft' ? 'badge-grey' : 'badge-success';
+
+            return `
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            ${icons[label]}
+                            <span style="font-weight: 500;">${label}</span>
+                        </div>
+                        <span class="badge ${badgeClass}">${data.count}</span>
+                    </div>
+                    <div style="background: ${bgColor}; height: 6px; border-radius: 3px; overflow: hidden;">
+                        <div style="background: linear-gradient(90deg, ${colorStart} 0%, ${colorEnd} 100%); height: 100%; width: ${data.pct}%; transition: width 0.6s ease;"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTable(data, onDetailClick) {
+            const tableEl = getElement('summaries-table');
+            const paginationInfo = getElement('pagination-info');
+
+            if (!tableEl) return;
+
+            if (!data || data.length === 0) {
+                tableEl.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--grey-5);">데이터 없음</td></tr>';
+                if (paginationInfo) paginationInfo.textContent = '0개 지점';
+                return;
+            }
+
+            const html = data.map(row => renderTableRow(row, onDetailClick)).join('');
+            tableEl.innerHTML = html;
+
+            if (paginationInfo) {
+                const start = state.pagination.currentPage * state.pagination.pageSize + 1;
+                const end = start + data.length - 1;
+                paginationInfo.textContent = `${start}-${end}개 표시`;
+            }
+        }
+
+        function renderTableRow(row, onDetailClick) {
+            const summaryPreview = row.summary_all
+                ? (row.summary_all.length > 60 ? row.summary_all.substring(0, 60) + '...' : row.summary_all)
+                : '<span style="color: var(--grey-5); font-style: italic;">요약 없음</span>';
+
+            const tags = row.top_tags || [];
+            const tagsHtml = tags.length > 0
+                ? tags.map(t => `<span class="keyword" style="background: ${getKeywordColor(t.name)}; color: ${getKeywordTextColor(t.name)};">${t.name}</span>`).join('')
+                : '<span style="color: var(--grey-5); font-style: italic;">-</span>';
+
+            return `
+                <tr style="vertical-align: middle;">
+                    <td>
+                        <div style="font-weight: 600; margin-bottom: 4px;">${row.branch_name || '-'}</div>
+                        <div>${getStarRating(row.avg_rating)}</div>
+                    </td>
+                    <td style="font-size: 13px; color: var(--grey-3); line-height: 1.5;">${summaryPreview}</td>
+                    <td style="text-align: center; font-weight: 600; font-size: 15px;">${row.review_count?.toLocaleString() || 0}</td>
+                    <td>
+                        <div class="keywords" style="display: flex; flex-wrap: wrap; gap: 4px;">
+                            ${tagsHtml}
+                        </div>
+                    </td>
+                    <td style="text-align: center;">
+                        <span class="badge ${row.status === 'published' ? 'badge-success' : 'badge-grey'}">
+                            ${row.status || 'draft'}
+                        </span>
+                    </td>
+                    <td style="text-align: center;">
+                        <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.showDetail(${row.branch_id})">상세</button>
+                    </td>
+                </tr>
+            `;
+        }
+
+        function updateSortUI() {
+            document.querySelectorAll('.sort-icon').forEach(el => el.textContent = '');
+            const iconEl = getElement(`sort-icon-${state.sort.field}`);
+            if (iconEl) {
+                iconEl.textContent = state.sort.order === 'asc' ? ' ↑' : ' ↓';
+                iconEl.style.color = 'var(--primary)';
+            }
+        }
+
+        function createReviewLinkHtml(reviewId) {
+            if (!isValidReviewId(reviewId)) return '';
+            const encodedId = encodeURIComponent(String(reviewId));
+            const escapedId = escapeHtml(String(reviewId));
+            const reviewUrl = buildCarmoreReviewUrl(encodedId);
+            return `<a href="${reviewUrl}" target="_blank" rel="noopener noreferrer" class="review-link" title="Carmore 관리자에서 리뷰 보기">#${escapedId}</a>`;
+        }
+
+        function renderReviewItem(reviewData, index, pageOffset) {
+            const reviewLink = createReviewLinkHtml(reviewData.review_id) || `<span>#${pageOffset + index + 1}</span>`;
+            const sentimentIcon = reviewData.sentiment ? getSentimentIcon(reviewData.sentiment) : '';
+            const escapedContent = escapeHtml(reviewData.content || '-');
+            const formattedDate = formatDate(reviewData.review_date);
+            const footerHtml = renderReviewFooter(reviewData);
+
+            return `
+                <div class="review-item">
+                    <div class="review-item__header">
+                        <span class="review-item__meta">
+                            ${reviewLink}
+                            ${sentimentIcon ? `<span class="review-item__sentiment">${sentimentIcon}</span>` : ''}
+                        </span>
+                        <span class="review-item__meta">${formattedDate}</span>
+                    </div>
+                    <div class="review-item__content">${escapedContent}</div>
+                    ${footerHtml}
+                </div>
+            `;
+        }
+
+        function renderReviewFooter(reviewData) {
+            const metaParts = [];
+            if (reviewData.rating_service) metaParts.push(`친절: ${reviewData.rating_service}`);
+            if (reviewData.rating_car) metaParts.push(`차량: ${reviewData.rating_car}`);
+            if (reviewData.car_model) metaParts.push(escapeHtml(reviewData.car_model));
+            if (metaParts.length === 0) return '';
+            return `<div class="review-item__footer">${metaParts.join(' | ')}</div>`;
+        }
+
+        function renderReviewsList(reviews, offset) {
+            const listEl = getElement('reviews-list');
+            if (!listEl) return;
+
+            if (reviews.length === 0) {
+                listEl.innerHTML = '<div class="review-item" style="text-align: center;">리뷰가 없습니다.</div>';
+            } else {
+                listEl.innerHTML = reviews.map((r, idx) => renderReviewItem(r, idx, offset)).join('');
+            }
+        }
+
+        function updateReviewsPagination(currentPage, totalPages) {
+            const pageInfo = getElement('reviews-page-info');
+            const prevBtn = getElement('reviews-prev-btn');
+            const nextBtn = getElement('reviews-next-btn');
+
+            if (pageInfo) pageInfo.textContent = `${currentPage + 1} / ${totalPages || 1}`;
+            if (prevBtn) prevBtn.disabled = currentPage === 0;
+            if (nextBtn) nextBtn.disabled = (currentPage + 1) >= totalPages;
+        }
+
+        function updateReviewsCount(total) {
+            const countEl = getElement('reviews-count');
+            if (countEl) countEl.textContent = `(총 ${total.toLocaleString()}건)`;
+        }
+
+        function updateCarModelDropdown(carModels) {
+            const carSelect = getElement('filter-car-model');
+            if (carSelect && carModels.length > 0) {
+                carSelect.innerHTML = '<option value="">🚗 전체 차량</option>' +
+                    carModels.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+            }
+        }
+
+        function renderTagsDisplay(tags) {
+            const display = getElement('tags-display');
+            if (!display) return;
+
+            if (tags.length > 0) {
+                display.innerHTML = tags.map(t =>
+                    `<span class="keyword" style="background: ${getKeywordColor(t)}; color: ${getKeywordTextColor(t)};">${t}</span>`
+                ).join('');
+            } else {
+                display.innerHTML = '<span class="summary-empty">태그 없음</span>';
+            }
+        }
+
+        function renderTagSelector(selectedTags, onToggle, onRemove) {
+            const selector = getElement('tag-selector');
+            if (!selector) return;
+
+            const allTags = [...new Set([...DEFAULT_TAGS, ...selectedTags])];
+
+            selector.innerHTML = allTags.map(tag => {
+                const isSelected = selectedTags.includes(tag);
+                const isCustom = !DEFAULT_TAGS.includes(tag);
+                const bg = isSelected ? getKeywordColor(tag) : 'var(--grey-8)';
+                const color = isSelected ? getKeywordTextColor(tag) : 'var(--grey-3)';
+                const border = isSelected ? '2px solid var(--primary)' : '2px solid transparent';
+                const deleteBtn = isCustom
+                    ? `<span onclick="event.stopPropagation(); window.dashboardHandlers.removeCustomTag('${tag}')" style="margin-left: 4px; font-size: 10px;">✕</span>`
+                    : '';
+
+                return `<span class="keyword" onclick="window.dashboardHandlers.toggleTag('${tag}')"
+                    style="background: ${bg}; color: ${color}; border: ${border}; cursor: pointer; user-select: none;"
+                    data-tag="${tag}">${tag}${deleteBtn}</span>`;
+            }).join('');
+        }
+
+        function openModal() {
+            const modal = getElement('detail-modal');
+            if (modal) modal.classList.add('active');
+        }
+
+        function uiCloseModal() {
+            const modal = getElement('detail-modal');
+            if (modal) modal.classList.remove('active');
+        }
+
+        function showModalLoading() {
+            const body = getElement('modal-body');
+            if (body) body.innerHTML = '<div class="loading"><div class="spinner"></div>로딩 중...</div>';
+        }
+
+        function showModalError(message = '로드 실패') {
+            const body = getElement('modal-body');
+            if (body) body.innerHTML = `<div style="color: var(--error);">${escapeHtml(message)}</div>`;
+        }
+
+        function setModalTitle(title) {
+            const titleEl = getElement('modal-title');
+            if (titleEl) titleEl.textContent = title;
+        }
+
+        function toggleEditModeUI(isEditMode) {
+            const viewButtons = getElement('view-mode-buttons');
+            const editButtons = getElement('edit-mode-buttons');
+            const regionDisplay = getElement('region-display');
+            const regionInput = getElement('region-input');
+            const tagsDisplay = getElement('tags-display');
+            const editAreaTags = getElement('edit-area-tags');
+
+            if (viewButtons) viewButtons.style.display = isEditMode ? 'none' : 'flex';
+            if (editButtons) editButtons.style.display = isEditMode ? 'flex' : 'none';
+            if (regionDisplay) regionDisplay.style.display = isEditMode ? 'none' : 'block';
+            if (regionInput) regionInput.style.display = isEditMode ? 'block' : 'none';
+            if (tagsDisplay) tagsDisplay.style.display = isEditMode ? 'none' : 'flex';
+            if (editAreaTags) editAreaTags.style.display = isEditMode ? 'block' : 'none';
+
+            ['all', '1y', '6m', '3m', '1m'].forEach(period => {
+                const textEl = getElement(`summary-text-${period}`);
+                const editEl = getElement(`edit-summary-${period}`);
+                if (textEl) textEl.style.display = isEditMode ? 'none' : 'block';
+                if (editEl) editEl.style.display = isEditMode ? 'block' : 'none';
+            });
+        }
+
+        function uiShowSummaryTab(tabEl, period) {
+            document.querySelectorAll('.tabs .tab').forEach(t => {
+                t.classList.remove('active');
+                t.style.background = 'var(--grey-8)';
+                t.style.color = 'var(--grey-3)';
+            });
+
+            if (tabEl) {
+                tabEl.classList.add('active');
+                tabEl.style.background = 'var(--grey-2)';
+                tabEl.style.color = 'white';
+            }
+
+            document.querySelectorAll('.summary-panel').forEach(p => p.style.display = 'none');
+            const panel = getElement(`panel-${period}`);
+            if (panel) panel.style.display = 'block';
+        }
+
+        function showReviewsLoading() {
+            const listEl = getElement('reviews-list');
+            if (listEl) listEl.innerHTML = '<div class="loading"><div class="spinner"></div>로딩 중...</div>';
+        }
+
+        function showTableMessage(message, isError = false) {
+            const tableEl = getElement('summaries-table');
+            if (tableEl) {
+                const style = isError ? 'color: var(--error);' : 'color: var(--grey-5);';
+                tableEl.innerHTML = `<tr><td colspan="7" style="text-align:center; ${style}">${escapeHtml(message)}</td></tr>`;
+            }
+        }
+
+        // ============================================================
+        // INDEX / MAIN CONTROLLER (index.js)
+        // ============================================================
+
+        function init() {
+            bindEvents();
+            initDateRangePicker();
+
+            loadStats();
+            loadRegionStatsData();
+            loadSummaries();
+
+            registerGlobalHandlers();
+
+            console.log('✅ Dashboard initialized (inlined v2.0)');
+        }
+
+        function registerGlobalHandlers() {
+            window.dashboardHandlers = {
+                showDetail,
+                handleSort,
+                prevPage,
+                nextPage,
+                toggleReviews,
+                loadMoreReviews,
+                applyFilters,
+                enterEditMode,
+                cancelEditMode,
+                saveAllChanges,
+                updateStatus,
+                showSummaryTab,
+                regenerateSummary,
+                applyPendingSummary,
+                discardPendingSummary,
+                toggleTag,
+                addCustomTag,
+                removeCustomTag,
+                closeModal,
+                clearDateFilter,
+                syncAffiliates
+            };
+
+            // Also expose to global for onclick in header
+            window.syncAffiliates = syncAffiliates;
+            window.handleSort = handleSort;
+            window.prevPage = prevPage;
+            window.nextPage = nextPage;
+        }
+
+        function bindEvents() {
+            const searchInput = getElement('search-input');
+            const filterRegion = getElement('filter-region');
+            const filterStatus = getElement('filter-status');
+            const modal = getElement('detail-modal');
+
+            if (searchInput) {
+                searchInput.addEventListener('input', debounce(() => {
+                    resetPage();
+                    loadSummaries();
+                }, 300));
+            }
+
+            if (filterRegion) {
+                filterRegion.addEventListener('change', () => {
+                    resetPage();
+                    loadSummaries();
+                });
+            }
+
+            if (filterStatus) {
+                filterStatus.addEventListener('change', () => {
+                    resetPage();
+                    loadSummaries();
+                });
+            }
+
+            if (modal) {
+                modal.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('modal-overlay')) {
+                        closeModal();
+                    }
+                });
+            }
+        }
+
+        function initDateRangePicker() {
+            const picker = flatpickr('#filter-date-range', {
+                mode: 'range',
+                locale: 'ko',
+                dateFormat: 'Y-m-d',
+                maxDate: 'today',
+                onChange: function (selectedDates) {
+                    if (selectedDates.length === 2) {
+                        setDateFilter(
+                            formatDateForAPI(selectedDates[0]),
+                            formatDateForAPI(selectedDates[1])
+                        );
+                        getElement('btn-clear-date').style.display = 'inline-block';
+                        resetPage();
+                        loadSummaries();
+                    }
+                },
+                onClose: function (selectedDates) {
+                    if (selectedDates.length === 1) {
+                        const dateStr = formatDateForAPI(selectedDates[0]);
+                        setDateFilter(dateStr, dateStr);
+                        getElement('btn-clear-date').style.display = 'inline-block';
+                        resetPage();
+                        loadSummaries();
+                    }
+                }
+            });
+
+            setDatePicker(picker);
+        }
+
+        async function loadStats() {
+            try {
+                const stats = await fetchStats();
+                renderStats(stats);
+            } catch (e) {
+                console.error('Stats load error:', e);
+            }
+        }
+
+        async function loadRegionStatsData() {
+            try {
+                const data = await fetchRegionStats();
+                setRegionStats(data);
+
+                const select = getElement('filter-region');
+                if (select) {
+                    data.forEach(r => {
+                        if (r.region && r.region !== '미분류') {
+                            const opt = document.createElement('option');
+                            opt.value = r.region;
+                            opt.textContent = `${r.region} (${r.count})`;
+                            select.appendChild(opt);
+                        }
+                    });
+                }
+
+                const totalReviews = data.reduce((sum, r) => sum + (r.total_reviews || 0), 0);
+                const statReviews = getElement('stat-reviews');
+                if (statReviews) {
+                    statReviews.textContent = totalReviews.toLocaleString();
+                }
+            } catch (e) {
+                console.error('Region stats error:', e);
+            }
+        }
+
+        async function loadSummaries() {
+            const filters = {
+                keyword: getElement('search-input')?.value || '',
+                region: getElement('filter-region')?.value || '',
+                status: getElement('filter-status')?.value || ''
+            };
+
+            updateSortUI();
+
+            try {
+                let data = await fetchSummaries(filters);
+
+                const branchIds = data.map(d => d.branch_id).filter(Boolean);
+                let tagsData = {};
+
+                if (branchIds.length > 0) {
+                    try {
+                        tagsData = await fetchBranchTagsBatch(branchIds);
+                    } catch (e) {
+                        console.error('Tags load error:', e);
+                    }
+                }
+
+                data.forEach(row => {
+                    if (Array.isArray(row.keywords)) {
+                        row.top_tags = row.keywords.map(k => ({ name: k }));
+                    } else {
+                        row.top_tags = tagsData[String(row.branch_id)] || [];
+                    }
+                });
+
+                setSummaries(data);
+                renderTable(data, showDetail);
+            } catch (e) {
+                console.error('Summaries load error:', e);
+                showTableMessage('로드 실패', true);
+            }
+        }
+
+        function handleSort(field) {
+            setSort(field);
+            resetPage();
+            loadSummaries();
+        }
+
+        function prevPage() {
+            if (state.pagination.currentPage > 0) {
+                statePrevPage();
+                loadSummaries();
+            }
+        }
+
+        function nextPage() {
+            if (state.summaries.length === state.pagination.pageSize) {
+                stateNextPage();
+                loadSummaries();
+            }
+        }
+
+        function clearDateFilter() {
+            if (state.dateFilter.picker) {
+                state.dateFilter.picker.clear();
+            }
+            stateClearDateFilter();
+            getElement('btn-clear-date').style.display = 'none';
+            resetPage();
+            loadSummaries();
+        }
+
+        async function showDetail(branchId) {
+            openModal();
+            showModalLoading();
+            resetReviews();
+
+            try {
+                const data = await fetchSummaryDetail(branchId);
+                setModalTitle(data.branch_name || `지점 ${branchId}`);
+
+                const modalHtml = buildDetailModalHtml(data);
+                getElement('modal-body').innerHTML = modalHtml;
+
+                await loadBranchTags(data, branchId);
+            } catch (e) {
+                console.error('Detail load error:', e);
+                showModalError();
+            }
+        }
+
+        function buildDetailModalHtml(data) {
+            const pendingSummaries = data.pending_summaries || {};
+
+            return `
+                <div class="modal-header-content" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
+                    <div style="flex: 1;">
+                        <div style="font-size: 14px; color: var(--grey-5); margin-bottom: 4px;">ID: ${data.branch_id}</div>
+                        <h2 style="font-size: 24px; font-weight: 700; color: var(--grey-1); margin: 0;">${data.branch_name}</h2>
+                        <div id="region-display" style="font-size: 14px; color: var(--grey-3); margin-top: 4px;">${data.region || '지역 정보 없음'}</div>
+                        <input type="text" id="region-input" value="${data.region || ''}" placeholder="지역 입력 (예: 서울 강남구)"
+                            style="display: none; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 14px; width: 100%; max-width: 300px;">
+                    </div>
+                    <div>
+                        <span class="badge badge-${STATUS_CLASS_MAP[data.status] || 'grey'}" style="font-size: 14px; padding: 6px 12px;">
+                            ${STATUS_LABEL_MAP[data.status] || data.status}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Tags -->
+                <div style="margin-bottom: 24px;">
+                    <div style="font-size: 14px; font-weight: 600; color: var(--grey-3); margin-bottom: 8px;">태그</div>
+                    <div class="keywords" id="tags-display" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <span class="summary-empty">로딩 중...</span>
+                    </div>
+                    <div id="edit-area-tags" style="display: none; margin-top: 12px;">
+                        <div style="font-size: 12px; color: var(--grey-5); margin-bottom: 8px;">클릭하여 선택/해제:</div>
+                        <div id="tag-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;"></div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" id="custom-tag-input" placeholder="커스텀 태그 입력"
+                                style="padding: 6px 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 13px; width: 150px;">
+                            <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.addCustomTag()">+ 추가</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 32px;">
+                    <div style="background: var(--grey-9); padding: 16px; border-radius: var(--radius);">
+                        <div style="font-size: 13px; color: var(--grey-5);">총 리뷰 수</div>
+                        <div style="font-size: 20px; font-weight: 700; color: var(--grey-1); margin-top: 4px;">${data.review_count?.toLocaleString() || 0}건</div>
+                    </div>
+                    <div style="background: var(--grey-9); padding: 16px; border-radius: var(--radius);">
+                        <div style="font-size: 13px; color: var(--grey-5);">평균 평점</div>
+                        <div style="font-size: 20px; font-weight: 700; color: var(--grey-1); margin-top: 4px;">⭐ ${data.avg_rating?.toFixed(2) || '0.0'}</div>
+                    </div>
+                </div>
+
+                <!-- Summary Tabs -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <div class="tabs" style="display: flex; gap: 8px;">
+                        ${['all', '1y', '6m', '3m', '1m'].map((p, i) => `
+                            <div class="tab ${i === 0 ? 'active' : ''}" onclick="window.dashboardHandlers.showSummaryTab(this, '${p}')"
+                                style="padding: 8px 16px; cursor: pointer; font-weight: 500; font-size: 13px; border-radius: 20px;
+                                background: ${i === 0 ? 'var(--grey-2)' : 'var(--grey-8)'}; color: ${i === 0 ? 'white' : 'var(--grey-3)'}; transition: all 0.2s;">
+                                ${PERIOD_LABELS[p]}
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button class="btn-ai-summary" onclick="window.dashboardHandlers.regenerateSummary(${data.branch_id}, event)" title="AI 요약 재생성">
+                        ✨ AI 요약
+                    </button>
+                </div>
+
+                <!-- Summary Content -->
+                <div id="summary-content" style="min-height: 200px; background: white; border-radius: 0 0 var(--radius) var(--radius);">
+                    ${['all', '1y', '6m', '3m', '1m'].map((period, i) => {
+                        const hasPending = !!pendingSummaries[period];
+                        return `
+                        <div class="summary-panel" id="panel-${period}" style="display: ${i === 0 ? 'block' : 'none'};">
+                            <div class="summary-text" id="summary-text-${period}" style="font-size: 15px; line-height: 1.7; color: var(--grey-2); white-space: pre-line;">
+                                ${data['summary_' + period] || '<span class="summary-empty" style="color: var(--grey-5); font-style: italic;">작성된 요약이 없습니다.</span>'}
+                            </div>
+                            <textarea id="edit-summary-${period}" style="display: none; width: 100%; min-height: 120px; padding: 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 14px; line-height: 1.6; resize: vertical; font-family: inherit;">${data['summary_' + period] || ''}</textarea>
+
+                            <div id="pending-section-${period}" class="pending-summary-section" style="display: ${hasPending ? 'block' : 'none'}; margin-top: 16px; padding: 16px; background: var(--primary-light); border: 2px dashed var(--primary); border-radius: var(--radius-sm);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <span style="font-size: 13px; font-weight: 600; color: var(--primary);">✨ 신규 생성 요약</span>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button class="btn btn-primary btn-sm" onclick="window.dashboardHandlers.applyPendingSummary(${data.branch_id}, '${period}')" style="font-size: 12px; padding: 4px 12px;">변경</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.discardPendingSummary(${data.branch_id}, '${period}')" style="font-size: 12px; padding: 4px 12px;">취소</button>
+                                    </div>
+                                </div>
+                                <div id="pending-text-${period}" style="font-size: 14px; line-height: 1.6; color: var(--grey-2); white-space: pre-line;">${pendingSummaries[period] || ''}</div>
+                            </div>
+                        </div>
+                    `}).join('')}
+                </div>
+
+                <!-- Action Buttons -->
+                <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--grey-8);">
+                    <div id="view-mode-buttons" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-secondary" onclick="window.dashboardHandlers.enterEditMode()">✏️ 수정</button>
+                            <button class="btn btn-secondary" onclick="window.dashboardHandlers.toggleReviews(${data.branch_id})" id="btn-toggle-reviews">📋 리뷰 보기</button>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.updateStatus(${data.branch_id}, 'draft')">보류</button>
+                            <button class="btn btn-primary btn-sm" onclick="window.dashboardHandlers.updateStatus(${data.branch_id}, 'published')">게시</button>
+                        </div>
+                    </div>
+                    <div id="edit-mode-buttons" style="display: none; justify-content: flex-end; gap: 12px;">
+                        <button class="btn btn-secondary" onclick="window.dashboardHandlers.cancelEditMode()">취소</button>
+                        <button class="btn btn-primary" onclick="window.dashboardHandlers.saveAllChanges(${data.branch_id})">💾 저장</button>
+                    </div>
+                </div>
+
+                <!-- Reviews Section -->
+                <div id="reviews-section" style="display: none; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--grey-8);">
+                    <div style="font-size: 14px; font-weight: 600; color: var(--grey-3); margin-bottom: 12px;">
+                        📋 리뷰 목록 <span id="reviews-count" style="font-weight: normal; color: var(--grey-5);"></span>
+                    </div>
+                    <div id="reviews-filters" style="display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+                        <select id="filter-car-model" onchange="window.dashboardHandlers.applyFilters(${data.branch_id})" style="padding: 6px 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 13px; background: white;">
+                            <option value="">🚗 전체 차량</option>
+                        </select>
+                        <select id="filter-sentiment" onchange="window.dashboardHandlers.applyFilters(${data.branch_id})" style="padding: 6px 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 13px; background: white;">
+                            <option value="">💬 전체 감정</option>
+                            <option value="positive">😊 긍정</option>
+                            <option value="neutral">😐 중립</option>
+                            <option value="negative">😞 부정</option>
+                        </select>
+                    </div>
+                    <div id="reviews-list" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); background: var(--grey-9);">
+                        <div class="loading"><div class="spinner"></div>로딩 중...</div>
+                    </div>
+                    <div style="margin-top: 12px; display: flex; justify-content: center; gap: 8px;">
+                        <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.loadMoreReviews(${data.branch_id}, 'prev')" id="reviews-prev-btn" disabled>이전</button>
+                        <span id="reviews-page-info" style="font-size: 13px; color: var(--grey-5); line-height: 32px;">-</span>
+                        <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.loadMoreReviews(${data.branch_id}, 'next')" id="reviews-next-btn">다음</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadBranchTags(data, branchId) {
+            let tags = [];
+
+            if (Array.isArray(data.keywords)) {
+                tags = [...data.keywords];
+            } else {
+                try {
+                    const tagsData = await fetchBranchTagsBatch([branchId]);
+                    const branchTags = tagsData[String(branchId)] || [];
+                    tags = branchTags.map(t => t.name);
+                } catch (e) {
+                    console.error('Tags load error:', e);
+                }
+            }
+
+            setSelectedTags(tags);
+            commitTags();
+            renderTagsDisplay(tags);
+        }
+
+        function closeModal() {
+            uiCloseModal();
+        }
+
+        function enterEditMode() {
+            enterEditModeState();
+            toggleEditModeUI(true);
+            renderTagSelector(state.editMode.selectedTags, toggleTag, removeCustomTagHandler);
+        }
+
+        function cancelEditMode() {
+            exitEditModeState(true);
+            toggleEditModeUI(false);
+            renderTagsDisplay(state.editMode.selectedTags);
+        }
+
+        async function saveAllChanges(branchId) {
+            const region = getElement('region-input')?.value.trim() || '';
+
+            const summariesData = {};
+            ['all', '1y', '6m', '3m', '1m'].forEach(period => {
+                const el = getElement(`edit-summary-${period}`);
+                if (el) summariesData[`summary_${period}`] = el.value;
+            });
+
+            try {
+                const response = await apiUpdateSummary(branchId, {
+                    region,
+                    keywords: state.editMode.selectedTags,
+                    ...summariesData
+                });
+
+                if (response.success) {
+                    getElement('region-display').textContent = region || '지역 정보 없음';
+
+                    ['all', '1y', '6m', '3m', '1m'].forEach(period => {
+                        const textEl = getElement(`summary-text-${period}`);
+                        const editEl = getElement(`edit-summary-${period}`);
+                        if (textEl && editEl) {
+                            textEl.innerHTML = editEl.value || '<span class="summary-empty">작성된 요약이 없습니다.</span>';
+                        }
+                    });
+
+                    commitTags();
+                    updateSummaryState(branchId, {
+                        region,
+                        top_tags: state.editMode.selectedTags.map(t => ({ name: t })),
+                        summary_all: summariesData.summary_all
+                    });
+
+                    renderTable(state.summaries, showDetail);
+
+                    exitEditModeState(false);
+                    toggleEditModeUI(false);
+                    renderTagsDisplay(state.editMode.selectedTags);
+
+                    showToast('✅ 저장되었습니다.', 'success');
+                } else {
+                    showToast('저장 실패', 'error');
+                }
+            } catch (e) {
+                console.error('Save error:', e);
+                showToast('저장 중 오류 발생', 'error');
+            }
+        }
+
+        function toggleTag(tag) {
+            stateToggleTag(tag);
+            renderTagSelector(state.editMode.selectedTags, toggleTag, removeCustomTagHandler);
+        }
+
+        function addCustomTag() {
+            const input = getElement('custom-tag-input');
+            const tagName = input?.value.trim();
+
+            if (!tagName) return;
+
+            if (!addTag(tagName)) {
+                alert('이미 존재하는 태그입니다.');
+                return;
+            }
+
+            input.value = '';
+            renderTagSelector(state.editMode.selectedTags, toggleTag, removeCustomTagHandler);
+        }
+
+        function removeCustomTagHandler(tag) {
+            removeTag(tag);
+            renderTagSelector(state.editMode.selectedTags, toggleTag, removeCustomTagHandler);
+        }
+
+        // Alias for global handler
+        function removeCustomTag(tag) {
+            removeCustomTagHandler(tag);
+        }
+
+        function showSummaryTab(tabEl, period) {
+            setCurrentPeriod(period);
+            uiShowSummaryTab(tabEl, period);
+        }
+
+        async function regenerateSummary(branchId, e) {
+            const period = state.editMode.currentPeriod;
+
+            if (!confirm(`[${PERIOD_LABELS[period]}] 기간의 요약을 AI로 재생성하시겠습니까?\n\n새 요약이 생성되며, "변경" 버튼을 눌러야 적용됩니다.`)) {
+                return;
+            }
+
+            const btn = e?.target || e?.currentTarget;
+            const originalText = btn.innerHTML;
+
+            try {
+                btn.innerHTML = '⏳ 생성 중...';
+                btn.disabled = true;
+
+                const result = await apiRegenerateSummary(branchId, period);
+
+                if (result.success) {
+                    const pendingSection = getElement(`pending-section-${period}`);
+                    const pendingText = getElement(`pending-text-${period}`);
+
+                    if (pendingSection && pendingText) {
+                        pendingText.innerHTML = result.summary;
+                        pendingSection.style.display = 'block';
+                    }
+
+                    showToast(`✨ [${PERIOD_LABELS[period]}] 새 요약이 생성되었습니다.`, 'success');
+                } else {
+                    throw new Error(result.error || '요약 생성 실패');
+                }
+            } catch (error) {
+                console.error('Regenerate error:', error);
+                showToast('❌ 요약 생성 실패: ' + error.message, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        async function applyPendingSummary(branchId, period) {
+            if (!confirm(`[${PERIOD_LABELS[period]}] 새 요약을 적용하시겠습니까?`)) {
+                return;
+            }
+
+            try {
+                const result = await apiApplyPendingSummary(branchId, period);
+
+                if (result.success) {
+                    const textEl = getElement(`summary-text-${period}`);
+                    const editEl = getElement(`edit-summary-${period}`);
+                    const pendingSection = getElement(`pending-section-${period}`);
+
+                    if (textEl) textEl.innerHTML = result.applied;
+                    if (editEl) editEl.value = result.applied;
+                    if (pendingSection) pendingSection.style.display = 'none';
+
+                    showToast(`✅ [${PERIOD_LABELS[period]}] 요약이 적용되었습니다`, 'success');
+                }
+            } catch (error) {
+                console.error('Apply error:', error);
+                showToast('❌ 적용 실패: ' + error.message, 'error');
+            }
+        }
+
+        async function discardPendingSummary(branchId, period) {
+            if (!confirm(`[${PERIOD_LABELS[period]}] 새 요약을 취소하시겠습니까?`)) {
+                return;
+            }
+
+            try {
+                const result = await apiDiscardPendingSummary(branchId, period);
+
+                if (result.success) {
+                    const pendingSection = getElement(`pending-section-${period}`);
+                    if (pendingSection) pendingSection.style.display = 'none';
+
+                    showToast(`🗑️ [${PERIOD_LABELS[period]}] 새 요약이 취소되었습니다`, 'success');
+                }
+            } catch (error) {
+                console.error('Discard error:', error);
+                showToast('❌ 취소 실패: ' + error.message, 'error');
+            }
+        }
+
+        async function updateStatus(branchId, status) {
+            try {
+                const result = await apiUpdateStatus(branchId, status);
+
+                if (result.success) {
+                    showToast(`✅ 상태가 ${STATUS_LABEL_MAP[status] || status}로 변경되었습니다.`, 'success');
+                    closeModal();
+                    await loadStats();
+                    await loadSummaries();
+                }
+            } catch (e) {
+                console.error('Status update error:', e);
+                showToast('❌ 상태 변경 실패: ' + e.message, 'error');
+            }
+        }
+
+        async function toggleReviews(branchId) {
+            const section = getElement('reviews-section');
+            const btn = getElement('btn-toggle-reviews');
+            const visible = toggleReviewsVisibility();
+
+            if (section) section.style.display = visible ? 'block' : 'none';
+            if (btn) btn.textContent = visible ? '📋 리뷰 숨기기' : '📋 리뷰 보기';
+
+            if (visible) {
+                const carSelect = getElement('filter-car-model');
+                const sentSelect = getElement('filter-sentiment');
+                if (carSelect) carSelect.value = '';
+                if (sentSelect) sentSelect.value = '';
+
+                await loadReviews(branchId);
+            }
+        }
+
+        function applyFilters(branchId) {
+            setReviewsPage(0);
+            loadReviews(branchId);
+        }
+
+        async function loadReviews(branchId) {
+            showReviewsLoading();
+
+            const offset = state.reviews.currentPage * state.reviews.pageSize;
+
+            try {
+                const result = await fetchBranchReviews(branchId, {
+                    limit: state.reviews.pageSize,
+                    offset,
+                    carModel: getElement('filter-car-model')?.value || '',
+                    sentiment: getElement('filter-sentiment')?.value || ''
+                });
+
+                console.log('📋 리뷰 API 응답:', result);
+
+                setReviewsTotal(result.total || 0);
+
+                if (!state.reviews.carModelsLoaded && result.car_models?.length > 0) {
+                    updateCarModelDropdown(result.car_models);
+                    markCarModelsLoaded();
+                }
+
+                updateReviewsCount(result.total || 0);
+                renderReviewsList(result.reviews || [], offset);
+
+                const totalPages = Math.ceil((result.total || 0) / state.reviews.pageSize);
+                updateReviewsPagination(state.reviews.currentPage, totalPages);
+
+            } catch (e) {
+                console.error('Reviews load error:', e);
+                getElement('reviews-list').innerHTML = '<div style="padding: 24px; text-align: center; color: var(--error);">로드 실패</div>';
+            }
+        }
+
+        function loadMoreReviews(branchId, direction) {
+            if (direction === 'prev' && state.reviews.currentPage > 0) {
+                setReviewsPage(state.reviews.currentPage - 1);
+            } else if (direction === 'next') {
+                setReviewsPage(state.reviews.currentPage + 1);
+            }
+
+            loadReviews(branchId);
+        }
+
+        async function syncAffiliates() {
+            if (!confirm('Carmore API에서 업체 정보를 동기화하시겠습니까?')) {
+                return;
+            }
+
+            try {
+                const result = await apiSyncAffiliates();
+
+                if (result.success) {
+                    showToast(`동기화 완료: ${result.success}개 업체`, 'success');
+                    loadSummaries();
+                } else {
+                    showToast('동기화 실패: ' + (result.error || 'Unknown error'), 'error');
+                }
+            } catch (e) {
+                showToast('동기화 실패: ' + e.message, 'error');
+            }
+        }
+
+        // Auto Initialize
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
 </body>
 
 </html>
