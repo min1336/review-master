@@ -30,7 +30,6 @@ async def lifespan(app: FastAPI):
     print("=" * 60)
     print("\n로컬 접속:    http://localhost:8000")
     print("API 문서:     http://localhost:8000/docs")
-    print("API IP주소: http://")
     print("\nAPI 엔드포인트:")
     print("  GET  /api/v2/summaries      - 요약 목록")
     print("  GET  /api/tags              - 태그 목록")
@@ -79,8 +78,8 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 from api.v1.api import api_router
 from api.v1.endpoints.pages import router as pages_router
 
-# API 라우터 (환경별 prefix: 로컬=/api, 프로덕션=/review/api)
-app.include_router(api_router, prefix=settings.api_prefix)
+# API 라우터 (/api/*)
+app.include_router(api_router, prefix="/api")
 
 # 페이지 라우터 (/)
 app.include_router(pages_router)

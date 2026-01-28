@@ -886,12 +886,27 @@
 
         /* Toast Animation */
         @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
         }
+
         @keyframes slideOut {
-            from { transform: translateX(0); opacity: 1; }
-            to { transform: translateX(100%); opacity: 0; }
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
         }
     </style>
 </head>
@@ -980,8 +995,8 @@
                     <span class="filter-label">기간</span>
                     <input type="text" id="filter-date-range" class="date-range-input" placeholder="날짜 범위 선택..."
                         readonly>
-                    <button class="btn-clear-date" id="btn-clear-date" onclick="window.dashboardHandlers.clearDateFilter()"
-                        style="display: none;">초기화</button>
+                    <button class="btn-clear-date" id="btn-clear-date"
+                        onclick="window.dashboardHandlers.clearDateFilter()" style="display: none;">초기화</button>
                 </div>
 
                 <!-- Search (Right aligned) -->
@@ -1057,183 +1072,188 @@
 
     <!-- Dashboard JavaScript (Inlined - All modules merged) -->
     <script>
-    (function() {
-        'use strict';
+        (function () {
+            'use strict';
 
-        // ============================================================
-        // CONFIG (config.js)
-        // ============================================================
+            // ============================================================
+            // CONFIG (config.js)
+            // ============================================================
 
-        const CONFIG = Object.freeze({
-            EXTERNAL_URLS: {
-                CARMORE_REVIEW_BASE: 'https://dev-admin.carmore.kr/partners/Reviewmanage'
-            },
-            PAGINATION: {
-                DEFAULT_PAGE_SIZE: 500,
-                REVIEWS_PAGE_SIZE: 20
-            },
-            VALIDATION: {
-                REVIEW_ID_PATTERN: /^[a-zA-Z0-9_-]+$/
-            }
-        });
+            // API_PREFIX는 서버에서 Jinja2 템플릿으로 주입됨
+            // 로컬: /api, 프로덕션(Nginx): /review/api
+            const API_PREFIX = '{{ api_prefix }}';
 
-        const STATUS_CLASS_MAP = Object.freeze({
-            'draft': 'grey',
-            'published': 'success'
-        });
-
-        const STATUS_LABEL_MAP = Object.freeze({
-            'draft': '보류',
-            'published': '게시'
-        });
-
-        const DEFAULT_TAGS = Object.freeze([
-            '고객응대',
-            '차량상태',
-            '가성비',
-            '반납/픽업',
-            '위치/접근성',
-            '서비스',
-            '보험/보장'
-        ]);
-
-        const PERIOD_LABELS = Object.freeze({
-            'all': '전체',
-            '1y': '1년',
-            '6m': '6개월',
-            '3m': '3개월',
-            '1m': '1개월'
-        });
-
-        // ============================================================
-        // UTILS (utils.js)
-        // ============================================================
-
-        function isValidReviewId(reviewId) {
-            return reviewId !== null && reviewId !== undefined && reviewId !== '';
-        }
-
-        function formatDateForAPI(date) {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        }
-
-        function formatDate(dateStr) {
-            if (!dateStr) return '-';
-            try {
-                const d = new Date(dateStr);
-                return d.toLocaleDateString('ko-KR', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit'
-                });
-            } catch {
-                return dateStr;
-            }
-        }
-
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function buildCarmoreReviewUrl(reservationId) {
-            const today = new Date();
-            const threeMonthsAgo = new Date(today);
-            threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-
-            const endDate = formatDateForAPI(today);
-            const startDate = formatDateForAPI(threeMonthsAgo);
-
-            const params = new URLSearchParams({
-                sp: 'reservation_idx',
-                ratingthan: '0',
-                sv: reservationId,
-                ratingless: '5',
-                startdate: startDate,
-                enddate: endDate
+            const CONFIG = Object.freeze({
+                API_PREFIX: API_PREFIX,
+                EXTERNAL_URLS: {
+                    CARMORE_REVIEW_BASE: 'https://dev-admin.carmore.kr/partners/Reviewmanage'
+                },
+                PAGINATION: {
+                    DEFAULT_PAGE_SIZE: 500,
+                    REVIEWS_PAGE_SIZE: 20
+                },
+                VALIDATION: {
+                    REVIEW_ID_PATTERN: /^[a-zA-Z0-9_-]+$/
+                }
             });
 
-            return `${CONFIG.EXTERNAL_URLS.CARMORE_REVIEW_BASE}?${params.toString()}`;
-        }
+            const STATUS_CLASS_MAP = Object.freeze({
+                'draft': 'grey',
+                'published': 'success'
+            });
 
-        function getKeywordColor(str) {
-            if (!str) return '#e5e7eb';
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) {
-                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            const STATUS_LABEL_MAP = Object.freeze({
+                'draft': '보류',
+                'published': '게시'
+            });
+
+            const DEFAULT_TAGS = Object.freeze([
+                '고객응대',
+                '차량상태',
+                '가성비',
+                '반납/픽업',
+                '위치/접근성',
+                '서비스',
+                '보험/보장'
+            ]);
+
+            const PERIOD_LABELS = Object.freeze({
+                'all': '전체',
+                '1y': '1년',
+                '6m': '6개월',
+                '3m': '3개월',
+                '1m': '1개월'
+            });
+
+            // ============================================================
+            // UTILS (utils.js)
+            // ============================================================
+
+            function isValidReviewId(reviewId) {
+                return reviewId !== null && reviewId !== undefined && reviewId !== '';
             }
-            const h = Math.abs(hash) % 360;
-            return `hsl(${h}, 70%, 85%)`;
-        }
 
-        function getKeywordTextColor(str) {
-            if (!str) return '#374151';
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) {
-                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            function formatDateForAPI(date) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
             }
-            const h = Math.abs(hash) % 360;
-            return `hsl(${h}, 80%, 30%)`;
-        }
 
-        function getStarRating(rating) {
-            if (rating === undefined || rating === null) return '-';
-            const numRating = Number(rating);
-            if (isNaN(numRating)) return '-';
-
-            const fullStars = Math.floor(numRating);
-            const hasHalfStar = numRating % 1 >= 0.5;
-            let html = '<div class="rating" style="display:inline-flex; align-items:center;">';
-
-            for (let i = 0; i < 5; i++) {
-                if (i < fullStars) {
-                    html += '<span class="rating-star" style="color:#F59E0B;">★</span>';
-                } else if (i === fullStars && hasHalfStar) {
-                    html += '<span class="rating-star" style="background: linear-gradient(90deg, #F59E0B 50%, #DDDDDD 50%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">★</span>';
-                } else {
-                    html += '<span class="rating-star" style="color:#DDDDDD;">★</span>';
+            function formatDate(dateStr) {
+                if (!dateStr) return '-';
+                try {
+                    const d = new Date(dateStr);
+                    return d.toLocaleDateString('ko-KR', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit'
+                    });
+                } catch {
+                    return dateStr;
                 }
             }
-            html += `<span style="margin-left: 4px; color: var(--grey-4); font-weight: normal; font-size: 12px;">(${numRating.toFixed(1)})</span>`;
-            html += '</div>';
-            return html;
-        }
 
-        function getSentimentIcon(sentiment) {
-            switch (sentiment) {
-                case 'positive': return '😊';
-                case 'negative': return '😞';
-                case 'neutral': return '😐';
-                default: return '';
+            function escapeHtml(text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
             }
-        }
 
-        function debounce(fn, ms) {
-            let timer;
-            return function (...args) {
-                clearTimeout(timer);
-                timer = setTimeout(() => fn.apply(this, args), ms);
-            };
-        }
+            function buildCarmoreReviewUrl(reservationId) {
+                const today = new Date();
+                const threeMonthsAgo = new Date(today);
+                threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
-        function showToast(message, type = 'info', duration = 3000) {
-            const existingToast = document.querySelector('.toast-notification');
-            if (existingToast) existingToast.remove();
+                const endDate = formatDateForAPI(today);
+                const startDate = formatDateForAPI(threeMonthsAgo);
 
-            const bgColors = {
-                success: '#10b981',
-                error: '#ef4444',
-                info: '#3b82f6'
-            };
+                const params = new URLSearchParams({
+                    sp: 'reservation_idx',
+                    ratingthan: '0',
+                    sv: reservationId,
+                    ratingless: '5',
+                    startdate: startDate,
+                    enddate: endDate
+                });
 
-            const toast = document.createElement('div');
-            toast.className = 'toast-notification';
-            toast.style.cssText = `
+                return `${CONFIG.EXTERNAL_URLS.CARMORE_REVIEW_BASE}?${params.toString()}`;
+            }
+
+            function getKeywordColor(str) {
+                if (!str) return '#e5e7eb';
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) {
+                    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                }
+                const h = Math.abs(hash) % 360;
+                return `hsl(${h}, 70%, 85%)`;
+            }
+
+            function getKeywordTextColor(str) {
+                if (!str) return '#374151';
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) {
+                    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                }
+                const h = Math.abs(hash) % 360;
+                return `hsl(${h}, 80%, 30%)`;
+            }
+
+            function getStarRating(rating) {
+                if (rating === undefined || rating === null) return '-';
+                const numRating = Number(rating);
+                if (isNaN(numRating)) return '-';
+
+                const fullStars = Math.floor(numRating);
+                const hasHalfStar = numRating % 1 >= 0.5;
+                let html = '<div class="rating" style="display:inline-flex; align-items:center;">';
+
+                for (let i = 0; i < 5; i++) {
+                    if (i < fullStars) {
+                        html += '<span class="rating-star" style="color:#F59E0B;">★</span>';
+                    } else if (i === fullStars && hasHalfStar) {
+                        html += '<span class="rating-star" style="background: linear-gradient(90deg, #F59E0B 50%, #DDDDDD 50%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">★</span>';
+                    } else {
+                        html += '<span class="rating-star" style="color:#DDDDDD;">★</span>';
+                    }
+                }
+                html += `<span style="margin-left: 4px; color: var(--grey-4); font-weight: normal; font-size: 12px;">(${numRating.toFixed(1)})</span>`;
+                html += '</div>';
+                return html;
+            }
+
+            function getSentimentIcon(sentiment) {
+                switch (sentiment) {
+                    case 'positive': return '😊';
+                    case 'negative': return '😞';
+                    case 'neutral': return '😐';
+                    default: return '';
+                }
+            }
+
+            function debounce(fn, ms) {
+                let timer;
+                return function (...args) {
+                    clearTimeout(timer);
+                    timer = setTimeout(() => fn.apply(this, args), ms);
+                };
+            }
+
+            function showToast(message, type = 'info', duration = 3000) {
+                const existingToast = document.querySelector('.toast-notification');
+                if (existingToast) existingToast.remove();
+
+                const bgColors = {
+                    success: '#10b981',
+                    error: '#ef4444',
+                    info: '#3b82f6'
+                };
+
+                const toast = document.createElement('div');
+                toast.className = 'toast-notification';
+                toast.style.cssText = `
                 position: fixed;
                 bottom: 24px;
                 right: 24px;
@@ -1247,337 +1267,330 @@
                 font-size: 14px;
                 font-weight: 500;
             `;
-            toast.textContent = message;
-            document.body.appendChild(toast);
+                toast.textContent = message;
+                document.body.appendChild(toast);
 
-            setTimeout(() => {
-                toast.style.animation = 'slideOut 0.3s ease';
-                setTimeout(() => toast.remove(), 300);
-            }, duration);
-        }
-
-        // ============================================================
-        // STATE (state.js)
-        // ============================================================
-
-        const state = {
-            pagination: {
-                currentPage: 0,
-                pageSize: CONFIG.PAGINATION.DEFAULT_PAGE_SIZE
-            },
-            sort: {
-                field: 'review_count',
-                order: 'desc'
-            },
-            dateFilter: {
-                picker: null,
-                from: null,
-                to: null
-            },
-            editMode: {
-                isActive: false,
-                selectedTags: [],
-                originalTags: [],
-                currentPeriod: 'all'
-            },
-            reviews: {
-                currentPage: 0,
-                pageSize: CONFIG.PAGINATION.REVIEWS_PAGE_SIZE,
-                total: 0,
-                visible: false,
-                carModelsLoaded: false
-            },
-            summaries: [],
-            regionStats: []
-        };
-
-        // State getters
-        function getState() { return state; }
-        function getPagination() { return state.pagination; }
-        function getSort() { return state.sort; }
-        function getDateFilter() { return state.dateFilter; }
-        function getEditMode() { return state.editMode; }
-        function getReviews() { return state.reviews; }
-        function getSummaries() { return state.summaries; }
-
-        // State setters
-        function setCurrentPage(page) { state.pagination.currentPage = Math.max(0, page); }
-        function stateNextPage() { state.pagination.currentPage++; }
-        function statePrevPage() { if (state.pagination.currentPage > 0) state.pagination.currentPage--; }
-        function resetPage() { state.pagination.currentPage = 0; }
-
-        function setSort(field, order) {
-            if (state.sort.field === field && !order) {
-                state.sort.order = state.sort.order === 'asc' ? 'desc' : 'asc';
-            } else {
-                state.sort.field = field;
-                state.sort.order = order || (field === 'branch_name' ? 'asc' : 'desc');
+                setTimeout(() => {
+                    toast.style.animation = 'slideOut 0.3s ease';
+                    setTimeout(() => toast.remove(), 300);
+                }, duration);
             }
-        }
 
-        function setDateFilter(from, to) {
-            state.dateFilter.from = from;
-            state.dateFilter.to = to;
-        }
+            // ============================================================
+            // STATE (state.js)
+            // ============================================================
 
-        function stateClearDateFilter() {
-            state.dateFilter.from = null;
-            state.dateFilter.to = null;
-        }
+            const state = {
+                pagination: {
+                    currentPage: 0,
+                    pageSize: CONFIG.PAGINATION.DEFAULT_PAGE_SIZE
+                },
+                sort: {
+                    field: 'review_count',
+                    order: 'desc'
+                },
+                dateFilter: {
+                    picker: null,
+                    from: null,
+                    to: null
+                },
+                editMode: {
+                    isActive: false,
+                    selectedTags: [],
+                    originalTags: [],
+                    currentPeriod: 'all'
+                },
+                reviews: {
+                    currentPage: 0,
+                    pageSize: CONFIG.PAGINATION.REVIEWS_PAGE_SIZE,
+                    total: 0,
+                    visible: false,
+                    carModelsLoaded: false
+                },
+                summaries: [],
+                regionStats: []
+            };
 
-        function setDatePicker(picker) { state.dateFilter.picker = picker; }
+            // State getters
+            function getState() { return state; }
+            function getPagination() { return state.pagination; }
+            function getSort() { return state.sort; }
+            function getDateFilter() { return state.dateFilter; }
+            function getEditMode() { return state.editMode; }
+            function getReviews() { return state.reviews; }
+            function getSummaries() { return state.summaries; }
 
-        function enterEditModeState() {
-            state.editMode.isActive = true;
-            state.editMode.originalTags = [...state.editMode.selectedTags];
-        }
+            // State setters
+            function setCurrentPage(page) { state.pagination.currentPage = Math.max(0, page); }
+            function stateNextPage() { state.pagination.currentPage++; }
+            function statePrevPage() { if (state.pagination.currentPage > 0) state.pagination.currentPage--; }
+            function resetPage() { state.pagination.currentPage = 0; }
 
-        function exitEditModeState(restore = false) {
-            state.editMode.isActive = false;
-            if (restore) {
-                state.editMode.selectedTags = [...state.editMode.originalTags];
+            function setSort(field, order) {
+                if (state.sort.field === field && !order) {
+                    state.sort.order = state.sort.order === 'asc' ? 'desc' : 'asc';
+                } else {
+                    state.sort.field = field;
+                    state.sort.order = order || (field === 'branch_name' ? 'asc' : 'desc');
+                }
             }
-        }
 
-        function setSelectedTags(tags) { state.editMode.selectedTags = [...tags]; }
-        function stateToggleTag(tag) {
-            const idx = state.editMode.selectedTags.indexOf(tag);
-            if (idx > -1) {
-                state.editMode.selectedTags.splice(idx, 1);
-            } else {
+            function setDateFilter(from, to) {
+                state.dateFilter.from = from;
+                state.dateFilter.to = to;
+            }
+
+            function stateClearDateFilter() {
+                state.dateFilter.from = null;
+                state.dateFilter.to = null;
+            }
+
+            function setDatePicker(picker) { state.dateFilter.picker = picker; }
+
+            function enterEditModeState() {
+                state.editMode.isActive = true;
+                state.editMode.originalTags = [...state.editMode.selectedTags];
+            }
+
+            function exitEditModeState(restore = false) {
+                state.editMode.isActive = false;
+                if (restore) {
+                    state.editMode.selectedTags = [...state.editMode.originalTags];
+                }
+            }
+
+            function setSelectedTags(tags) { state.editMode.selectedTags = [...tags]; }
+            function stateToggleTag(tag) {
+                const idx = state.editMode.selectedTags.indexOf(tag);
+                if (idx > -1) {
+                    state.editMode.selectedTags.splice(idx, 1);
+                } else {
+                    state.editMode.selectedTags.push(tag);
+                }
+            }
+
+            function addTag(tag) {
+                if (state.editMode.selectedTags.includes(tag)) return false;
                 state.editMode.selectedTags.push(tag);
+                return true;
             }
-        }
 
-        function addTag(tag) {
-            if (state.editMode.selectedTags.includes(tag)) return false;
-            state.editMode.selectedTags.push(tag);
-            return true;
-        }
+            function removeTag(tag) {
+                const idx = state.editMode.selectedTags.indexOf(tag);
+                if (idx > -1) state.editMode.selectedTags.splice(idx, 1);
+            }
 
-        function removeTag(tag) {
-            const idx = state.editMode.selectedTags.indexOf(tag);
-            if (idx > -1) state.editMode.selectedTags.splice(idx, 1);
-        }
+            function setCurrentPeriod(period) { state.editMode.currentPeriod = period; }
+            function commitTags() { state.editMode.originalTags = [...state.editMode.selectedTags]; }
+            function setReviewsPage(page) { state.reviews.currentPage = Math.max(0, page); }
 
-        function setCurrentPeriod(period) { state.editMode.currentPeriod = period; }
-        function commitTags() { state.editMode.originalTags = [...state.editMode.selectedTags]; }
-        function setReviewsPage(page) { state.reviews.currentPage = Math.max(0, page); }
-
-        function resetReviews() {
-            state.reviews.currentPage = 0;
-            state.reviews.total = 0;
-            state.reviews.visible = false;
-            state.reviews.carModelsLoaded = false;
-        }
-
-        function toggleReviewsVisibility() {
-            state.reviews.visible = !state.reviews.visible;
-            if (state.reviews.visible) {
+            function resetReviews() {
                 state.reviews.currentPage = 0;
+                state.reviews.total = 0;
+                state.reviews.visible = false;
                 state.reviews.carModelsLoaded = false;
             }
-            return state.reviews.visible;
-        }
 
-        function setReviewsTotal(total) { state.reviews.total = total; }
-        function markCarModelsLoaded() { state.reviews.carModelsLoaded = true; }
-        function setSummaries(data) { state.summaries = data; }
-
-        function updateSummaryState(branchId, updates) {
-            const idx = state.summaries.findIndex(s => Number(s.branch_id) === Number(branchId));
-            if (idx > -1) {
-                state.summaries[idx] = { ...state.summaries[idx], ...updates };
-            }
-        }
-
-        function setRegionStats(data) { state.regionStats = data; }
-
-        // ============================================================
-        // API (api.js)
-        // ============================================================
-
-        // 환경별 API prefix (서버에서 주입)
-        const API_BASE = '{{ api_prefix }}';
-
-        async function apiRequest(url, options = {}) {
-            // /api로 시작하는 경로를 환경별 API_BASE로 대체
-            const fullUrl = url.startsWith('/api')
-                ? url.replace('/api', API_BASE)
-                : url;
-            const response = await fetch(fullUrl, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                },
-                ...options
-            });
-
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({}));
-                throw new Error(error.error || error.detail || `HTTP ${response.status}`);
+            function toggleReviewsVisibility() {
+                state.reviews.visible = !state.reviews.visible;
+                if (state.reviews.visible) {
+                    state.reviews.currentPage = 0;
+                    state.reviews.carModelsLoaded = false;
+                }
+                return state.reviews.visible;
             }
 
-            return response.json();
-        }
+            function setReviewsTotal(total) { state.reviews.total = total; }
+            function markCarModelsLoaded() { state.reviews.carModelsLoaded = true; }
+            function setSummaries(data) { state.summaries = data; }
 
-        async function fetchStats() {
-            return apiRequest('/api/v2/stats');
-        }
-
-        async function fetchRegionStats() {
-            return apiRequest('/api/v2/stats/region');
-        }
-
-        function buildSummariesParams(filters = {}) {
-            const params = new URLSearchParams({
-                limit: state.pagination.pageSize,
-                offset: state.pagination.currentPage * state.pagination.pageSize,
-                sort_by: state.sort.field,
-                order: state.sort.order,
-                min_reviews: 0
-            });
-
-            if (filters.keyword) params.set('keyword', filters.keyword);
-            if (filters.region) params.set('region', filters.region);
-            if (filters.status) params.set('status', filters.status);
-            if (state.dateFilter.from) params.set('review_date_from', state.dateFilter.from);
-            if (state.dateFilter.to) params.set('review_date_to', state.dateFilter.to);
-
-            return params;
-        }
-
-        async function fetchSummaries(filters = {}) {
-            const params = buildSummariesParams(filters);
-            return apiRequest(`/api/v2/summaries?${params}`);
-        }
-
-        async function fetchSummaryDetail(branchId) {
-            return apiRequest(`/api/v2/summaries/${branchId}`);
-        }
-
-        async function apiUpdateSummary(branchId, data) {
-            return apiRequest(`/api/v2/summaries/${branchId}`, {
-                method: 'PUT',
-                body: JSON.stringify(data)
-            });
-        }
-
-        async function apiUpdateStatus(branchId, status) {
-            return apiRequest(`/api/v2/summaries/${branchId}/status`, {
-                method: 'PUT',
-                body: JSON.stringify({ status })
-            });
-        }
-
-        async function apiRegenerateSummary(branchId, period = 'all') {
-            return apiRequest(`/api/v2/summaries/${branchId}/regenerate`, {
-                method: 'POST',
-                body: JSON.stringify({ period })
-            });
-        }
-
-        async function apiApplyPendingSummary(branchId, period) {
-            return apiRequest(`/api/v2/summaries/${branchId}/apply-pending`, {
-                method: 'POST',
-                body: JSON.stringify({ period })
-            });
-        }
-
-        async function apiDiscardPendingSummary(branchId, period) {
-            return apiRequest(`/api/v2/summaries/${branchId}/discard-pending`, {
-                method: 'POST',
-                body: JSON.stringify({ period })
-            });
-        }
-
-        async function fetchBranchReviews(branchId, options = {}) {
-            const params = new URLSearchParams({
-                limit: options.limit || 20,
-                offset: options.offset || 0
-            });
-
-            if (options.carModel) params.set('car_model', options.carModel);
-            if (options.sentiment) params.set('sentiment', options.sentiment);
-            if (state.dateFilter.from) params.set('review_date_from', state.dateFilter.from);
-            if (state.dateFilter.to) params.set('review_date_to', state.dateFilter.to);
-
-            return apiRequest(`/api/v2/summaries/${branchId}/reviews?${params}`);
-        }
-
-        async function fetchBranchTagsBatch(branchIds) {
-            if (!branchIds || branchIds.length === 0) return {};
-            return apiRequest('/api/tags/batch', {
-                method: 'POST',
-                body: JSON.stringify({ branch_ids: branchIds })
-            });
-        }
-
-        async function apiSyncAffiliates() {
-            return apiRequest('/api/carmore/sync/affiliates', {
-                method: 'POST'
-            });
-        }
-
-        // ============================================================
-        // UI (ui.js)
-        // ============================================================
-
-        const elements = {};
-
-        function getElement(id) {
-            const el = document.getElementById(id);
-            if (el) {
-                elements[id] = el;
+            function updateSummaryState(branchId, updates) {
+                const idx = state.summaries.findIndex(s => Number(s.branch_id) === Number(branchId));
+                if (idx > -1) {
+                    state.summaries[idx] = { ...state.summaries[idx], ...updates };
+                }
             }
-            return el || elements[id];
-        }
 
-        function renderStats(stats) {
-            const statTotal = getElement('stat-total');
-            const statReviews = getElement('stat-reviews');
-            const statPublished = getElement('stat-published');
-            const statusStats = getElement('status-stats');
+            function setRegionStats(data) { state.regionStats = data; }
 
-            if (statTotal) statTotal.textContent = stats.total?.toLocaleString() || '0';
-            if (statReviews) statReviews.textContent = stats.total_reviews?.toLocaleString() || '0';
-            if (statPublished) statPublished.textContent = stats.published?.toLocaleString() || '0';
+            // ============================================================
+            // API (api.js)
+            // ============================================================
 
-            if (statusStats) {
-                const total = stats.total || 1;
-                const draftPct = Math.round((stats.draft || 0) / total * 100);
-                const publishedPct = Math.round((stats.published || 0) / total * 100);
+            async function apiRequest(url, options = {}) {
+                const response = await fetch(url, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    },
+                    ...options
+                });
 
-                statusStats.innerHTML = renderStatusBars({
-                    draft: { count: stats.draft || 0, pct: draftPct },
-                    published: { count: stats.published || 0, pct: publishedPct }
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.error || error.detail || `HTTP ${response.status}`);
+                }
+
+                return response.json();
+            }
+
+            async function fetchStats() {
+                return apiRequest(`${API_PREFIX}/v2/stats`);
+            }
+
+            async function fetchRegionStats() {
+                return apiRequest(`${API_PREFIX}/v2/stats/region`);
+            }
+
+            function buildSummariesParams(filters = {}) {
+                const params = new URLSearchParams({
+                    limit: state.pagination.pageSize,
+                    offset: state.pagination.currentPage * state.pagination.pageSize,
+                    sort_by: state.sort.field,
+                    order: state.sort.order,
+                    min_reviews: 0
+                });
+
+                if (filters.keyword) params.set('keyword', filters.keyword);
+                if (filters.region) params.set('region', filters.region);
+                if (filters.status) params.set('status', filters.status);
+                if (state.dateFilter.from) params.set('review_date_from', state.dateFilter.from);
+                if (state.dateFilter.to) params.set('review_date_to', state.dateFilter.to);
+
+                return params;
+            }
+
+            async function fetchSummaries(filters = {}) {
+                const params = buildSummariesParams(filters);
+                return apiRequest(`${API_PREFIX}/v2/summaries?${params}`);
+            }
+
+            async function fetchSummaryDetail(branchId) {
+                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}`);
+            }
+
+            async function apiUpdateSummary(branchId, data) {
+                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(data)
                 });
             }
-        }
 
-        function renderStatusBars(data) {
-            return `
+            async function apiUpdateStatus(branchId, status) {
+                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/status`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ status })
+                });
+            }
+
+            async function apiRegenerateSummary(branchId, period = 'all') {
+                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/regenerate`, {
+                    method: 'POST',
+                    body: JSON.stringify({ period })
+                });
+            }
+
+            async function apiApplyPendingSummary(branchId, period) {
+                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/apply-pending`, {
+                    method: 'POST',
+                    body: JSON.stringify({ period })
+                });
+            }
+
+            async function apiDiscardPendingSummary(branchId, period) {
+                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/discard-pending`, {
+                    method: 'POST',
+                    body: JSON.stringify({ period })
+                });
+            }
+
+            async function fetchBranchReviews(branchId, options = {}) {
+                const params = new URLSearchParams({
+                    limit: options.limit || 20,
+                    offset: options.offset || 0
+                });
+
+                if (options.carModel) params.set('car_model', options.carModel);
+                if (options.sentiment) params.set('sentiment', options.sentiment);
+                if (state.dateFilter.from) params.set('review_date_from', state.dateFilter.from);
+                if (state.dateFilter.to) params.set('review_date_to', state.dateFilter.to);
+
+                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/reviews?${params}`);
+            }
+
+            async function fetchBranchTagsBatch(branchIds) {
+                if (!branchIds || branchIds.length === 0) return {};
+                return apiRequest(`${API_PREFIX}/tags/batch`, {
+                    method: 'POST',
+                    body: JSON.stringify({ branch_ids: branchIds })
+                });
+            }
+
+            async function apiSyncAffiliates() {
+                return apiRequest(`${API_PREFIX}/carmore/sync/affiliates`, {
+                    method: 'POST'
+                });
+            }
+
+            // ============================================================
+            // UI (ui.js)
+            // ============================================================
+
+            const elements = {};
+
+            function getElement(id) {
+                const el = document.getElementById(id);
+                if (el) {
+                    elements[id] = el;
+                }
+                return el || elements[id];
+            }
+
+            function renderStats(stats) {
+                const statTotal = getElement('stat-total');
+                const statReviews = getElement('stat-reviews');
+                const statPublished = getElement('stat-published');
+                const statusStats = getElement('status-stats');
+
+                if (statTotal) statTotal.textContent = stats.total?.toLocaleString() || '0';
+                if (statReviews) statReviews.textContent = stats.total_reviews?.toLocaleString() || '0';
+                if (statPublished) statPublished.textContent = stats.published?.toLocaleString() || '0';
+
+                if (statusStats) {
+                    const total = stats.total || 1;
+                    const draftPct = Math.round((stats.draft || 0) / total * 100);
+                    const publishedPct = Math.round((stats.published || 0) / total * 100);
+
+                    statusStats.innerHTML = renderStatusBars({
+                        draft: { count: stats.draft || 0, pct: draftPct },
+                        published: { count: stats.published || 0, pct: publishedPct }
+                    });
+                }
+            }
+
+            function renderStatusBars(data) {
+                return `
                 <div style="display: flex; flex-direction: column; gap: 20px; padding: 8px 0;">
                     ${renderStatusBar('Draft', data.draft, '#999', '#666', '#f0f0f0')}
                     ${renderStatusBar('Published', data.published, '#10b981', '#059669', '#d1fae5')}
                 </div>
             `;
-        }
+            }
 
-        function renderStatusBar(label, data, colorStart, colorEnd, bgColor) {
-            const icons = {
-                'Draft': `<svg width="16" height="16" fill="none" stroke="${colorStart}" stroke-width="2" viewBox="0 0 24 24">
+            function renderStatusBar(label, data, colorStart, colorEnd, bgColor) {
+                const icons = {
+                    'Draft': `<svg width="16" height="16" fill="none" stroke="${colorStart}" stroke-width="2" viewBox="0 0 24 24">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
                 </svg>`,
-                'Published': `<svg width="16" height="16" fill="none" stroke="${colorStart}" stroke-width="2" viewBox="0 0 24 24">
+                    'Published': `<svg width="16" height="16" fill="none" stroke="${colorStart}" stroke-width="2" viewBox="0 0 24 24">
                     <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>`
-            };
+                };
 
-            const badgeClass = label === 'Draft' ? 'badge-grey' : 'badge-success';
+                const badgeClass = label === 'Draft' ? 'badge-grey' : 'badge-success';
 
-            return `
+                return `
                 <div>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <div style="display: flex; align-items: center; gap: 8px;">
@@ -1591,41 +1604,41 @@
                     </div>
                 </div>
             `;
-        }
-
-        function renderTable(data, onDetailClick) {
-            const tableEl = getElement('summaries-table');
-            const paginationInfo = getElement('pagination-info');
-
-            if (!tableEl) return;
-
-            if (!data || data.length === 0) {
-                tableEl.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--grey-5);">데이터 없음</td></tr>';
-                if (paginationInfo) paginationInfo.textContent = '0개 지점';
-                return;
             }
 
-            const html = data.map(row => renderTableRow(row, onDetailClick)).join('');
-            tableEl.innerHTML = html;
+            function renderTable(data, onDetailClick) {
+                const tableEl = getElement('summaries-table');
+                const paginationInfo = getElement('pagination-info');
 
-            if (paginationInfo) {
-                const start = state.pagination.currentPage * state.pagination.pageSize + 1;
-                const end = start + data.length - 1;
-                paginationInfo.textContent = `${start}-${end}개 표시`;
+                if (!tableEl) return;
+
+                if (!data || data.length === 0) {
+                    tableEl.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--grey-5);">데이터 없음</td></tr>';
+                    if (paginationInfo) paginationInfo.textContent = '0개 지점';
+                    return;
+                }
+
+                const html = data.map(row => renderTableRow(row, onDetailClick)).join('');
+                tableEl.innerHTML = html;
+
+                if (paginationInfo) {
+                    const start = state.pagination.currentPage * state.pagination.pageSize + 1;
+                    const end = start + data.length - 1;
+                    paginationInfo.textContent = `${start}-${end}개 표시`;
+                }
             }
-        }
 
-        function renderTableRow(row, onDetailClick) {
-            const summaryPreview = row.summary_all
-                ? (row.summary_all.length > 60 ? row.summary_all.substring(0, 60) + '...' : row.summary_all)
-                : '<span style="color: var(--grey-5); font-style: italic;">요약 없음</span>';
+            function renderTableRow(row, onDetailClick) {
+                const summaryPreview = row.summary_all
+                    ? (row.summary_all.length > 60 ? row.summary_all.substring(0, 60) + '...' : row.summary_all)
+                    : '<span style="color: var(--grey-5); font-style: italic;">요약 없음</span>';
 
-            const tags = row.top_tags || [];
-            const tagsHtml = tags.length > 0
-                ? tags.map(t => `<span class="keyword" style="background: ${getKeywordColor(t.name)}; color: ${getKeywordTextColor(t.name)};">${t.name}</span>`).join('')
-                : '<span style="color: var(--grey-5); font-style: italic;">-</span>';
+                const tags = row.top_tags || [];
+                const tagsHtml = tags.length > 0
+                    ? tags.map(t => `<span class="keyword" style="background: ${getKeywordColor(t.name)}; color: ${getKeywordTextColor(t.name)};">${t.name}</span>`).join('')
+                    : '<span style="color: var(--grey-5); font-style: italic;">-</span>';
 
-            return `
+                return `
                 <tr style="vertical-align: middle;">
                     <td>
                         <div style="font-weight: 600; margin-bottom: 4px;">${row.branch_name || '-'}</div>
@@ -1648,33 +1661,33 @@
                     </td>
                 </tr>
             `;
-        }
-
-        function updateSortUI() {
-            document.querySelectorAll('.sort-icon').forEach(el => el.textContent = '');
-            const iconEl = getElement(`sort-icon-${state.sort.field}`);
-            if (iconEl) {
-                iconEl.textContent = state.sort.order === 'asc' ? ' ↑' : ' ↓';
-                iconEl.style.color = 'var(--primary)';
             }
-        }
 
-        function createReviewLinkHtml(reviewId) {
-            if (!isValidReviewId(reviewId)) return '';
-            const encodedId = encodeURIComponent(String(reviewId));
-            const escapedId = escapeHtml(String(reviewId));
-            const reviewUrl = buildCarmoreReviewUrl(encodedId);
-            return `<a href="${reviewUrl}" target="_blank" rel="noopener noreferrer" class="review-link" title="Carmore 관리자에서 리뷰 보기">#${escapedId}</a>`;
-        }
+            function updateSortUI() {
+                document.querySelectorAll('.sort-icon').forEach(el => el.textContent = '');
+                const iconEl = getElement(`sort-icon-${state.sort.field}`);
+                if (iconEl) {
+                    iconEl.textContent = state.sort.order === 'asc' ? ' ↑' : ' ↓';
+                    iconEl.style.color = 'var(--primary)';
+                }
+            }
 
-        function renderReviewItem(reviewData, index, pageOffset) {
-            const reviewLink = createReviewLinkHtml(reviewData.review_id) || `<span>#${pageOffset + index + 1}</span>`;
-            const sentimentIcon = reviewData.sentiment ? getSentimentIcon(reviewData.sentiment) : '';
-            const escapedContent = escapeHtml(reviewData.content || '-');
-            const formattedDate = formatDate(reviewData.review_date);
-            const footerHtml = renderReviewFooter(reviewData);
+            function createReviewLinkHtml(reviewId) {
+                if (!isValidReviewId(reviewId)) return '';
+                const encodedId = encodeURIComponent(String(reviewId));
+                const escapedId = escapeHtml(String(reviewId));
+                const reviewUrl = buildCarmoreReviewUrl(encodedId);
+                return `<a href="${reviewUrl}" target="_blank" rel="noopener noreferrer" class="review-link" title="Carmore 관리자에서 리뷰 보기">#${escapedId}</a>`;
+            }
 
-            return `
+            function renderReviewItem(reviewData, index, pageOffset) {
+                const reviewLink = createReviewLinkHtml(reviewData.review_id) || `<span>#${pageOffset + index + 1}</span>`;
+                const sentimentIcon = reviewData.sentiment ? getSentimentIcon(reviewData.sentiment) : '';
+                const escapedContent = escapeHtml(reviewData.content || '-');
+                const formattedDate = formatDate(reviewData.review_date);
+                const footerHtml = renderReviewFooter(reviewData);
+
+                return `
                 <div class="review-item">
                     <div class="review-item__header">
                         <span class="review-item__meta">
@@ -1687,409 +1700,409 @@
                     ${footerHtml}
                 </div>
             `;
-        }
-
-        function renderReviewFooter(reviewData) {
-            const metaParts = [];
-            if (reviewData.rating_service) metaParts.push(`친절: ${reviewData.rating_service}`);
-            if (reviewData.rating_car) metaParts.push(`차량: ${reviewData.rating_car}`);
-            if (reviewData.car_model) metaParts.push(escapeHtml(reviewData.car_model));
-            if (metaParts.length === 0) return '';
-            return `<div class="review-item__footer">${metaParts.join(' | ')}</div>`;
-        }
-
-        function renderReviewsList(reviews, offset) {
-            const listEl = getElement('reviews-list');
-            if (!listEl) return;
-
-            if (reviews.length === 0) {
-                listEl.innerHTML = '<div class="review-item" style="text-align: center;">리뷰가 없습니다.</div>';
-            } else {
-                listEl.innerHTML = reviews.map((r, idx) => renderReviewItem(r, idx, offset)).join('');
             }
-        }
 
-        function updateReviewsPagination(currentPage, totalPages) {
-            const pageInfo = getElement('reviews-page-info');
-            const prevBtn = getElement('reviews-prev-btn');
-            const nextBtn = getElement('reviews-next-btn');
-
-            if (pageInfo) pageInfo.textContent = `${currentPage + 1} / ${totalPages || 1}`;
-            if (prevBtn) prevBtn.disabled = currentPage === 0;
-            if (nextBtn) nextBtn.disabled = (currentPage + 1) >= totalPages;
-        }
-
-        function updateReviewsCount(total) {
-            const countEl = getElement('reviews-count');
-            if (countEl) countEl.textContent = `(총 ${total.toLocaleString()}건)`;
-        }
-
-        function updateCarModelDropdown(carModels) {
-            const carSelect = getElement('filter-car-model');
-            if (carSelect && carModels.length > 0) {
-                carSelect.innerHTML = '<option value="">🚗 전체 차량</option>' +
-                    carModels.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+            function renderReviewFooter(reviewData) {
+                const metaParts = [];
+                if (reviewData.rating_service) metaParts.push(`친절: ${reviewData.rating_service}`);
+                if (reviewData.rating_car) metaParts.push(`차량: ${reviewData.rating_car}`);
+                if (reviewData.car_model) metaParts.push(escapeHtml(reviewData.car_model));
+                if (metaParts.length === 0) return '';
+                return `<div class="review-item__footer">${metaParts.join(' | ')}</div>`;
             }
-        }
 
-        function renderTagsDisplay(tags) {
-            const display = getElement('tags-display');
-            if (!display) return;
+            function renderReviewsList(reviews, offset) {
+                const listEl = getElement('reviews-list');
+                if (!listEl) return;
 
-            if (tags.length > 0) {
-                display.innerHTML = tags.map(t =>
-                    `<span class="keyword" style="background: ${getKeywordColor(t)}; color: ${getKeywordTextColor(t)};">${t}</span>`
-                ).join('');
-            } else {
-                display.innerHTML = '<span class="summary-empty">태그 없음</span>';
+                if (reviews.length === 0) {
+                    listEl.innerHTML = '<div class="review-item" style="text-align: center;">리뷰가 없습니다.</div>';
+                } else {
+                    listEl.innerHTML = reviews.map((r, idx) => renderReviewItem(r, idx, offset)).join('');
+                }
             }
-        }
 
-        function renderTagSelector(selectedTags, onToggle, onRemove) {
-            const selector = getElement('tag-selector');
-            if (!selector) return;
+            function updateReviewsPagination(currentPage, totalPages) {
+                const pageInfo = getElement('reviews-page-info');
+                const prevBtn = getElement('reviews-prev-btn');
+                const nextBtn = getElement('reviews-next-btn');
 
-            const allTags = [...new Set([...DEFAULT_TAGS, ...selectedTags])];
+                if (pageInfo) pageInfo.textContent = `${currentPage + 1} / ${totalPages || 1}`;
+                if (prevBtn) prevBtn.disabled = currentPage === 0;
+                if (nextBtn) nextBtn.disabled = (currentPage + 1) >= totalPages;
+            }
 
-            selector.innerHTML = allTags.map(tag => {
-                const isSelected = selectedTags.includes(tag);
-                const isCustom = !DEFAULT_TAGS.includes(tag);
-                const bg = isSelected ? getKeywordColor(tag) : 'var(--grey-8)';
-                const color = isSelected ? getKeywordTextColor(tag) : 'var(--grey-3)';
-                const border = isSelected ? '2px solid var(--primary)' : '2px solid transparent';
-                const deleteBtn = isCustom
-                    ? `<span onclick="event.stopPropagation(); window.dashboardHandlers.removeCustomTag('${tag}')" style="margin-left: 4px; font-size: 10px;">✕</span>`
-                    : '';
+            function updateReviewsCount(total) {
+                const countEl = getElement('reviews-count');
+                if (countEl) countEl.textContent = `(총 ${total.toLocaleString()}건)`;
+            }
 
-                return `<span class="keyword" onclick="window.dashboardHandlers.toggleTag('${tag}')"
+            function updateCarModelDropdown(carModels) {
+                const carSelect = getElement('filter-car-model');
+                if (carSelect && carModels.length > 0) {
+                    carSelect.innerHTML = '<option value="">🚗 전체 차량</option>' +
+                        carModels.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+                }
+            }
+
+            function renderTagsDisplay(tags) {
+                const display = getElement('tags-display');
+                if (!display) return;
+
+                if (tags.length > 0) {
+                    display.innerHTML = tags.map(t =>
+                        `<span class="keyword" style="background: ${getKeywordColor(t)}; color: ${getKeywordTextColor(t)};">${t}</span>`
+                    ).join('');
+                } else {
+                    display.innerHTML = '<span class="summary-empty">태그 없음</span>';
+                }
+            }
+
+            function renderTagSelector(selectedTags, onToggle, onRemove) {
+                const selector = getElement('tag-selector');
+                if (!selector) return;
+
+                const allTags = [...new Set([...DEFAULT_TAGS, ...selectedTags])];
+
+                selector.innerHTML = allTags.map(tag => {
+                    const isSelected = selectedTags.includes(tag);
+                    const isCustom = !DEFAULT_TAGS.includes(tag);
+                    const bg = isSelected ? getKeywordColor(tag) : 'var(--grey-8)';
+                    const color = isSelected ? getKeywordTextColor(tag) : 'var(--grey-3)';
+                    const border = isSelected ? '2px solid var(--primary)' : '2px solid transparent';
+                    const deleteBtn = isCustom
+                        ? `<span onclick="event.stopPropagation(); window.dashboardHandlers.removeCustomTag('${tag}')" style="margin-left: 4px; font-size: 10px;">✕</span>`
+                        : '';
+
+                    return `<span class="keyword" onclick="window.dashboardHandlers.toggleTag('${tag}')"
                     style="background: ${bg}; color: ${color}; border: ${border}; cursor: pointer; user-select: none;"
                     data-tag="${tag}">${tag}${deleteBtn}</span>`;
-            }).join('');
-        }
-
-        function openModal() {
-            const modal = getElement('detail-modal');
-            if (modal) modal.classList.add('active');
-        }
-
-        function uiCloseModal() {
-            const modal = getElement('detail-modal');
-            if (modal) modal.classList.remove('active');
-        }
-
-        function showModalLoading() {
-            const body = getElement('modal-body');
-            if (body) body.innerHTML = '<div class="loading"><div class="spinner"></div>로딩 중...</div>';
-        }
-
-        function showModalError(message = '로드 실패') {
-            const body = getElement('modal-body');
-            if (body) body.innerHTML = `<div style="color: var(--error);">${escapeHtml(message)}</div>`;
-        }
-
-        function setModalTitle(title) {
-            const titleEl = getElement('modal-title');
-            if (titleEl) titleEl.textContent = title;
-        }
-
-        function toggleEditModeUI(isEditMode) {
-            const viewButtons = getElement('view-mode-buttons');
-            const editButtons = getElement('edit-mode-buttons');
-            const regionDisplay = getElement('region-display');
-            const regionInput = getElement('region-input');
-            const tagsDisplay = getElement('tags-display');
-            const editAreaTags = getElement('edit-area-tags');
-
-            if (viewButtons) viewButtons.style.display = isEditMode ? 'none' : 'flex';
-            if (editButtons) editButtons.style.display = isEditMode ? 'flex' : 'none';
-            if (regionDisplay) regionDisplay.style.display = isEditMode ? 'none' : 'block';
-            if (regionInput) regionInput.style.display = isEditMode ? 'block' : 'none';
-            if (tagsDisplay) tagsDisplay.style.display = isEditMode ? 'none' : 'flex';
-            if (editAreaTags) editAreaTags.style.display = isEditMode ? 'block' : 'none';
-
-            ['all', '1y', '6m', '3m', '1m'].forEach(period => {
-                const textEl = getElement(`summary-text-${period}`);
-                const editEl = getElement(`edit-summary-${period}`);
-                if (textEl) textEl.style.display = isEditMode ? 'none' : 'block';
-                if (editEl) editEl.style.display = isEditMode ? 'block' : 'none';
-            });
-        }
-
-        function uiShowSummaryTab(tabEl, period) {
-            document.querySelectorAll('.tabs .tab').forEach(t => {
-                t.classList.remove('active');
-                t.style.background = 'var(--grey-8)';
-                t.style.color = 'var(--grey-3)';
-            });
-
-            if (tabEl) {
-                tabEl.classList.add('active');
-                tabEl.style.background = 'var(--grey-2)';
-                tabEl.style.color = 'white';
+                }).join('');
             }
 
-            document.querySelectorAll('.summary-panel').forEach(p => p.style.display = 'none');
-            const panel = getElement(`panel-${period}`);
-            if (panel) panel.style.display = 'block';
-        }
-
-        function showReviewsLoading() {
-            const listEl = getElement('reviews-list');
-            if (listEl) listEl.innerHTML = '<div class="loading"><div class="spinner"></div>로딩 중...</div>';
-        }
-
-        function showTableMessage(message, isError = false) {
-            const tableEl = getElement('summaries-table');
-            if (tableEl) {
-                const style = isError ? 'color: var(--error);' : 'color: var(--grey-5);';
-                tableEl.innerHTML = `<tr><td colspan="7" style="text-align:center; ${style}">${escapeHtml(message)}</td></tr>`;
-            }
-        }
-
-        // ============================================================
-        // INDEX / MAIN CONTROLLER (index.js)
-        // ============================================================
-
-        function init() {
-            bindEvents();
-            initDateRangePicker();
-
-            loadStats();
-            loadRegionStatsData();
-            loadSummaries();
-
-            registerGlobalHandlers();
-
-            console.log('✅ Dashboard initialized (inlined v2.0)');
-        }
-
-        function registerGlobalHandlers() {
-            window.dashboardHandlers = {
-                showDetail,
-                handleSort,
-                prevPage,
-                nextPage,
-                toggleReviews,
-                loadMoreReviews,
-                applyFilters,
-                enterEditMode,
-                cancelEditMode,
-                saveAllChanges,
-                updateStatus,
-                showSummaryTab,
-                regenerateSummary,
-                applyPendingSummary,
-                discardPendingSummary,
-                toggleTag,
-                addCustomTag,
-                removeCustomTag,
-                closeModal,
-                clearDateFilter,
-                syncAffiliates
-            };
-
-            // Also expose to global for onclick in header
-            window.syncAffiliates = syncAffiliates;
-            window.handleSort = handleSort;
-            window.prevPage = prevPage;
-            window.nextPage = nextPage;
-        }
-
-        function bindEvents() {
-            const searchInput = getElement('search-input');
-            const filterRegion = getElement('filter-region');
-            const filterStatus = getElement('filter-status');
-            const modal = getElement('detail-modal');
-
-            if (searchInput) {
-                searchInput.addEventListener('input', debounce(() => {
-                    resetPage();
-                    loadSummaries();
-                }, 300));
+            function openModal() {
+                const modal = getElement('detail-modal');
+                if (modal) modal.classList.add('active');
             }
 
-            if (filterRegion) {
-                filterRegion.addEventListener('change', () => {
-                    resetPage();
-                    loadSummaries();
+            function uiCloseModal() {
+                const modal = getElement('detail-modal');
+                if (modal) modal.classList.remove('active');
+            }
+
+            function showModalLoading() {
+                const body = getElement('modal-body');
+                if (body) body.innerHTML = '<div class="loading"><div class="spinner"></div>로딩 중...</div>';
+            }
+
+            function showModalError(message = '로드 실패') {
+                const body = getElement('modal-body');
+                if (body) body.innerHTML = `<div style="color: var(--error);">${escapeHtml(message)}</div>`;
+            }
+
+            function setModalTitle(title) {
+                const titleEl = getElement('modal-title');
+                if (titleEl) titleEl.textContent = title;
+            }
+
+            function toggleEditModeUI(isEditMode) {
+                const viewButtons = getElement('view-mode-buttons');
+                const editButtons = getElement('edit-mode-buttons');
+                const regionDisplay = getElement('region-display');
+                const regionInput = getElement('region-input');
+                const tagsDisplay = getElement('tags-display');
+                const editAreaTags = getElement('edit-area-tags');
+
+                if (viewButtons) viewButtons.style.display = isEditMode ? 'none' : 'flex';
+                if (editButtons) editButtons.style.display = isEditMode ? 'flex' : 'none';
+                if (regionDisplay) regionDisplay.style.display = isEditMode ? 'none' : 'block';
+                if (regionInput) regionInput.style.display = isEditMode ? 'block' : 'none';
+                if (tagsDisplay) tagsDisplay.style.display = isEditMode ? 'none' : 'flex';
+                if (editAreaTags) editAreaTags.style.display = isEditMode ? 'block' : 'none';
+
+                ['all', '1y', '6m', '3m', '1m'].forEach(period => {
+                    const textEl = getElement(`summary-text-${period}`);
+                    const editEl = getElement(`edit-summary-${period}`);
+                    if (textEl) textEl.style.display = isEditMode ? 'none' : 'block';
+                    if (editEl) editEl.style.display = isEditMode ? 'block' : 'none';
                 });
             }
 
-            if (filterStatus) {
-                filterStatus.addEventListener('change', () => {
-                    resetPage();
-                    loadSummaries();
+            function uiShowSummaryTab(tabEl, period) {
+                document.querySelectorAll('.tabs .tab').forEach(t => {
+                    t.classList.remove('active');
+                    t.style.background = 'var(--grey-8)';
+                    t.style.color = 'var(--grey-3)';
                 });
-            }
 
-            if (modal) {
-                modal.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('modal-overlay')) {
-                        closeModal();
-                    }
-                });
-            }
-        }
-
-        function initDateRangePicker() {
-            const picker = flatpickr('#filter-date-range', {
-                mode: 'range',
-                locale: 'ko',
-                dateFormat: 'Y-m-d',
-                maxDate: 'today',
-                onChange: function (selectedDates) {
-                    if (selectedDates.length === 2) {
-                        setDateFilter(
-                            formatDateForAPI(selectedDates[0]),
-                            formatDateForAPI(selectedDates[1])
-                        );
-                        getElement('btn-clear-date').style.display = 'inline-block';
-                        resetPage();
-                        loadSummaries();
-                    }
-                },
-                onClose: function (selectedDates) {
-                    if (selectedDates.length === 1) {
-                        const dateStr = formatDateForAPI(selectedDates[0]);
-                        setDateFilter(dateStr, dateStr);
-                        getElement('btn-clear-date').style.display = 'inline-block';
-                        resetPage();
-                        loadSummaries();
-                    }
+                if (tabEl) {
+                    tabEl.classList.add('active');
+                    tabEl.style.background = 'var(--grey-2)';
+                    tabEl.style.color = 'white';
                 }
-            });
 
-            setDatePicker(picker);
-        }
-
-        async function loadStats() {
-            try {
-                const stats = await fetchStats();
-                renderStats(stats);
-            } catch (e) {
-                console.error('Stats load error:', e);
+                document.querySelectorAll('.summary-panel').forEach(p => p.style.display = 'none');
+                const panel = getElement(`panel-${period}`);
+                if (panel) panel.style.display = 'block';
             }
-        }
 
-        async function loadRegionStatsData() {
-            try {
-                const data = await fetchRegionStats();
-                setRegionStats(data);
+            function showReviewsLoading() {
+                const listEl = getElement('reviews-list');
+                if (listEl) listEl.innerHTML = '<div class="loading"><div class="spinner"></div>로딩 중...</div>';
+            }
 
-                const select = getElement('filter-region');
-                if (select) {
-                    data.forEach(r => {
-                        if (r.region && r.region !== '미분류') {
-                            const opt = document.createElement('option');
-                            opt.value = r.region;
-                            opt.textContent = `${r.region} (${r.count})`;
-                            select.appendChild(opt);
-                        }
+            function showTableMessage(message, isError = false) {
+                const tableEl = getElement('summaries-table');
+                if (tableEl) {
+                    const style = isError ? 'color: var(--error);' : 'color: var(--grey-5);';
+                    tableEl.innerHTML = `<tr><td colspan="7" style="text-align:center; ${style}">${escapeHtml(message)}</td></tr>`;
+                }
+            }
+
+            // ============================================================
+            // INDEX / MAIN CONTROLLER (index.js)
+            // ============================================================
+
+            function init() {
+                bindEvents();
+                initDateRangePicker();
+
+                loadStats();
+                loadRegionStatsData();
+                loadSummaries();
+
+                registerGlobalHandlers();
+
+                console.log('✅ Dashboard initialized (inlined v2.0)');
+            }
+
+            function registerGlobalHandlers() {
+                window.dashboardHandlers = {
+                    showDetail,
+                    handleSort,
+                    prevPage,
+                    nextPage,
+                    toggleReviews,
+                    loadMoreReviews,
+                    applyFilters,
+                    enterEditMode,
+                    cancelEditMode,
+                    saveAllChanges,
+                    updateStatus,
+                    showSummaryTab,
+                    regenerateSummary,
+                    applyPendingSummary,
+                    discardPendingSummary,
+                    toggleTag,
+                    addCustomTag,
+                    removeCustomTag,
+                    closeModal,
+                    clearDateFilter,
+                    syncAffiliates
+                };
+
+                // Also expose to global for onclick in header
+                window.syncAffiliates = syncAffiliates;
+                window.handleSort = handleSort;
+                window.prevPage = prevPage;
+                window.nextPage = nextPage;
+            }
+
+            function bindEvents() {
+                const searchInput = getElement('search-input');
+                const filterRegion = getElement('filter-region');
+                const filterStatus = getElement('filter-status');
+                const modal = getElement('detail-modal');
+
+                if (searchInput) {
+                    searchInput.addEventListener('input', debounce(() => {
+                        resetPage();
+                        loadSummaries();
+                    }, 300));
+                }
+
+                if (filterRegion) {
+                    filterRegion.addEventListener('change', () => {
+                        resetPage();
+                        loadSummaries();
                     });
                 }
 
-                const totalReviews = data.reduce((sum, r) => sum + (r.total_reviews || 0), 0);
-                const statReviews = getElement('stat-reviews');
-                if (statReviews) {
-                    statReviews.textContent = totalReviews.toLocaleString();
+                if (filterStatus) {
+                    filterStatus.addEventListener('change', () => {
+                        resetPage();
+                        loadSummaries();
+                    });
                 }
-            } catch (e) {
-                console.error('Region stats error:', e);
+
+                if (modal) {
+                    modal.addEventListener('click', (e) => {
+                        if (e.target.classList.contains('modal-overlay')) {
+                            closeModal();
+                        }
+                    });
+                }
             }
-        }
 
-        async function loadSummaries() {
-            const filters = {
-                keyword: getElement('search-input')?.value || '',
-                region: getElement('filter-region')?.value || '',
-                status: getElement('filter-status')?.value || ''
-            };
-
-            updateSortUI();
-
-            try {
-                let data = await fetchSummaries(filters);
-
-                const branchIds = data.map(d => d.branch_id).filter(Boolean);
-                let tagsData = {};
-
-                if (branchIds.length > 0) {
-                    try {
-                        tagsData = await fetchBranchTagsBatch(branchIds);
-                    } catch (e) {
-                        console.error('Tags load error:', e);
-                    }
-                }
-
-                data.forEach(row => {
-                    if (Array.isArray(row.keywords)) {
-                        row.top_tags = row.keywords.map(k => ({ name: k }));
-                    } else {
-                        row.top_tags = tagsData[String(row.branch_id)] || [];
+            function initDateRangePicker() {
+                const picker = flatpickr('#filter-date-range', {
+                    mode: 'range',
+                    locale: 'ko',
+                    dateFormat: 'Y-m-d',
+                    maxDate: 'today',
+                    onChange: function (selectedDates) {
+                        if (selectedDates.length === 2) {
+                            setDateFilter(
+                                formatDateForAPI(selectedDates[0]),
+                                formatDateForAPI(selectedDates[1])
+                            );
+                            getElement('btn-clear-date').style.display = 'inline-block';
+                            resetPage();
+                            loadSummaries();
+                        }
+                    },
+                    onClose: function (selectedDates) {
+                        if (selectedDates.length === 1) {
+                            const dateStr = formatDateForAPI(selectedDates[0]);
+                            setDateFilter(dateStr, dateStr);
+                            getElement('btn-clear-date').style.display = 'inline-block';
+                            resetPage();
+                            loadSummaries();
+                        }
                     }
                 });
 
-                setSummaries(data);
-                renderTable(data, showDetail);
-            } catch (e) {
-                console.error('Summaries load error:', e);
-                showTableMessage('로드 실패', true);
+                setDatePicker(picker);
             }
-        }
 
-        function handleSort(field) {
-            setSort(field);
-            resetPage();
-            loadSummaries();
-        }
+            async function loadStats() {
+                try {
+                    const stats = await fetchStats();
+                    renderStats(stats);
+                } catch (e) {
+                    console.error('Stats load error:', e);
+                }
+            }
 
-        function prevPage() {
-            if (state.pagination.currentPage > 0) {
-                statePrevPage();
+            async function loadRegionStatsData() {
+                try {
+                    const data = await fetchRegionStats();
+                    setRegionStats(data);
+
+                    const select = getElement('filter-region');
+                    if (select) {
+                        data.forEach(r => {
+                            if (r.region && r.region !== '미분류') {
+                                const opt = document.createElement('option');
+                                opt.value = r.region;
+                                opt.textContent = `${r.region} (${r.count})`;
+                                select.appendChild(opt);
+                            }
+                        });
+                    }
+
+                    const totalReviews = data.reduce((sum, r) => sum + (r.total_reviews || 0), 0);
+                    const statReviews = getElement('stat-reviews');
+                    if (statReviews) {
+                        statReviews.textContent = totalReviews.toLocaleString();
+                    }
+                } catch (e) {
+                    console.error('Region stats error:', e);
+                }
+            }
+
+            async function loadSummaries() {
+                const filters = {
+                    keyword: getElement('search-input')?.value || '',
+                    region: getElement('filter-region')?.value || '',
+                    status: getElement('filter-status')?.value || ''
+                };
+
+                updateSortUI();
+
+                try {
+                    let data = await fetchSummaries(filters);
+
+                    const branchIds = data.map(d => d.branch_id).filter(Boolean);
+                    let tagsData = {};
+
+                    if (branchIds.length > 0) {
+                        try {
+                            tagsData = await fetchBranchTagsBatch(branchIds);
+                        } catch (e) {
+                            console.error('Tags load error:', e);
+                        }
+                    }
+
+                    data.forEach(row => {
+                        if (Array.isArray(row.keywords)) {
+                            row.top_tags = row.keywords.map(k => ({ name: k }));
+                        } else {
+                            row.top_tags = tagsData[String(row.branch_id)] || [];
+                        }
+                    });
+
+                    setSummaries(data);
+                    renderTable(data, showDetail);
+                } catch (e) {
+                    console.error('Summaries load error:', e);
+                    showTableMessage('로드 실패', true);
+                }
+            }
+
+            function handleSort(field) {
+                setSort(field);
+                resetPage();
                 loadSummaries();
             }
-        }
 
-        function nextPage() {
-            if (state.summaries.length === state.pagination.pageSize) {
-                stateNextPage();
+            function prevPage() {
+                if (state.pagination.currentPage > 0) {
+                    statePrevPage();
+                    loadSummaries();
+                }
+            }
+
+            function nextPage() {
+                if (state.summaries.length === state.pagination.pageSize) {
+                    stateNextPage();
+                    loadSummaries();
+                }
+            }
+
+            function clearDateFilter() {
+                if (state.dateFilter.picker) {
+                    state.dateFilter.picker.clear();
+                }
+                stateClearDateFilter();
+                getElement('btn-clear-date').style.display = 'none';
+                resetPage();
                 loadSummaries();
             }
-        }
 
-        function clearDateFilter() {
-            if (state.dateFilter.picker) {
-                state.dateFilter.picker.clear();
+            async function showDetail(branchId) {
+                openModal();
+                showModalLoading();
+                resetReviews();
+
+                try {
+                    const data = await fetchSummaryDetail(branchId);
+                    setModalTitle(data.branch_name || `지점 ${branchId}`);
+
+                    const modalHtml = buildDetailModalHtml(data);
+                    getElement('modal-body').innerHTML = modalHtml;
+
+                    await loadBranchTags(data, branchId);
+                } catch (e) {
+                    console.error('Detail load error:', e);
+                    showModalError();
+                }
             }
-            stateClearDateFilter();
-            getElement('btn-clear-date').style.display = 'none';
-            resetPage();
-            loadSummaries();
-        }
 
-        async function showDetail(branchId) {
-            openModal();
-            showModalLoading();
-            resetReviews();
+            function buildDetailModalHtml(data) {
+                const pendingSummaries = data.pending_summaries || {};
 
-            try {
-                const data = await fetchSummaryDetail(branchId);
-                setModalTitle(data.branch_name || `지점 ${branchId}`);
-
-                const modalHtml = buildDetailModalHtml(data);
-                getElement('modal-body').innerHTML = modalHtml;
-
-                await loadBranchTags(data, branchId);
-            } catch (e) {
-                console.error('Detail load error:', e);
-                showModalError();
-            }
-        }
-
-        function buildDetailModalHtml(data) {
-            const pendingSummaries = data.pending_summaries || {};
-
-            return `
+                return `
                 <div class="modal-header-content" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
                     <div style="flex: 1;">
                         <div style="font-size: 14px; color: var(--grey-5); margin-bottom: 4px;">ID: ${data.branch_id}</div>
@@ -2153,8 +2166,8 @@
                 <!-- Summary Content -->
                 <div id="summary-content" style="min-height: 200px; background: white; border-radius: 0 0 var(--radius) var(--radius);">
                     ${['all', '1y', '6m', '3m', '1m'].map((period, i) => {
-                        const hasPending = !!pendingSummaries[period];
-                        return `
+                    const hasPending = !!pendingSummaries[period];
+                    return `
                         <div class="summary-panel" id="panel-${period}" style="display: ${i === 0 ? 'block' : 'none'};">
                             <div class="summary-text" id="summary-text-${period}" style="font-size: 15px; line-height: 1.7; color: var(--grey-2); white-space: pre-line;">
                                 ${data['summary_' + period] || '<span class="summary-empty" style="color: var(--grey-5); font-style: italic;">작성된 요약이 없습니다.</span>'}
@@ -2219,321 +2232,321 @@
                     </div>
                 </div>
             `;
-        }
+            }
 
-        async function loadBranchTags(data, branchId) {
-            let tags = [];
+            async function loadBranchTags(data, branchId) {
+                let tags = [];
 
-            if (Array.isArray(data.keywords)) {
-                tags = [...data.keywords];
-            } else {
+                if (Array.isArray(data.keywords)) {
+                    tags = [...data.keywords];
+                } else {
+                    try {
+                        const tagsData = await fetchBranchTagsBatch([branchId]);
+                        const branchTags = tagsData[String(branchId)] || [];
+                        tags = branchTags.map(t => t.name);
+                    } catch (e) {
+                        console.error('Tags load error:', e);
+                    }
+                }
+
+                setSelectedTags(tags);
+                commitTags();
+                renderTagsDisplay(tags);
+            }
+
+            function closeModal() {
+                uiCloseModal();
+            }
+
+            function enterEditMode() {
+                enterEditModeState();
+                toggleEditModeUI(true);
+                renderTagSelector(state.editMode.selectedTags, toggleTag, removeCustomTagHandler);
+            }
+
+            function cancelEditMode() {
+                exitEditModeState(true);
+                toggleEditModeUI(false);
+                renderTagsDisplay(state.editMode.selectedTags);
+            }
+
+            async function saveAllChanges(branchId) {
+                const region = getElement('region-input')?.value.trim() || '';
+
+                const summariesData = {};
+                ['all', '1y', '6m', '3m', '1m'].forEach(period => {
+                    const el = getElement(`edit-summary-${period}`);
+                    if (el) summariesData[`summary_${period}`] = el.value;
+                });
+
                 try {
-                    const tagsData = await fetchBranchTagsBatch([branchId]);
-                    const branchTags = tagsData[String(branchId)] || [];
-                    tags = branchTags.map(t => t.name);
+                    const response = await apiUpdateSummary(branchId, {
+                        region,
+                        keywords: state.editMode.selectedTags,
+                        ...summariesData
+                    });
+
+                    if (response.success) {
+                        getElement('region-display').textContent = region || '지역 정보 없음';
+
+                        ['all', '1y', '6m', '3m', '1m'].forEach(period => {
+                            const textEl = getElement(`summary-text-${period}`);
+                            const editEl = getElement(`edit-summary-${period}`);
+                            if (textEl && editEl) {
+                                textEl.innerHTML = editEl.value || '<span class="summary-empty">작성된 요약이 없습니다.</span>';
+                            }
+                        });
+
+                        commitTags();
+                        updateSummaryState(branchId, {
+                            region,
+                            top_tags: state.editMode.selectedTags.map(t => ({ name: t })),
+                            summary_all: summariesData.summary_all
+                        });
+
+                        renderTable(state.summaries, showDetail);
+
+                        exitEditModeState(false);
+                        toggleEditModeUI(false);
+                        renderTagsDisplay(state.editMode.selectedTags);
+
+                        showToast('✅ 저장되었습니다.', 'success');
+                    } else {
+                        showToast('저장 실패', 'error');
+                    }
                 } catch (e) {
-                    console.error('Tags load error:', e);
+                    console.error('Save error:', e);
+                    showToast('저장 중 오류 발생', 'error');
                 }
             }
 
-            setSelectedTags(tags);
-            commitTags();
-            renderTagsDisplay(tags);
-        }
+            function toggleTag(tag) {
+                stateToggleTag(tag);
+                renderTagSelector(state.editMode.selectedTags, toggleTag, removeCustomTagHandler);
+            }
 
-        function closeModal() {
-            uiCloseModal();
-        }
+            function addCustomTag() {
+                const input = getElement('custom-tag-input');
+                const tagName = input?.value.trim();
 
-        function enterEditMode() {
-            enterEditModeState();
-            toggleEditModeUI(true);
-            renderTagSelector(state.editMode.selectedTags, toggleTag, removeCustomTagHandler);
-        }
+                if (!tagName) return;
 
-        function cancelEditMode() {
-            exitEditModeState(true);
-            toggleEditModeUI(false);
-            renderTagsDisplay(state.editMode.selectedTags);
-        }
+                if (!addTag(tagName)) {
+                    alert('이미 존재하는 태그입니다.');
+                    return;
+                }
 
-        async function saveAllChanges(branchId) {
-            const region = getElement('region-input')?.value.trim() || '';
+                input.value = '';
+                renderTagSelector(state.editMode.selectedTags, toggleTag, removeCustomTagHandler);
+            }
 
-            const summariesData = {};
-            ['all', '1y', '6m', '3m', '1m'].forEach(period => {
-                const el = getElement(`edit-summary-${period}`);
-                if (el) summariesData[`summary_${period}`] = el.value;
-            });
+            function removeCustomTagHandler(tag) {
+                removeTag(tag);
+                renderTagSelector(state.editMode.selectedTags, toggleTag, removeCustomTagHandler);
+            }
 
-            try {
-                const response = await apiUpdateSummary(branchId, {
-                    region,
-                    keywords: state.editMode.selectedTags,
-                    ...summariesData
-                });
+            // Alias for global handler
+            function removeCustomTag(tag) {
+                removeCustomTagHandler(tag);
+            }
 
-                if (response.success) {
-                    getElement('region-display').textContent = region || '지역 정보 없음';
+            function showSummaryTab(tabEl, period) {
+                setCurrentPeriod(period);
+                uiShowSummaryTab(tabEl, period);
+            }
 
-                    ['all', '1y', '6m', '3m', '1m'].forEach(period => {
+            async function regenerateSummary(branchId, e) {
+                const period = state.editMode.currentPeriod;
+
+                if (!confirm(`[${PERIOD_LABELS[period]}] 기간의 요약을 AI로 재생성하시겠습니까?\n\n새 요약이 생성되며, "변경" 버튼을 눌러야 적용됩니다.`)) {
+                    return;
+                }
+
+                const btn = e?.target || e?.currentTarget;
+                const originalText = btn.innerHTML;
+
+                try {
+                    btn.innerHTML = '⏳ 생성 중...';
+                    btn.disabled = true;
+
+                    const result = await apiRegenerateSummary(branchId, period);
+
+                    if (result.success) {
+                        const pendingSection = getElement(`pending-section-${period}`);
+                        const pendingText = getElement(`pending-text-${period}`);
+
+                        if (pendingSection && pendingText) {
+                            pendingText.innerHTML = result.summary;
+                            pendingSection.style.display = 'block';
+                        }
+
+                        showToast(`✨ [${PERIOD_LABELS[period]}] 새 요약이 생성되었습니다.`, 'success');
+                    } else {
+                        throw new Error(result.error || '요약 생성 실패');
+                    }
+                } catch (error) {
+                    console.error('Regenerate error:', error);
+                    showToast('❌ 요약 생성 실패: ' + error.message, 'error');
+                } finally {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            }
+
+            async function applyPendingSummary(branchId, period) {
+                if (!confirm(`[${PERIOD_LABELS[period]}] 새 요약을 적용하시겠습니까?`)) {
+                    return;
+                }
+
+                try {
+                    const result = await apiApplyPendingSummary(branchId, period);
+
+                    if (result.success) {
                         const textEl = getElement(`summary-text-${period}`);
                         const editEl = getElement(`edit-summary-${period}`);
-                        if (textEl && editEl) {
-                            textEl.innerHTML = editEl.value || '<span class="summary-empty">작성된 요약이 없습니다.</span>';
-                        }
-                    });
+                        const pendingSection = getElement(`pending-section-${period}`);
 
-                    commitTags();
-                    updateSummaryState(branchId, {
-                        region,
-                        top_tags: state.editMode.selectedTags.map(t => ({ name: t })),
-                        summary_all: summariesData.summary_all
-                    });
+                        if (textEl) textEl.innerHTML = result.applied;
+                        if (editEl) editEl.value = result.applied;
+                        if (pendingSection) pendingSection.style.display = 'none';
 
-                    renderTable(state.summaries, showDetail);
-
-                    exitEditModeState(false);
-                    toggleEditModeUI(false);
-                    renderTagsDisplay(state.editMode.selectedTags);
-
-                    showToast('✅ 저장되었습니다.', 'success');
-                } else {
-                    showToast('저장 실패', 'error');
+                        showToast(`✅ [${PERIOD_LABELS[period]}] 요약이 적용되었습니다`, 'success');
+                    }
+                } catch (error) {
+                    console.error('Apply error:', error);
+                    showToast('❌ 적용 실패: ' + error.message, 'error');
                 }
-            } catch (e) {
-                console.error('Save error:', e);
-                showToast('저장 중 오류 발생', 'error');
-            }
-        }
-
-        function toggleTag(tag) {
-            stateToggleTag(tag);
-            renderTagSelector(state.editMode.selectedTags, toggleTag, removeCustomTagHandler);
-        }
-
-        function addCustomTag() {
-            const input = getElement('custom-tag-input');
-            const tagName = input?.value.trim();
-
-            if (!tagName) return;
-
-            if (!addTag(tagName)) {
-                alert('이미 존재하는 태그입니다.');
-                return;
             }
 
-            input.value = '';
-            renderTagSelector(state.editMode.selectedTags, toggleTag, removeCustomTagHandler);
-        }
+            async function discardPendingSummary(branchId, period) {
+                if (!confirm(`[${PERIOD_LABELS[period]}] 새 요약을 취소하시겠습니까?`)) {
+                    return;
+                }
 
-        function removeCustomTagHandler(tag) {
-            removeTag(tag);
-            renderTagSelector(state.editMode.selectedTags, toggleTag, removeCustomTagHandler);
-        }
+                try {
+                    const result = await apiDiscardPendingSummary(branchId, period);
 
-        // Alias for global handler
-        function removeCustomTag(tag) {
-            removeCustomTagHandler(tag);
-        }
+                    if (result.success) {
+                        const pendingSection = getElement(`pending-section-${period}`);
+                        if (pendingSection) pendingSection.style.display = 'none';
 
-        function showSummaryTab(tabEl, period) {
-            setCurrentPeriod(period);
-            uiShowSummaryTab(tabEl, period);
-        }
-
-        async function regenerateSummary(branchId, e) {
-            const period = state.editMode.currentPeriod;
-
-            if (!confirm(`[${PERIOD_LABELS[period]}] 기간의 요약을 AI로 재생성하시겠습니까?\n\n새 요약이 생성되며, "변경" 버튼을 눌러야 적용됩니다.`)) {
-                return;
+                        showToast(`🗑️ [${PERIOD_LABELS[period]}] 새 요약이 취소되었습니다`, 'success');
+                    }
+                } catch (error) {
+                    console.error('Discard error:', error);
+                    showToast('❌ 취소 실패: ' + error.message, 'error');
+                }
             }
 
-            const btn = e?.target || e?.currentTarget;
-            const originalText = btn.innerHTML;
+            async function updateStatus(branchId, status) {
+                try {
+                    const result = await apiUpdateStatus(branchId, status);
 
-            try {
-                btn.innerHTML = '⏳ 생성 중...';
-                btn.disabled = true;
+                    if (result.success) {
+                        showToast(`✅ 상태가 ${STATUS_LABEL_MAP[status] || status}로 변경되었습니다.`, 'success');
+                        closeModal();
+                        await loadStats();
+                        await loadSummaries();
+                    }
+                } catch (e) {
+                    console.error('Status update error:', e);
+                    showToast('❌ 상태 변경 실패: ' + e.message, 'error');
+                }
+            }
 
-                const result = await apiRegenerateSummary(branchId, period);
+            async function toggleReviews(branchId) {
+                const section = getElement('reviews-section');
+                const btn = getElement('btn-toggle-reviews');
+                const visible = toggleReviewsVisibility();
 
-                if (result.success) {
-                    const pendingSection = getElement(`pending-section-${period}`);
-                    const pendingText = getElement(`pending-text-${period}`);
+                if (section) section.style.display = visible ? 'block' : 'none';
+                if (btn) btn.textContent = visible ? '📋 리뷰 숨기기' : '📋 리뷰 보기';
 
-                    if (pendingSection && pendingText) {
-                        pendingText.innerHTML = result.summary;
-                        pendingSection.style.display = 'block';
+                if (visible) {
+                    const carSelect = getElement('filter-car-model');
+                    const sentSelect = getElement('filter-sentiment');
+                    if (carSelect) carSelect.value = '';
+                    if (sentSelect) sentSelect.value = '';
+
+                    await loadReviews(branchId);
+                }
+            }
+
+            function applyFilters(branchId) {
+                setReviewsPage(0);
+                loadReviews(branchId);
+            }
+
+            async function loadReviews(branchId) {
+                showReviewsLoading();
+
+                const offset = state.reviews.currentPage * state.reviews.pageSize;
+
+                try {
+                    const result = await fetchBranchReviews(branchId, {
+                        limit: state.reviews.pageSize,
+                        offset,
+                        carModel: getElement('filter-car-model')?.value || '',
+                        sentiment: getElement('filter-sentiment')?.value || ''
+                    });
+
+                    console.log('📋 리뷰 API 응답:', result);
+
+                    setReviewsTotal(result.total || 0);
+
+                    if (!state.reviews.carModelsLoaded && result.car_models?.length > 0) {
+                        updateCarModelDropdown(result.car_models);
+                        markCarModelsLoaded();
                     }
 
-                    showToast(`✨ [${PERIOD_LABELS[period]}] 새 요약이 생성되었습니다.`, 'success');
-                } else {
-                    throw new Error(result.error || '요약 생성 실패');
+                    updateReviewsCount(result.total || 0);
+                    renderReviewsList(result.reviews || [], offset);
+
+                    const totalPages = Math.ceil((result.total || 0) / state.reviews.pageSize);
+                    updateReviewsPagination(state.reviews.currentPage, totalPages);
+
+                } catch (e) {
+                    console.error('Reviews load error:', e);
+                    getElement('reviews-list').innerHTML = '<div style="padding: 24px; text-align: center; color: var(--error);">로드 실패</div>';
                 }
-            } catch (error) {
-                console.error('Regenerate error:', error);
-                showToast('❌ 요약 생성 실패: ' + error.message, 'error');
-            } finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
-        }
-
-        async function applyPendingSummary(branchId, period) {
-            if (!confirm(`[${PERIOD_LABELS[period]}] 새 요약을 적용하시겠습니까?`)) {
-                return;
             }
 
-            try {
-                const result = await apiApplyPendingSummary(branchId, period);
-
-                if (result.success) {
-                    const textEl = getElement(`summary-text-${period}`);
-                    const editEl = getElement(`edit-summary-${period}`);
-                    const pendingSection = getElement(`pending-section-${period}`);
-
-                    if (textEl) textEl.innerHTML = result.applied;
-                    if (editEl) editEl.value = result.applied;
-                    if (pendingSection) pendingSection.style.display = 'none';
-
-                    showToast(`✅ [${PERIOD_LABELS[period]}] 요약이 적용되었습니다`, 'success');
-                }
-            } catch (error) {
-                console.error('Apply error:', error);
-                showToast('❌ 적용 실패: ' + error.message, 'error');
-            }
-        }
-
-        async function discardPendingSummary(branchId, period) {
-            if (!confirm(`[${PERIOD_LABELS[period]}] 새 요약을 취소하시겠습니까?`)) {
-                return;
-            }
-
-            try {
-                const result = await apiDiscardPendingSummary(branchId, period);
-
-                if (result.success) {
-                    const pendingSection = getElement(`pending-section-${period}`);
-                    if (pendingSection) pendingSection.style.display = 'none';
-
-                    showToast(`🗑️ [${PERIOD_LABELS[period]}] 새 요약이 취소되었습니다`, 'success');
-                }
-            } catch (error) {
-                console.error('Discard error:', error);
-                showToast('❌ 취소 실패: ' + error.message, 'error');
-            }
-        }
-
-        async function updateStatus(branchId, status) {
-            try {
-                const result = await apiUpdateStatus(branchId, status);
-
-                if (result.success) {
-                    showToast(`✅ 상태가 ${STATUS_LABEL_MAP[status] || status}로 변경되었습니다.`, 'success');
-                    closeModal();
-                    await loadStats();
-                    await loadSummaries();
-                }
-            } catch (e) {
-                console.error('Status update error:', e);
-                showToast('❌ 상태 변경 실패: ' + e.message, 'error');
-            }
-        }
-
-        async function toggleReviews(branchId) {
-            const section = getElement('reviews-section');
-            const btn = getElement('btn-toggle-reviews');
-            const visible = toggleReviewsVisibility();
-
-            if (section) section.style.display = visible ? 'block' : 'none';
-            if (btn) btn.textContent = visible ? '📋 리뷰 숨기기' : '📋 리뷰 보기';
-
-            if (visible) {
-                const carSelect = getElement('filter-car-model');
-                const sentSelect = getElement('filter-sentiment');
-                if (carSelect) carSelect.value = '';
-                if (sentSelect) sentSelect.value = '';
-
-                await loadReviews(branchId);
-            }
-        }
-
-        function applyFilters(branchId) {
-            setReviewsPage(0);
-            loadReviews(branchId);
-        }
-
-        async function loadReviews(branchId) {
-            showReviewsLoading();
-
-            const offset = state.reviews.currentPage * state.reviews.pageSize;
-
-            try {
-                const result = await fetchBranchReviews(branchId, {
-                    limit: state.reviews.pageSize,
-                    offset,
-                    carModel: getElement('filter-car-model')?.value || '',
-                    sentiment: getElement('filter-sentiment')?.value || ''
-                });
-
-                console.log('📋 리뷰 API 응답:', result);
-
-                setReviewsTotal(result.total || 0);
-
-                if (!state.reviews.carModelsLoaded && result.car_models?.length > 0) {
-                    updateCarModelDropdown(result.car_models);
-                    markCarModelsLoaded();
+            function loadMoreReviews(branchId, direction) {
+                if (direction === 'prev' && state.reviews.currentPage > 0) {
+                    setReviewsPage(state.reviews.currentPage - 1);
+                } else if (direction === 'next') {
+                    setReviewsPage(state.reviews.currentPage + 1);
                 }
 
-                updateReviewsCount(result.total || 0);
-                renderReviewsList(result.reviews || [], offset);
-
-                const totalPages = Math.ceil((result.total || 0) / state.reviews.pageSize);
-                updateReviewsPagination(state.reviews.currentPage, totalPages);
-
-            } catch (e) {
-                console.error('Reviews load error:', e);
-                getElement('reviews-list').innerHTML = '<div style="padding: 24px; text-align: center; color: var(--error);">로드 실패</div>';
-            }
-        }
-
-        function loadMoreReviews(branchId, direction) {
-            if (direction === 'prev' && state.reviews.currentPage > 0) {
-                setReviewsPage(state.reviews.currentPage - 1);
-            } else if (direction === 'next') {
-                setReviewsPage(state.reviews.currentPage + 1);
+                loadReviews(branchId);
             }
 
-            loadReviews(branchId);
-        }
-
-        async function syncAffiliates() {
-            if (!confirm('Carmore API에서 업체 정보를 동기화하시겠습니까?')) {
-                return;
-            }
-
-            try {
-                const result = await apiSyncAffiliates();
-
-                if (result.success) {
-                    showToast(`동기화 완료: ${result.success}개 업체`, 'success');
-                    loadSummaries();
-                } else {
-                    showToast('동기화 실패: ' + (result.error || 'Unknown error'), 'error');
+            async function syncAffiliates() {
+                if (!confirm('Carmore API에서 업체 정보를 동기화하시겠습니까?')) {
+                    return;
                 }
-            } catch (e) {
-                showToast('동기화 실패: ' + e.message, 'error');
-            }
-        }
 
-        // Auto Initialize
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', init);
-        } else {
-            init();
-        }
-    })();
+                try {
+                    const result = await apiSyncAffiliates();
+
+                    if (result.success) {
+                        showToast(`동기화 완료: ${result.success}개 업체`, 'success');
+                        loadSummaries();
+                    } else {
+                        showToast('동기화 실패: ' + (result.error || 'Unknown error'), 'error');
+                    }
+                } catch (e) {
+                    showToast('동기화 실패: ' + e.message, 'error');
+                }
+            }
+
+            // Auto Initialize
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
     </script>
 </body>
 
