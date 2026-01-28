@@ -124,3 +124,5 @@ data/*.npz
 
 # setting
 .claude/settings.local.json
+
+.env.prod

@@ -164,6 +164,7 @@ jobs:
       - name: Deploy to Production Server
         uses: appleboy/ssh-action@v1.0.3
         env:
+          API_PREFIX: ${{ secrets.API_PREFIX }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -181,7 +182,7 @@ jobs:
           proxy_port: ${{ secrets.AWS_TM2_BASTION_PORT }}
           debug: true
           script_stop: true
-          envs: GCP_SERVICE_ACCOUNT_JSON,OPENAI_API_KEY,LLM_PROVIDER,SUPABASE_URL,SUPABASE_KEY,IP_WHITELIST_ENABLED,IP_WHITELIST
+          envs: API_PREFIX,GCP_SERVICE_ACCOUNT_JSON,OPENAI_API_KEY,LLM_PROVIDER,SUPABASE_URL,SUPABASE_KEY,IP_WHITELIST_ENABLED,IP_WHITELIST
           script: |
             echo "🚀 배포 시작..."
             
@@ -194,6 +195,7 @@ jobs:
             # .env 생성 (GitHub Secrets 주입)
             umask 077
             : > .env
+            printf 'API_PREFIX=%s\n' "$API_PREFIX" >> .env
             printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY" >> .env
             printf 'LLM_PROVIDER=%s\n' "$LLM_PROVIDER" >> .env
             printf 'SUPABASE_URL=%s\n' "$SUPABASE_URL" >> .env

@@ -14,7 +14,10 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from core.config import get_settings
+
 router = APIRouter(tags=["pages"])
+settings = get_settings()
 
 # 템플릿 디렉토리 설정
 _templates_dir = Path(__file__).parent.parent.parent.parent / "templates"
@@ -24,7 +27,11 @@ templates = Jinja2Templates(directory=str(_templates_dir))
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """메인 대시보드"""
-    return templates.TemplateResponse(request=request, name="dashboard_v2.html")
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard_v2.html",
+        context={"api_prefix": settings.api_prefix},
+    )
 
 
 @router.get("/tag-tester", response_class=HTMLResponse)

@@ -1397,8 +1397,15 @@
         // API (api.js)
         // ============================================================
 
+        // 환경별 API prefix (서버에서 주입)
+        const API_BASE = '{{ api_prefix }}';
+
         async function apiRequest(url, options = {}) {
-            const response = await fetch(url, {
+            // /api로 시작하는 경로를 환경별 API_BASE로 대체
+            const fullUrl = url.startsWith('/api')
+                ? url.replace('/api', API_BASE)
+                : url;
+            const response = await fetch(fullUrl, {
                 headers: {
                     'Content-Type': 'application/json',
                     ...options.headers

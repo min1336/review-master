@@ -11,5 +11,6 @@ services:
       - LLM_PROVIDER
       - SUPABASE_URL
       - SUPABASE_KEY
+      - API_PREFIX
     cpus: "0.5"
     mem_limit: "512m"

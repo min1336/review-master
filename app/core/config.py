@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     # App
     debug: bool = False
 
+    # API Routing (환경별 분기)
+    # 로컬: /api, 프로덕션(Nginx): /review/api
+    api_prefix: str = "/api"
+
 
 @lru_cache
 def get_settings() -> Settings:
