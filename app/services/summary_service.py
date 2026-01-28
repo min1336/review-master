@@ -237,16 +237,16 @@ class SummaryService:
             temperature=0.7,
         )
 
-        generated_summary = (
-            response.content if hasattr(response, "content") else str(response)
-        )
+        generated_summary = response.content if hasattr(response, 'content') else str(response)
 
-        existing_pending = summary_data.get("pending_summaries") or {}
+        # pending_summaries에 저장 (바로 덮어쓰지 않음)
+        existing_pending = summary_data.get('pending_summaries') or {}
         existing_pending[period] = generated_summary
 
-        await self.summary_repo.upsert_by_branch_id(
-            {"branch_id": branch_id, "pending_summaries": existing_pending}
-        )
+        await self.summary_repo.upsert_by_branch_id({
+            'branch_id': branch_id,
+            'pending_summaries': existing_pending
+        })
 
         return generated_summary
 
@@ -309,6 +309,7 @@ class SummaryService:
         """지점 상세 분석 (JSON 반환)"""
         from domain.analysis import KeywordExtractor, RuleBasedABSA
 
+        # 1. 기본 정보 조회
         summary = await self.summary_repo.get_by_branch_id(branch_id)
         if not summary:
             return None

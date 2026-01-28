@@ -184,6 +184,22 @@ async def api_discard_pending_summary(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
+@router.post("/summaries/{branch_id}/discard-pending")
+async def api_discard_pending_summary(
+    branch_id: int,
+    data: RegenerateRequest = None,
+    service: SummaryService = Depends(get_summary_service)
+):
+    """대기 중인 요약 취소 (삭제)"""
+    period = data.period if data else "all"
+
+    try:
+        result = await service.discard_pending_summary(branch_id, period)
+        return {'success': True, **result}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.get("/stats")
 async def api_stats(
     service: SummaryService = Depends(get_summary_service),

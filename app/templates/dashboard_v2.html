@@ -1415,11 +1415,11 @@
         }
 
         async function fetchStats() {
-            return apiRequest('/review/api/v2/stats');
+            return apiRequest('/api/v2/stats');
         }
 
         async function fetchRegionStats() {
-            return apiRequest('/review/api/v2/stats/region');
+            return apiRequest('/api/v2/stats/region');
         }
 
         function buildSummariesParams(filters = {}) {
@@ -1442,43 +1442,43 @@
 
         async function fetchSummaries(filters = {}) {
             const params = buildSummariesParams(filters);
-            return apiRequest(`/review/api/v2/summaries?${params}`);
+            return apiRequest(`/api/v2/summaries?${params}`);
         }
 
         async function fetchSummaryDetail(branchId) {
-            return apiRequest(`/review/api/v2/summaries/${branchId}`);
+            return apiRequest(`/api/v2/summaries/${branchId}`);
         }
 
         async function apiUpdateSummary(branchId, data) {
-            return apiRequest(`/review/api/v2/summaries/${branchId}`, {
+            return apiRequest(`/api/v2/summaries/${branchId}`, {
                 method: 'PUT',
                 body: JSON.stringify(data)
             });
         }
 
         async function apiUpdateStatus(branchId, status) {
-            return apiRequest(`/review/api/v2/summaries/${branchId}/status`, {
+            return apiRequest(`/api/v2/summaries/${branchId}/status`, {
                 method: 'PUT',
                 body: JSON.stringify({ status })
             });
         }
 
         async function apiRegenerateSummary(branchId, period = 'all') {
-            return apiRequest(`/review/api/v2/summaries/${branchId}/regenerate`, {
+            return apiRequest(`/api/v2/summaries/${branchId}/regenerate`, {
                 method: 'POST',
                 body: JSON.stringify({ period })
             });
         }
 
         async function apiApplyPendingSummary(branchId, period) {
-            return apiRequest(`/review/api/v2/summaries/${branchId}/apply-pending`, {
+            return apiRequest(`/api/v2/summaries/${branchId}/apply-pending`, {
                 method: 'POST',
                 body: JSON.stringify({ period })
             });
         }
 
         async function apiDiscardPendingSummary(branchId, period) {
-            return apiRequest(`/review/api/v2/summaries/${branchId}/discard-pending`, {
+            return apiRequest(`/api/v2/summaries/${branchId}/discard-pending`, {
                 method: 'POST',
                 body: JSON.stringify({ period })
             });
@@ -1495,19 +1495,19 @@
             if (state.dateFilter.from) params.set('review_date_from', state.dateFilter.from);
             if (state.dateFilter.to) params.set('review_date_to', state.dateFilter.to);
 
-            return apiRequest(`/review/api/v2/summaries/${branchId}/reviews?${params}`);
+            return apiRequest(`/api/v2/summaries/${branchId}/reviews?${params}`);
         }
 
         async function fetchBranchTagsBatch(branchIds) {
             if (!branchIds || branchIds.length === 0) return {};
-            return apiRequest('/review/api/tags/batch', {
+            return apiRequest('/api/tags/batch', {
                 method: 'POST',
                 body: JSON.stringify({ branch_ids: branchIds })
             });
         }
 
         async function apiSyncAffiliates() {
-            return apiRequest('/review/api/carmore/sync/affiliates', {
+            return apiRequest('/api/carmore/sync/affiliates', {
                 method: 'POST'
             });
         }
@@ -1519,10 +1519,11 @@
         const elements = {};
 
         function getElement(id) {
-            if (!elements[id]) {
-                elements[id] = document.getElementById(id);
+            const el = document.getElementById(id);
+            if (el) {
+                elements[id] = el;
             }
-            return elements[id];
+            return el || elements[id];
         }
 
         function renderStats(stats) {
