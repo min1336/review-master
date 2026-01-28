@@ -776,6 +776,65 @@ class CleanupResultDTO:
 
 
 # ==============================================================================
+# Car Model (차량별 태그) DTO
+# ==============================================================================
+
+
+@dataclass
+class CarModelTagDTO:
+    """차량별 태그 감정 통계 DTO"""
+
+    name: str
+    positive: int = 0
+    negative: int = 0
+    neutral: int = 0
+    total: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "positive": self.positive,
+            "negative": self.negative,
+            "neutral": self.neutral,
+            "total": self.total,
+        }
+
+
+@dataclass
+class CarModelDTO:
+    """차량 모델별 태그 분석 DTO"""
+
+    name: str
+    review_count: int = 0
+    tags: list[CarModelTagDTO] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "review_count": self.review_count,
+            "tags": [t.to_dict() for t in self.tags],
+        }
+
+
+@dataclass
+class BranchCarModelsDTO:
+    """지점별 차량 모델 태그 분석 DTO"""
+
+    branch_id: int
+    car_models: list[CarModelDTO] = field(default_factory=list)
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result = {
+            "branch_id": self.branch_id,
+            "car_models": [cm.to_dict() for cm in self.car_models],
+        }
+        if self.error:
+            result["error"] = self.error
+        return result
+
+
+# ==============================================================================
 # 내보내기
 # ==============================================================================
 
@@ -814,4 +873,8 @@ __all__ = [
     "SentimentStatsDTO",
     "ReviewSearchResultDTO",
     "CleanupResultDTO",
+    # Car Model
+    "CarModelTagDTO",
+    "CarModelDTO",
+    "BranchCarModelsDTO",
 ]

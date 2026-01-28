@@ -4,8 +4,11 @@ import asyncio
 from datetime import datetime
 
 from schemas.dto import (
+    BranchCarModelsDTO,
     BranchDetailDTO,
     BranchReviewsDTO,
+    CarModelDTO,
+    CarModelTagDTO,
     PendingSummaryResultDTO,
     RatingDistributionDTO,
     RatingStatsDTO,
@@ -448,3 +451,115 @@ class SummaryService:
             limit=limit,
             offset=offset,
         )
+
+    async def get_car_model_tags(
+        self,
+        branch_id: int,
+        car_model: str | None = None,
+    ) -> BranchCarModelsDTO:
+        """
+        지점별 차량 모델 태그 분석
+
+        Args:
+            branch_id: 지점 ID
+            car_model: 특정 차량 모델만 조회 (None이면 전체)
+
+        Returns:
+            BranchCarModelsDTO: 차량별 태그 통계
+        """
+        from repository.session import get_client
+
+        client = await get_client()
+
+        # car_model_tags 테이블에서 조회
+        query = (
+            client.table("car_model_tags")
+            .select("*, tags(id, name)")
+            .eq("branch_id", branch_id)
+        )
+
+        if car_model:
+            query = query.eq("car_model", car_model)
+
+        try:
+            result = await query.execute()
+        except Exception as e:
+            # 테이블이 없으면 빈 결과 반환
+            if "Could not find" in str(e):
+                return BranchCarModelsDTO(
+                    branch_id=branch_id,
+                    car_models=[],
+                    error="car_model_tags 테이블이 없습니다. SQL을 먼저 실행하세요.",
+                )
+            raise
+
+        if not result.data:
+            return BranchCarModelsDTO(branch_id=branch_id, car_models=[])
+
+        # 차량별로 그룹화
+        car_data: dict[str, dict] = {}
+
+        for row in result.data:
+            car = row["car_model"]
+            tag_info = row.get("tags") or {}
+            tag_name = tag_info.get("name", "기타")
+
+            if car not in car_data:
+                car_data[car] = {"name": car, "tags": {}, "review_count": 0}
+
+            if tag_name not in car_data[car]["tags"]:
+                car_data[car]["tags"][tag_name] = {
+                    "name": tag_name,
+                    "positive": 0,
+                    "negative": 0,
+                    "neutral": 0,
+                    "total": 0,
+                }
+
+            car_data[car]["tags"][tag_name]["positive"] += row.get("positive_count", 0)
+            car_data[car]["tags"][tag_name]["negative"] += row.get("negative_count", 0)
+            car_data[car]["tags"][tag_name]["neutral"] += row.get("neutral_count", 0)
+            car_data[car]["tags"][tag_name]["total"] += row.get("total_count", 0)
+
+        # 리뷰 수 조회 (branch_reviews 테이블)
+        for car in car_data:
+            try:
+                count_result = (
+                    await client.table("branch_reviews")
+                    .select("id", count="exact")
+                    .eq("branch_id", branch_id)
+                    .eq("car_model", car)
+                    .execute()
+                )
+                car_data[car]["review_count"] = count_result.count or 0
+            except Exception:
+                car_data[car]["review_count"] = 0
+
+        # DTO로 변환
+        car_models_dto: list[CarModelDTO] = []
+        for car, data in sorted(car_data.items()):
+            # 태그 DTO 생성 (total 기준 정렬)
+            tags_dto = sorted(
+                [
+                    CarModelTagDTO(
+                        name=tag_data["name"],
+                        positive=tag_data["positive"],
+                        negative=tag_data["negative"],
+                        neutral=tag_data["neutral"],
+                        total=tag_data["total"],
+                    )
+                    for tag_data in data["tags"].values()
+                ],
+                key=lambda x: x.total,
+                reverse=True,
+            )
+
+            car_models_dto.append(
+                CarModelDTO(
+                    name=data["name"],
+                    review_count=data.get("review_count", 0),
+                    tags=tags_dto,
+                )
+            )
+
+        return BranchCarModelsDTO(branch_id=branch_id, car_models=car_models_dto)

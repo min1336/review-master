@@ -90,17 +90,19 @@ class TagService:
             extractor = KeywordExtractor()
             keywords = extractor.extract(review_text)
 
-            from domain.analysis import HybridTagClassifier
+            from domain.analysis import HybridClassifier
 
-            classifier = HybridTagClassifier()
+            classifier = HybridClassifier()
 
             keyword_results = []
             tag_groups: dict[str, TagGroupDTO] = {}
 
-            for kw in keywords:
-                tag, score, sentiment = classifier.classify_with_sentiment(
-                    kw, context=review_text
-                )
+            # 배치 분류 (키워드 + 컨텍스트)
+            classifications = classifier.classify_keywords_with_context(
+                keywords, review_text
+            )
+
+            for kw, (tag, score, sentiment) in zip(keywords, classifications):
                 keyword_results.append(
                     KeywordSentimentDTO(keyword=kw, sentiment=sentiment)
                 )

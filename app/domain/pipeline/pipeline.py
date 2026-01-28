@@ -84,21 +84,21 @@ class BasePipeline(ABC):
     """
 
     def __init__(self) -> None:
-        self.mecab = None
+        self.kiwi = None
         self._supabase_client: AsyncClient | None = None
         self._hybrid_classifier = None
 
-        self._init_mecab()
+        self._init_kiwi()
 
-    def _init_mecab(self) -> None:
-        """MeCab 초기화"""
+    def _init_kiwi(self) -> None:
+        """Kiwi 형태소 분석기 초기화"""
         try:
-            import mecab
+            from kiwipiepy import Kiwi
 
-            self.mecab = mecab.MeCab()
-            logger.info("MeCab 초기화 완료")
+            self.kiwi = Kiwi()
+            logger.info("Kiwi 형태소 분석기 초기화 완료")
         except ImportError:
-            logger.warning("MeCab 미설치 - 정규식 폴백 사용")
+            logger.warning("Kiwi 미설치 - 정규식 폴백 사용")
 
     async def _get_supabase(self) -> AsyncClient:
         """Supabase 비동기 클라이언트 획득 (lazy loading)"""
@@ -119,7 +119,7 @@ class BasePipeline(ABC):
 
     def extract_keywords(self, text: str) -> list[str]:
         """
-        텍스트에서 키워드 추출 (MeCab 우선, 정규식 폴백)
+        텍스트에서 키워드 추출 (Kiwi 우선, 정규식 폴백)
 
         Args:
             text: 분석할 텍스트
@@ -130,18 +130,15 @@ class BasePipeline(ABC):
         if not text:
             return []
 
-        if self.mecab:
+        if self.kiwi:
             try:
                 keywords = []
-                for token in self.mecab.parse(text):
-                    pos = token.pos
-                    word = token.surface
-                    # 명사(NNG, NNP) + 형용사(VA)
-                    is_target_pos = (
-                        pos.startswith("NNG")
-                        or pos.startswith("NNP")
-                        or pos.startswith("VA")
-                    )
+                tokens = self.kiwi.tokenize(text)
+                for token in tokens:
+                    tag = token.tag
+                    word = token.form
+                    # 명사(NNG, NNP) + 형용사(VA) + 동사(VV)
+                    is_target_pos = tag in ("NNG", "NNP", "VA", "VV")
                     is_valid = len(word) >= 2 and word not in LexiconConfig.STOP_WORDS
                     if is_target_pos and is_valid:
                         keywords.append(word)
@@ -439,6 +436,9 @@ class BatchPipeline(BasePipeline):
             # Step 6: 태그 매핑 및 집계 (DB 저장)
             await self._aggregate_tags(processed_reviews)
 
+            # Step 7: 차량별 태그 집계 (DB 저장)
+            await self._aggregate_car_model_tags(processed_reviews)
+
             # 완료
             elapsed = (datetime.now() - started_at).total_seconds()
             self._stats["elapsed_seconds"] = elapsed
@@ -515,20 +515,52 @@ class BatchPipeline(BasePipeline):
         # 정렬
         query = query.order("review_date", desc=True)
 
-        # 제한
+        # 제한이 있으면 단일 쿼리
         if limit:
             query = query.limit(limit)
             print(f"   → 최대 조회: {limit:,}개")
+            result = await query.execute()
+            if not result.data:
+                print("   ⚠️ 조회된 리뷰가 없습니다")
+                return []
+            reviews = [ReviewDTO.from_db_row(row) for row in result.data]
+            print(f"✅ {len(reviews):,}개 리뷰 로드 완료 (DB)")
+            return reviews
 
-        # 실행
-        result = await query.execute()
+        # 제한 없으면 페이지네이션으로 전체 로드
+        print("   → 전체 리뷰 로드 중 (페이지네이션)...")
+        all_data = []
+        page_size = 10000
+        offset = 0
 
-        if not result.data:
+        while True:
+            page_query = client.table("branch_reviews").select("*")
+            if branch_ids:
+                page_query = page_query.in_("branch_id", branch_ids)
+            if date_from:
+                page_query = page_query.gte("review_date", date_from.isoformat())
+            if date_to:
+                page_query = page_query.lte("review_date", date_to.isoformat())
+            page_query = page_query.order("review_date", desc=True)
+            page_query = page_query.range(offset, offset + page_size - 1)
+
+            result = await page_query.execute()
+            if not result.data:
+                break
+
+            all_data.extend(result.data)
+            print(f"   → {len(all_data):,}개 로드됨...")
+
+            if len(result.data) < page_size:
+                break
+            offset += page_size
+
+        if not all_data:
             print("   ⚠️ 조회된 리뷰가 없습니다")
             return []
 
         # ReviewDTO 변환
-        reviews = [ReviewDTO.from_db_row(row) for row in result.data]
+        reviews = [ReviewDTO.from_db_row(row) for row in all_data]
 
         print(f"✅ {len(reviews):,}개 리뷰 로드 완료 (DB)")
         return reviews
@@ -974,11 +1006,16 @@ class BatchPipeline(BasePipeline):
         branch_id: int | None = None,
         max_retries: int = 2,
         top_helpful_reviews: list[dict] | None = None,
+        skip_llm: bool = True,  # LLM 호출 스킵 (기본값: True)
     ) -> str:
         """LLM으로 요약 생성"""
         from infrastructure.llm import SummaryPromptBuilder, validate_summary
 
         if not keywords:
+            return SummaryPromptBuilder.get_default_summary(keywords)
+
+        # LLM 스킵 옵션
+        if skip_llm:
             return SummaryPromptBuilder.get_default_summary(keywords)
 
         if not self.llm_provider or not self.llm_provider.is_available():
@@ -1185,6 +1222,133 @@ class BatchPipeline(BasePipeline):
             f"   ✅ 태그 매핑 완료: {mapped_count}개 키워드 → {len(tag_cache)}개 태그"
         )
         print(f"   📊 감정 분포: 긍정 {positive_count:,}개 / 부정 {negative_count:,}개")
+
+    async def _aggregate_car_model_tags(
+        self, processed_reviews: list[ProcessedReviewDTO]
+    ) -> None:
+        """차량별 태그 집계 (비동기)"""
+        print("\n" + "=" * 60)
+        print("[Step 7] 차량별 태그 집계")
+        print("=" * 60)
+
+        client = await self._get_supabase()
+
+        if self._hybrid_classifier is None:
+            try:
+                from ..analysis import HybridClassifier
+
+                self._hybrid_classifier = HybridClassifier(lazy_load=True)
+            except ImportError as e:
+                print(f"   ⚠️ HybridClassifier 로드 실패: {e}")
+                return
+
+        # 지점+차량별 리뷰 그룹화
+        car_model_data: dict[tuple[int, str], list[ProcessedReviewDTO]] = {}
+
+        for pr in processed_reviews:
+            car_model = pr.review.car_model
+            if not car_model or car_model.strip() == "":
+                continue
+
+            key = (pr.branch_id, car_model.strip())
+            if key not in car_model_data:
+                car_model_data[key] = []
+            car_model_data[key].append(pr)
+
+        if not car_model_data:
+            print("   ⚠️ 차량 모델 정보가 있는 리뷰가 없습니다")
+            return
+
+        print(f"   → {len(car_model_data)}개 지점+차량 조합 발견")
+
+        # 태그 ID 캐시 조회
+        try:
+            result = await client.table("tags").select("id, name").execute()
+            tag_id_map = {t["name"]: t["id"] for t in (result.data or [])}
+        except Exception as e:
+            print(f"   ⚠️ 태그 조회 실패: {e}")
+            tag_id_map = {}
+
+        # 차량별 태그 집계
+        car_model_tags: dict[tuple[int, str, int], dict] = {}
+        total_processed = 0
+
+        for (branch_id, car_model), reviews in car_model_data.items():
+            for pr in reviews:
+                # 리뷰별 태그+감정 분류
+                result = self._hybrid_classifier.classify_review(
+                    review=pr.content, keywords=pr.keywords
+                )
+
+                for tag_name, sentiments in result.items():
+                    if tag_name == "기타":
+                        continue
+
+                    tag_id = tag_id_map.get(tag_name)
+                    if not tag_id:
+                        continue
+
+                    key = (branch_id, car_model, tag_id)
+                    if key not in car_model_tags:
+                        car_model_tags[key] = {
+                            "branch_id": branch_id,
+                            "car_model": car_model,
+                            "tag_id": tag_id,
+                            "positive_count": 0,
+                            "negative_count": 0,
+                            "neutral_count": 0,
+                            "total_count": 0,
+                        }
+
+                    pos = len(sentiments.get("positive", []))
+                    neg = len(sentiments.get("negative", []))
+                    neu = len(sentiments.get("neutral", []))
+
+                    car_model_tags[key]["positive_count"] += pos
+                    car_model_tags[key]["negative_count"] += neg
+                    car_model_tags[key]["neutral_count"] += neu
+                    car_model_tags[key]["total_count"] += pos + neg + neu
+
+            total_processed += len(reviews)
+            if total_processed % 200 == 0:
+                print(f"   {total_processed:,}개 리뷰 처리 중...")
+
+        print(f"   → {len(car_model_tags):,}개 차량+태그 조합 집계 완료")
+
+        # DB 저장
+        saved_count = 0
+        for tag_data in car_model_tags.values():
+            if tag_data["total_count"] == 0:
+                continue
+
+            try:
+                await client.table("car_model_tags").upsert(
+                    {
+                        "branch_id": tag_data["branch_id"],
+                        "car_model": tag_data["car_model"],
+                        "tag_id": tag_data["tag_id"],
+                        "period_type": "all",
+                        "positive_count": tag_data["positive_count"],
+                        "negative_count": tag_data["negative_count"],
+                        "neutral_count": tag_data["neutral_count"],
+                        "total_count": tag_data["total_count"],
+                    },
+                    on_conflict="branch_id,car_model,tag_id,period_type",
+                ).execute()
+                saved_count += 1
+            except Exception as e:
+                if "Could not find" in str(e):
+                    print(f"   ⚠️ car_model_tags 테이블이 없습니다. SQL을 먼저 실행하세요.")
+                    return
+                continue
+
+        print(f"   ✅ 차량별 태그 저장 완료: {saved_count}개")
+
+        # 통계 출력
+        unique_cars = len({(d["branch_id"], d["car_model"]) for d in car_model_tags.values()})
+        total_pos = sum(d["positive_count"] for d in car_model_tags.values())
+        total_neg = sum(d["negative_count"] for d in car_model_tags.values())
+        print(f"   📊 {unique_cars}개 차량, 긍정 {total_pos:,}개 / 부정 {total_neg:,}개")
 
 
 # =============================================================================

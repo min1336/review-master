@@ -1108,13 +1108,13 @@
             });
 
             const DEFAULT_TAGS = Object.freeze([
-                '고객응대',
+                '친절도',
+                '사고',
+                '주유',
+                '가격',
+                '청결',
                 '차량상태',
-                '가성비',
-                '반납/픽업',
-                '위치/접근성',
-                '서비스',
-                '보험/보장'
+                '딜리버리'
             ]);
 
             const PERIOD_LABELS = Object.freeze({
@@ -1307,6 +1307,11 @@
                     visible: false,
                     carModelsLoaded: false
                 },
+                carList: {
+                    visible: false,
+                    loaded: false,
+                    models: []
+                },
                 summaries: [],
                 regionStats: []
             };
@@ -1402,6 +1407,22 @@
 
             function setReviewsTotal(total) { state.reviews.total = total; }
             function markCarModelsLoaded() { state.reviews.carModelsLoaded = true; }
+
+            // Car list state functions
+            function toggleCarListVisibility() {
+                state.carList.visible = !state.carList.visible;
+                return state.carList.visible;
+            }
+            function resetCarList() {
+                state.carList.visible = false;
+                state.carList.loaded = false;
+                state.carList.models = [];
+            }
+            function setCarListModels(models) {
+                state.carList.models = models;
+                state.carList.loaded = true;
+            }
+
             function setSummaries(data) { state.summaries = data; }
 
             function updateSummaryState(branchId, updates) {
@@ -1883,6 +1904,7 @@
                     prevPage,
                     nextPage,
                     toggleReviews,
+                    toggleCarList,
                     loadMoreReviews,
                     applyFilters,
                     enterEditMode,
@@ -2084,6 +2106,7 @@
                 openModal();
                 showModalLoading();
                 resetReviews();
+                resetCarList();
 
                 try {
                     const data = await fetchSummaryDetail(branchId);
@@ -2194,6 +2217,7 @@
                         <div style="display: flex; gap: 8px;">
                             <button class="btn btn-secondary" onclick="window.dashboardHandlers.enterEditMode()">✏️ 수정</button>
                             <button class="btn btn-secondary" onclick="window.dashboardHandlers.toggleReviews(${data.branch_id})" id="btn-toggle-reviews">📋 리뷰 보기</button>
+                            <button class="btn btn-secondary" onclick="window.dashboardHandlers.toggleCarList(${data.branch_id})" id="btn-toggle-carlist">🚗 차량 리스트</button>
                         </div>
                         <div style="display: flex; gap: 8px;">
                             <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.updateStatus(${data.branch_id}, 'draft')">보류</button>
@@ -2229,6 +2253,16 @@
                         <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.loadMoreReviews(${data.branch_id}, 'prev')" id="reviews-prev-btn" disabled>이전</button>
                         <span id="reviews-page-info" style="font-size: 13px; color: var(--grey-5); line-height: 32px;">-</span>
                         <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.loadMoreReviews(${data.branch_id}, 'next')" id="reviews-next-btn">다음</button>
+                    </div>
+                </div>
+
+                <!-- Car List Section -->
+                <div id="carlist-section" style="display: none; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--grey-8);">
+                    <div style="font-size: 14px; font-weight: 600; color: var(--grey-3); margin-bottom: 12px;">
+                        🚗 차량 리스트 <span id="carlist-count" style="font-weight: normal; color: var(--grey-5);"></span>
+                    </div>
+                    <div id="carlist-content" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <div class="loading"><div class="spinner"></div>로딩 중...</div>
                     </div>
                 </div>
             `;
@@ -2469,6 +2503,56 @@
                     if (sentSelect) sentSelect.value = '';
 
                     await loadReviews(branchId);
+                }
+            }
+
+            async function toggleCarList(branchId) {
+                const section = getElement('carlist-section');
+                const btn = getElement('btn-toggle-carlist');
+                const visible = toggleCarListVisibility();
+
+                if (section) section.style.display = visible ? 'block' : 'none';
+                if (btn) btn.textContent = visible ? '🚗 차량 숨기기' : '🚗 차량 리스트';
+
+                if (visible && !state.carList.loaded) {
+                    await loadCarList(branchId);
+                }
+            }
+
+            async function loadCarList(branchId) {
+                const content = getElement('carlist-content');
+                const countEl = getElement('carlist-count');
+
+                if (content) {
+                    content.innerHTML = '<div class="loading"><div class="spinner"></div>로딩 중...</div>';
+                }
+
+                try {
+                    const result = await fetchBranchReviews(branchId, { limit: 1, offset: 0 });
+                    const carModels = result.car_models || [];
+
+                    setCarListModels(carModels);
+
+                    if (countEl) {
+                        countEl.textContent = `(${carModels.length}종)`;
+                    }
+
+                    if (content) {
+                        if (carModels.length === 0) {
+                            content.innerHTML = '<div style="padding: 16px; color: var(--grey-5); font-style: italic;">등록된 차량이 없습니다.</div>';
+                        } else {
+                            content.innerHTML = carModels.map(model => `
+                                <span style="display: inline-block; padding: 8px 16px; background: var(--grey-8); border-radius: 20px; font-size: 13px; color: var(--grey-2);">
+                                    🚗 ${escapeHtml(model)}
+                                </span>
+                            `).join('');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Car list load error:', e);
+                    if (content) {
+                        content.innerHTML = '<div style="padding: 16px; color: var(--error);">차량 리스트 로드 실패</div>';
+                    }
                 }
             }
 

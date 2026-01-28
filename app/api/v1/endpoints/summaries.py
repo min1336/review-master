@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from schemas.dto import BranchCarModelsDTO
 from schemas.summary import RegenerateRequest, StatusUpdate, SummaryUpdate
 from services.summary_service import SummaryService
 
@@ -59,7 +60,7 @@ async def api_summaries(
     keyword: str | None = Query(None, description="키워드/업체명 검색"),
     min_rating: float | None = Query(None, description="최소 평점"),
     max_rating: float | None = Query(None, description="최대 평점"),
-    min_reviews: int = Query(30, description="최소 리뷰 수"),
+    min_reviews: int = Query(0, description="최소 리뷰 수"),
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     sort_by: str = Query("branch_id"),
@@ -289,3 +290,37 @@ async def api_branch_detail(
     if result:
         return result.to_dict()
     raise HTTPException(status_code=404, detail="Not found")
+
+
+@router.get("/summaries/{branch_id}/car-models")
+async def api_car_model_tags(
+    branch_id: int,
+    car_model: str | None = Query(None, description="특정 차량 모델만 조회"),
+    service: SummaryService = Depends(get_summary_service),
+) -> BranchCarModelsDTO:
+    """
+    지점별 차량 모델 태그 분석
+
+    각 차량 모델별로 태그와 감정 통계를 반환합니다.
+
+    응답 예시:
+    ```json
+    {
+      "branch_id": 1234,
+      "car_models": [
+        {
+          "name": "아반떼",
+          "review_count": 50,
+          "tags": [
+            {"name": "차량청결", "positive": 40, "negative": 5, "total": 45},
+            {"name": "가성비", "positive": 35, "negative": 3, "total": 38}
+          ]
+        }
+      ]
+    }
+    ```
+    """
+    return await service.get_car_model_tags(
+        branch_id=branch_id,
+        car_model=car_model,
+    )
