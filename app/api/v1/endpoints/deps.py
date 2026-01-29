@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from repository.sentiment_repository import SentimentRepository
     from repository.summary_repository import SummaryRepository
     from repository.tag_repository import TagRepository
+    from services.analysis_service import AnalysisService
     from services.carmore_service import CarmoreService
     from services.sentiment_service import SentimentService
     from services.summary_service import SummaryService
@@ -40,6 +41,12 @@ if TYPE_CHECKING:
 
 async def get_db_client() -> AsyncClient:
     """Supabase AsyncClient 의존성"""
+    return await get_client()
+
+
+# Alias for direct client access
+async def get_supabase_client() -> AsyncClient:
+    """Supabase AsyncClient 의존성 (alias)"""
     return await get_client()
 
 
@@ -135,3 +142,12 @@ async def get_carmore_service(
     from services.carmore_service import CarmoreService
 
     return CarmoreService(affiliate_repo)
+
+
+async def get_analysis_service(
+    review_repo: BranchReviewRepository = Depends(get_review_repo),
+    summary_repo: SummaryRepository = Depends(get_summary_repo),
+) -> AnalysisService:
+    from services.analysis_service import AnalysisService
+
+    return AnalysisService(review_repo, summary_repo)

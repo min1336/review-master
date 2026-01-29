@@ -1,11 +1,3 @@
-"""
-리뷰 Repository (recent_reviews, branch_reviews 테이블)
-
-이 모듈은 리뷰 데이터에 대한 CRUD 작업을 담당합니다.
-- ReviewRepository: recent_reviews 테이블 (최근 리뷰 캐시)
-- BranchReviewRepository: branch_reviews 테이블 (원본 리뷰)
-"""
-
 from __future__ import annotations
 
 import logging
@@ -16,6 +8,7 @@ from models.review import Review
 from schemas.dto import BranchReviewsDTO, CleanupResultDTO, ReviewSearchResultDTO
 
 from .base import BaseRepository
+from .session import execute_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +65,7 @@ class ReviewRepository(BaseRepository[Review]):
             query = query.eq("branch_id", branch_id)
 
         query = query.order("created_at", desc=True).range(offset, offset + limit - 1)
-        result = await query.execute()
+        result = await execute_with_retry(query)
 
         return ReviewSearchResultDTO(
             reviews=result.data,
@@ -244,10 +237,12 @@ class BranchReviewRepository(BaseRepository[Review]):
         if review_date_from:
             query = query.gte("review_date", review_date_from.isoformat())
         if review_date_to:
-            query = query.lte("review_date", review_date_to.isoformat())
+            # 종료일 전체를 포함하기 위해 다음날 00:00:00 미만으로 비교
+            next_day = review_date_to + timedelta(days=1)
+            query = query.lt("review_date", next_day.isoformat())
 
         query = query.order("review_date", desc=True).range(offset, offset + limit - 1)
-        result = await query.execute()
+        result = await execute_with_retry(query)
 
         # 차량 모델 목록 조회 (distinct)
         car_models = []
@@ -272,7 +267,7 @@ class BranchReviewRepository(BaseRepository[Review]):
         """지점별 리뷰 통계"""
         result = (
             await self._client.table(self.table_name)
-            .select("branch_id, branch_name")
+            .select("branch_id, branch_name, company_name")
             .execute()
         )
 
@@ -280,19 +275,86 @@ class BranchReviewRepository(BaseRepository[Review]):
             return []
 
         branch_counts = Counter()
-        branch_names = {}
+        branch_data: dict[int, dict] = {}
 
         for r in result.data:
             bid = r["branch_id"]
             branch_counts[bid] += 1
-            if bid not in branch_names:
-                branch_names[bid] = r["branch_name"]
+            if bid not in branch_data:
+                branch_data[bid] = {
+                    "branch_name": r["branch_name"],
+                    "company_name": r.get("company_name"),
+                }
 
         return [
             {
                 "branch_id": bid,
-                "branch_name": branch_names.get(bid),
+                "branch_name": branch_data[bid]["branch_name"],
+                "company_name": branch_data[bid]["company_name"],
                 "review_count": count,
             }
             for bid, count in branch_counts.most_common()
         ]
+
+    async def search_with_filters(
+        self,
+        branch_ids: list[int] | None = None,
+        sentiment: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        sort_by: str = "latest",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> BranchReviewsDTO:
+        """
+        다중 필터 조건으로 리뷰 검색
+
+        Args:
+            branch_ids: 지점 ID 필터 목록 (인덱스 활용)
+            sentiment: 감정 필터
+            date_from: 시작일 (YYYY-MM-DD)
+            date_to: 종료일 (YYYY-MM-DD)
+            sort_by: 정렬 기준 (latest, rating_low)
+            limit: 조회 개수
+            offset: 페이징 오프셋
+
+        Returns:
+            BranchReviewsDTO: 리뷰 목록과 전체 개수
+        """
+        query = self._client.table(self.table_name).select("*", count="exact")
+
+        # 지점 ID 필터 (인덱스 활용으로 빠름)
+        if branch_ids:
+            query = query.in_("branch_id", branch_ids)
+
+        # 감정 필터
+        if sentiment:
+            query = query.eq("sentiment", sentiment)
+
+        # 날짜 범위 필터
+        if date_from:
+            query = query.gte("review_date", date_from)
+        if date_to:
+            # 종료일 전체를 포함하기 위해 다음날 00:00:00 미만으로 비교
+            next_day = (
+                datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+            ).strftime("%Y-%m-%d")
+            query = query.lt("review_date", next_day)
+
+        # 정렬
+        sort_config = {
+            "latest": ("review_date", True),
+            "rating_low": ("rating_service", False),
+        }
+        sort_field, desc = sort_config.get(sort_by, ("review_date", True))
+        query = query.order(sort_field, desc=desc)
+
+        # 페이징
+        query = query.range(offset, offset + limit - 1)
+
+        result = await execute_with_retry(query)
+
+        return BranchReviewsDTO(
+            reviews=result.data,
+            total=result.count or 0,
+        )

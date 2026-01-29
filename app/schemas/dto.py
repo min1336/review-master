@@ -833,6 +833,125 @@ class BranchCarModelsDTO:
 
 
 # ==============================================================================
+# Analysis (분석 페이지) DTO
+# ==============================================================================
+
+
+@dataclass
+class BranchOptionDTO:
+    """
+    지점 옵션 DTO
+
+    필터 드롭다운에서 사용하는 지점 정보입니다.
+    """
+
+    branch_id: int
+    branch_name: str
+    company_name: str = ""
+    region: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "branch_id": self.branch_id,
+            "branch_name": self.branch_name,
+            "company_name": self.company_name,
+            "region": self.region,
+        }
+
+
+@dataclass
+class FilterOptionsDTO:
+    """
+    필터 옵션 DTO (계층형 필터 지원)
+
+    분석 페이지의 필터 드롭다운에 사용되는 옵션들을 담습니다.
+    branches에 region, company_name이 포함되어 계층형 필터링 가능.
+    """
+
+    regions: list[str] = field(default_factory=list)
+    companies: list[str] = field(default_factory=list)
+    branches: list[BranchOptionDTO] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "regions": self.regions,
+            "companies": self.companies,
+            "branches": [b.to_dict() for b in self.branches],
+        }
+
+
+@dataclass
+class AnalysisReviewDTO:
+    """
+    분석 페이지용 리뷰 DTO
+    """
+
+    id: int | None
+    review_id: int | None
+    branch_id: int | None
+    branch_name: str
+    company_name: str
+    content: str
+    sentiment: str | None
+    review_date: str | None
+    rating_service: float | None
+    rating_car: float | None
+    rating_convenience: float | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "review_id": self.review_id,
+            "branch_id": self.branch_id,
+            "branch_name": self.branch_name,
+            "company_name": self.company_name,
+            "content": self.content,
+            "sentiment": self.sentiment,
+            "review_date": self.review_date,
+            "rating_service": self.rating_service,
+            "rating_car": self.rating_car,
+            "rating_convenience": self.rating_convenience,
+        }
+
+    @classmethod
+    def from_db_row(cls, row: dict[str, Any]) -> "AnalysisReviewDTO":
+        """DB row에서 DTO 생성"""
+        review_date = row.get("review_date")
+        if isinstance(review_date, datetime):
+            review_date = review_date.isoformat()
+
+        return cls(
+            id=row.get("id"),
+            review_id=row.get("review_id"),
+            branch_id=row.get("branch_id"),
+            branch_name=row.get("branch_name") or "",
+            company_name=row.get("company_name") or "",
+            content=row.get("content") or "",
+            sentiment=row.get("sentiment"),
+            review_date=review_date,
+            rating_service=row.get("rating_service"),
+            rating_car=row.get("rating_car"),
+            rating_convenience=row.get("rating_convenience"),
+        )
+
+
+@dataclass
+class AnalysisReviewListDTO:
+    """
+    분석 페이지 리뷰 목록 결과 DTO
+    """
+
+    reviews: list[AnalysisReviewDTO]
+    total: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "reviews": [r.to_dict() for r in self.reviews],
+            "total": self.total,
+        }
+
+
+# ==============================================================================
 # 내보내기
 # ==============================================================================
 
@@ -875,4 +994,9 @@ __all__ = [
     "CarModelTagDTO",
     "CarModelDTO",
     "BranchCarModelsDTO",
+    # Analysis
+    "BranchOptionDTO",
+    "FilterOptionsDTO",
+    "AnalysisReviewDTO",
+    "AnalysisReviewListDTO",
 ]

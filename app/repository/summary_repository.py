@@ -1,15 +1,6 @@
-"""
-지점 요약 Repository (branch_summaries 테이블)
-
-이 모듈은 지점 요약 데이터에 대한 CRUD 작업을 담당합니다.
-- 요약 목록 조회 (필터링, 정렬, 페이징)
-- 날짜 범위로 지점 ID 조회
-- 통계 조회
-"""
-
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from models.summary import Summary
 from schemas.dto import SummaryStatsDTO
@@ -234,7 +225,9 @@ class SummaryRepository(BaseRepository[Summary]):
         if review_date_from:
             query = query.gte("review_date", review_date_from.isoformat())
         if review_date_to:
-            query = query.lte("review_date", review_date_to.isoformat())
+            # 종료일 전체를 포함하기 위해 다음날 00:00:00 미만으로 비교
+            next_day = review_date_to + timedelta(days=1)
+            query = query.lt("review_date", next_day.isoformat())
 
         result = await query.execute()
 

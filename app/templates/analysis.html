@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>리뷰 분석 - Review Summary AI</title>
+    <link rel="stylesheet" as="style" crossorigin
+        href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
+    <style>
+        :root {
+            --primary: #0d6ffc;
+            --primary-hover: #0b5ed7;
+            --primary-light: #e3f0ff;
+            --success: #10b981;
+            --success-light: #d1fae5;
+            --warning: #f59e0b;
+            --warning-light: #fef3c7;
+            --error: #ef4444;
+            --error-light: #fee2e2;
+            --grey-1: #1e1e1e;
+            --grey-2: #333333;
+            --grey-3: #555555;
+            --grey-5: #999999;
+            --grey-7: #dddddd;
+            --grey-8: #eeeeee;
+            --grey-9: #f8f8f8;
+            --max-width: 1400px;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--grey-9);
+            color: var(--grey-1);
+            line-height: 1.5;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        /* Container */
+        .container {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: var(--spacing-lg);
+        }
+
+        /* Filter Section - Compact */
+        .filter-card {
+            background: white;
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-sm);
+            padding: 12px 16px;
+            margin-bottom: var(--spacing-md);
+            border: 1px solid var(--grey-7);
+        }
+
+        .filter-title {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--grey-3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-title .cascade-hint {
+            font-size: 11px;
+            font-weight: 400;
+            color: var(--grey-5);
+            background: var(--grey-8);
+            padding: 1px 6px;
+            border-radius: 4px;
+        }
+
+        /* Cascading Filter Row - Compact */
+        .filter-cascade {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .filter-cascade .filter-step {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .filter-cascade .arrow {
+            display: flex;
+            align-items: center;
+            padding-top: 20px;
+            color: var(--grey-6);
+            font-size: 14px;
+        }
+
+        @media (max-width: 900px) {
+            .filter-cascade {
+                flex-direction: column;
+            }
+            .filter-cascade .arrow {
+                display: none;
+            }
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .filter-label {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--grey-4);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .filter-label .step-number {
+            background: var(--primary);
+            color: white;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: 600;
+        }
+
+        .filter-label .count-badge {
+            background: var(--grey-8);
+            color: var(--grey-5);
+            padding: 0px 5px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 400;
+        }
+
+        /* Dropdown Select - Compact */
+        .filter-select-wrapper {
+            position: relative;
+        }
+
+        .filter-select {
+            width: 100%;
+            padding: 6px 10px;
+            padding-right: 28px;
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            appearance: none;
+        }
+
+        .filter-select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .filter-select:disabled {
+            background: var(--grey-8);
+            color: var(--grey-5);
+            cursor: not-allowed;
+        }
+
+        .filter-select-wrapper::after {
+            content: '▼';
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 8px;
+            color: var(--grey-5);
+            pointer-events: none;
+        }
+
+        .filter-input {
+            padding: 6px 10px;
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            background: white;
+        }
+
+        .filter-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Selected Chips - Compact */
+        .selected-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+            min-height: 28px;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 2px 8px;
+            background: var(--primary-light);
+            color: var(--primary);
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .chip .remove {
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+            opacity: 0.7;
+        }
+
+        .chip .remove:hover {
+            opacity: 1;
+        }
+
+        /* Additional Filters - Compact */
+        .filter-row {
+            display: flex;
+            gap: 12px;
+            padding-top: 10px;
+            border-top: 1px solid var(--grey-8);
+            align-items: flex-end;
+        }
+
+        @media (max-width: 768px) {
+            .filter-row {
+                flex-wrap: wrap;
+            }
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        /* Buttons - Compact */
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--grey-3);
+            border: 1px solid var(--grey-7);
+        }
+
+        .btn-secondary:hover {
+            background: var(--grey-9);
+        }
+
+        /* Review List */
+        .review-card {
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--grey-7);
+        }
+
+        .review-header {
+            padding: var(--spacing-md) var(--spacing-lg);
+            border-bottom: 1px solid var(--grey-8);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .review-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--grey-2);
+        }
+
+        .review-count {
+            font-size: 14px;
+            color: var(--grey-5);
+        }
+
+        .review-header-actions {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+        }
+
+        .btn-export {
+            background: #217346;
+            color: white;
+            padding: 8px 14px;
+            font-size: 13px;
+        }
+
+        .btn-export:hover:not(:disabled) {
+            background: #1a5c38;
+        }
+
+        .btn-export:disabled {
+            background: var(--grey-7);
+            color: var(--grey-5);
+            cursor: not-allowed;
+        }
+
+        .review-list {
+            /* 스크롤 제거 - 페이지네이션으로 탐색 */
+        }
+
+        .review-item {
+            padding: var(--spacing-md) var(--spacing-lg);
+            border-bottom: 1px solid var(--grey-8);
+            transition: background 0.2s;
+        }
+
+        .review-item:hover {
+            background: var(--grey-9);
+        }
+
+        .review-item:last-child {
+            border-bottom: none;
+        }
+
+        .review-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .review-info {
+            display: flex;
+            gap: var(--spacing-md);
+            font-size: 13px;
+            color: var(--grey-5);
+        }
+
+        .review-info span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .info-id {
+            color: var(--primary);
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .info-id:hover {
+            text-decoration: underline;
+        }
+
+        .review-ratings {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+
+        .rating-item {
+            font-size: 12px;
+            padding: 2px 8px;
+            background: var(--grey-8);
+            border-radius: 4px;
+            color: var(--grey-3);
+        }
+
+        .review-sentiment {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .review-sentiment.positive {
+            background: var(--success-light);
+            color: #065f46;
+        }
+
+        .review-sentiment.negative {
+            background: var(--error-light);
+            color: #991b1b;
+        }
+
+        .review-sentiment.neutral {
+            background: var(--grey-8);
+            color: var(--grey-3);
+        }
+
+        .review-content {
+            font-size: 14px;
+            line-height: 1.7;
+            color: var(--grey-2);
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 60px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--grey-7);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .spinning {
+            animation: spin 1s linear infinite;
+        }
+
+        /* Empty State */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            color: var(--grey-5);
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            stroke: var(--grey-7);
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-md);
+            border-top: 1px solid var(--grey-8);
+        }
+
+        .page-btn {
+            padding: 8px 14px;
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            background: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: var(--grey-9);
+            border-color: var(--grey-5);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .page-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .page-info {
+            font-size: 14px;
+            color: var(--grey-5);
+            padding: 0 var(--spacing-md);
+        }
+
+        /* Sort Section */
+        .sort-section {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .sort-label {
+            font-size: 13px;
+            color: var(--grey-5);
+        }
+
+        .sort-buttons {
+            display: flex;
+            gap: 4px;
+            background: var(--grey-8);
+            padding: 4px;
+            border-radius: var(--radius-sm);
+        }
+
+        .sort-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            background: transparent;
+            font-size: 13px;
+            color: var(--grey-3);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .sort-btn:hover {
+            background: white;
+        }
+
+        .sort-btn.active {
+            background: white;
+            color: var(--primary);
+            font-weight: 500;
+            box-shadow: var(--shadow-sm);
+        }
+    </style>
+</head>
+
+<body>
+    <header class="header">
+        <h1>리뷰 분석</h1>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="window.location.href='/'">대시보드로 돌아가기</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Filter Section -->
+        <div class="filter-card">
+            <div class="filter-title">
+                필터 조건
+                <span class="cascade-hint">지역 → 업체 → 지점 순서로 선택</span>
+            </div>
+
+            <!-- Cascading Filters -->
+            <div class="filter-cascade">
+                <!-- Step 1: 지역 -->
+                <div class="filter-step">
+                    <div class="filter-group">
+                        <label class="filter-label">
+                            <span class="step-number">1</span>
+                            지역
+                            <span class="count-badge" id="regionCount">0</span>
+                        </label>
+                        <div class="filter-select-wrapper">
+                            <select class="filter-select" id="regionSelect" onchange="onRegionChange()">
+                                <option value="">전체 지역</option>
+                            </select>
+                        </div>
+                        <div class="selected-chips" id="regionChips"></div>
+                    </div>
+                </div>
+
+                <div class="arrow">→</div>
+
+                <!-- Step 2: 업체 -->
+                <div class="filter-step">
+                    <div class="filter-group">
+                        <label class="filter-label">
+                            <span class="step-number">2</span>
+                            업체명
+                            <span class="count-badge" id="companyCount">0</span>
+                        </label>
+                        <div class="filter-select-wrapper">
+                            <select class="filter-select" id="companySelect" onchange="onCompanyChange()">
+                                <option value="">전체 업체</option>
+                            </select>
+                        </div>
+                        <div class="selected-chips" id="companyChips"></div>
+                    </div>
+                </div>
+
+                <div class="arrow">→</div>
+
+                <!-- Step 3: 지점 -->
+                <div class="filter-step">
+                    <div class="filter-group">
+                        <label class="filter-label">
+                            <span class="step-number">3</span>
+                            지점
+                            <span class="count-badge" id="branchCount">0</span>
+                        </label>
+                        <div class="filter-select-wrapper">
+                            <select class="filter-select" id="branchSelect" onchange="onBranchChange()">
+                                <option value="">전체 지점</option>
+                            </select>
+                        </div>
+                        <div class="selected-chips" id="branchChips"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Additional Filters -->
+            <div class="filter-row" style="justify-content: flex-end;">
+                <div class="filter-group">
+                    <label class="filter-label">감정</label>
+                    <div class="filter-select-wrapper">
+                        <select class="filter-select" id="sentimentFilter">
+                            <option value="">전체</option>
+                            <option value="positive">긍정</option>
+                            <option value="negative">부정</option>
+                            <option value="neutral">중립</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">정렬</label>
+                    <div class="filter-select-wrapper">
+                        <select class="filter-select" id="sortSelect">
+                            <option value="latest">최신순</option>
+                            <option value="rating_low">낮은 평점순</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">기간</label>
+                    <input type="text" class="filter-input" id="dateRangeFilter" placeholder="기간 선택">
+                </div>
+
+                <div class="filter-actions">
+                    <button class="btn btn-secondary" onclick="resetFilters()">초기화</button>
+                    <button class="btn btn-primary" onclick="applyFilters()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="M21 21l-4.35-4.35"></path>
+                        </svg>
+                        검색
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Review List -->
+        <div class="review-card">
+            <div class="review-header">
+                <div class="review-title">리뷰 목록</div>
+                <div class="review-header-actions">
+                    <div class="review-count" id="reviewCount">총 0건</div>
+                    <button class="btn btn-export" onclick="exportToExcel()" id="exportBtn" disabled>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
+                            <polyline points="7,10 12,15 17,10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        엑셀 내보내기
+                    </button>
+                </div>
+            </div>
+
+            <div id="reviewListContainer">
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                </div>
+                <div class="review-list" id="reviewList" style="display: none;"></div>
+                <div class="empty-state" id="emptyState" style="display: none;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <span>조건에 맞는 리뷰가 없습니다.</span>
+                </div>
+            </div>
+
+            <div class="pagination" id="pagination" style="display: none;">
+                <button class="page-btn" id="prevBtn" onclick="goToPage(currentPage - 1)">이전</button>
+                <div id="pageNumbers"></div>
+                <button class="page-btn" id="nextBtn" onclick="goToPage(currentPage + 1)">다음</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+    <script>
+        // API Prefix
+        const API_PREFIX = '{{ api_prefix }}';
+
+        // Full data from API
+        let allBranches = [];  // Contains: branch_id, branch_name, region, company_name
+        let allRegions = [];
+        let allCompanies = [];
+
+        // Selected filters (multi-select via chips)
+        let selectedRegions = [];
+        let selectedCompanies = [];
+        let selectedBranches = [];
+
+        // Filtered options based on cascading
+        let availableCompanies = [];
+        let availableBranches = [];
+
+        // Pagination
+        let currentPage = 1;
+        let totalPages = 1;
+        let totalCount = 0;
+        let currentSort = 'latest';
+        const pageSize = 5;
+
+        // Date filter
+        let dateFrom = null;
+        let dateTo = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Initialize date picker
+            flatpickr('#dateRangeFilter', {
+                mode: 'range',
+                dateFormat: 'Y-m-d',
+                locale: 'ko',
+                onChange: function(selectedDates) {
+                    if (selectedDates.length === 2) {
+                        // 로컬 날짜 포맷 (타임존 문제 방지)
+                        const formatLocalDate = (date) => {
+                            const year = date.getFullYear();
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const day = String(date.getDate()).padStart(2, '0');
+                            return `${year}-${month}-${day}`;
+                        };
+                        dateFrom = formatLocalDate(selectedDates[0]);
+                        dateTo = formatLocalDate(selectedDates[1]);
+                    } else {
+                        dateFrom = null;
+                        dateTo = null;
+                    }
+                }
+            });
+
+            // Load filter options
+            await loadFilterOptions();
+
+            // Load initial reviews
+            await loadReviews();
+        });
+
+        // Load filter options from API
+        async function loadFilterOptions() {
+            try {
+                const response = await fetch(`${API_PREFIX}/analysis/filters`);
+                const data = await response.json();
+
+                allRegions = data.regions || [];
+                allCompanies = data.companies || [];
+                allBranches = data.branches || [];
+
+                // Initialize dropdowns
+                updateRegionSelect();
+                updateCompanySelect();
+                updateBranchSelect();
+
+                // Update counts
+                document.getElementById('regionCount').textContent = allRegions.length;
+                document.getElementById('companyCount').textContent = allCompanies.length;
+                document.getElementById('branchCount').textContent = allBranches.length;
+
+            } catch (error) {
+                console.error('Failed to load filter options:', error);
+            }
+        }
+
+        // Update region dropdown (계층형)
+        function updateRegionSelect() {
+            const select = document.getElementById('regionSelect');
+            select.innerHTML = '<option value="">지역 선택...</option>';
+
+            // 지역을 도/시 기준으로 그룹화
+            const grouped = {};
+            const standalone = []; // 하위 지역 없는 단독 항목
+
+            allRegions.forEach(region => {
+                if (selectedRegions.includes(region)) return;
+
+                const parts = region.split(' ');
+                if (parts.length >= 2) {
+                    // "강원 강릉시" → 강원 그룹에 강릉시 추가
+                    const province = parts[0];
+                    if (!grouped[province]) grouped[province] = [];
+                    grouped[province].push(region);
+                } else {
+                    // "강원", "서울" 등 단독 항목
+                    standalone.push(region);
+                }
+            });
+
+            const provinces = Object.keys(grouped).sort();
+
+            provinces.forEach(province => {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = province;
+
+                // "전체" 옵션 추가 (도/시 전체 선택) - 그룹이 있으면 항상 표시
+                if (!selectedRegions.includes(province)) {
+                    const allOption = document.createElement('option');
+                    allOption.value = province;
+                    allOption.textContent = '전체';
+                    optgroup.appendChild(allOption);
+                }
+
+                // 해당 도/시의 하위 지역들
+                grouped[province].sort().forEach(region => {
+                    const option = document.createElement('option');
+                    option.value = region;
+                    // "강원 강릉시" → "강릉시"로 표시
+                    option.textContent = region.split(' ').slice(1).join(' ');
+                    optgroup.appendChild(option);
+                });
+
+                select.appendChild(optgroup);
+            });
+
+            // 하위 지역 없는 단독 항목 (기타, 해외 등) - 그룹에 포함되지 않은 것만
+            standalone.filter(r => !provinces.includes(r)).sort().forEach(region => {
+                const option = document.createElement('option');
+                option.value = region;
+                option.textContent = region;
+                select.appendChild(option);
+            });
+        }
+
+        // Update company dropdown (filtered by selected regions)
+        function updateCompanySelect() {
+            const select = document.getElementById('companySelect');
+            select.innerHTML = '<option value="">업체 선택...</option>';
+
+            // Get available companies based on selected regions
+            // 지역 미선택 시 전체 포함 (region 없는 지점 포함)
+            const companiesInRegions = new Set();
+            allBranches.forEach(b => {
+                if (selectedRegions.length === 0) {
+                    // 지역 미선택: 모든 업체 포함
+                    if (b.company_name) {
+                        companiesInRegions.add(b.company_name);
+                    }
+                } else {
+                    // 지역 선택됨: 해당 지역 업체만
+                    if (selectedRegions.includes(b.region) && b.company_name) {
+                        companiesInRegions.add(b.company_name);
+                    }
+                }
+            });
+            availableCompanies = [...companiesInRegions].sort();
+
+            availableCompanies.forEach(company => {
+                if (!selectedCompanies.includes(company)) {
+                    const option = document.createElement('option');
+                    option.value = company;
+                    option.textContent = company;
+                    select.appendChild(option);
+                }
+            });
+
+            document.getElementById('companyCount').textContent = availableCompanies.length;
+        }
+
+        // Update branch dropdown (filtered by selected regions & companies)
+        function updateBranchSelect() {
+            const select = document.getElementById('branchSelect');
+            select.innerHTML = '<option value="">지점 선택...</option>';
+
+            // Filter branches based on selections
+            // 지역 미선택 시 전체 포함 (region 없는 지점 포함)
+            availableBranches = allBranches.filter(b => {
+                // If regions selected, branch must be in one of them (region 없는 지점 제외)
+                if (selectedRegions.length > 0 && !selectedRegions.includes(b.region)) {
+                    return false;
+                }
+                // If companies selected, branch must belong to one of them
+                if (selectedCompanies.length > 0 && !selectedCompanies.includes(b.company_name)) {
+                    return false;
+                }
+                // Exclude already selected branches
+                if (selectedBranches.includes(b.branch_id)) {
+                    return false;
+                }
+                return true;
+            });
+
+            availableBranches.forEach(branch => {
+                const option = document.createElement('option');
+                option.value = branch.branch_id;
+                option.textContent = branch.branch_name;
+                select.appendChild(option);
+            });
+
+            document.getElementById('branchCount').textContent = availableBranches.length;
+        }
+
+        // Region selection handler
+        function onRegionChange() {
+            const select = document.getElementById('regionSelect');
+            const value = select.value;
+
+            if (value && !selectedRegions.includes(value)) {
+                // 선택된 값이 상위 지역(예: "강원", "서울")인지 확인
+                const parts = value.split(' ');
+                const isParentRegion = parts.length === 1;
+
+                if (isParentRegion) {
+                    // 상위 지역 선택 시: 해당 지역 + 모든 하위 지역 함께 선택
+                    const regionsToAdd = allRegions.filter(r => {
+                        // 정확히 일치하거나 해당 지역으로 시작하는 모든 하위 지역
+                        return r === value || r.startsWith(value + ' ');
+                    });
+
+                    regionsToAdd.forEach(r => {
+                        if (!selectedRegions.includes(r)) {
+                            selectedRegions.push(r);
+                        }
+                    });
+                } else {
+                    // 하위 지역 선택 시: 해당 지역만 추가
+                    selectedRegions.push(value);
+                }
+
+                renderChips('regionChips', selectedRegions, removeRegion);
+
+                // Reset downstream selections
+                selectedCompanies = [];
+                selectedBranches = [];
+                renderChips('companyChips', selectedCompanies, removeCompany);
+                renderChips('branchChips', selectedBranches, removeBranch);
+            }
+
+            select.value = '';
+            updateRegionSelect();
+            updateCompanySelect();
+            updateBranchSelect();
+        }
+
+        // Company selection handler
+        function onCompanyChange() {
+            const select = document.getElementById('companySelect');
+            const value = select.value;
+
+            if (value && !selectedCompanies.includes(value)) {
+                selectedCompanies.push(value);
+                renderChips('companyChips', selectedCompanies, removeCompany);
+
+                // Reset downstream selections
+                selectedBranches = [];
+                renderChips('branchChips', selectedBranches, removeBranch);
+            }
+
+            select.value = '';
+            updateCompanySelect();
+            updateBranchSelect();
+        }
+
+        // Branch selection handler
+        function onBranchChange() {
+            const select = document.getElementById('branchSelect');
+            const value = parseInt(select.value);
+
+            if (value && !selectedBranches.includes(value)) {
+                selectedBranches.push(value);
+                const branchNames = selectedBranches.map(id => {
+                    const b = allBranches.find(x => x.branch_id === id);
+                    return b ? b.branch_name : id;
+                });
+                renderChips('branchChips', branchNames, (name) => {
+                    const b = allBranches.find(x => x.branch_name === name);
+                    if (b) removeBranch(b.branch_id);
+                });
+            }
+
+            select.value = '';
+            updateBranchSelect();
+        }
+
+        // Remove region
+        function removeRegion(region) {
+            selectedRegions = selectedRegions.filter(r => r !== region);
+            renderChips('regionChips', selectedRegions, removeRegion);
+
+            // Clear downstream if affected
+            updateCompanySelect();
+            selectedCompanies = selectedCompanies.filter(c => availableCompanies.includes(c));
+            renderChips('companyChips', selectedCompanies, removeCompany);
+
+            updateBranchSelect();
+            selectedBranches = selectedBranches.filter(id =>
+                availableBranches.some(b => b.branch_id === id)
+            );
+            const branchNames = selectedBranches.map(id => {
+                const b = allBranches.find(x => x.branch_id === id);
+                return b ? b.branch_name : id;
+            });
+            renderChips('branchChips', branchNames, (name) => {
+                const b = allBranches.find(x => x.branch_name === name);
+                if (b) removeBranch(b.branch_id);
+            });
+
+            updateRegionSelect();
+        }
+
+        // Remove company
+        function removeCompany(company) {
+            selectedCompanies = selectedCompanies.filter(c => c !== company);
+            renderChips('companyChips', selectedCompanies, removeCompany);
+
+            // Clear downstream if affected
+            updateBranchSelect();
+            selectedBranches = selectedBranches.filter(id =>
+                availableBranches.some(b => b.branch_id === id)
+            );
+            const branchNames = selectedBranches.map(id => {
+                const b = allBranches.find(x => x.branch_id === id);
+                return b ? b.branch_name : id;
+            });
+            renderChips('branchChips', branchNames, (name) => {
+                const b = allBranches.find(x => x.branch_name === name);
+                if (b) removeBranch(b.branch_id);
+            });
+
+            updateCompanySelect();
+        }
+
+        // Remove branch
+        function removeBranch(branchId) {
+            selectedBranches = selectedBranches.filter(id => id !== branchId);
+            const branchNames = selectedBranches.map(id => {
+                const b = allBranches.find(x => x.branch_id === id);
+                return b ? b.branch_name : id;
+            });
+            renderChips('branchChips', branchNames, (name) => {
+                const b = allBranches.find(x => x.branch_name === name);
+                if (b) removeBranch(b.branch_id);
+            });
+            updateBranchSelect();
+        }
+
+        // Render chips
+        function renderChips(containerId, items, removeCallback) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = items.map(item => `
+                <span class="chip">
+                    ${item}
+                    <span class="remove" onclick="event.stopPropagation(); (${removeCallback.toString()})(${typeof item === 'string' ? `'${item}'` : item})">&times;</span>
+                </span>
+            `).join('');
+        }
+
+        // Reset all filters
+        function resetFilters() {
+            selectedRegions = [];
+            selectedCompanies = [];
+            selectedBranches = [];
+            dateFrom = null;
+            dateTo = null;
+            currentSort = 'latest';
+
+            document.getElementById('sentimentFilter').value = '';
+            document.getElementById('sortSelect').value = 'latest';
+            flatpickr('#dateRangeFilter').clear();
+
+            renderChips('regionChips', [], () => {});
+            renderChips('companyChips', [], () => {});
+            renderChips('branchChips', [], () => {});
+
+            updateRegionSelect();
+            updateCompanySelect();
+            updateBranchSelect();
+
+            currentPage = 1;
+            loadReviews();
+        }
+
+        // Apply filters and search
+        function applyFilters() {
+            currentPage = 1;
+            currentSort = document.getElementById('sortSelect').value;
+            loadReviews();
+        }
+
+        // Export to Excel
+        async function exportToExcel() {
+            const exportBtn = document.getElementById('exportBtn');
+            const originalText = exportBtn.innerHTML;
+
+            // 버튼 비활성화 및 로딩 표시
+            exportBtn.disabled = true;
+            exportBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinning">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 6v6l4 2"></path>
+                </svg>
+                내보내는 중...
+            `;
+
+            try {
+                const params = new URLSearchParams({
+                    sort_by: currentSort
+                });
+
+                // Add filters
+                if (selectedRegions.length > 0) {
+                    selectedRegions.forEach(r => params.append('regions', r));
+                }
+                if (selectedCompanies.length > 0) {
+                    selectedCompanies.forEach(c => params.append('companies', c));
+                }
+                if (selectedBranches.length > 0) {
+                    selectedBranches.forEach(b => params.append('branch_ids', b));
+                }
+
+                const sentiment = document.getElementById('sentimentFilter').value;
+                if (sentiment) {
+                    params.append('sentiment', sentiment);
+                }
+                if (dateFrom) {
+                    params.append('date_from', dateFrom);
+                }
+                if (dateTo) {
+                    params.append('date_to', dateTo);
+                }
+
+                const response = await fetch(`${API_PREFIX}/analysis/reviews/export?${params}`);
+
+                if (!response.ok) {
+                    throw new Error('Export failed');
+                }
+
+                // Blob으로 변환 후 다운로드
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+
+                // Content-Disposition 헤더에서 파일명 추출
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = '리뷰_내보내기.xlsx';
+                if (contentDisposition) {
+                    const filenameMatch = contentDisposition.match(/filename\*?=['"]?(?:UTF-8'')?([^;\n"']+)/i);
+                    if (filenameMatch && filenameMatch[1]) {
+                        filename = decodeURIComponent(filenameMatch[1]);
+                    }
+                }
+
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+            } catch (error) {
+                console.error('Failed to export reviews:', error);
+                alert('리뷰 내보내기에 실패했습니다.');
+            } finally {
+                // 버튼 복원
+                exportBtn.disabled = false;
+                exportBtn.innerHTML = originalText;
+            }
+        }
+
+        // Load reviews from API
+        async function loadReviews() {
+            const loading = document.getElementById('loading');
+            const reviewList = document.getElementById('reviewList');
+            const emptyState = document.getElementById('emptyState');
+            const pagination = document.getElementById('pagination');
+
+            loading.style.display = 'flex';
+            reviewList.style.display = 'none';
+            emptyState.style.display = 'none';
+            pagination.style.display = 'none';
+
+            try {
+                const params = new URLSearchParams({
+                    limit: pageSize,
+                    offset: (currentPage - 1) * pageSize,
+                    sort_by: currentSort
+                });
+
+                // Add filters
+                if (selectedRegions.length > 0) {
+                    selectedRegions.forEach(r => params.append('regions', r));
+                }
+                if (selectedCompanies.length > 0) {
+                    selectedCompanies.forEach(c => params.append('companies', c));
+                }
+                if (selectedBranches.length > 0) {
+                    selectedBranches.forEach(b => params.append('branch_ids', b));
+                }
+
+                const sentiment = document.getElementById('sentimentFilter').value;
+                if (sentiment) {
+                    params.append('sentiment', sentiment);
+                }
+                if (dateFrom) {
+                    params.append('date_from', dateFrom);
+                }
+                if (dateTo) {
+                    params.append('date_to', dateTo);
+                }
+
+                const response = await fetch(`${API_PREFIX}/analysis/reviews?${params}`);
+                const data = await response.json();
+
+                totalCount = data.total || 0;
+                totalPages = Math.ceil(totalCount / pageSize) || 1;
+
+                // 현재 페이지가 총 페이지 수를 초과하면 마지막 페이지로 조정
+                if (currentPage > totalPages && totalCount > 0) {
+                    currentPage = totalPages;
+                    loading.style.display = 'none';
+                    return loadReviews();
+                }
+
+                document.getElementById('reviewCount').textContent = `총 ${totalCount.toLocaleString()}건`;
+
+                // 내보내기 버튼 활성화/비활성화
+                document.getElementById('exportBtn').disabled = totalCount === 0;
+
+                if (data.reviews && data.reviews.length > 0) {
+                    renderReviews(data.reviews);
+                    reviewList.style.display = 'block';
+                    if (totalPages > 1) {
+                        renderPagination();
+                        pagination.style.display = 'flex';
+                    }
+                } else {
+                    emptyState.style.display = 'flex';
+                }
+
+            } catch (error) {
+                console.error('Failed to load reviews:', error);
+                emptyState.style.display = 'flex';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        // Render reviews
+        function renderReviews(reviews) {
+            const reviewList = document.getElementById('reviewList');
+
+            reviewList.innerHTML = reviews.map(review => {
+                const sentimentClass = review.sentiment || 'neutral';
+                const sentimentText = {
+                    'positive': '긍정',
+                    'negative': '부정',
+                    'neutral': '중립'
+                }[sentimentClass] || '중립';
+
+                const date = review.review_date
+                    ? new Date(review.review_date).toLocaleDateString('ko-KR')
+                    : '-';
+
+                const reviewId = review.review_id || '-';
+                const reviewDate = review.review_date ? review.review_date.split('T')[0] : '';
+                const ratingService = review.rating_service != null ? review.rating_service.toFixed(1) : '-';
+                const ratingCar = review.rating_car != null ? review.rating_car.toFixed(1) : '-';
+                const ratingConv = review.rating_convenience != null ? review.rating_convenience.toFixed(1) : '-';
+
+                return `
+                    <div class="review-item">
+                        <div class="review-meta">
+                            <div class="review-info">
+                                <span class="info-company">${review.company_name || '-'}</span>
+                                <span class="info-branch">${review.branch_name || '-'}</span>
+                                <span class="info-date">${date}</span>
+                                <span class="info-id" onclick="openReservation('${reviewId}', '${reviewDate}')" title="운영툴에서 보기">#${reviewId}</span>
+                            </div>
+                            <div class="review-ratings">
+                                <span class="rating-item" title="친절/편의성">서비스 ${ratingService}</span>
+                                <span class="rating-item" title="차량평점">차량 ${ratingCar}</span>
+                                <span class="rating-item" title="인수/반납편의성">편의성 ${ratingConv}</span>
+                            </div>
+                        </div>
+                        <div class="review-content">${review.content || '-'}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 운영툴에서 예약 보기
+        function openReservation(reviewId, reviewDate) {
+            if (reviewId && reviewId !== '-') {
+                let url = `https://dev-admin.carmore.kr/partners/Reviewmanage?sp=reservation_idx&sv=${reviewId}`;
+                if (reviewDate) {
+                    url += `&startdate=${reviewDate}&enddate=${reviewDate}`;
+                }
+                window.open(url, '_blank');
+            }
+        }
+
+        // Render pagination
+        function renderPagination() {
+            const pageNumbers = document.getElementById('pageNumbers');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+
+            prevBtn.disabled = currentPage === 1;
+            nextBtn.disabled = currentPage === totalPages;
+
+            let startPage = Math.max(1, currentPage - 2);
+            let endPage = Math.min(totalPages, startPage + 4);
+            if (endPage - startPage < 4) {
+                startPage = Math.max(1, endPage - 4);
+            }
+
+            let html = '';
+            if (startPage > 1) {
+                html += `<button class="page-btn" onclick="goToPage(1)">1</button>`;
+                if (startPage > 2) html += `<span class="page-info">...</span>`;
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) html += `<span class="page-info">...</span>`;
+                html += `<button class="page-btn" onclick="goToPage(${totalPages})">${totalPages}</button>`;
+            }
+
+            pageNumbers.innerHTML = html;
+        }
+
+        // Go to page
+        function goToPage(page) {
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            loadReviews();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    </script>
+</body>
+
+</html>
