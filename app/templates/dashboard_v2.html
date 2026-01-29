@@ -1089,8 +1089,8 @@
                     CARMORE_REVIEW_BASE: 'https://dev-admin.carmore.kr/partners/Reviewmanage'
                 },
                 PAGINATION: {
-                    DEFAULT_PAGE_SIZE: 500,
-                    REVIEWS_PAGE_SIZE: 20
+                    DEFAULT_PAGE_SIZE: 10,
+                    REVIEWS_PAGE_SIZE: 10
                 },
                 VALIDATION: {
                     REVIEW_ID_PATTERN: /^[a-zA-Z0-9_-]+$/
@@ -1305,7 +1305,8 @@
                     pageSize: CONFIG.PAGINATION.REVIEWS_PAGE_SIZE,
                     total: 0,
                     visible: false,
-                    carModelsLoaded: false
+                    carModelsLoaded: false,
+                    carModelTags: {}
                 },
                 carList: {
                     visible: false,
@@ -1407,6 +1408,9 @@
 
             function setReviewsTotal(total) { state.reviews.total = total; }
             function markCarModelsLoaded() { state.reviews.carModelsLoaded = true; }
+            function setCarModelTags(carModel, tags) { state.reviews.carModelTags[carModel] = tags; }
+            function getCarModelTags(carModel) { return state.reviews.carModelTags[carModel] || []; }
+            function clearCarModelTags() { state.reviews.carModelTags = {}; }
 
             // Car list state functions
             function toggleCarListVisibility() {
@@ -1545,6 +1549,10 @@
                     method: 'POST',
                     body: JSON.stringify({ branch_ids: branchIds })
                 });
+            }
+
+            async function fetchCarModelTags(branchId) {
+                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/car-models`);
             }
 
             async function apiSyncAffiliates() {
@@ -1904,9 +1912,9 @@
                     prevPage,
                     nextPage,
                     toggleReviews,
-                    toggleCarList,
                     loadMoreReviews,
                     applyFilters,
+                    onCarModelChange,
                     enterEditMode,
                     cancelEditMode,
                     saveAllChanges,
@@ -2217,7 +2225,6 @@
                         <div style="display: flex; gap: 8px;">
                             <button class="btn btn-secondary" onclick="window.dashboardHandlers.enterEditMode()">✏️ 수정</button>
                             <button class="btn btn-secondary" onclick="window.dashboardHandlers.toggleReviews(${data.branch_id})" id="btn-toggle-reviews">📋 리뷰 보기</button>
-                            <button class="btn btn-secondary" onclick="window.dashboardHandlers.toggleCarList(${data.branch_id})" id="btn-toggle-carlist">🚗 차량 리스트</button>
                         </div>
                         <div style="display: flex; gap: 8px;">
                             <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.updateStatus(${data.branch_id}, 'draft')">보류</button>
@@ -2235,8 +2242,8 @@
                     <div style="font-size: 14px; font-weight: 600; color: var(--grey-3); margin-bottom: 12px;">
                         📋 리뷰 목록 <span id="reviews-count" style="font-weight: normal; color: var(--grey-5);"></span>
                     </div>
-                    <div id="reviews-filters" style="display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
-                        <select id="filter-car-model" onchange="window.dashboardHandlers.applyFilters(${data.branch_id})" style="padding: 6px 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 13px; background: white;">
+                    <div id="reviews-filters" style="display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
+                        <select id="filter-car-model" onchange="window.dashboardHandlers.onCarModelChange(${data.branch_id})" style="padding: 6px 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 13px; background: white;">
                             <option value="">🚗 전체 차량</option>
                         </select>
                         <select id="filter-sentiment" onchange="window.dashboardHandlers.applyFilters(${data.branch_id})" style="padding: 6px 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 13px; background: white;">
@@ -2246,6 +2253,12 @@
                             <option value="negative">😞 부정</option>
                         </select>
                     </div>
+                    <div id="car-model-tags" style="display: none; margin-bottom: 12px; padding: 12px; background: var(--grey-9); border-radius: var(--radius-sm); border: 1px solid var(--grey-7);">
+                        <div style="font-size: 12px; font-weight: 600; color: var(--grey-4); margin-bottom: 8px;">
+                            📊 <span id="selected-car-name"></span> 태그 분석
+                        </div>
+                        <div id="car-model-tags-content" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                    </div>
                     <div id="reviews-list" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); background: var(--grey-9);">
                         <div class="loading"><div class="spinner"></div>로딩 중...</div>
                     </div>
@@ -2253,16 +2266,6 @@
                         <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.loadMoreReviews(${data.branch_id}, 'prev')" id="reviews-prev-btn" disabled>이전</button>
                         <span id="reviews-page-info" style="font-size: 13px; color: var(--grey-5); line-height: 32px;">-</span>
                         <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.loadMoreReviews(${data.branch_id}, 'next')" id="reviews-next-btn">다음</button>
-                    </div>
-                </div>
-
-                <!-- Car List Section -->
-                <div id="carlist-section" style="display: none; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--grey-8);">
-                    <div style="font-size: 14px; font-weight: 600; color: var(--grey-3); margin-bottom: 12px;">
-                        🚗 차량 리스트 <span id="carlist-count" style="font-weight: normal; color: var(--grey-5);"></span>
-                    </div>
-                    <div id="carlist-content" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                        <div class="loading"><div class="spinner"></div>로딩 중...</div>
                     </div>
                 </div>
             `;
@@ -2499,10 +2502,33 @@
                 if (visible) {
                     const carSelect = getElement('filter-car-model');
                     const sentSelect = getElement('filter-sentiment');
+                    const tagsSection = getElement('car-model-tags');
+
                     if (carSelect) carSelect.value = '';
                     if (sentSelect) sentSelect.value = '';
+                    if (tagsSection) tagsSection.style.display = 'none';
+
+                    // 차량 태그 정보 미리 로드
+                    clearCarModelTags();
+                    loadCarModelTagsAsync(branchId);
 
                     await loadReviews(branchId);
+                }
+            }
+
+            async function loadCarModelTagsAsync(branchId) {
+                try {
+                    const result = await fetchCarModelTags(branchId);
+                    const carModels = result.car_models || [];
+
+                    // 각 차량별 태그 캐싱
+                    carModels.forEach(car => {
+                        setCarModelTags(car.name, car.tags || []);
+                    });
+
+                    console.log('📊 차량별 태그 로드 완료:', carModels.length, '종');
+                } catch (e) {
+                    console.warn('차량별 태그 로드 실패:', e);
                 }
             }
 
@@ -2556,6 +2582,72 @@
                 }
             }
 
+            async function onCarModelChange(branchId) {
+                const carSelect = getElement('filter-car-model');
+                const tagsSection = getElement('car-model-tags');
+                const carNameEl = getElement('selected-car-name');
+                const tagsContent = getElement('car-model-tags-content');
+
+                const selectedCar = carSelect?.value || '';
+
+                if (selectedCar) {
+                    // 차량 선택됨 - 태그 표시
+                    if (carNameEl) carNameEl.textContent = selectedCar;
+                    if (tagsSection) tagsSection.style.display = 'block';
+
+                    let tags = getCarModelTags(selectedCar);
+
+                    if (tags.length === 0) {
+                        // 캐시에 없으면 API 호출
+                        if (tagsContent) tagsContent.innerHTML = '<span style="color: var(--grey-5);">로딩 중...</span>';
+
+                        try {
+                            const result = await fetchCarModelTags(branchId);
+                            const carModels = result.car_models || [];
+
+                            // 모든 차량 태그 캐싱
+                            carModels.forEach(car => {
+                                setCarModelTags(car.name, car.tags || []);
+                            });
+
+                            tags = getCarModelTags(selectedCar);
+                        } catch (e) {
+                            console.error('차량 태그 로드 실패:', e);
+                        }
+                    }
+
+                    renderCarModelTags(tags, tagsContent);
+                } else {
+                    // 전체 차량 - 태그 숨김
+                    if (tagsSection) tagsSection.style.display = 'none';
+                }
+
+                // 리뷰 필터 적용
+                applyFilters(branchId);
+            }
+
+            function renderCarModelTags(tags, container) {
+                if (!container) return;
+
+                if (!tags || tags.length === 0) {
+                    container.innerHTML = '<span style="color: var(--grey-5); font-style: italic; font-size: 12px;">태그 정보가 없습니다.</span>';
+                    return;
+                }
+
+                container.innerHTML = tags.map(tag => {
+                    const total = tag.total || (tag.positive + tag.negative + (tag.neutral || 0));
+                    const posRatio = total > 0 ? Math.round((tag.positive / total) * 100) : 0;
+                    const bgColor = posRatio >= 70 ? '#dcfce7' : posRatio <= 30 ? '#fee2e2' : '#fef3c7';
+                    const textColor = posRatio >= 70 ? '#166534' : posRatio <= 30 ? '#991b1b' : '#92400e';
+                    return `
+                        <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: ${bgColor}; border-radius: 12px; font-size: 11px; color: ${textColor};">
+                            <span style="font-weight: 600;">${escapeHtml(tag.name)}</span>
+                            <span style="opacity: 0.8;">👍${tag.positive} 👎${tag.negative}</span>
+                        </span>
+                    `;
+                }).join('');
+            }
+
             function applyFilters(branchId) {
                 setReviewsPage(0);
                 loadReviews(branchId);
@@ -2606,23 +2698,12 @@
             }
 
             async function syncAffiliates() {
-                if (!confirm('Carmore API에서 업체 정보를 동기화하시겠습니까?')) {
-                    return;
-                }
-
-                try {
-                    const result = await apiSyncAffiliates();
-
-                    if (result.success) {
-                        showToast(`동기화 완료: ${result.success}개 업체`, 'success');
-                        loadSummaries();
-                    } else {
-                        showToast('동기화 실패: ' + (result.error || 'Unknown error'), 'error');
-                    }
-                } catch (e) {
-                    showToast('동기화 실패: ' + e.message, 'error');
-                }
+                // TODO: 구현 예정
+                showToast('업체 동기화 기능은 준비 중입니다.', 'info');
             }
+
+            // Expose global handlers immediately (before DOMContentLoaded)
+            registerGlobalHandlers();
 
             // Auto Initialize
             if (document.readyState === 'loading') {

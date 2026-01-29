@@ -43,7 +43,7 @@ class SummaryRepository(BaseRepository[Summary]):
         self,
         status: str | None = None,
         region: str | None = None,
-        min_reviews: int = 30,
+        min_reviews: int = 0,
         limit: int = 50,
         offset: int = 0,
         sort_by: str = "branch_id",
@@ -167,7 +167,7 @@ class SummaryRepository(BaseRepository[Summary]):
         region: str | None = None,
         min_rating: float | None = None,
         max_rating: float | None = None,
-        min_reviews: int = 30,
+        min_reviews: int = 0,
         limit: int = 50,
     ) -> list[Summary]:
         """검색"""

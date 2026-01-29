@@ -317,7 +317,6 @@ class PipelineConfigDTO:
     """
 
     # 필터링 설정
-    min_reviews: int = 30  # 지점당 최소 리뷰 수
     min_review_length: int = 5  # 최소 리뷰 글자 수
 
     # 감정분석 설정
@@ -341,7 +340,6 @@ class PipelineConfigDTO:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "min_reviews": self.min_reviews,
             "min_review_length": self.min_review_length,
             "sentiment_threshold": self.sentiment_threshold,
             "confident_high": self.confident_high,

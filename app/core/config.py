@@ -41,8 +41,6 @@ class Settings(BaseSettings):
     supabase_key: SecretStr = SecretStr("")
 
     # 파이프라인 설정
-    min_reviews_per_branch: int = 30
-    min_review_length: int = 5
     sentiment_threshold: float = 0.45
 
     # 감정분석 설정

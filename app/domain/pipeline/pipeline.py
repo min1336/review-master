@@ -276,7 +276,6 @@ class BatchPipeline(BasePipeline):
     DB에서 리뷰를 로드하여 전체 지점의 리뷰를 분석하고 AI 요약을 생성합니다.
 
     사용법:
-        pipeline = BatchPipeline(min_reviews=30)
         result = await pipeline.run(branch_ids=[1234, 5678])
     """
 
@@ -288,8 +287,6 @@ class BatchPipeline(BasePipeline):
             keyword_extractor=container.keyword_extractor,
             keyword_aggregator=container.keyword_aggregator,
             llm_provider=container.llm_provider,
-            min_reviews=config.min_reviews,
-            min_review_length=config.min_review_length,
             sentiment_threshold=config.sentiment_threshold,
             use_parallel=config.use_parallel,
             n_jobs=config.n_jobs,
@@ -300,8 +297,7 @@ class BatchPipeline(BasePipeline):
         keyword_extractor: KeywordExtractor | None = None,
         keyword_aggregator: KeywordAggregator | None = None,
         llm_provider: LLMProvider | None = None,
-        min_reviews: int = 30,
-        min_review_length: int = 5,
+
         sentiment_threshold: float = 0.45,
         use_parallel: bool = True,
         n_jobs: int = -1,
@@ -312,8 +308,6 @@ class BatchPipeline(BasePipeline):
             keyword_extractor: 키워드 추출기
             keyword_aggregator: 키워드 집계기
             llm_provider: LLM Provider
-            min_reviews: 지점당 최소 리뷰 수
-            min_review_length: 최소 리뷰 길이
             sentiment_threshold: 긍정 판정 임계값
             use_parallel: 병렬 처리 사용 여부
             n_jobs: 병렬 작업 수 (-1: 모든 CPU)
@@ -338,8 +332,6 @@ class BatchPipeline(BasePipeline):
         else:
             self.llm_provider = None
 
-        self.min_reviews = min_reviews
-        self.min_review_length = min_review_length
         self.sentiment_threshold = sentiment_threshold
         self.use_parallel = use_parallel
         self.n_jobs = n_jobs
@@ -527,10 +519,10 @@ class BatchPipeline(BasePipeline):
             print(f"✅ {len(reviews):,}개 리뷰 로드 완료 (DB)")
             return reviews
 
-        # 제한 없으면 페이지네이션으로 전체 로드
+        # 제한 없으면 페이지네이션으로 전체 로드 (Supabase 기본 limit: 1000)
         print("   → 전체 리뷰 로드 중 (페이지네이션)...")
         all_data = []
-        page_size = 10000
+        page_size = 1000
         offset = 0
 
         while True:
@@ -592,7 +584,34 @@ class BatchPipeline(BasePipeline):
         print(f"✅ {len(processed_reviews):,}개 리뷰 처리 완료")
         print(f"   → 총 {total_keywords:,}개 키워드 추출")
 
+        # Step 2.5: sentiment 업데이트
+        await self._update_review_sentiments(processed_reviews)
+
         return processed_reviews
+
+    async def _update_review_sentiments(
+        self, processed_reviews: list[ProcessedReviewDTO]
+    ) -> None:
+        """Step 2.5: branch_reviews 테이블의 sentiment 업데이트"""
+        print("\n   → Sentiment 업데이트 중...")
+
+        client = await self._get_supabase()
+        updated = 0
+
+        for pr in processed_reviews:
+            if not pr.review.id or pr.review.id == 0:
+                continue
+
+            try:
+                await client.table("branch_reviews").update({
+                    "sentiment": pr.sentiment
+                }).eq("id", pr.review.id).execute()
+                updated += 1
+            except Exception:
+                # 개별 실패는 무시하고 계속 진행
+                continue
+
+        print(f"   ✅ {updated:,}/{len(processed_reviews):,}개 리뷰 sentiment 업데이트 완료")
 
     def _aggregate_keywords_by_branch(
         self, processed_reviews: list[ProcessedReviewDTO]
@@ -1941,7 +1960,7 @@ if __name__ == "__main__":
         """BatchPipeline 비동기 테스트"""
         print("=== BatchPipeline 비동기 테스트 ===\n")
 
-        pipeline = BatchPipeline(min_reviews=1)
+        pipeline = BatchPipeline()
 
         # DB에서 데이터 로드하여 처리 (branch_ids 지정)
         print("1. DB 로드 테스트")

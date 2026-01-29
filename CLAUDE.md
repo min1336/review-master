@@ -13,8 +13,6 @@ Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
 ## Key Constants
 
 ```python
-MIN_REVIEWS_PER_BRANCH = 30      # 최소 리뷰 수
-MIN_REVIEW_LENGTH = 5            # 최소 리뷰 길이
 OPENAI_RPM = 3500                # API Rate Limit
 MAX_REVIEWS_PER_BRANCH = 30      # recent_reviews 저장 개수
 EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
