@@ -23,7 +23,7 @@ RUN mkdir -p /app/credentials
 
 # Ensure environment is synced against lock (and validates it)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked
+    uv sync --locked && rm -rf /root/.cache/uv/*
 
 EXPOSE 8000
 

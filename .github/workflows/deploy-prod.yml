@@ -65,6 +65,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Disk usage (pre-build)
+        run: |
+          df -h
+          docker system df || true
+
       - name: Build and push API Docker image
         uses: docker/build-push-action@v5
         with:
@@ -75,7 +80,7 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/${{ env.image_name }}:latest
             ghcr.io/${{ github.repository_owner }}/${{ env.image_name }}:prod-${{ github.sha }}
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ env.image_name }}:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ env.image_name }}:buildcache,mode=max
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ env.image_name }}:buildcache,mode=min
 
       - name: Debug SSH Configuration
         run: |
