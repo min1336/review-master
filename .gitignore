@@ -126,3 +126,7 @@ data/*.npz
 .claude/settings.local.json
 
 .env.prod
+
+# ============================================================================
+/data
+/app/data

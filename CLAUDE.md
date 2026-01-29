@@ -4,8 +4,8 @@ Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
 
 ## Tech Stack
 
-- **Backend**: Python 3.x, FastAPI
-- **NLP**: MeCab (한국어 형태소 분석), Sentence-Transformers
+- **Backend**: Python 3.12, FastAPI
+- **NLP**: Kiwi (한국어 형태소 분석), Sentence-Transformers
 - **LLM**: OpenAI GPT-4o-mini
 - **Database**: Supabase (PostgreSQL)
 - **Data**: pandas, openpyxl
@@ -30,25 +30,22 @@ app/
 │   └── endpoints/
 │       ├── deps.py                # 의존성 주입 (DI)
 │       ├── pages.py               # HTML 페이지 렌더링
-│       ├── sentiment.py           # 감정 API
+│       ├── analysis.py            # 분석 페이지 API (/api/analysis/*)
+│       ├── sentiment.py           # 감정 API (/api/sentiment/*)
 │       ├── summaries.py           # 요약 API (/api/v2/*)
 │       └── tags.py                # 태그 API (/api/tags/*)
 │
 ├── domain/                        # 도메인 로직 (핵심 비즈니스)
 │   ├── analysis/                  # 분석 모듈
-│   │   ├── extractor.py           # MeCab 키워드 추출
+│   │   ├── extractor.py           # Kiwi 키워드 추출
 │   │   ├── absa.py                # 규칙 기반 ABSA
 │   │   ├── chunker.py             # 절 단위 청킹
 │   │   ├── aggregator.py          # 키워드 집계
-│   │   ├── weight.py              # 가중치 계산
-│   │   ├── mapper.py              # 태그 매핑
 │   │   ├── patterns.py            # 감정 패턴
-│   │   ├── embedding_classifier.py
-│   │   ├── hybrid_classifier.py
-│   │   └── tag_embeddings.py
+│   │   ├── hybrid_classifier.py   # 하이브리드 분류기
+│   │   └── tag_embeddings.py      # 태그 임베딩
 │   └── pipeline/                  # 파이프라인
-│       ├── batch_pipeline.py      # Excel 전체 처리
-│       └── incremental_pipeline.py # API 증분 처리
+│       └── pipeline.py            # 배치/증분 처리
 │
 ├── infrastructure/                # 외부 시스템 연동
 │   └── llm/                       # LLM 프로바이더
@@ -59,21 +56,21 @@ app/
 │       └── validator.py           # 응답 검증
 │
 ├── services/                      # 서비스 레이어 (API 비즈니스 로직)
+│   ├── analysis_service.py        # 분석 페이지 로직
 │   ├── summary_service.py         # 요약 CRUD + 상세분석
 │   ├── tag_service.py             # 태그/카테고리/매핑
 │   ├── sentiment_service.py       # 감정 통계
 │   └── carmore_service.py         # Carmore API 연동
 │
-├── crud/                          # Repository 레이어 (DB 접근)
+├── repository/                    # Repository 레이어 (DB 접근)
 │   ├── session.py                 # Supabase 클라이언트
-│   ├── unit_of_work.py            # UoW 패턴
 │   ├── base.py                    # BaseRepository
-│   ├── summary_crud.py
-│   ├── tag_crud.py
-│   ├── branch_tag_crud.py
-│   ├── review_crud.py
-│   ├── sentiment_crud.py
-│   └── affiliate_crud.py
+│   ├── summary_repository.py      # 요약 Repository
+│   ├── tag_repository.py          # 태그 Repository
+│   ├── branch_tag_repository.py   # 지점 태그 Repository
+│   ├── review_repository.py       # 리뷰 Repository
+│   ├── sentiment_repository.py    # 감정 Repository
+│   └── affiliate_repository.py    # 업체 Repository
 │
 ├── models/                        # DB 모델 (Pydantic)
 │   ├── summary.py
@@ -83,29 +80,23 @@ app/
 │   └── affiliate.py
 │
 ├── schemas/                       # API 스키마 (DTO)
+│   ├── dto.py                     # 데이터 전송 객체
 │   ├── summary.py                 # 요약 요청/응답
 │   ├── tag.py                     # 태그 요청/응답
 │   ├── entities.py                # DB 엔티티
-│   ├── dto.py                     # 파이프라인 DTO
 │   └── common.py                  # 공통 스키마
 │
 ├── core/                          # 설정
 │   ├── config.py                  # 환경변수 설정
 │   └── stopwords.py               # 불용어 사전
 │
+├── scripts/                       # 유틸리티 스크립트
+│   └── migrate_sentiments.py      # 마이그레이션
+│
 └── templates/                     # HTML 템플릿
     ├── dashboard_v2.html          # 메인 대시보드
+    ├── analysis.html              # 리뷰 분석 페이지
     └── tag_tester.html            # 태그 테스트 페이지
-```
-
-## Common Commands
-
-```bash
-# 앱 실행
-cd app && python main.py
-
-# 또는 uvicorn 직접 실행
-cd app && uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ## API Endpoints
@@ -135,7 +126,22 @@ cd app && uvicorn main:app --reload --host 0.0.0.0 --port 8000
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/stats` | 감정 통계 |
+| GET | `/stats/all` | 전체 지점 감정 통계 |
 | GET | `/reviews/recent` | 최근 리뷰 |
+| POST | `/reviews/cleanup` | 리뷰 정리 |
+
+### 분석 API (`/api/analysis/`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/filters` | 필터 옵션 (지역/업체/지점) |
+| GET | `/reviews` | 필터링된 리뷰 목록 |
+
+### 페이지 라우트
+| Path | Description |
+|------|-------------|
+| `/` | 메인 대시보드 |
+| `/analysis` | 리뷰 분석 페이지 |
+| `/tag-tester` | 태그 테스트 페이지 |
 
 ## Environment Variables
 
@@ -145,6 +151,7 @@ OPENAI_API_KEY=sk-...
 LLM_PROVIDER=openai
 SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_KEY=eyJ...
+API_PREFIX=/api  # 로컬: /api, 서버: /review/api
 ```
 
 ## Status Workflow
@@ -169,7 +176,7 @@ SUPABASE_KEY=eyJ...
 ## Architecture Layers
 
 ```
-Request → API (endpoints) → Service → Domain/CRUD → Response
+Request → API (endpoints) → Service → Domain/Repository → Response
                               ↓
                          Infrastructure (LLM)
 ```
@@ -180,7 +187,7 @@ Request → API (endpoints) → Service → Domain/CRUD → Response
 | `services/` | API 비즈니스 로직 |
 | `domain/` | 핵심 도메인 로직 (분석, 파이프라인) |
 | `infrastructure/` | 외부 시스템 (LLM) |
-| `crud/` | DB 접근 |
+| `repository/` | DB 접근 |
 | `models/` | DB 테이블 매핑 |
 | `schemas/` | API 요청/응답 DTO |
 
@@ -188,5 +195,20 @@ Request → API (endpoints) → Service → Domain/CRUD → Response
 
 1. **단일 책임**: 하나의 파일/함수는 하나의 역할
 2. **의존성 주입**: `deps.py`에서 서비스 생성
-3. **UoW 패턴**: `UnitOfWork`로 Repository 묶음 관리
-4. **순환 참조 방지**: 함수 내부 import 사용
+3. **Repository 패턴**: Repository로 DB 접근 추상화
+4. **DTO 패턴**: 데이터 전송 객체로 타입 안전성 보장
+5. **순환 참조 방지**: 함수 내부 import 사용
+6. **에러 처리**: HTTPException으로 적절한 에러 응답
+7. **로깅**: logging 모듈로 에러 상황 기록
+
+## Database Tables
+
+| 테이블 | 용도 |
+|--------|------|
+| `branch_summaries` | 지점별 요약 데이터 |
+| `branch_reviews` | 원본 리뷰 데이터 |
+| `recent_reviews` | 최근 리뷰 캐시 |
+| `branch_tags` | 지점별 태그 매핑 |
+| `tags` | 태그 마스터 |
+| `sentiment_stats` | 감정 통계 |
+| `affiliates` | 업체 정보 |
