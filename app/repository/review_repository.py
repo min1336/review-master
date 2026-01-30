@@ -169,23 +169,25 @@ class BranchReviewRepository(BaseRepository[Review]):
                     rating_conv = r.get("rating_convenience") or r.get(
                         "인수/반납편의성"
                     )
-                    insert_data.append(
-                        {
-                            "review_id": r.get("review_id") or r.get("리뷰번호"),
-                            "branch_id": r.get("branch_id") or r.get("지점번호"),
-                            "branch_name": r.get("branch_name") or r.get("예약_지점명"),
-                            "company_name": r.get("company_name")
-                            or r.get("예약_업체명"),
-                            "content": r.get("content") or r.get("리뷰내용"),
-                            "rating_service": rating_svc,
-                            "rating_car": r.get("rating_car") or r.get("차량평점"),
-                            "rating_convenience": rating_conv,
-                            "review_date": r.get("review_date") or r.get("등록일시"),
-                            "car_model": r.get("car_model") or r.get("차량모델"),
-                            "rent_type": r.get("rent_type") or r.get("렌트타입"),
-                            "sentiment": r.get("sentiment"),
-                        }
-                    )
+                    data = {
+                        "review_id": r.get("review_id") or r.get("리뷰번호"),
+                        "branch_id": r.get("branch_id") or r.get("지점번호"),
+                        "branch_name": r.get("branch_name") or r.get("예약_지점명"),
+                        "company_name": r.get("company_name")
+                        or r.get("예약_업체명"),
+                        "content": r.get("content") or r.get("리뷰내용"),
+                        "rating_service": rating_svc,
+                        "rating_car": r.get("rating_car") or r.get("차량평점"),
+                        "rating_convenience": rating_conv,
+                        "review_date": r.get("review_date") or r.get("등록일시"),
+                        "car_model": r.get("car_model") or r.get("차량모델"),
+                        "rent_type": r.get("rent_type") or r.get("렌트타입"),
+                        "sentiment": r.get("sentiment"),
+                    }
+                    # is_new 필드가 명시적으로 있으면 포함
+                    if "is_new" in r:
+                        data["is_new"] = r["is_new"]
+                    insert_data.append(data)
 
                 await (
                     self._client.table(self.table_name)

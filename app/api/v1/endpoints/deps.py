@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from services.carmore_service import CarmoreService
     from services.sentiment_service import SentimentService
     from services.summary_service import SummaryService
+    from services.sync_service import SyncService
     from services.tag_service import TagService
 
 # ============================================================
@@ -151,3 +152,23 @@ async def get_analysis_service(
     from services.analysis_service import AnalysisService
 
     return AnalysisService(review_repo, summary_repo)
+
+
+async def get_sync_service(
+    review_repo: BranchReviewRepository = Depends(get_review_repo),
+) -> SyncService:
+    from services.sync_service import SyncService
+
+    # Athena 클라이언트 초기화 (설정이 있는 경우에만)
+    athena_client = None
+    try:
+        from core.config import get_settings
+        from infrastructure.athena import AthenaClient
+
+        settings = get_settings()
+        if settings.aws_access_key_id and settings.athena_output_bucket:
+            athena_client = AthenaClient()
+    except Exception:
+        pass
+
+    return SyncService(review_repo, athena_client)

@@ -583,6 +583,113 @@
             font-weight: 500;
             box-shadow: var(--shadow-sm);
         }
+
+        /* 신규 배지 */
+        .new-badge {
+            background: var(--error);
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 4px;
+        }
+
+        .review-item.is-new {
+            border-left: 3px solid var(--primary);
+            background: var(--primary-light);
+        }
+
+        .review-item .new-tag {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 8px;
+        }
+
+        /* 스케줄러 상태 UI */
+        .scheduler-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            font-size: 12px;
+            color: white;
+        }
+
+        .scheduler-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ef4444;
+        }
+
+        .scheduler-indicator.active {
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .scheduler-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .scheduler-label {
+            font-weight: 500;
+        }
+
+        .scheduler-next {
+            font-size: 10px;
+            opacity: 0.8;
+        }
+
+        .scheduler-toggle {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: background 0.2s;
+        }
+
+        .scheduler-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .scheduler-toggle:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .scheduler-interval {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 4px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .scheduler-interval option {
+            background: #333;
+            color: white;
+        }
     </style>
 </head>
 
@@ -590,6 +697,31 @@
     <header class="header">
         <h1>리뷰 분석</h1>
         <div class="header-actions">
+            <!-- 스케줄러 상태 -->
+            <div class="scheduler-status" id="scheduler-status">
+                <div class="scheduler-indicator" id="scheduler-indicator"></div>
+                <div class="scheduler-info">
+                    <span class="scheduler-label" id="scheduler-label">스케줄러 확인 중...</span>
+                    <span class="scheduler-next" id="scheduler-next"></span>
+                </div>
+                <select class="scheduler-interval" id="scheduler-interval" onchange="updateInterval(this.value)">
+                    <option value="5">5분</option>
+                    <option value="10">10분</option>
+                    <option value="15">15분</option>
+                    <option value="20">20분</option>
+                    <option value="30">30분</option>
+                </select>
+                <button class="scheduler-toggle" id="scheduler-toggle" onclick="toggleScheduler()" disabled>-</button>
+            </div>
+
+            <button class="btn btn-secondary" id="btn-mark-read" onclick="markAllAsRead()" style="display: none;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                모두 읽음
+                <span class="new-badge" id="new-count-badge" style="display: none;">0</span>
+            </button>
             <button class="btn btn-secondary" id="btn-back">대시보드로 돌아가기</button>
         </div>
     </header>
@@ -782,6 +914,12 @@
                     window.location.href = `${BASE_PATH}/`;
                 });
             }
+
+            // 스케줄러 상태 확인
+            await checkSchedulerStatus();
+
+            // 동기화 상태 확인
+            await checkSyncStatus();
 
             // Initialize date picker
             flatpickr('#dateRangeFilter', {
@@ -1327,19 +1465,26 @@
                     : '-';
 
                 const reviewId = review.review_id || '-';
+                const dbId = review.id || null;
                 const reviewDate = review.review_date ? review.review_date.split('T')[0] : '';
                 const ratingService = review.rating_service != null ? review.rating_service.toFixed(1) : '-';
                 const ratingCar = review.rating_car != null ? review.rating_car.toFixed(1) : '-';
                 const ratingConv = review.rating_convenience != null ? review.rating_convenience.toFixed(1) : '-';
 
+                // 신규 리뷰 여부
+                const isNew = review.is_new === true;
+                const newTag = isNew ? '<span class="new-tag">NEW</span>' : '';
+                const itemClass = isNew ? 'review-item is-new' : 'review-item';
+
                 return `
-                    <div class="review-item">
+                    <div class="${itemClass}" data-id="${dbId}">
                         <div class="review-meta">
                             <div class="review-info">
                                 <span class="info-company">${review.company_name || '-'}</span>
                                 <span class="info-branch">${review.branch_name || '-'}</span>
                                 <span class="info-date">${date}</span>
-                                <span class="info-id" onclick="openReservation('${reviewId}', '${reviewDate}')" title="운영툴에서 보기">#${reviewId}</span>
+                                <span class="info-id" onclick="openReservation('${reviewId}', '${reviewDate}', ${dbId})" title="운영툴에서 보기">#${reviewId}</span>
+                                ${newTag}
                             </div>
                             <div class="review-ratings">
                                 <span class="rating-item" title="친절/편의성">서비스 ${ratingService}</span>
@@ -1353,14 +1498,45 @@
             }).join('');
         }
 
-        // 운영툴에서 예약 보기
-        function openReservation(reviewId, reviewDate) {
+        // 운영툴에서 예약 보기 + 해당 리뷰 읽음 처리
+        async function openReservation(reviewId, reviewDate, dbId) {
             if (reviewId && reviewId !== '-') {
                 let url = `https://dev-admin.carmore.kr/partners/Reviewmanage?sp=reservation_idx&sv=${reviewId}`;
                 if (reviewDate) {
                     url += `&startdate=${reviewDate}&enddate=${reviewDate}`;
                 }
                 window.open(url, '_blank');
+
+                // 해당 리뷰 읽음 처리 (DB ID가 있는 경우)
+                if (dbId) {
+                    await markReviewAsRead(dbId);
+                }
+            }
+        }
+
+        // 단일 리뷰 읽음 처리
+        async function markReviewAsRead(dbId) {
+            try {
+                const response = await fetch(`${API_PREFIX}/sync/reviews/read`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ review_ids: [dbId] })
+                });
+                const data = await response.json();
+
+                if (data.success && data.marked_count > 0) {
+                    // UI에서 해당 리뷰의 NEW 태그 제거
+                    const reviewItem = document.querySelector(`.review-item[data-id="${dbId}"]`);
+                    if (reviewItem) {
+                        reviewItem.classList.remove('is-new');
+                        const newTag = reviewItem.querySelector('.new-tag');
+                        if (newTag) newTag.remove();
+                    }
+                    // 동기화 상태 갱신
+                    await checkSyncStatus();
+                }
+            } catch (error) {
+                console.error('Failed to mark review as read:', error);
             }
         }
 
@@ -1403,6 +1579,183 @@
             currentPage = page;
             loadReviews();
             window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // =============================================
+        // 스케줄러 관련 함수
+        // =============================================
+
+        // 스케줄러 상태 확인
+        async function checkSchedulerStatus() {
+            try {
+                const response = await fetch(`${API_PREFIX}/sync/scheduler/status`);
+                const data = await response.json();
+
+                const indicator = document.getElementById('scheduler-indicator');
+                const label = document.getElementById('scheduler-label');
+                const nextRun = document.getElementById('scheduler-next');
+                const toggleBtn = document.getElementById('scheduler-toggle');
+                const intervalSelect = document.getElementById('scheduler-interval');
+
+                // 현재 간격 선택
+                intervalSelect.value = data.interval_minutes;
+
+                if (data.is_running) {
+                    indicator.classList.add('active');
+                    label.textContent = `자동 동기화`;
+                    toggleBtn.textContent = '중지';
+                    toggleBtn.disabled = false;
+
+                    if (data.next_run_time) {
+                        const next = new Date(data.next_run_time);
+                        const now = new Date();
+                        const diffMs = next - now;
+                        const diffMin = Math.max(0, Math.floor(diffMs / 60000));
+                        const diffSec = Math.max(0, Math.floor((diffMs % 60000) / 1000));
+
+                        if (diffMin > 0) {
+                            nextRun.textContent = `다음: ${diffMin}분 ${diffSec}초 후`;
+                        } else {
+                            nextRun.textContent = `다음: ${diffSec}초 후`;
+                        }
+                    } else {
+                        nextRun.textContent = '';
+                    }
+                } else {
+                    indicator.classList.remove('active');
+                    label.textContent = '자동 동기화 중지됨';
+                    nextRun.textContent = '';
+                    toggleBtn.textContent = '시작';
+                    toggleBtn.disabled = false;
+                }
+            } catch (error) {
+                console.error('Failed to check scheduler status:', error);
+                document.getElementById('scheduler-label').textContent = '상태 확인 실패';
+                document.getElementById('scheduler-toggle').disabled = true;
+            }
+        }
+
+        // 스케줄러 토글
+        async function toggleScheduler() {
+            const toggleBtn = document.getElementById('scheduler-toggle');
+            const isRunning = document.getElementById('scheduler-indicator').classList.contains('active');
+
+            toggleBtn.disabled = true;
+            toggleBtn.textContent = '처리 중...';
+
+            try {
+                const endpoint = isRunning ? 'stop' : 'start';
+                const response = await fetch(`${API_PREFIX}/sync/scheduler/${endpoint}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                await checkSchedulerStatus();
+            } catch (error) {
+                console.error('Failed to toggle scheduler:', error);
+                alert('스케줄러 상태 변경에 실패했습니다.');
+                toggleBtn.disabled = false;
+            }
+        }
+
+        // 간격 변경
+        async function updateInterval(minutes) {
+            const intervalSelect = document.getElementById('scheduler-interval');
+
+            try {
+                const response = await fetch(`${API_PREFIX}/sync/scheduler/interval`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ interval_minutes: parseInt(minutes) })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    alert(error.detail || '간격 변경에 실패했습니다.');
+                    await checkSchedulerStatus(); // 원래 값으로 복구
+                    return;
+                }
+
+                await checkSchedulerStatus();
+            } catch (error) {
+                console.error('Failed to update interval:', error);
+                alert('간격 변경에 실패했습니다.');
+                await checkSchedulerStatus();
+            }
+        }
+
+        // 주기적으로 스케줄러 상태 갱신 (10초마다)
+        setInterval(checkSchedulerStatus, 10000);
+
+        // =============================================
+        // 동기화 관련 함수
+        // =============================================
+
+        // 동기화 상태 확인 (신규 리뷰 수)
+        async function checkSyncStatus() {
+            try {
+                const response = await fetch(`${API_PREFIX}/sync/status`);
+                const data = await response.json();
+
+                const badge = document.getElementById('new-count-badge');
+                const markReadBtn = document.getElementById('btn-mark-read');
+
+                if (data.new_reviews > 0) {
+                    badge.textContent = data.new_reviews;
+                    badge.style.display = 'inline';
+                    markReadBtn.style.display = 'inline-flex';
+                } else {
+                    badge.style.display = 'none';
+                    markReadBtn.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Failed to check sync status:', error);
+            }
+        }
+
+        // 전체 읽음 처리
+        async function markAllAsRead() {
+            const badge = document.getElementById('new-count-badge');
+            const count = badge.textContent || '0';
+
+            if (!confirm(`${count}개의 신규 리뷰를 모두 읽음 처리하시겠습니까?`)) {
+                return;
+            }
+
+            const btn = document.getElementById('btn-mark-read');
+            btn.disabled = true;
+            btn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinning">
+                    <circle cx="12" cy="12" r="10"></circle>
+                </svg>
+                처리 중...
+            `;
+
+            try {
+                const response = await fetch(`${API_PREFIX}/sync/reviews/read`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ review_ids: null })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    await checkSyncStatus();
+                    await loadReviews();
+                }
+            } catch (error) {
+                console.error('Failed to mark all as read:', error);
+                alert('읽음 처리 중 오류가 발생했습니다.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    모두 읽음
+                `;
+            }
         }
     </script>
 </body>

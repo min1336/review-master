@@ -24,6 +24,8 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan"""
+    from infrastructure.scheduler import SyncScheduler
+    from infrastructure.scheduler.sync_scheduler import get_scheduler
 
     print("\n" + "=" * 60)
     print("Review Summary AI - FastAPI 운영팀 모니터링 대시보드")
@@ -35,7 +37,14 @@ async def lifespan(app: FastAPI):
     print("  GET  /api/tags              - 태그 목록")
     print("=" * 60 + "\n")
 
+    # 스케줄러 시작
+    scheduler = get_scheduler()
+    await scheduler.start()
+
     yield
+
+    # 스케줄러 종료
+    await scheduler.stop()
 
 
 # ============================================================

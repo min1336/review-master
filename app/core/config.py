@@ -58,6 +58,17 @@ class Settings(BaseSettings):
     # 로컬: /api, 프로덕션(Nginx): /review/api
     api_prefix: str = "/api"
 
+    # AWS Athena 설정
+    aws_access_key_id: str = ""
+    aws_secret_access_key: SecretStr = SecretStr("")
+    aws_region: str = "ap-northeast-2"
+    athena_database: str = "carmore"
+    athena_output_bucket: str = ""
+
+    # 스케줄러 설정
+    scheduler_enabled: bool = True  # 스케줄러 활성화 여부
+    sync_interval_minutes: int = 30  # 동기화 주기 (분)
+
 
 @lru_cache
 def get_settings() -> Settings:

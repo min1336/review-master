@@ -897,6 +897,7 @@ class AnalysisReviewDTO:
     rating_service: float | None
     rating_car: float | None
     rating_convenience: float | None
+    is_new: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -911,6 +912,7 @@ class AnalysisReviewDTO:
             "rating_service": self.rating_service,
             "rating_car": self.rating_car,
             "rating_convenience": self.rating_convenience,
+            "is_new": self.is_new,
         }
 
     @classmethod
@@ -932,6 +934,7 @@ class AnalysisReviewDTO:
             rating_service=row.get("rating_service"),
             rating_car=row.get("rating_car"),
             rating_convenience=row.get("rating_convenience"),
+            is_new=row.get("is_new", False),
         )
 
 
