@@ -37,7 +37,11 @@ async def index(request: Request):
 @router.get("/tag-tester", response_class=HTMLResponse)
 async def tag_tester(request: Request):
     """태그 분석 테스트 페이지"""
-    return templates.TemplateResponse(request=request, name="tag_tester.html")
+    return templates.TemplateResponse(
+        request=request,
+        name="tag_tester.html",
+        context={"api_prefix": settings.api_prefix},
+    )
 
 
 @router.get("/analysis", response_class=HTMLResponse)

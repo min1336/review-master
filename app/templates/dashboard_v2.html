@@ -901,8 +901,8 @@
     <header class="header">
         <h1>Review Summary AI - 운영팀 대시보드</h1>
         <div class="header-actions">
-            <button class="btn btn-primary" onclick="window.location.href='/analysis'">분석</button>
-            <button class="btn btn-secondary" onclick="window.location.href='/tag-tester'">태그 분석 테스트</button>
+            <button class="btn btn-primary" id="btn-analysis">분석</button>
+            <button class="btn btn-secondary" id="btn-tag-tester">태그 분석 테스트</button>
         </div>
     </header>
 
@@ -1073,6 +1073,8 @@
             // API_PREFIX는 서버에서 Jinja2 템플릿으로 주입됨
             // 로컬: /api, 프로덕션(Nginx): /review/api
             const API_PREFIX = '{{ api_prefix }}';
+            // 페이지 경로용 base path (로컬: '', 프로덕션: '/review')
+            const BASE_PATH = API_PREFIX.replace('/api', '');
 
             const CONFIG = Object.freeze({
                 API_PREFIX: API_PREFIX,
@@ -1924,6 +1926,21 @@
             }
 
             function bindEvents() {
+                // 헤더 네비게이션 버튼
+                const btnAnalysis = document.getElementById('btn-analysis');
+                const btnTagTester = document.getElementById('btn-tag-tester');
+
+                if (btnAnalysis) {
+                    btnAnalysis.addEventListener('click', () => {
+                        window.location.href = `${BASE_PATH}/analysis`;
+                    });
+                }
+                if (btnTagTester) {
+                    btnTagTester.addEventListener('click', () => {
+                        window.location.href = `${BASE_PATH}/tag-tester`;
+                    });
+                }
+
                 const searchInput = getElement('search-input');
                 const filterRegion = getElement('filter-region');
                 const filterStatus = getElement('filter-status');

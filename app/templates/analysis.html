@@ -590,7 +590,7 @@
     <header class="header">
         <h1>리뷰 분석</h1>
         <div class="header-actions">
-            <button class="btn btn-secondary" onclick="window.location.href='/'">대시보드로 돌아가기</button>
+            <button class="btn btn-secondary" id="btn-back">대시보드로 돌아가기</button>
         </div>
     </header>
 
@@ -745,6 +745,8 @@
     <script>
         // API Prefix
         const API_PREFIX = '{{ api_prefix }}';
+        // 페이지 경로용 base path
+        const BASE_PATH = API_PREFIX.replace('/api', '');
 
         // Full data from API
         let allBranches = [];  // Contains: branch_id, branch_name, region, company_name
@@ -773,6 +775,14 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
+            // 헤더 네비게이션 버튼
+            const btnBack = document.getElementById('btn-back');
+            if (btnBack) {
+                btnBack.addEventListener('click', () => {
+                    window.location.href = `${BASE_PATH}/`;
+                });
+            }
+
             // Initialize date picker
             flatpickr('#dateRangeFilter', {
                 mode: 'range',

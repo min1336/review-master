@@ -378,7 +378,7 @@
     <header class="header">
         <h1>태그 분석 테스트</h1>
         <div class="header-actions">
-            <button class="btn btn-secondary" onclick="window.location.href='/'">돌아가기</button>
+            <button class="btn btn-secondary" id="btn-back">돌아가기</button>
         </div>
     </header>
 
@@ -388,7 +388,8 @@
             <div class="card-title">리뷰 입력</div>
             <div class="form-group">
                 <label class="form-label">분석할 리뷰 텍스트를 입력하세요</label>
-                <textarea id="reviewInput" placeholder="예: 직원분이 정말 친절하시고 차량도 깨끗했어요. 가격도 합리적이라 만족합니다. 다만 주차장 위치를 찾기가 조금 어려웠어요."></textarea>
+                <textarea id="reviewInput"
+                    placeholder="예: 직원분이 정말 친절하시고 차량도 깨끗했어요. 가격도 합리적이라 만족합니다. 다만 주차장 위치를 찾기가 조금 어려웠어요."></textarea>
             </div>
             <div class="btn-group">
                 <button class="btn btn-primary" onclick="analyzeReview()" id="analyzeBtn">분석하기</button>
@@ -430,6 +431,21 @@
     </div>
 
     <script>
+        // API Prefix (서버에서 Jinja2로 주입)
+        const API_PREFIX = '{{ api_prefix }}';
+        // 페이지 경로용 base path
+        const BASE_PATH = API_PREFIX.replace('/api', '');
+
+        // 헤더 네비게이션 버튼
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnBack = document.getElementById('btn-back');
+            if (btnBack) {
+                btnBack.addEventListener('click', () => {
+                    window.location.href = `${BASE_PATH}/`;
+                });
+            }
+        });
+
         const EXAMPLES = {
             1: "직원분들이 정말 친절하시고 설명도 자세히 해주셨어요. 차량도 신차급으로 깨끗하고 컨디션이 좋았습니다. 가격도 합리적이고 픽업 반납도 편리해서 다음에도 이용할 예정입니다. 감사합니다!",
             2: "차량에서 담배 냄새가 심하게 났어요. 직원 응대도 불친절했고, 예약한 차량이 아닌 다른 차량을 줬습니다. 가격도 생각보다 비쌌고, 주차장 위치도 찾기 어려웠어요. 다시는 이용 안 할 것 같습니다.",
@@ -462,7 +478,7 @@
             results.classList.remove('show');
 
             try {
-                const response = await fetch('/api/analyze-tags', {
+                const response = await fetch(`${API_PREFIX}/tags/analyze-tags`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ review: reviewText })
