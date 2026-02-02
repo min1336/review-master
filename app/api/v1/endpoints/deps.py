@@ -24,12 +24,14 @@ from supabase import AsyncClient
 if TYPE_CHECKING:
     from repository.affiliate_repository import AffiliateRepository
     from repository.branch_tag_repository import BranchTagRepository
+    from repository.report_repository import ReportRepository
     from repository.review_repository import BranchReviewRepository
     from repository.sentiment_repository import SentimentRepository
     from repository.summary_repository import SummaryRepository
     from repository.tag_repository import TagRepository
     from services.analysis_service import AnalysisService
     from services.carmore_service import CarmoreService
+    from services.report_service import ReportService
     from services.sentiment_service import SentimentService
     from services.summary_service import SummaryService
     from services.sync_service import SyncService
@@ -172,3 +174,22 @@ async def get_sync_service(
         pass
 
     return SyncService(review_repo, athena_client)
+
+
+async def get_report_repo(
+    client: AsyncClient = Depends(get_db_client),
+) -> "ReportRepository":
+    from repository.report_repository import ReportRepository
+
+    return ReportRepository(client)
+
+
+async def get_report_service(
+    summary_repo: SummaryRepository = Depends(get_summary_repo),
+    review_repo: BranchReviewRepository = Depends(get_review_repo),
+    branch_tag_repo: BranchTagRepository = Depends(get_branch_tag_repo),
+    report_repo: "ReportRepository" = Depends(get_report_repo),
+) -> ReportService:
+    from services.report_service import ReportService
+
+    return ReportService(summary_repo, review_repo, branch_tag_repo, report_repo)

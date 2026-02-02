@@ -21,7 +21,7 @@ from services.summary_service import SummaryService
 
 from .deps import get_summary_service
 
-router = APIRouter(prefix="/v2", tags=["summaries"])
+router = APIRouter(tags=["summaries"])
 
 
 def parse_date(date_str: str | None, end_of_day: bool = False) -> datetime | None:

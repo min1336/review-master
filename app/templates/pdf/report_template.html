@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>AI 컨설팅 리포트 - {{ report.branch_name }}</title>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #1f2937;
+            background: white;
+        }
+
+        .page {
+            padding: 40px 50px;
+            max-width: 210mm;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding-bottom: 30px;
+            border-bottom: 3px solid #2563eb;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 24pt;
+            font-weight: 700;
+            color: #1e40af;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            font-size: 12pt;
+            color: #6b7280;
+        }
+
+        .header .period {
+            font-size: 11pt;
+            color: #374151;
+            margin-top: 12px;
+            padding: 8px 16px;
+            background: #f3f4f6;
+            border-radius: 6px;
+            display: inline-block;
+        }
+
+        /* Section */
+        .section {
+            margin-bottom: 28px;
+            page-break-inside: avoid;
+        }
+
+        .section-title {
+            font-size: 14pt;
+            font-weight: 700;
+            color: #1f2937;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e5e7eb;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-icon {
+            font-size: 16pt;
+        }
+
+        /* Summary Box */
+        .summary-box {
+            background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+            border-left: 4px solid #2563eb;
+            padding: 20px;
+            border-radius: 0 8px 8px 0;
+            font-size: 11pt;
+            line-height: 1.8;
+        }
+
+        /* Keywords */
+        .keywords {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .keyword {
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 10pt;
+            font-weight: 500;
+        }
+
+        /* Trend Chart */
+        .trend-chart {
+            margin-top: 16px;
+        }
+
+        .trend-bar-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            gap: 12px;
+        }
+
+        .trend-label {
+            width: 60px;
+            font-size: 9pt;
+            color: #6b7280;
+        }
+
+        .trend-bar {
+            flex: 1;
+            height: 20px;
+            background: #f3f4f6;
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .bar-positive {
+            background: #10b981;
+        }
+
+        .bar-neutral {
+            background: #fbbf24;
+        }
+
+        .bar-negative {
+            background: #ef4444;
+        }
+
+        .trend-count {
+            width: 50px;
+            text-align: right;
+            font-size: 9pt;
+            color: #6b7280;
+        }
+
+        .trend-legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 12px;
+            font-size: 9pt;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .legend-dot.positive {
+            background: #10b981;
+        }
+
+        .legend-dot.neutral {
+            background: #fbbf24;
+        }
+
+        .legend-dot.negative {
+            background: #ef4444;
+        }
+
+        /* Vehicle Table */
+        .vehicle-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10pt;
+        }
+
+        .vehicle-table th {
+            background: #f3f4f6;
+            padding: 10px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .vehicle-table td {
+            padding: 10px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .vehicle-table tr:hover {
+            background: #f9fafb;
+        }
+
+        /* Strengths & Weaknesses */
+        .sw-container {
+            display: flex;
+            gap: 24px;
+        }
+
+        .sw-column {
+            flex: 1;
+        }
+
+        .sw-title {
+            font-size: 11pt;
+            font-weight: 600;
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+
+        .sw-title.strengths {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .sw-title.weaknesses {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .strength-item,
+        .weakness-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            background: #f9fafb;
+            border-radius: 6px;
+        }
+
+        .tag-name {
+            font-weight: 500;
+        }
+
+        .ratio {
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10pt;
+        }
+
+        .ratio.positive {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .ratio.negative {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Action Items */
+        .action-item {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .action-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .action-number {
+            width: 24px;
+            height: 24px;
+            background: #2563eb;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 10pt;
+        }
+
+        .priority {
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 9pt;
+            font-weight: 600;
+        }
+
+        .priority.high {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .priority.medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .priority.low {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .category {
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .action-issue {
+            font-size: 10pt;
+            color: #6b7280;
+            margin-bottom: 6px;
+        }
+
+        .action-solution {
+            font-size: 10pt;
+            color: #1f2937;
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 3px solid #10b981;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            font-size: 9pt;
+            color: #9ca3af;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            flex: 1;
+            background: #f9fafb;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 20pt;
+            font-weight: 700;
+            color: #2563eb;
+        }
+
+        .stat-label {
+            font-size: 9pt;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+
+        .empty-message {
+            color: #9ca3af;
+            text-align: center;
+            padding: 20px;
+        }
+
+        /* Utility Classes */
+        .text-center {
+            text-align: center;
+        }
+
+        /* Sentiment Colors */
+        .sentiment-positive {
+            color: #10b981;
+        }
+
+        .sentiment-neutral {
+            color: #f59e0b;
+        }
+
+        .sentiment-negative {
+            color: #ef4444;
+        }
+
+        @media print {
+            .page {
+                padding: 20px 30px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+        <!-- Header -->
+        <div class="header">
+            <h1>{{ report.branch_name }}</h1>
+            <div class="subtitle">AI 컨설팅 리포트</div>
+            <div class="period">
+                분석 기간: {{ report.period_start }} ~ {{ report.period_end }}
+            </div>
+        </div>
+
+        <!-- Stats Overview -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ report.total_reviews }}</div>
+                <div class="stat-label">총 리뷰 수</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ report.strengths|length }}</div>
+                <div class="stat-label">강점 항목</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ report.weaknesses|length }}</div>
+                <div class="stat-label">개선 필요 항목</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ report.action_items|length }}</div>
+                <div class="stat-label">액션 아이템</div>
+            </div>
+        </div>
+
+        <!-- Period Summary -->
+        <div class="section">
+            <div class="section-title">
+                <span class="section-icon">📊</span>
+                기간별 요약 분석
+            </div>
+            <div class="summary-box">
+                {{ report.period_summary }}
+            </div>
+            <div class="keywords">
+                {% for kw in report.top_keywords %}
+                <span class="keyword">{{ kw }}</span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Sentiment Trend -->
+        <div class="section">
+            <div class="section-title">
+                <span class="section-icon">📈</span>
+                감정 추이
+            </div>
+            <div class="trend-chart">
+                {% for t in report.sentiment_trend[-6:] %}
+                {% set total = t.positive + t.neutral + t.negative %}
+                {% set pos_pct = (t.positive / total * 100) if total > 0 else 0 %}
+                {% set neu_pct = (t.neutral / total * 100) if total > 0 else 0 %}
+                {% set neg_pct = (t.negative / total * 100) if total > 0 else 0 %}
+                <div class="trend-bar-container">
+                    <div class="trend-label">{{ t.period }}</div>
+                    <div class="trend-bar">
+                        <div class="bar-positive" {{ 'style="width: %s%%"'|format(pos_pct)|safe }}></div>
+                        <div class="bar-neutral" {{ 'style="width: %s%%"'|format(neu_pct)|safe }}></div>
+                        <div class="bar-negative" {{ 'style="width: %s%%"'|format(neg_pct)|safe }}></div>
+                    </div>
+                    <div class="trend-count">{{ total }}건</div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="trend-legend">
+                <div class="legend-item">
+                    <div class="legend-dot positive"></div>
+                    <span>긍정</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot neutral"></div>
+                    <span>중립</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot negative"></div>
+                    <span>부정</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vehicle Analysis -->
+        <div class="section">
+            <div class="section-title">
+                <span class="section-icon">🚗</span>
+                차량별 평가 분석
+            </div>
+            <table class="vehicle-table">
+                <thead>
+                    <tr>
+                        <th>차량 모델</th>
+                        <th class="text-center">리뷰 수</th>
+                        <th class="text-center">평가</th>
+                        <th>주요 호평</th>
+                        <th>주요 불만</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if report.vehicle_analysis %}
+                    {% for v in report.vehicle_analysis %}
+                    {% set star_count = (v.avg_sentiment * 5)|int %}
+                    {% if v.avg_sentiment >= 0.7 %}
+                    {% set sentiment_class = "sentiment-positive" %}
+                    {% elif v.avg_sentiment >= 0.5 %}
+                    {% set sentiment_class = "sentiment-neutral" %}
+                    {% else %}
+                    {% set sentiment_class = "sentiment-negative" %}
+                    {% endif %}
+                    <tr>
+                        <td>{{ v.model }}</td>
+                        <td class="text-center">{{ v.count }}건</td>
+                        <td class="text-center {{ sentiment_class }}">{{ "★" * star_count }}{{ "☆" * (5 - star_count) }}</td>
+                        <td>{{ v.top_praise or '-' }}</td>
+                        <td class="sentiment-negative">{{ v.top_issue or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="empty-message">차량별 데이터가 없습니다.</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Strengths & Weaknesses -->
+        <div class="section">
+            <div class="section-title">
+                <span class="section-icon">💪</span>
+                장단점 분석
+            </div>
+            <div class="sw-container">
+                <div class="sw-column">
+                    <div class="sw-title strengths">✓ 강점</div>
+                    {% if report.strengths %}
+                    {% for s in report.strengths %}
+                    <div class="strength-item">
+                        <span class="tag-name">{{ s.tag }}</span>
+                        <span class="ratio positive">{{ s.ratio }}%</span>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="empty-message">분석된 강점이 없습니다.</div>
+                    {% endif %}
+                </div>
+                <div class="sw-column">
+                    <div class="sw-title weaknesses">✕ 개선 필요</div>
+                    {% if report.weaknesses %}
+                    {% for w in report.weaknesses %}
+                    <div class="weakness-item">
+                        <span class="tag-name">{{ w.tag }}</span>
+                        <span class="ratio negative">{{ w.ratio }}%</span>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="empty-message">개선이 필요한 항목이 없습니다.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Items -->
+        <div class="section">
+            <div class="section-title">
+                <span class="section-icon">🎯</span>
+                개선 액션 아이템
+            </div>
+            {% if report.action_items %}
+            {% for item in report.action_items %}
+            {% if item.priority == "높음" %}
+            {% set priority_class = "high" %}
+            {% elif item.priority == "중간" %}
+            {% set priority_class = "medium" %}
+            {% else %}
+            {% set priority_class = "low" %}
+            {% endif %}
+            <div class="action-item">
+                <div class="action-header">
+                    <span class="action-number">{{ loop.index }}</span>
+                    <span class="priority {{ priority_class }}">{{ item.priority }}</span>
+                    <span class="category">{{ item.category }}</span>
+                </div>
+                <div class="action-issue">문제: {{ item.issue }}</div>
+                <div class="action-solution">개선안: {{ item.action }}</div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty-message">제안된 액션 아이템이 없습니다.</div>
+            {% endif %}
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            Generated by Carmore AI · {{ report.generated_at }}
+        </div>
+    </div>
+</body>
+
+</html>

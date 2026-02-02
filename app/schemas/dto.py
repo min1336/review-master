@@ -897,6 +897,7 @@ class AnalysisReviewDTO:
     rating_service: float | None
     rating_car: float | None
     rating_convenience: float | None
+    car_model: str | None = None
     is_new: bool = False
 
     def to_dict(self) -> dict[str, Any]:
@@ -912,6 +913,7 @@ class AnalysisReviewDTO:
             "rating_service": self.rating_service,
             "rating_car": self.rating_car,
             "rating_convenience": self.rating_convenience,
+            "car_model": self.car_model,
             "is_new": self.is_new,
         }
 
@@ -922,6 +924,17 @@ class AnalysisReviewDTO:
         if isinstance(review_date, datetime):
             review_date = review_date.isoformat()
 
+        # 평점 추출
+        rating_service = row.get("rating_service")
+        rating_car = row.get("rating_car")
+        rating_convenience = row.get("rating_convenience")
+
+        # 감정 계산: 평점 + DB 감정 결합
+        db_sentiment = row.get("sentiment")
+        final_sentiment = cls._calculate_sentiment(
+            rating_service, rating_car, rating_convenience, db_sentiment
+        )
+
         return cls(
             id=row.get("id"),
             review_id=row.get("review_id"),
@@ -929,13 +942,51 @@ class AnalysisReviewDTO:
             branch_name=row.get("branch_name") or "",
             company_name=row.get("company_name") or "",
             content=row.get("content") or "",
-            sentiment=row.get("sentiment"),
+            sentiment=final_sentiment,
             review_date=review_date,
-            rating_service=row.get("rating_service"),
-            rating_car=row.get("rating_car"),
-            rating_convenience=row.get("rating_convenience"),
+            rating_service=rating_service,
+            rating_car=rating_car,
+            rating_convenience=rating_convenience,
+            car_model=row.get("car_model"),
             is_new=row.get("is_new", False),
         )
+
+    @staticmethod
+    def _calculate_sentiment(
+        rating_service: float | None,
+        rating_car: float | None,
+        rating_convenience: float | None,
+        content_sentiment: str | None,
+    ) -> str:
+        """
+        평점 + 내용 분석을 결합한 최종 감정 판단
+
+        규칙:
+        1. 3가지 평점 중 1개라도 낮으면(3점 이하) → 부정
+        2. 내용 분석이 부정인데 평점이 모두 높으면 → 중립
+        3. 평점 높고 내용도 긍정/중립 → 기존 감정 유지
+        """
+        LOW_RATING_THRESHOLD = 3.0
+
+        # 평점 검사: 유효한 평점만 확인
+        ratings = [r for r in [rating_service, rating_car, rating_convenience] if r is not None]
+        is_any_rating_low = any(r <= LOW_RATING_THRESHOLD for r in ratings) if ratings else False
+
+        # 내용 기반 감정 (기본값: neutral)
+        is_content_negative = content_sentiment == "negative"
+
+        # 규칙 적용
+        if is_any_rating_low:
+            # 평점이 하나라도 낮으면 무조건 부정
+            return "negative"
+        elif is_content_negative:
+            # 평점은 다 높은데 내용이 부정이면 → 중립
+            return "neutral"
+        else:
+            # 평점 높고 내용도 부정 아님 → 기존 감정 유지 (없으면 neutral)
+            return content_sentiment or "neutral"
+
+
 
 
 @dataclass

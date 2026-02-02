@@ -21,7 +21,7 @@ from .deps import get_sync_service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/sync", tags=["sync"])
+router = APIRouter(tags=["sync"])
 
 
 @router.get("/status", response_model=SyncStatusResponse)

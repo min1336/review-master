@@ -5,6 +5,7 @@
 - 태그 분류 (HybridClassifier: ABSA + 임베딩)
 - ABSA (Aspect-Based Sentiment Analysis)
 - 청킹 (절 단위 분리)
+- 통합 감정 분석 (UnifiedSentimentAnalyzer)
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from .patterns import (
     get_tag_for_keyword,
     is_negative_keyword,
 )
+from .sentiment_utils import SentimentResult, UnifiedSentimentAnalyzer
 from .tag_embeddings import TAG_COLORS, TAG_DESCRIPTIONS, TagEmbeddingManager
 
 __all__ = [
@@ -44,6 +46,9 @@ __all__ = [
     "ClauseChunker",
     # ABSA
     "RuleBasedABSA",
+    # Unified Sentiment
+    "UnifiedSentimentAnalyzer",
+    "SentimentResult",
     # Patterns
     "NEGATIVE_PATTERNS",
     "POSITIVE_PATTERNS",
@@ -60,3 +65,4 @@ __all__ = [
     "is_negative_keyword",
     "get_tag_for_keyword",
 ]
+

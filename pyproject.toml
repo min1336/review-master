@@ -30,6 +30,8 @@ dependencies = [
     "boto3>=1.34.0",
     # Scheduler
     "apscheduler>=3.10.0",
+    # PDF Generation
+    "weasyprint>=60.0",
 ]
 
 [project.optional-dependencies]

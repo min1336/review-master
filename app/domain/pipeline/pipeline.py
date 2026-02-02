@@ -86,7 +86,8 @@ class BasePipeline(ABC):
     def __init__(self) -> None:
         self.kiwi = None
         self._supabase_client: AsyncClient | None = None
-        self._hybrid_classifier = None
+        self._sentiment_analyzer = None  # UnifiedSentimentAnalyzer
+        self._tag_classifier = None  # HybridClassifier (태그 분류용)
 
         self._init_kiwi()
 
@@ -193,7 +194,12 @@ class BasePipeline(ABC):
         self, text: str, keywords: list[str] | None = None
     ) -> tuple[str, float]:
         """
-        감정 분석 (HybridClassifier 기반)
+        감정 분석 (UnifiedSentimentAnalyzer 기반)
+
+        세 가지 분석 방식을 통합:
+        1. Rule-based (ABSA): 빠른 패턴 매칭
+        2. HybridClassifier: 문맥 고려 분석
+        3. Rating: 평점 통합 (analyze_sentiment_with_ratings에서 사용)
 
         Args:
             text: 분석할 텍스트
@@ -205,26 +211,55 @@ class BasePipeline(ABC):
         if not text:
             return "neutral", 0.5
 
-        # HybridClassifier 지연 로딩
-        if self._hybrid_classifier is None:
-            from ..analysis import HybridClassifier
+        # UnifiedSentimentAnalyzer 지연 로딩
+        if self._sentiment_analyzer is None:
+            from ..analysis import UnifiedSentimentAnalyzer
 
-            self._hybrid_classifier = HybridClassifier(lazy_load=True)
+            self._sentiment_analyzer = UnifiedSentimentAnalyzer(lazy_load=True)
 
-        result = self._hybrid_classifier.get_review_summary(text, keywords)
-        overall = result.get("overall_sentiment", "neutral")
+        result = self._sentiment_analyzer.analyze(text, keywords)
+        return result.sentiment, result.confidence
 
-        # 점수 계산
-        pos_count = len(result.get("positive_aspects", []))
-        neg_count = len(result.get("negative_aspects", []))
-        total = pos_count + neg_count
+    def analyze_sentiment_with_ratings(
+        self,
+        text: str,
+        keywords: list[str] | None = None,
+        rating_service: float | None = None,
+        rating_car: float | None = None,
+        rating_convenience: float | None = None,
+    ) -> tuple[str, float]:
+        """
+        감정 분석 + 평점 통합
 
-        if total == 0:
+        텍스트 분석 결과와 평점을 결합하여 최종 감정을 판단합니다.
+
+        Args:
+            text: 분석할 텍스트
+            keywords: 추출된 키워드 리스트
+            rating_service: 서비스 평점 (1~5)
+            rating_car: 차량 평점 (1~5)
+            rating_convenience: 편의성 평점 (1~5)
+
+        Returns:
+            (sentiment, score) - ('positive'/'neutral'/'negative', 0~1)
+        """
+        if not text:
             return "neutral", 0.5
 
-        score = (pos_count + 1) / (total + 2)  # Laplace smoothing
+        # UnifiedSentimentAnalyzer 지연 로딩
+        if self._sentiment_analyzer is None:
+            from ..analysis import UnifiedSentimentAnalyzer
 
-        return overall, score
+            self._sentiment_analyzer = UnifiedSentimentAnalyzer(lazy_load=True)
+
+        result = self._sentiment_analyzer.analyze_with_ratings(
+            text=text,
+            keywords=keywords,
+            rating_service=rating_service,
+            rating_car=rating_car,
+            rating_convenience=rating_convenience,
+        )
+        return result.sentiment, result.confidence
 
     def process_review(self, review: ReviewDTO) -> ProcessedReviewDTO | None:
         """
@@ -673,12 +708,12 @@ class BatchPipeline(BasePipeline):
         print("[Step 4] 태그+감정 분류 (HybridClassifier)")
         print("=" * 60)
 
-        if self._hybrid_classifier is None:
+        if self._tag_classifier is None:
             try:
                 from ..analysis import HybridClassifier
 
-                self._hybrid_classifier = HybridClassifier(lazy_load=True)
-                print("   → HybridClassifier 로딩")
+                self._tag_classifier = HybridClassifier(lazy_load=True)
+                print("   → HybridClassifier 로딩 (태그 분류용)")
             except ImportError as e:
                 print(f"   ⚠️ HybridClassifier 로드 실패: {e}")
                 return
@@ -702,7 +737,7 @@ class BatchPipeline(BasePipeline):
             tag_sentiment: dict[str, dict[str, list[str]]] = {}
 
             for pr in reviews:
-                result = self._hybrid_classifier.classify_review(
+                result = self._tag_classifier.classify_review(
                     review=pr.content, keywords=pr.keywords
                 )
 
