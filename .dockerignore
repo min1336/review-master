@@ -35,3 +35,25 @@ dist
 
 # OS
 .DS_Store
+
+# Data files (large, not needed in image)
+data/*.xlsx
+data/*.csv
+*.xlsx
+*.csv
+
+# Model caches (will be downloaded on first run)
+.fastembed_cache
+*.onnx
+
+# Documentation
+*.md
+!README.md
+
+# Test files
+tests
+*_test.py
+test_*.py
+
+# Credentials (should be mounted at runtime)
+credentials

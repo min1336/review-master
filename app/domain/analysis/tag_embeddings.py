@@ -1,5 +1,5 @@
 """
-태그 대표 임베딩 관리
+태그 대표 임베딩 관리 (FastEmbed/ONNX 기반)
 사전 계산된 임베딩을 저장/로드하여 성능 최적화
 """
 
@@ -75,7 +75,7 @@ class TagEmbeddingManager:
     def __init__(self, model=None, cache_path: str | None = None):
         """
         Args:
-            model: SentenceTransformer 모델 (지연 로딩 시 None)
+            model: FastEmbed TextEmbedding 모델 (지연 로딩 시 None)
             cache_path: 임베딩 캐시 파일 경로
         """
         self.model = model
@@ -103,8 +103,8 @@ class TagEmbeddingManager:
         descriptions = list(TAG_DESCRIPTIONS.values())
         tags = list(TAG_DESCRIPTIONS.keys())
 
-        # 배치로 한번에 인코딩
-        vectors = self.model.encode(descriptions, convert_to_numpy=True)
+        # 배치로 한번에 인코딩 (FastEmbed)
+        vectors = np.array(list(self.model.embed(descriptions)))
 
         for tag, vector in zip(tags, vectors, strict=False):
             embeddings[tag] = vector

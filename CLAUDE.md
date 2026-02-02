@@ -5,7 +5,7 @@ Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
 ## Tech Stack
 
 - **Backend**: Python 3.12, FastAPI
-- **NLP**: Kiwi (한국어 형태소 분석), Sentence-Transformers
+- **NLP**: Kiwi (한국어 형태소 분석), FastEmbed (ONNX 기반)
 - **LLM**: OpenAI GPT-4o-mini
 - **Database**: Supabase (PostgreSQL)
 - **Data**: pandas, openpyxl
@@ -15,7 +15,7 @@ Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
 ```python
 OPENAI_RPM = 3500                # API Rate Limit
 MAX_REVIEWS_PER_BRANCH = 30      # recent_reviews 저장 개수
-EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
+EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
 SIMILARITY_THRESHOLD = 0.3       # 태그 분류 최소 유사도
 ```
 

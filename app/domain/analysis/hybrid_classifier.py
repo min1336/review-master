@@ -1,9 +1,9 @@
 """
-하이브리드 태그+감정 분류기 (v2.0)
+하이브리드 태그+감정 분류기 (v2.1)
 
-ABSA + BERT 임베딩을 결합하여 정확도 향상:
+ABSA + FastEmbed 임베딩을 결합하여 정확도 향상:
 1. ABSA: 리뷰 전체를 분석하여 Aspect별 감정 추출 (혼합 감정 처리에 강함)
-2. Embedding: 개별 키워드를 태그에 분류 (빠르고 안정적)
+2. Embedding: 개별 키워드를 태그에 분류 (빠르고 안정적, ONNX 기반)
 3. 규칙 기반: 전문 용어 우선 매핑
 
 사용법:
@@ -48,10 +48,10 @@ class HybridClassifier:
     """
     하이브리드 태그+감정 분류기
 
-    ABSA + BERT 임베딩 + 규칙 기반 매핑을 결합
+    ABSA + FastEmbed 임베딩 + 규칙 기반 매핑을 결합
     """
 
-    DEFAULT_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
+    DEFAULT_MODEL = "intfloat/multilingual-e5-small"
     DEFAULT_THRESHOLD = 0.3
 
     def __init__(
@@ -62,7 +62,7 @@ class HybridClassifier:
     ):
         """
         Args:
-            model_name: Sentence Transformer 모델명
+            model_name: FastEmbed 모델명 (ONNX 기반)
             similarity_threshold: 최소 유사도 임계값 (미만이면 '기타')
             lazy_load: True면 첫 사용 시 모델 로드
         """
@@ -90,9 +90,9 @@ class HybridClassifier:
         try:
             logger.info(f"임베딩 모델 로딩 중: {self.model_name}")
 
-            from sentence_transformers import SentenceTransformer
+            from fastembed import TextEmbedding
 
-            self._model = SentenceTransformer(self.model_name)
+            self._model = TextEmbedding(model_name=self.model_name)
 
             self._tag_manager = TagEmbeddingManager(model=self._model)
             self._tag_embeddings = self._tag_manager.get_or_compute()
@@ -103,7 +103,7 @@ class HybridClassifier:
             return True
 
         except ImportError as e:
-            logger.error(f"sentence-transformers 패키지가 필요합니다: {e}")
+            logger.error(f"fastembed 패키지가 필요합니다: {e}")
             return False
 
         except Exception as e:
@@ -224,7 +224,7 @@ class HybridClassifier:
             return rule_result
 
         # 임베딩 기반 분류
-        keyword_embedding = self._model.encode(keyword, convert_to_numpy=True)
+        keyword_embedding = np.array(list(self._model.embed([keyword])))[0]
 
         similarities = {}
         for tag_name, tag_embedding in self._tag_embeddings.items():
@@ -271,9 +271,7 @@ class HybridClassifier:
             return results
 
         # 배치 인코딩
-        keyword_embeddings = self._model.encode(
-            embedding_keywords, convert_to_numpy=True, show_progress_bar=False
-        )
+        keyword_embeddings = np.array(list(self._model.embed(embedding_keywords)))
 
         tag_matrix = np.array([self._tag_embeddings[tag] for tag in self._tag_names])
 

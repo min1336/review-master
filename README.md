@@ -19,7 +19,7 @@ Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
 | Category | Technology |
 |----------|------------|
 | Backend | Python 3.12, FastAPI |
-| NLP | Kiwi, Sentence-Transformers |
+| NLP | Kiwi |
 | LLM | OpenAI GPT-4o-mini |
 | Database | Supabase (PostgreSQL) |
 | Frontend | HTML, JavaScript (Vanilla) |
