@@ -10,5 +10,5 @@ api_router.include_router(summaries.router, prefix="/v2")
 api_router.include_router(tags.router, prefix="/tags")
 api_router.include_router(sentiment.router, prefix="/sentiment")
 api_router.include_router(analysis.router, prefix="/analysis")
-api_router.include_router(report.router, prefix="/report")
+api_router.include_router(report.router, prefix="/v2/report")  # /v2 아래로 이동
 api_router.include_router(sync.router, prefix="/sync")

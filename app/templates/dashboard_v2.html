@@ -3058,7 +3058,7 @@
                 }
 
                 try {
-                    const response = await fetch(`${API_PREFIX}/report/${branchId}/list?limit=5`);
+                    const response = await fetch(`${API_PREFIX}/v2/report/${branchId}/list?limit=5`);
                     const result = await response.json();
 
                     if (result.success && result.data && result.data.length > 0) {
@@ -3125,7 +3125,7 @@
                 `;
 
                 try {
-                    const response = await fetch(`${API_PREFIX}/report/${reportState.branchId}?start_date=${startDate}&end_date=${endDate}`);
+                    const response = await fetch(`${API_PREFIX}/v2/report/${reportState.branchId}?start_date=${startDate}&end_date=${endDate}`);
                     const result = await response.json();
 
                     if (result.success) {
@@ -3241,7 +3241,7 @@
                 `;
 
                 try {
-                    const response = await fetch(`${API_PREFIX}/report/${reportState.branchId}/generate`, {
+                    const response = await fetch(`${API_PREFIX}/v2/report/${reportState.branchId}/generate`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -3289,7 +3289,7 @@
                 `;
 
                 try {
-                    const response = await fetch(`${API_PREFIX}/report/${reportState.branchId}/regenerate`, {
+                    const response = await fetch(`${API_PREFIX}/v2/report/${reportState.branchId}/regenerate`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -3535,7 +3535,7 @@
                     return;
                 }
 
-                const url = `${API_PREFIX}/report/${reportState.branchId}/pdf?start_date=${reportState.startDate}&end_date=${reportState.endDate}`;
+                const url = `${API_PREFIX}/v2/report/${reportState.branchId}/pdf?start_date=${reportState.startDate}&end_date=${reportState.endDate}`;
                 window.open(url, '_blank');
             }
 
