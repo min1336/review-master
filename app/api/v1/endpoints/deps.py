@@ -191,10 +191,11 @@ async def get_report_service(
     review_repo: BranchReviewRepository = Depends(get_review_repo),
     branch_tag_repo: BranchTagRepository = Depends(get_branch_tag_repo),
     report_repo: "ReportRepository" = Depends(get_report_repo),
+    sentiment_repo: SentimentRepository = Depends(get_sentiment_repo),
 ) -> ReportService:
     from services.report_service import ReportService
 
-    return ReportService(summary_repo, review_repo, branch_tag_repo, report_repo)
+    return ReportService(summary_repo, review_repo, branch_tag_repo, report_repo, sentiment_repo)
 
 
 async def get_report_job_repo(

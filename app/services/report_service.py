@@ -70,11 +70,12 @@ class ReportData(BaseModel):
 class ReportService:
     """AI 리포트 비즈니스 로직"""
 
-    def __init__(self, summary_repo, review_repo, branch_tag_repo, report_repo=None):
+    def __init__(self, summary_repo, review_repo, branch_tag_repo, report_repo=None, sentiment_repo=None):
         self.summary_repo = summary_repo
         self.review_repo = review_repo
         self.branch_tag_repo = branch_tag_repo
         self.report_repo = report_repo
+        self.sentiment_repo = sentiment_repo
 
     async def get_saved_report(
         self,
@@ -181,7 +182,7 @@ class ReportService:
         progress_callback: Callable[[int], Awaitable[None]] | None = None,
     ) -> ReportData:
         """
-        진행률 콜백이 포함된 AI 리포트 생성 (비동기 작업용)
+        DB 조회 + AI 생성만 수행하는 리팩토링된 리포트 생성
 
         Args:
             branch_id: 지점 ID
@@ -192,14 +193,12 @@ class ReportService:
         Returns:
             ReportData: 리포트 데이터
         """
-        from domain.analysis import KeywordExtractor, RuleBasedABSA
-
         async def update_progress(value: int) -> None:
             if progress_callback:
                 await progress_callback(value)
 
-        # 1. 기본 정보 조회 (5%)
-        await update_progress(5)
+        # 1. 지점 기본 정보 조회 (10%)
+        await update_progress(10)
         summary = await self.summary_repo.get_by_branch_id(branch_id)
         if not summary:
             raise ValueError(f"지점 {branch_id}을(를) 찾을 수 없습니다")
@@ -207,19 +206,10 @@ class ReportService:
         summary_data = summary.model_dump()
         branch_name = summary_data.get("branch_name", f"지점 {branch_id}")
         affiliate_name = summary_data.get("affiliate_name", "")
+        total_reviews = summary_data.get("review_count", 0)
 
-        # 2. 기간 내 리뷰 조회 (15%)
-        await update_progress(15)
-        reviews_result = await self.review_repo.get_by_branch(
-            branch_id=branch_id,
-            review_date_from=start_date,
-            review_date_to=end_date,
-            limit=1000,
-        )
-        reviews_data = reviews_result.reviews
-        total_reviews = reviews_result.total
-
-        if not reviews_data:
+        # 리뷰가 없는 경우 빈 리포트 반환
+        if total_reviews == 0:
             await update_progress(100)
             return ReportData(
                 branch_id=branch_id,
@@ -231,94 +221,37 @@ class ReportService:
                 generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
             )
 
-        # 3. 키워드 추출 및 감정 분석 (60%)
-        await update_progress(25)
-        review_texts = [r.get("content", "") or "" for r in reviews_data]
+        # 2. 키워드 조회 - branch_summaries.keywords에서 (20%)
+        await update_progress(20)
+        top_keywords = summary_data.get("keywords", [])[:10]
 
-        def analyze_reviews():
-            extractor = KeywordExtractor()
-            classifier = RuleBasedABSA()
+        # 3. 감정 통계 조회 - sentiment_stats 테이블에서 (30%)
+        await update_progress(30)
+        # 감정 통계는 현재 리포트에서 직접 사용하지 않지만, 필요시 조회 가능
+        # sentiment_stats = await self.sentiment_repo.get_stats(branch_id) if self.sentiment_repo else None
 
-            all_keywords = extractor.extract_batch(review_texts)
-            tag_totals: dict[str, dict] = {}
-            sentiment_counts = {"positive": 0, "neutral": 0, "negative": 0}
+        # 4. 태그별 강점/약점 조회 - branch_tags 테이블에서 (50%)
+        await update_progress(50)
+        strengths, weaknesses = await self._get_strengths_weaknesses_from_db(branch_id)
 
-            for keywords, review_text, review in zip(
-                all_keywords, review_texts, reviews_data, strict=False
-            ):
-                result = classifier.classify_review(review_text, keywords[:10])
-
-                review_sentiment = review.get("sentiment", "neutral")
-                sentiment_counts[review_sentiment] = (
-                    sentiment_counts.get(review_sentiment, 0) + 1
-                )
-
-                for tag, sentiments in result.items():
-                    pos = len(sentiments.get("positive", []))
-                    neg = len(sentiments.get("negative", []))
-                    neu = len(sentiments.get("neutral", []))
-
-                    if tag not in tag_totals:
-                        tag_totals[tag] = {
-                            "positive": 0,
-                            "negative": 0,
-                            "neutral": 0,
-                            "total": 0,
-                            "positive_samples": [],
-                            "negative_samples": [],
-                        }
-                    tag_totals[tag]["positive"] += pos
-                    tag_totals[tag]["negative"] += neg
-                    tag_totals[tag]["neutral"] += neu
-                    tag_totals[tag]["total"] += pos + neg + neu
-
-                    if pos > 0 and len(tag_totals[tag]["positive_samples"]) < 3:
-                        tag_totals[tag]["positive_samples"].append(review_text[:100])
-                    if neg > 0 and len(tag_totals[tag]["negative_samples"]) < 3:
-                        tag_totals[tag]["negative_samples"].append(review_text[:100])
-
-            keyword_freq: dict[str, int] = {}
-            for keywords in all_keywords:
-                for kw in keywords[:5]:
-                    keyword_freq[kw] = keyword_freq.get(kw, 0) + 1
-
-            top_keywords = sorted(
-                keyword_freq.items(), key=lambda x: x[1], reverse=True
-            )[:10]
-
-            return tag_totals, sentiment_counts, [kw for kw, _ in top_keywords]
-
-        tag_totals, sentiment_counts, top_keywords = await asyncio.to_thread(
-            analyze_reviews
-        )
-        await update_progress(60)
-
-        # 4. 차량별 분석 (70%)
-        vehicle_analysis = await self._analyze_vehicles(reviews_data, branch_id)
+        # 5. AI 액션 아이템 생성 (70%)
         await update_progress(70)
+        action_items = await self._generate_action_items(weaknesses, [], branch_name)
 
-        # 5. 강점/약점 분석
-        strengths, weaknesses = self._analyze_strengths_weaknesses(tag_totals)
-
-        # 6. 기간별 추이 (월별 집계)
-        sentiment_trend = self._calculate_sentiment_trend(reviews_data)
-        await update_progress(75)
-
-        # 7. AI 개선 액션 아이템 + 기간 요약 병렬 생성 (90%)
-        action_items, period_summary = await asyncio.gather(
-            self._generate_action_items(weaknesses, reviews_data, branch_name),
-            self._generate_period_summary(
-                branch_name,
-                total_reviews,
-                top_keywords,
-                strengths,
-                weaknesses,
-                start_date,
-                end_date,
-            ),
-        )
+        # 6. AI 기간 요약 생성 (90%)
         await update_progress(90)
+        period_summary = await self._generate_period_summary(
+            branch_name,
+            total_reviews,
+            top_keywords,
+            strengths,
+            weaknesses,
+            start_date,
+            end_date,
+        )
 
+        # 7. 리포트 조립 (95%)
+        await update_progress(95)
         report = ReportData(
             branch_id=branch_id,
             branch_name=branch_name,
@@ -326,18 +259,17 @@ class ReportService:
             period_start=start_date.strftime("%Y-%m-%d"),
             period_end=end_date.strftime("%Y-%m-%d"),
             total_reviews=total_reviews,
-            sentiment_trend=sentiment_trend,
+            sentiment_trend=[],  # DB에 기간별 데이터 없음 - 제외
             top_keywords=top_keywords,
             period_summary=period_summary,
-            vehicle_analysis=vehicle_analysis,
+            vehicle_analysis=[],  # 실시간 계산 필요 - 제외
             strengths=strengths,
             weaknesses=weaknesses,
             action_items=action_items,
             generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
         )
 
-        # DB에 리포트 저장 (95%)
-        await update_progress(95)
+        # 8. DB에 리포트 저장 (100%)
         if self.report_repo:
             try:
                 await self.report_repo.save(
@@ -351,7 +283,6 @@ class ReportService:
                 )
             except Exception as e:
                 import logging
-
                 logging.warning(f"리포트 저장 실패 (생성은 성공): {e}")
 
         await update_progress(100)
@@ -382,228 +313,48 @@ class ReportService:
             progress_callback=None,
         )
 
-    async def _analyze_vehicles(
-        self, reviews_data: list[dict], branch_id: int
-    ) -> list[VehicleAnalysis]:
-        """차량별 분석"""
-        from domain.analysis import KeywordExtractor
-
-        vehicle_stats: dict[str, dict] = {}
-
-        for review in reviews_data:
-            car_model = review.get("car_model")
-            if not car_model:
-                continue
-
-            if car_model not in vehicle_stats:
-                vehicle_stats[car_model] = {
-                    "count": 0,
-                    "sentiment_sum": 0,
-                    "positive_reviews": [],
-                    "negative_reviews": [],
-                }
-
-            vehicle_stats[car_model]["count"] += 1
-
-            sentiment = review.get("sentiment", "neutral")
-            sentiment_score = {"positive": 1, "neutral": 0.5, "negative": 0}
-            vehicle_stats[car_model]["sentiment_sum"] += sentiment_score.get(
-                sentiment, 0.5
-            )
-
-            # 리뷰 전체 수집
-            content = review.get("content", "")
-            if sentiment == "positive" and content:
-                vehicle_stats[car_model]["positive_reviews"].append(content)
-            elif sentiment == "negative" and content:
-                vehicle_stats[car_model]["negative_reviews"].append(content)
-
-        # Kiwi 키워드 추출기 초기화
-        extractor = KeywordExtractor()
-
-        result = []
-        for model, stats in sorted(
-            vehicle_stats.items(), key=lambda x: x[1]["count"], reverse=True
-        )[:10]:
-            avg_sentiment = (
-                stats["sentiment_sum"] / stats["count"] if stats["count"] > 0 else 0.5
-            )
-
-            # Kiwi로 의미있는 키워드 추출
-            top_praise = self._extract_meaningful_keyword(
-                stats["positive_reviews"], extractor, is_positive=True
-            )
-            top_issue = self._extract_meaningful_keyword(
-                stats["negative_reviews"], extractor, is_positive=False
-            )
-
-            result.append(
-                VehicleAnalysis(
-                    model=model,
-                    count=stats["count"],
-                    avg_sentiment=round(avg_sentiment, 2),
-                    top_praise=top_praise,
-                    top_issue=top_issue,
-                )
-            )
-
-        return result
-
-    def _extract_meaningful_keyword(
-        self,
-        reviews: list[str],
-        extractor,
-        is_positive: bool = True,
-    ) -> str:
-        """리뷰 목록에서 의미있는 키워드 추출 (Kiwi 사용)"""
-        if not reviews:
-            return ""
-
-        from domain.analysis.patterns import (
-            NEGATIVE_KEYWORDS_SET,
-            POSITIVE_KEYWORDS_SET,
-        )
-
-        # 긍정/부정 관련 의미있는 단어 패턴
-        target_keywords = (
-            POSITIVE_KEYWORDS_SET if is_positive else NEGATIVE_KEYWORDS_SET
-        )
-
-
-
-        # 키워드 빈도 집계
-        keyword_counts: dict[str, int] = {}
-
-        for review in reviews[:20]:  # 최대 20개 리뷰 분석
-            # Kiwi로 키워드 추출
-            try:
-                keywords = extractor.extract(review)
-                if not keywords:
-                    continue
-                for kw in keywords[:10]:
-                    if not kw:  # None 또는 빈 문자열 건너뛰기
-                        continue
-                    # 의미있는 키워드인지 확인
-                    for target in target_keywords:
-                        if target in kw or kw in target:
-                            keyword_counts[target] = keyword_counts.get(target, 0) + 1
-                            break
-                    else:
-                        # 2글자 이상 명사/형용사만 수집
-                        if len(kw) >= 2:
-                            keyword_counts[kw] = keyword_counts.get(kw, 0) + 1
-            except Exception:
-                continue
-
-        if not keyword_counts:
-            return ""
-
-        # 가장 빈도 높은 의미있는 키워드 반환
-        # 우선순위: 미리 정의된 키워드 > 일반 키워드
-        for kw in sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True):
-            if kw[0] in target_keywords:
-                return kw[0]
-
-        # 미리 정의된 키워드가 없으면 가장 빈도 높은 것 반환
-        top_keyword = max(keyword_counts.items(), key=lambda x: x[1])[0]
-        return top_keyword
-
-    def _analyze_strengths_weaknesses(
-        self, tag_totals: dict[str, dict]
+    async def _get_strengths_weaknesses_from_db(
+        self, branch_id: int
     ) -> tuple[list[StrengthWeakness], list[StrengthWeakness]]:
-        """강점/약점 분석"""
+        """branch_tags 테이블에서 강점/약점 조회"""
         strengths = []
         weaknesses = []
 
-        for tag, counts in tag_totals.items():
-            total = counts["total"]
-            if total < 2:  # 최소 2개 이상 언급된 태그만 분석
-                continue
+        # positive 태그 조회 (강점)
+        positive_tags = await self.branch_tag_repo.get_by_branch(
+            branch_id, period_type="positive", limit=10
+        )
+        for tag in positive_tags:
+            tag_data = tag.model_dump() if hasattr(tag, "model_dump") else tag
+            tag_info = tag_data.get("tags", {})
+            tag_name = tag_info.get("name", "") if isinstance(tag_info, dict) else ""
+            count = tag_data.get("count", 0)
 
-            positive_ratio = counts["positive"] / total * 100 if total > 0 else 0
-            negative_ratio = counts["negative"] / total * 100 if total > 0 else 0
+            if tag_name and count >= 2:
+                strengths.append(StrengthWeakness(
+                    tag=tag_name,
+                    ratio=0.0,  # DB에 비율 없음
+                    sample=""   # DB에 샘플 없음
+                ))
 
-            if positive_ratio >= 60:  # 60% 이상 긍정이면 강점
-                sample = (
-                    counts["positive_samples"][0]
-                    if counts["positive_samples"]
-                    else ""
-                )
-                strengths.append(
-                    StrengthWeakness(
-                        tag=tag,
-                        ratio=round(positive_ratio, 1),
-                        sample=sample,
-                    )
-                )
-            elif negative_ratio >= 15:  # 15% 이상 부정이면 약점 (개선 필요)
-                sample = (
-                    counts["negative_samples"][0]
-                    if counts["negative_samples"]
-                    else ""
-                )
-                weaknesses.append(
-                    StrengthWeakness(
-                        tag=tag,
-                        ratio=round(negative_ratio, 1),
-                        sample=sample,
-                    )
-                )
+        # negative 태그 조회 (약점)
+        negative_tags = await self.branch_tag_repo.get_by_branch(
+            branch_id, period_type="negative", limit=10
+        )
+        for tag in negative_tags:
+            tag_data = tag.model_dump() if hasattr(tag, "model_dump") else tag
+            tag_info = tag_data.get("tags", {})
+            tag_name = tag_info.get("name", "") if isinstance(tag_info, dict) else ""
+            count = tag_data.get("count", 0)
 
-        # 정렬
-        strengths.sort(key=lambda x: x.ratio, reverse=True)
-        weaknesses.sort(key=lambda x: x.ratio, reverse=True)
+            if tag_name and count >= 2:
+                weaknesses.append(StrengthWeakness(
+                    tag=tag_name,
+                    ratio=0.0,
+                    sample=""
+                ))
 
         return strengths[:5], weaknesses[:5]
-
-    def _calculate_sentiment_trend(
-        self, reviews_data: list[dict]
-    ) -> list[PeriodTrend]:
-        """월별 감정 추이 계산"""
-        monthly_counts: dict[str, dict] = {}
-
-        for review in reviews_data:
-            review_date = review.get("review_date")
-            if not review_date:
-                continue
-
-            # 날짜 파싱
-            if isinstance(review_date, str):
-                try:
-                    dt = datetime.strptime(review_date[:10], "%Y-%m-%d")
-                except ValueError:
-                    continue
-            elif isinstance(review_date, datetime):
-                dt = review_date
-            else:
-                continue
-
-            month_key = dt.strftime("%Y-%m")
-            if month_key not in monthly_counts:
-                monthly_counts[month_key] = {
-                    "positive": 0,
-                    "neutral": 0,
-                    "negative": 0,
-                }
-
-            sentiment = review.get("sentiment", "neutral")
-            if sentiment in monthly_counts[month_key]:
-                monthly_counts[month_key][sentiment] += 1
-
-        # 정렬된 결과 반환
-        result = []
-        for month in sorted(monthly_counts.keys()):
-            counts = monthly_counts[month]
-            result.append(
-                PeriodTrend(
-                    period=month,
-                    positive=counts["positive"],
-                    neutral=counts["neutral"],
-                    negative=counts["negative"],
-                )
-            )
-
-        return result[-12:]  # 최근 12개월만
 
     async def _generate_action_items(
         self,
@@ -615,11 +366,15 @@ class ReportService:
         from infrastructure.llm import get_provider
 
         # 부정 리뷰 수집
-        negative_reviews = [
-            r.get("content", "")[:200]
-            for r in reviews_data
-            if r.get("sentiment") == "negative"
-        ][:10]
+        # reviews_data가 비어있으면 빈 리스트 처리
+        if not reviews_data:
+            negative_reviews = []
+        else:
+            negative_reviews = [
+                r.get("content", "")[:200]
+                for r in reviews_data
+                if r.get("sentiment") == "negative"
+            ][:10]
 
         # 부정 리뷰가 없으면 중립 리뷰 중 개선 키워드 포함된 것 수집
         if not negative_reviews:
