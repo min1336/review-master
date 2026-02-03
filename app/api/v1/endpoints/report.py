@@ -9,13 +9,15 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
+from services.report_job_service import ReportJobService
 from services.report_service import ReportService
 
-from .deps import get_report_service
+from .deps import get_report_job_service, get_report_service
 
 router = APIRouter(tags=["report"])
 
@@ -190,6 +192,104 @@ async def api_regenerate_report(
         import logging
         logging.exception("리포트 재생성 오류")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/{branch_id}/generate/async")
+async def api_generate_report_async(
+    branch_id: int,
+    data: ReportRequest,
+    job_service: ReportJobService = Depends(get_report_job_service),
+) -> dict[str, Any]:
+    """
+    비동기 AI 리포트 생성 요청
+
+    502 타임아웃 방지를 위한 백그라운드 작업 방식.
+    즉시 job_id를 반환하고, 클라이언트는 /job/{job_id}로 상태를 폴링합니다.
+
+    Args:
+        branch_id: 지점 ID
+        data: 기간 설정 (start_date, end_date)
+
+    Returns:
+        job_id: 작업 ID (폴링용)
+        poll_url: 상태 조회 URL
+    """
+    start_date = parse_date(data.start_date)
+    end_date = parse_date(data.end_date, end_of_day=True)
+
+    if start_date > end_date:
+        raise HTTPException(
+            status_code=400,
+            detail="시작일이 종료일보다 늦을 수 없습니다.",
+        )
+
+    try:
+        job_id = await job_service.submit_job(
+            branch_id=branch_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return {
+            "success": True,
+            "job_id": job_id,
+            "poll_url": f"/api/v2/report/{branch_id}/job/{job_id}",
+        }
+    except Exception as e:
+        import logging
+
+        logging.exception("비동기 리포트 생성 요청 실패")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/{branch_id}/job/{job_id}")
+async def api_get_job_status(
+    branch_id: int,
+    job_id: UUID = Path(..., description="작업 UUID"),
+    job_service: ReportJobService = Depends(get_report_job_service),
+) -> dict[str, Any]:
+    """
+    비동기 작업 상태 조회 (폴링용)
+
+    클라이언트는 2초 간격으로 이 엔드포인트를 호출하여 진행 상황을 확인합니다.
+
+    Args:
+        branch_id: 지점 ID
+        job_id: 작업 UUID
+
+    Returns:
+        status: pending/processing/completed/failed
+        progress: 0-100 (진행률)
+        error_message: 에러 메시지 (실패 시)
+        report_id: 생성된 리포트 ID (완료 시)
+    """
+    # branch_id 소유권 검증 포함
+    job_status = await job_service.get_job_status(str(job_id), branch_id=branch_id)
+
+    if not job_status:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
+
+    return {"success": True, "data": job_status}
+
+
+@router.delete("/{branch_id}/job/{job_id}")
+async def api_cancel_job(
+    branch_id: int,
+    job_id: UUID = Path(..., description="작업 UUID"),
+    job_service: ReportJobService = Depends(get_report_job_service),
+) -> dict[str, Any]:
+    """
+    진행 중인 작업 취소
+
+    Args:
+        branch_id: 지점 ID
+        job_id: 작업 UUID
+
+    Returns:
+        취소 성공 여부
+    """
+    # branch_id 소유권 검증 포함
+    cancelled = await job_service.cancel_job(str(job_id), branch_id=branch_id)
+    return {"success": cancelled, "message": "작업이 취소되었습니다." if cancelled else "취소할 수 없는 작업입니다."}
 
 
 @router.get("/{branch_id}/pdf")

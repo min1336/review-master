@@ -24,6 +24,7 @@ from supabase import AsyncClient
 if TYPE_CHECKING:
     from repository.affiliate_repository import AffiliateRepository
     from repository.branch_tag_repository import BranchTagRepository
+    from repository.report_job_repository import ReportJobRepository
     from repository.report_repository import ReportRepository
     from repository.review_repository import BranchReviewRepository
     from repository.sentiment_repository import SentimentRepository
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from repository.tag_repository import TagRepository
     from services.analysis_service import AnalysisService
     from services.carmore_service import CarmoreService
+    from services.report_job_service import ReportJobService
     from services.report_service import ReportService
     from services.sentiment_service import SentimentService
     from services.summary_service import SummaryService
@@ -193,3 +195,20 @@ async def get_report_service(
     from services.report_service import ReportService
 
     return ReportService(summary_repo, review_repo, branch_tag_repo, report_repo)
+
+
+async def get_report_job_repo(
+    client: AsyncClient = Depends(get_db_client),
+) -> "ReportJobRepository":
+    from repository.report_job_repository import ReportJobRepository
+
+    return ReportJobRepository(client)
+
+
+async def get_report_job_service(
+    job_repo: "ReportJobRepository" = Depends(get_report_job_repo),
+    report_service: ReportService = Depends(get_report_service),
+) -> "ReportJobService":
+    from services.report_job_service import ReportJobService
+
+    return ReportJobService(job_repo, report_service)

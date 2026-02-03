@@ -60,6 +60,8 @@ app/
 │   ├── summary_service.py         # 요약 CRUD + 상세분석
 │   ├── tag_service.py             # 태그/카테고리/매핑
 │   ├── sentiment_service.py       # 감정 통계
+│   ├── report_service.py          # AI 리포트 생성
+│   ├── report_job_service.py      # 비동기 리포트 작업 관리
 │   └── carmore_service.py         # Carmore API 연동
 │
 ├── repository/                    # Repository 레이어 (DB 접근)
@@ -70,7 +72,9 @@ app/
 │   ├── branch_tag_repository.py   # 지점 태그 Repository
 │   ├── review_repository.py       # 리뷰 Repository
 │   ├── sentiment_repository.py    # 감정 Repository
-│   └── affiliate_repository.py    # 업체 Repository
+│   ├── affiliate_repository.py    # 업체 Repository
+│   ├── report_repository.py       # 리포트 Repository
+│   └── report_job_repository.py   # 비동기 작업 Repository
 │
 ├── models/                        # DB 모델 (Pydantic)
 │   ├── summary.py
@@ -135,6 +139,17 @@ app/
 |--------|------|-------------|
 | GET | `/filters` | 필터 옵션 (지역/업체/지점) |
 | GET | `/reviews` | 필터링된 리뷰 목록 |
+
+### 리포트 API (`/api/v2/report/`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/{branch_id}` | 저장된 리포트 조회 (없으면 생성) |
+| GET | `/{branch_id}/list` | 리포트 목록 |
+| POST | `/{branch_id}/generate` | 동기 리포트 생성 |
+| POST | `/{branch_id}/generate/async` | **비동기** 리포트 생성 (job_id 반환) |
+| GET | `/{branch_id}/job/{job_id}` | 작업 상태 폴링 (progress 0-100%) |
+| DELETE | `/{branch_id}/job/{job_id}` | 작업 취소 |
+| GET | `/{branch_id}/pdf` | PDF 다운로드 |
 
 ### 페이지 라우트
 | Path | Description |
@@ -201,6 +216,10 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 6. **에러 처리**: HTTPException으로 적절한 에러 응답
 7. **로깅**: logging 모듈로 에러 상황 기록
 
+## Git Rules
+
+- **main/master 브랜치에 직접 푸시 금지**: 절대로 root 브랜치(main, master)에 직접 push하지 말 것. 반드시 feature 브랜치에서 작업 후 PR을 통해 병합할 것.
+
 ## Database Tables
 
 | 테이블 | 용도 |
@@ -212,3 +231,18 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 | `tags` | 태그 마스터 |
 | `sentiment_stats` | 감정 통계 |
 | `affiliates` | 업체 정보 |
+| `branch_reports` | AI 리포트 저장 |
+| `report_jobs` | 비동기 작업 상태 (pending/processing/completed/failed) |
+
+## 비동기 작업 패턴 (502 타임아웃 방지)
+
+긴 처리 시간(60초+) 작업은 백그라운드 + 폴링 패턴 사용:
+```
+POST /generate/async → job_id 즉시 반환
+GET  /job/{job_id}   → 2초 간격 폴링 (progress: 0-100%)
+```
+
+## 개발 명령어
+
+- `python -m py_compile <file.py>` - Python 문법 검사
+- Supabase MCP로 마이그레이션: `mcp__supabase__apply_migration`

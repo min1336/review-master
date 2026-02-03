@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+from typing import Awaitable, Callable
+
 from pydantic import BaseModel
 
 
@@ -171,26 +173,33 @@ class ReportService:
         """
         return await self.generate_report(branch_id, start_date, end_date)
 
-    async def generate_report(
+    async def generate_report_with_progress(
         self,
         branch_id: int,
         start_date: datetime,
         end_date: datetime,
+        progress_callback: Callable[[int], Awaitable[None]] | None = None,
     ) -> ReportData:
         """
-        AI 리포트 생성
+        진행률 콜백이 포함된 AI 리포트 생성 (비동기 작업용)
 
         Args:
             branch_id: 지점 ID
             start_date: 분석 시작일
             end_date: 분석 종료일
+            progress_callback: 진행률 업데이트 콜백 (0-100)
 
         Returns:
             ReportData: 리포트 데이터
         """
         from domain.analysis import KeywordExtractor, RuleBasedABSA
 
-        # 1. 기본 정보 조회
+        async def update_progress(value: int) -> None:
+            if progress_callback:
+                await progress_callback(value)
+
+        # 1. 기본 정보 조회 (5%)
+        await update_progress(5)
         summary = await self.summary_repo.get_by_branch_id(branch_id)
         if not summary:
             raise ValueError(f"지점 {branch_id}을(를) 찾을 수 없습니다")
@@ -199,7 +208,8 @@ class ReportService:
         branch_name = summary_data.get("branch_name", f"지점 {branch_id}")
         affiliate_name = summary_data.get("affiliate_name", "")
 
-        # 2. 기간 내 리뷰 조회
+        # 2. 기간 내 리뷰 조회 (15%)
+        await update_progress(15)
         reviews_result = await self.review_repo.get_by_branch(
             branch_id=branch_id,
             review_date_from=start_date,
@@ -210,6 +220,7 @@ class ReportService:
         total_reviews = reviews_result.total
 
         if not reviews_data:
+            await update_progress(100)
             return ReportData(
                 branch_id=branch_id,
                 branch_name=branch_name,
@@ -220,7 +231,8 @@ class ReportService:
                 generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
             )
 
-        # 3. 키워드 추출 및 감정 분석
+        # 3. 키워드 추출 및 감정 분석 (60%)
+        await update_progress(25)
         review_texts = [r.get("content", "") or "" for r in reviews_data]
 
         def analyze_reviews():
@@ -236,13 +248,11 @@ class ReportService:
             ):
                 result = classifier.classify_review(review_text, keywords[:10])
 
-                # 전체 감정 집계
                 review_sentiment = review.get("sentiment", "neutral")
                 sentiment_counts[review_sentiment] = (
                     sentiment_counts.get(review_sentiment, 0) + 1
                 )
 
-                # 태그별 감정 집계
                 for tag, sentiments in result.items():
                     pos = len(sentiments.get("positive", []))
                     neg = len(sentiments.get("negative", []))
@@ -262,17 +272,11 @@ class ReportService:
                     tag_totals[tag]["neutral"] += neu
                     tag_totals[tag]["total"] += pos + neg + neu
 
-                    # 샘플 수집
                     if pos > 0 and len(tag_totals[tag]["positive_samples"]) < 3:
-                        tag_totals[tag]["positive_samples"].append(
-                            review_text[:100]
-                        )
+                        tag_totals[tag]["positive_samples"].append(review_text[:100])
                     if neg > 0 and len(tag_totals[tag]["negative_samples"]) < 3:
-                        tag_totals[tag]["negative_samples"].append(
-                            review_text[:100]
-                        )
+                        tag_totals[tag]["negative_samples"].append(review_text[:100])
 
-            # 상위 키워드 추출
             keyword_freq: dict[str, int] = {}
             for keywords in all_keywords:
                 for kw in keywords[:5]:
@@ -287,33 +291,33 @@ class ReportService:
         tag_totals, sentiment_counts, top_keywords = await asyncio.to_thread(
             analyze_reviews
         )
+        await update_progress(60)
 
-        # 4. 차량별 분석
-        vehicle_analysis = await self._analyze_vehicles(
-            reviews_data, branch_id
-        )
+        # 4. 차량별 분석 (70%)
+        vehicle_analysis = await self._analyze_vehicles(reviews_data, branch_id)
+        await update_progress(70)
 
         # 5. 강점/약점 분석
         strengths, weaknesses = self._analyze_strengths_weaknesses(tag_totals)
 
         # 6. 기간별 추이 (월별 집계)
         sentiment_trend = self._calculate_sentiment_trend(reviews_data)
+        await update_progress(75)
 
-        # 7. AI 개선 액션 아이템 생성
-        action_items = await self._generate_action_items(
-            weaknesses, reviews_data, branch_name
+        # 7. AI 개선 액션 아이템 + 기간 요약 병렬 생성 (90%)
+        action_items, period_summary = await asyncio.gather(
+            self._generate_action_items(weaknesses, reviews_data, branch_name),
+            self._generate_period_summary(
+                branch_name,
+                total_reviews,
+                top_keywords,
+                strengths,
+                weaknesses,
+                start_date,
+                end_date,
+            ),
         )
-
-        # 8. 기간 요약 생성
-        period_summary = await self._generate_period_summary(
-            branch_name,
-            total_reviews,
-            top_keywords,
-            strengths,
-            weaknesses,
-            start_date,
-            end_date,
-        )
+        await update_progress(90)
 
         report = ReportData(
             branch_id=branch_id,
@@ -332,7 +336,8 @@ class ReportService:
             generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
         )
 
-        # DB에 리포트 저장
+        # DB에 리포트 저장 (95%)
+        await update_progress(95)
         if self.report_repo:
             try:
                 await self.report_repo.save(
@@ -346,9 +351,36 @@ class ReportService:
                 )
             except Exception as e:
                 import logging
+
                 logging.warning(f"리포트 저장 실패 (생성은 성공): {e}")
 
+        await update_progress(100)
         return report
+
+    async def generate_report(
+        self,
+        branch_id: int,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> ReportData:
+        """
+        AI 리포트 생성
+
+        Args:
+            branch_id: 지점 ID
+            start_date: 분석 시작일
+            end_date: 분석 종료일
+
+        Returns:
+            ReportData: 리포트 데이터
+        """
+        # 진행률 콜백 없이 generate_report_with_progress 호출
+        return await self.generate_report_with_progress(
+            branch_id=branch_id,
+            start_date=start_date,
+            end_date=end_date,
+            progress_callback=None,
+        )
 
     async def _analyze_vehicles(
         self, reviews_data: list[dict], branch_id: int
