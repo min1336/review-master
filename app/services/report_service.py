@@ -174,158 +174,6 @@ class ReportService:
         """
         return await self.generate_report(branch_id, start_date, end_date)
 
-    async def _step_collect(self, branch_id: int) -> dict:
-        """
-        Step 1: 지점 기본 정보 및 키워드 수집
-
-        Args:
-            branch_id: 지점 ID
-
-        Returns:
-            dict: 수집된 기본 정보
-        """
-        summary = await self.summary_repo.get_by_branch_id(branch_id)
-        if not summary:
-            raise ValueError(f"지점 {branch_id}을(를) 찾을 수 없습니다")
-
-        summary_data = summary.model_dump()
-
-        # affiliate_name 조회 (branch_reviews에서 company_name 가져오기)
-        affiliate_name = ""
-        if self.review_repo:
-            try:
-                result = await self.review_repo.get_by_branch(branch_id=branch_id, limit=1)
-                if result.reviews:
-                    affiliate_name = result.reviews[0].get("company_name", "")
-            except Exception:
-                pass  # affiliate_name은 필수가 아니므로 실패해도 무시
-
-        return {
-            "branch_id": branch_id,
-            "branch_name": summary_data.get("branch_name", f"지점 {branch_id}"),
-            "affiliate_name": affiliate_name,
-            "total_reviews": summary_data.get("review_count", 0),
-            "keywords": summary_data.get("keywords", [])[:10],
-        }
-        # summary, summary_data 메모리 해제
-
-    async def _step_tags(self, branch_id: int, reviews_data: list[dict] | None = None) -> dict:
-        """
-        Step 2: 태그별 강점/약점 조회
-
-        Args:
-            branch_id: 지점 ID
-            reviews_data: 리뷰 데이터 (샘플 추출용)
-
-        Returns:
-            dict: 강점/약점 데이터 (직렬화된 형태)
-        """
-        strengths, weaknesses = await self._get_strengths_weaknesses_from_db(
-            branch_id, reviews_data
-        )
-
-        return {
-            "strengths": [s.model_dump() for s in strengths],
-            "weaknesses": [w.model_dump() for w in weaknesses],
-        }
-        # strengths, weaknesses 원본 메모리 해제
-
-    async def _step_ai(self, data: dict) -> dict:
-        """
-        Step 3: AI 분석 (LLM 호출)
-
-        Args:
-            data: 이전 단계에서 수집된 데이터
-
-        Returns:
-            dict: AI 분석 결과 (직렬화된 형태)
-        """
-        # dict에서 StrengthWeakness 복원
-        weaknesses = [StrengthWeakness(**w) for w in data.get("weaknesses", [])]
-        strengths = [StrengthWeakness(**s) for s in data.get("strengths", [])]
-
-        # 리뷰 데이터 가져오기 (액션 아이템 생성용)
-        reviews_data = data.get("reviews_data", [])
-
-        # 액션 아이템 생성
-        action_items = await self._generate_action_items(
-            weaknesses, reviews_data, data["branch_name"]
-        )
-
-        # 기간 요약 생성
-        period_summary = await self._generate_period_summary(
-            branch_name=data["branch_name"],
-            total_reviews=data["total_reviews"],
-            top_keywords=data["keywords"],
-            strengths=strengths,
-            weaknesses=weaknesses,
-            start_date=data["start_date"],
-            end_date=data["end_date"],
-        )
-
-        return {
-            "action_items": [item.model_dump() for item in action_items],
-            "period_summary": period_summary,
-        }
-        # LLM 응답 관련 변수 메모리 해제
-
-    async def _step_build(
-        self,
-        collected: dict,
-        tags: dict,
-        ai: dict,
-        start_date: datetime,
-        end_date: datetime,
-    ) -> ReportData:
-        """
-        Step 4: 리포트 조립 및 저장
-
-        Args:
-            collected: Step 1에서 수집된 기본 정보
-            tags: Step 2에서 조회된 태그 데이터
-            ai: Step 3에서 생성된 AI 분석 결과
-            start_date: 시작일
-            end_date: 종료일
-
-        Returns:
-            ReportData: 최종 리포트
-        """
-        report = ReportData(
-            branch_id=collected["branch_id"],
-            branch_name=collected["branch_name"],
-            affiliate_name=collected["affiliate_name"],
-            period_start=start_date.strftime("%Y-%m-%d"),
-            period_end=end_date.strftime("%Y-%m-%d"),
-            total_reviews=collected["total_reviews"],
-            sentiment_trend=[],  # DB에 기간별 데이터 없음 - 제외
-            top_keywords=collected["keywords"],
-            period_summary=ai["period_summary"],
-            vehicle_analysis=[],  # 실시간 계산 필요 - 제외
-            strengths=[StrengthWeakness(**s) for s in tags["strengths"]],
-            weaknesses=[StrengthWeakness(**w) for w in tags["weaknesses"]],
-            action_items=[ActionItem(**item) for item in ai["action_items"]],
-            generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
-        )
-
-        # DB 저장
-        if self.report_repo:
-            try:
-                await self.report_repo.save(
-                    branch_id=collected["branch_id"],
-                    branch_name=collected["branch_name"],
-                    affiliate_name=collected["affiliate_name"],
-                    period_start=start_date,
-                    period_end=end_date,
-                    total_reviews=collected["total_reviews"],
-                    report_data=report.model_dump(),
-                )
-            except Exception as e:
-                import logging
-
-                logging.warning(f"리포트 저장 실패 (생성은 성공): {e}")
-
-        return report
-
     async def generate_report_with_progress(
         self,
         branch_id: int,
@@ -334,10 +182,7 @@ class ReportService:
         progress_callback: Callable[[int], Awaitable[None]] | None = None,
     ) -> ReportData:
         """
-        리팩토링된 리포트 생성 (단계별 함수 호출)
-
-        각 단계가 별도 함수로 분리되어 단계 완료 시 로컬 변수가
-        가비지 컬렉션 대상이 됨 → OOM 방지
+        DB 조회 + AI 생성만 수행하는 리팩토링된 리포트 생성
 
         Args:
             branch_id: 지점 ID
@@ -348,55 +193,99 @@ class ReportService:
         Returns:
             ReportData: 리포트 데이터
         """
-
         async def update_progress(value: int) -> None:
             if progress_callback:
                 await progress_callback(value)
 
-        # Step 1: 데이터 수집 (10-20%)
+        # 1. 지점 기본 정보 조회 (10%)
         await update_progress(10)
-        collected = await self._step_collect(branch_id)
-        await update_progress(20)
+        summary = await self.summary_repo.get_by_branch_id(branch_id)
+        if not summary:
+            raise ValueError(f"지점 {branch_id}을(를) 찾을 수 없습니다")
+
+        summary_data = summary.model_dump()
+        branch_name = summary_data.get("branch_name", f"지점 {branch_id}")
+        affiliate_name = summary_data.get("affiliate_name", "")
+        total_reviews = summary_data.get("review_count", 0)
 
         # 리뷰가 없는 경우 빈 리포트 반환
-        if collected["total_reviews"] == 0:
+        if total_reviews == 0:
             await update_progress(100)
             return ReportData(
                 branch_id=branch_id,
-                branch_name=collected["branch_name"],
-                affiliate_name=collected["affiliate_name"],
+                branch_name=branch_name,
+                affiliate_name=affiliate_name,
                 period_start=start_date.strftime("%Y-%m-%d"),
                 period_end=end_date.strftime("%Y-%m-%d"),
                 total_reviews=0,
                 generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
             )
 
-        # Step 2: 리뷰 데이터 수집 (30-40%)
+        # 2. 키워드 조회 - branch_summaries.keywords에서 (20%)
+        await update_progress(20)
+        top_keywords = summary_data.get("keywords", [])[:10]
+
+        # 3. 감정 통계 조회 - sentiment_stats 테이블에서 (30%)
         await update_progress(30)
-        reviews_data = await self._fetch_reviews_for_report(branch_id, limit=50)
-        await update_progress(40)
+        # 감정 통계는 현재 리포트에서 직접 사용하지 않지만, 필요시 조회 가능
+        # sentiment_stats = await self.sentiment_repo.get_stats(branch_id) if self.sentiment_repo else None
 
-        # Step 3: 태그 분석 (40-50%)
-        tags = await self._step_tags(branch_id, reviews_data)
+        # 4. 태그별 강점/약점 조회 - branch_tags 테이블에서 (50%)
         await update_progress(50)
+        strengths, weaknesses = await self._get_strengths_weaknesses_from_db(branch_id)
 
-        # Step 4: AI 분석 (70-90%)
+        # 5. AI 액션 아이템 생성 (70%)
         await update_progress(70)
-        ai_data = {
-            **collected,
-            **tags,
-            "start_date": start_date,
-            "end_date": end_date,
-            "reviews_data": reviews_data,
-        }
-        ai = await self._step_ai(ai_data)
+        action_items = await self._generate_action_items(weaknesses, [], branch_name)
+
+        # 6. AI 기간 요약 생성 (90%)
         await update_progress(90)
+        period_summary = await self._generate_period_summary(
+            branch_name,
+            total_reviews,
+            top_keywords,
+            strengths,
+            weaknesses,
+            start_date,
+            end_date,
+        )
 
-        # Step 4: 리포트 조립 및 저장 (95-100%)
+        # 7. 리포트 조립 (95%)
         await update_progress(95)
-        report = await self._step_build(collected, tags, ai, start_date, end_date)
-        await update_progress(100)
+        report = ReportData(
+            branch_id=branch_id,
+            branch_name=branch_name,
+            affiliate_name=affiliate_name,
+            period_start=start_date.strftime("%Y-%m-%d"),
+            period_end=end_date.strftime("%Y-%m-%d"),
+            total_reviews=total_reviews,
+            sentiment_trend=[],  # DB에 기간별 데이터 없음 - 제외
+            top_keywords=top_keywords,
+            period_summary=period_summary,
+            vehicle_analysis=[],  # 실시간 계산 필요 - 제외
+            strengths=strengths,
+            weaknesses=weaknesses,
+            action_items=action_items,
+            generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        )
 
+        # 8. DB에 리포트 저장 (100%)
+        if self.report_repo:
+            try:
+                await self.report_repo.save(
+                    branch_id=branch_id,
+                    branch_name=branch_name,
+                    affiliate_name=affiliate_name,
+                    period_start=start_date,
+                    period_end=end_date,
+                    total_reviews=total_reviews,
+                    report_data=report.model_dump(),
+                )
+            except Exception as e:
+                import logging
+                logging.warning(f"리포트 저장 실패 (생성은 성공): {e}")
+
+        await update_progress(100)
         return report
 
     async def generate_report(
@@ -425,9 +314,9 @@ class ReportService:
         )
 
     async def _get_strengths_weaknesses_from_db(
-        self, branch_id: int, reviews_data: list[dict] | None = None
+        self, branch_id: int
     ) -> tuple[list[StrengthWeakness], list[StrengthWeakness]]:
-        """branch_tags 테이블에서 강점/약점 조회 (ratio, sample 포함)"""
+        """branch_tags 테이블에서 강점/약점 조회"""
         strengths = []
         weaknesses = []
 
@@ -435,46 +324,6 @@ class ReportService:
         positive_tags = await self.branch_tag_repo.get_by_branch(
             branch_id, period_type="positive", limit=10
         )
-        # negative 태그 조회 (약점)
-        negative_tags = await self.branch_tag_repo.get_by_branch(
-            branch_id, period_type="negative", limit=10
-        )
-
-        # 전체 태그 카운트 합계 계산 (비율 계산용)
-        total_positive = sum(
-            (t.model_dump() if hasattr(t, "model_dump") else t).get("count", 0)
-            for t in positive_tags
-        )
-        total_negative = sum(
-            (t.model_dump() if hasattr(t, "model_dump") else t).get("count", 0)
-            for t in negative_tags
-        )
-
-        # 태그명 → 샘플 리뷰 매핑 (리뷰 데이터가 있을 경우)
-        tag_samples: dict[str, str] = {}
-        if reviews_data:
-            for tag in positive_tags + negative_tags:
-                tag_data = tag.model_dump() if hasattr(tag, "model_dump") else tag
-                tag_info = tag_data.get("tags", {})
-                tag_name = tag_info.get("name", "") if isinstance(tag_info, dict) else ""
-                if tag_name and tag_name not in tag_samples:
-                    # 해당 태그 키워드가 포함된 리뷰 찾기
-                    for r in reviews_data:
-                        content = r.get("content") or ""
-                        if tag_name in content:
-                            # 키워드 주변 텍스트 추출 (최대 80자)
-                            idx = content.find(tag_name)
-                            start = max(0, idx - 20)
-                            end = min(len(content), idx + len(tag_name) + 60)
-                            sample = content[start:end].strip()
-                            if start > 0:
-                                sample = "..." + sample
-                            if end < len(content):
-                                sample = sample + "..."
-                            tag_samples[tag_name] = sample
-                            break
-
-        # 강점 처리
         for tag in positive_tags:
             tag_data = tag.model_dump() if hasattr(tag, "model_dump") else tag
             tag_info = tag_data.get("tags", {})
@@ -482,14 +331,16 @@ class ReportService:
             count = tag_data.get("count", 0)
 
             if tag_name and count >= 2:
-                ratio = round((count / total_positive * 100), 1) if total_positive > 0 else 0.0
                 strengths.append(StrengthWeakness(
                     tag=tag_name,
-                    ratio=ratio,
-                    sample=tag_samples.get(tag_name, "")
+                    ratio=0.0,  # DB에 비율 없음
+                    sample=""   # DB에 샘플 없음
                 ))
 
-        # 약점 처리
+        # negative 태그 조회 (약점)
+        negative_tags = await self.branch_tag_repo.get_by_branch(
+            branch_id, period_type="negative", limit=10
+        )
         for tag in negative_tags:
             tag_data = tag.model_dump() if hasattr(tag, "model_dump") else tag
             tag_info = tag_data.get("tags", {})
@@ -497,11 +348,10 @@ class ReportService:
             count = tag_data.get("count", 0)
 
             if tag_name and count >= 2:
-                ratio = round((count / total_negative * 100), 1) if total_negative > 0 else 0.0
                 weaknesses.append(StrengthWeakness(
                     tag=tag_name,
-                    ratio=ratio,
-                    sample=tag_samples.get(tag_name, "")
+                    ratio=0.0,
+                    sample=""
                 ))
 
         return strengths[:5], weaknesses[:5]
@@ -685,30 +535,3 @@ class ReportService:
             f"총 {total_reviews}건의 리뷰를 분석했습니다. "
             f"주요 키워드는 {keywords_str}입니다."
         )
-
-    async def _fetch_reviews_for_report(
-        self, branch_id: int, limit: int = 50
-    ) -> list[dict]:
-        """
-        리포트 생성용 리뷰 데이터 조회
-
-        Args:
-            branch_id: 지점 ID
-            limit: 조회할 리뷰 수
-
-        Returns:
-            list[dict]: 리뷰 데이터 목록
-        """
-        if not self.review_repo:
-            return []
-
-        try:
-            result = await self.review_repo.get_by_branch(
-                branch_id=branch_id,
-                limit=limit,
-            )
-            return result.reviews if hasattr(result, "reviews") else []
-        except Exception as e:
-            import logging
-            logging.warning(f"리뷰 데이터 조회 실패: {e}")
-            return []
