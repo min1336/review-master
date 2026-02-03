@@ -3146,12 +3146,21 @@
                 }
             }
 
+            // 폴링 취소용 AbortController (전역 스코프)
+            let reportPollingController = null;
+
             function closeReportModal() {
                 const modal = getElement('report-modal');
                 if (modal) {
                     modal.style.display = 'none';
                 }
                 reportState.reportData = null;
+
+                // 진행 중인 폴링 취소
+                if (reportPollingController) {
+                    reportPollingController.abort();
+                    reportPollingController = null;
+                }
             }
 
             function formatReportDate(date) {
@@ -3231,95 +3240,202 @@
                 const body = getElement('report-modal-body');
                 if (!body) return;
 
+                // 이전 폴링 취소
+                if (reportPollingController) {
+                    reportPollingController.abort();
+                }
+                reportPollingController = new AbortController();
+
                 // 로딩 표시
-                body.innerHTML = `
-                    <div class="report-loading">
-                        <div class="spinner"></div>
-                        <div class="report-loading-text">AI가 리포트를 생성 중입니다...</div>
-                        <div style="margin-top: 8px; font-size: 12px; color: var(--grey-5);">약 10~20초 소요</div>
-                    </div>
-                `;
+                showReportLoadingUI(body, 'AI가 리포트를 생성 중입니다...');
 
                 try {
-                    const response = await fetch(`${API_PREFIX}/v2/report/${reportState.branchId}/generate`, {
+                    // 1단계: 비동기 작업 제출 (즉시 반환)
+                    const submitResponse = await fetch(`${API_PREFIX}/v2/report/${reportState.branchId}/generate/async`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             start_date: reportState.startDate,
                             end_date: reportState.endDate
-                        })
+                        }),
+                        signal: reportPollingController.signal
                     });
 
-                    if (!response.ok) {
-                        const error = await response.json();
-                        throw new Error(error.detail || '리포트 생성 실패');
+                    if (!submitResponse.ok) {
+                        const error = await submitResponse.json();
+                        throw new Error(error.detail || '리포트 생성 요청 실패');
                     }
 
-                    const result = await response.json();
-                    if (result.success) {
-                        reportState.reportData = result.data;
-                        renderReportContent(result.data, true); // is_new = true
-                    } else {
-                        throw new Error(result.error || '리포트 생성 실패');
+                    const submitResult = await submitResponse.json();
+                    if (!submitResult.success || !submitResult.job_id) {
+                        throw new Error(submitResult.error || '작업 ID를 받지 못했습니다');
                     }
+
+                    const jobId = submitResult.job_id;
+
+                    // 2단계: 폴링으로 진행 상태 확인 (최대 2분)
+                    await pollReportJob(jobId, true);
+
                 } catch (error) {
+                    if (error.name === 'AbortError') {
+                        console.log('Report generation aborted');
+                        return;
+                    }
                     console.error('Report generation error:', error);
-                    body.innerHTML = `
-                        <div style="text-align: center; padding: 40px;">
-                            <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
-                            <div style="font-size: 16px; color: var(--grey-2); margin-bottom: 8px;">리포트 생성 실패</div>
-                            <div style="font-size: 14px; color: var(--grey-5); margin-bottom: 24px;">${error.message}</div>
-                            <button class="btn btn-secondary" onclick="window.dashboardHandlers.renderReportPeriodSelection()">다시 시도</button>
-                        </div>
-                    `;
+                    showReportErrorUI(body, '리포트 생성 실패', error.message, 'renderReportPeriodSelection');
                 }
+            }
+
+            function showReportLoadingUI(container, message) {
+                // 로딩 컨테이너 생성
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'report-loading';
+
+                const spinner = document.createElement('div');
+                spinner.className = 'spinner';
+                loadingDiv.appendChild(spinner);
+
+                const textDiv = document.createElement('div');
+                textDiv.className = 'report-loading-text';
+                textDiv.textContent = message;
+                loadingDiv.appendChild(textDiv);
+
+                container.replaceChildren(loadingDiv);
+            }
+
+            function showReportErrorUI(container, title, message, retryHandler) {
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = 'text-align: center; padding: 40px;';
+
+                const icon = document.createElement('div');
+                icon.style.cssText = 'font-size: 48px; margin-bottom: 16px;';
+                icon.textContent = '\u274C';
+                errorDiv.appendChild(icon);
+
+                const titleDiv = document.createElement('div');
+                titleDiv.style.cssText = 'font-size: 16px; color: var(--grey-2); margin-bottom: 8px;';
+                titleDiv.textContent = title;
+                errorDiv.appendChild(titleDiv);
+
+                const msgDiv = document.createElement('div');
+                msgDiv.style.cssText = 'font-size: 14px; color: var(--grey-5); margin-bottom: 24px;';
+                msgDiv.textContent = message;
+                errorDiv.appendChild(msgDiv);
+
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-secondary';
+                btn.textContent = retryHandler === 'renderReportPeriodSelection' ? '다시 시도' : '돌아가기';
+                btn.onclick = () => window.dashboardHandlers[retryHandler](retryHandler === 'renderReportContent' ? reportState.reportData : undefined, false);
+                errorDiv.appendChild(btn);
+
+                container.replaceChildren(errorDiv);
+            }
+
+            async function pollReportJob(jobId, isNew) {
+                const maxPolls = 60;
+                let pollCount = 0;
+
+                while (pollCount < maxPolls) {
+                    // 폴링 취소 확인
+                    if (reportPollingController && reportPollingController.signal.aborted) {
+                        console.log('Report polling cancelled');
+                        return;
+                    }
+
+                    const statusResponse = await fetch(`${API_PREFIX}/v2/report/${reportState.branchId}/job/${jobId}`, {
+                        signal: reportPollingController ? reportPollingController.signal : undefined
+                    });
+
+                    if (!statusResponse.ok) {
+                        throw new Error('작업 상태 조회 실패');
+                    }
+
+                    const statusResult = await statusResponse.json();
+                    const jobData = statusResult.data;
+
+                    if (jobData.status === 'completed') {
+                        // 완료 - 리포트 데이터 가져오기
+                        const reportData = await fetchReportData();
+                        if (reportData) {
+                            reportState.reportData = reportData;
+                            renderReportContent(reportData, isNew);
+                        }
+                        return;
+                    } else if (jobData.status === 'failed') {
+                        throw new Error(jobData.error_message || '리포트 생성 실패');
+                    }
+
+                    // 2초 대기 후 다음 폴링
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    pollCount++;
+                }
+
+                // 타임아웃
+                throw new Error('리포트 생성 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+            }
+
+            async function fetchReportData() {
+                // 생성된 리포트 데이터 가져오기
+                const response = await fetch(
+                    `${API_PREFIX}/v2/report/${reportState.branchId}?start_date=${reportState.startDate}&end_date=${reportState.endDate}`,
+                    { signal: reportPollingController ? reportPollingController.signal : undefined }
+                );
+
+                if (!response.ok) {
+                    throw new Error('리포트 데이터 조회 실패');
+                }
+
+                const result = await response.json();
+                return result.success ? result.data : null;
             }
 
             async function regenerateReport() {
                 const body = getElement('report-modal-body');
                 if (!body) return;
 
+                // 이전 폴링 취소
+                if (reportPollingController) {
+                    reportPollingController.abort();
+                }
+                reportPollingController = new AbortController();
+
                 // 로딩 표시
-                body.innerHTML = `
-                    <div class="report-loading">
-                        <div class="spinner"></div>
-                        <div class="report-loading-text">AI가 리포트를 재생성 중입니다...</div>
-                        <div style="margin-top: 8px; font-size: 12px; color: var(--grey-5);">약 10~20초 소요</div>
-                    </div>
-                `;
+                showReportLoadingUI(body, 'AI가 리포트를 재생성 중입니다...');
 
                 try {
-                    const response = await fetch(`${API_PREFIX}/v2/report/${reportState.branchId}/regenerate`, {
+                    // 비동기 작업 제출 (/generate/async는 regenerate와 동일한 로직 사용)
+                    const submitResponse = await fetch(`${API_PREFIX}/v2/report/${reportState.branchId}/generate/async`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             start_date: reportState.startDate,
                             end_date: reportState.endDate
-                        })
+                        }),
+                        signal: reportPollingController.signal
                     });
 
-                    if (!response.ok) {
-                        const error = await response.json();
-                        throw new Error(error.detail || '리포트 재생성 실패');
+                    if (!submitResponse.ok) {
+                        const error = await submitResponse.json();
+                        throw new Error(error.detail || '리포트 재생성 요청 실패');
                     }
 
-                    const result = await response.json();
-                    if (result.success) {
-                        reportState.reportData = result.data;
-                        renderReportContent(result.data, true);
-                    } else {
-                        throw new Error(result.error || '리포트 재생성 실패');
+                    const submitResult = await submitResponse.json();
+                    if (!submitResult.success || !submitResult.job_id) {
+                        throw new Error(submitResult.error || '작업 ID를 받지 못했습니다');
                     }
+
+                    const jobId = submitResult.job_id;
+
+                    // 폴링으로 진행 상태 확인
+                    await pollReportJob(jobId, true);
+
                 } catch (error) {
+                    if (error.name === 'AbortError') {
+                        console.log('Report regeneration aborted');
+                        return;
+                    }
                     console.error('Report regeneration error:', error);
-                    body.innerHTML = `
-                        <div style="text-align: center; padding: 40px;">
-                            <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
-                            <div style="font-size: 16px; color: var(--grey-2); margin-bottom: 8px;">리포트 재생성 실패</div>
-                            <div style="font-size: 14px; color: var(--grey-5); margin-bottom: 24px;">${error.message}</div>
-                            <button class="btn btn-secondary" onclick="window.dashboardHandlers.renderReportContent(reportState.reportData, false)">돌아가기</button>
-                        </div>
-                    `;
+                    showReportErrorUI(body, '리포트 재생성 실패', error.message, 'renderReportContent');
                 }
             }
 

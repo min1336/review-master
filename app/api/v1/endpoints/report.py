@@ -113,6 +113,53 @@ async def api_get_report_list(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.post("/{branch_id}/generate/async")
+async def api_generate_report_async(
+    branch_id: int,
+    data: ReportRequest,
+    job_service: ReportJobService = Depends(get_report_job_service),
+) -> dict[str, Any]:
+    """
+    비동기 AI 리포트 생성 요청
+
+    502 타임아웃 방지를 위한 백그라운드 작업 방식.
+    즉시 job_id를 반환하고, 클라이언트는 /job/{job_id}로 상태를 폴링합니다.
+
+    Args:
+        branch_id: 지점 ID
+        data: 기간 설정 (start_date, end_date)
+
+    Returns:
+        job_id: 작업 ID (폴링용)
+        poll_url: 상태 조회 URL
+    """
+    start_date = parse_date(data.start_date)
+    end_date = parse_date(data.end_date, end_of_day=True)
+
+    if start_date > end_date:
+        raise HTTPException(
+            status_code=400,
+            detail="시작일이 종료일보다 늦을 수 없습니다.",
+        )
+
+    try:
+        job_id = await job_service.submit_job(
+            branch_id=branch_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return {
+            "success": True,
+            "job_id": job_id,
+            "poll_url": f"/api/v2/report/{branch_id}/job/{job_id}",
+        }
+    except Exception as e:
+        import logging
+
+        logging.exception("비동기 리포트 생성 요청 실패")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @router.post("/{branch_id}/generate")
 async def api_generate_report(
     branch_id: int,
@@ -120,7 +167,9 @@ async def api_generate_report(
     service: ReportService = Depends(get_report_service),
 ) -> dict[str, Any]:
     """
-    AI 리포트 신규 생성 (저장됨)
+    AI 리포트 신규 생성 (저장됨) - 동기 방식
+
+    주의: 긴 처리 시간으로 502 타임아웃 가능. /generate/async 권장.
 
     Args:
         branch_id: 지점 ID
@@ -191,53 +240,6 @@ async def api_regenerate_report(
     except Exception as e:
         import logging
         logging.exception("리포트 재생성 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.post("/{branch_id}/generate/async")
-async def api_generate_report_async(
-    branch_id: int,
-    data: ReportRequest,
-    job_service: ReportJobService = Depends(get_report_job_service),
-) -> dict[str, Any]:
-    """
-    비동기 AI 리포트 생성 요청
-
-    502 타임아웃 방지를 위한 백그라운드 작업 방식.
-    즉시 job_id를 반환하고, 클라이언트는 /job/{job_id}로 상태를 폴링합니다.
-
-    Args:
-        branch_id: 지점 ID
-        data: 기간 설정 (start_date, end_date)
-
-    Returns:
-        job_id: 작업 ID (폴링용)
-        poll_url: 상태 조회 URL
-    """
-    start_date = parse_date(data.start_date)
-    end_date = parse_date(data.end_date, end_of_day=True)
-
-    if start_date > end_date:
-        raise HTTPException(
-            status_code=400,
-            detail="시작일이 종료일보다 늦을 수 없습니다.",
-        )
-
-    try:
-        job_id = await job_service.submit_job(
-            branch_id=branch_id,
-            start_date=start_date,
-            end_date=end_date,
-        )
-        return {
-            "success": True,
-            "job_id": job_id,
-            "poll_url": f"/api/v2/report/{branch_id}/job/{job_id}",
-        }
-    except Exception as e:
-        import logging
-
-        logging.exception("비동기 리포트 생성 요청 실패")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

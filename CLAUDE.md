@@ -242,6 +242,18 @@ POST /generate/async → job_id 즉시 반환
 GET  /job/{job_id}   → 2초 간격 폴링 (progress: 0-100%)
 ```
 
+### 프론트엔드 폴링 구현
+- `AbortController`로 모달 닫기 시 폴링 취소
+- 최대 폴링 횟수 설정 (60회 = 2분 타임아웃)
+- 진행률 UI: `updateReportProgress(progress, status)` 패턴
+
+## 프론트엔드 수정 시 주의사항
+
+- **innerHTML 대신 DOM API 사용**: 보안 훅이 innerHTML에 XSS 경고 발생
+  - `document.createElement()` + `container.replaceChildren()` 패턴 권장
+- **let 변수 스코프**: 호이스팅 안 됨 - 사용하는 함수보다 위에 선언
+- **regenerate vs generate**: `regenerate_report()`는 내부적으로 `generate_report()` 호출 (동일 로직)
+
 ## 개발 명령어
 
 - `python -m py_compile <file.py>` - Python 문법 검사
