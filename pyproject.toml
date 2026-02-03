@@ -31,7 +31,7 @@ dependencies = [
     # Scheduler
     "apscheduler>=3.10.0",
     # PDF Generation
-    "weasyprint>=60.0",
+    "fpdf2>=2.8.0",
 ]
 
 [project.optional-dependencies]

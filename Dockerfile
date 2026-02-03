@@ -21,6 +21,11 @@ COPY . ./
 
 RUN mkdir -p /app/credentials
 
+# Install Korean fonts for PDF generation (system package - best practice)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends fonts-nanum && \
+    rm -rf /var/lib/apt/lists/*
+
 # Ensure environment is synced against lock (and validates it)
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked && rm -rf /root/.cache/uv/*

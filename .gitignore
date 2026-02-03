@@ -118,6 +118,9 @@ temp/
 output/*.xlsx
 output/*.txt
 
+# Fonts (downloaded at runtime)
+app/fonts/
+
 # Data files (too large / sensitive)
 data/*.xlsx
 data/*.npz

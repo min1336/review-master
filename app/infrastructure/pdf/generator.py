@@ -1,8 +1,9 @@
 """
 PDF 생성기
 
-WeasyPrint를 사용하여 HTML 템플릿을 PDF로 변환합니다.
-Jinja2 템플릿 엔진을 활용하여 HTML을 렌더링합니다.
+FPDF2를 사용하여 리포트를 PDF로 생성합니다.
+시스템 의존성 없이 pip만으로 설치 가능합니다.
+한글 폰트는 시스템 폰트(fonts-nanum)를 사용합니다.
 """
 
 from __future__ import annotations
@@ -11,29 +12,67 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from fpdf import FPDF
 
 if TYPE_CHECKING:
-    from services.report_service import ReportData
+    from app.services.report_service import ReportData
+
+logger = logging.getLogger(__name__)
 
 
 class PDFGenerator:
-    """PDF 생성기"""
+    """FPDF2 기반 PDF 생성기"""
+
+    # 시스템 폰트 경로 (우선순위 순)
+    FONT_PATHS = [
+        # Linux (apt-get install fonts-nanum)
+        Path("/usr/share/fonts/truetype/nanum/NanumGothic.ttf"),
+        Path("/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"),
+        # macOS (brew install font-nanum-gothic)
+        Path("/Library/Fonts/NanumGothic.ttf"),
+        Path("/Library/Fonts/NanumGothicBold.ttf"),
+        # Local fallback (app/fonts/)
+        Path(__file__).resolve().parent.parent.parent / "fonts" / "NanumGothic-Regular.ttf",
+        Path(__file__).resolve().parent.parent.parent / "fonts" / "NanumGothic-Bold.ttf",
+    ]
 
     def __init__(self):
-        # 템플릿 디렉토리 설정 (app/templates)
-        app_dir = Path(__file__).resolve().parent.parent.parent
-        self.template_dir = app_dir / "templates"
+        self._font_regular: Path | None = None
+        self._font_bold: Path | None = None
+        self._find_fonts()
 
-        # Jinja2 환경 설정
-        self._jinja_env = Environment(
-            loader=FileSystemLoader(str(self.template_dir)),
-            autoescape=select_autoescape(["html", "xml"]),
-        )
+    def _find_fonts(self) -> None:
+        """시스템에서 사용 가능한 폰트 찾기"""
+        for path in self.FONT_PATHS:
+            if not path.exists():
+                continue
 
-    def generate(self, report: ReportData) -> bytes:
+            if "Bold" in path.name or "bold" in path.name:
+                if self._font_bold is None:
+                    self._font_bold = path
+            else:
+                if self._font_regular is None:
+                    self._font_regular = path
+
+            if self._font_regular and self._font_bold:
+                break
+
+        if self._font_regular:
+            logger.info(f"Found Korean font: {self._font_regular}")
+        else:
+            logger.warning(
+                "Korean font not found. Install with: "
+                "apt-get install fonts-nanum (Linux) or "
+                "brew install font-nanum-gothic (macOS)"
+            )
+
+    def generate_simple(self, report: ReportData) -> bytes:
         """
-        리포트 데이터를 PDF로 변환
+        단순 텍스트 PDF 생성 (레이아웃 없이 AI 결과만)
+
+        - 차트, 색상, 그리드 없음
+        - 순수 텍스트만 출력
+        - Docker 환경에서 가볍게 사용 가능
 
         Args:
             report: 리포트 데이터
@@ -41,94 +80,93 @@ class PDFGenerator:
         Returns:
             PDF 바이트 데이터
         """
-        try:
-            from weasyprint import HTML
-        except ImportError:
-            logging.warning("WeasyPrint not installed, using fallback PDF generation")
-            return self._generate_fallback_pdf(report)
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
 
-        # HTML 렌더링
-        html_content = self._render_html(report)
+        # 폰트 설정
+        if self._font_regular:
+            pdf.add_font("NanumGothic", "", str(self._font_regular))
+            if self._font_bold:
+                pdf.add_font("NanumGothic", "B", str(self._font_bold))
+            else:
+                pdf.add_font("NanumGothic", "B", str(self._font_regular))
+            font = "NanumGothic"
+        else:
+            font = "Helvetica"
 
-        # PDF 생성
-        html = HTML(string=html_content)
-        pdf_bytes = html.write_pdf()
+        pdf.add_page()
 
-        return pdf_bytes
+        # 제목
+        pdf.set_font(font, "B", 16)
+        pdf.cell(0, 10, f"{report.branch_name} AI 컨설팅 리포트", align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(3)
 
-    def _render_html(self, report: ReportData) -> str:
-        """Jinja2 템플릿을 사용한 HTML 렌더링"""
-        template = self._jinja_env.get_template("pdf/report_template.html")
-        return template.render(report=report)
+        pdf.set_font(font, "", 10)
+        pdf.cell(0, 6, f"분석 기간: {report.period_start} ~ {report.period_end}", align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, f"총 리뷰 수: {report.total_reviews}건", align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(8)
 
-    def _generate_fallback_pdf(self, report: ReportData) -> bytes:
-        """WeasyPrint 없을 때 대체 PDF 생성 (reportlab 사용)"""
-        try:
-            import io
+        # 구분선
+        pdf.set_draw_color(200, 200, 200)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(8)
 
-            from reportlab.lib import colors
-            from reportlab.lib.pagesizes import A4
-            from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-            from reportlab.platypus import (
-                Paragraph,
-                SimpleDocTemplate,
-                Spacer,
-                Table,
-                TableStyle,
-            )
+        # 유효 너비 (A4: 210mm, 마진 10mm 양쪽)
+        w = 190
 
-            buffer = io.BytesIO()
-            doc = SimpleDocTemplate(buffer, pagesize=A4)
-            styles = getSampleStyleSheet()
-            story = []
+        # 기간 요약
+        pdf.set_font(font, "B", 12)
+        pdf.cell(w, 8, "기간별 요약", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font(font, "", 10)
+        pdf.multi_cell(w, 6, report.period_summary or "요약 없음")
+        pdf.ln(6)
 
-            # 제목
-            title_style = ParagraphStyle(
-                'Title',
-                parent=styles['Heading1'],
-                fontSize=18,
-                alignment=1,
-            )
-            story.append(
-                Paragraph(f"{report.branch_name} AI Report", title_style)
-            )
-            story.append(Spacer(1, 12))
-            period_text = f"Period: {report.period_start} ~ {report.period_end}"
-            story.append(Paragraph(period_text, styles['Normal']))
-            story.append(Spacer(1, 24))
+        # 키워드
+        if report.top_keywords:
+            pdf.set_font(font, "B", 12)
+            pdf.cell(w, 8, "핵심 키워드", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font(font, "", 10)
+            pdf.multi_cell(w, 6, ", ".join(report.top_keywords))
+            pdf.ln(6)
 
-            # 요약
-            story.append(Paragraph("Summary", styles['Heading2']))
-            summary_text = report.period_summary or "No summary available."
-            story.append(Paragraph(summary_text, styles['Normal']))
-            story.append(Spacer(1, 12))
+        # 강점
+        if report.strengths:
+            pdf.set_font(font, "B", 12)
+            pdf.cell(w, 8, "강점", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font(font, "", 10)
+            for s in report.strengths:
+                pdf.cell(w, 6, f"  - {s.tag}: {s.ratio}%", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(4)
 
-            # 통계
-            stats_data = [
-                ['Total Reviews', 'Strengths', 'Weaknesses', 'Actions'],
-                [
-                    str(report.total_reviews),
-                    str(len(report.strengths)),
-                    str(len(report.weaknesses)),
-                    str(len(report.action_items)),
-                ],
-            ]
-            stats_table = Table(stats_data)
-            stats_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ]))
-            story.append(stats_table)
+        # 약점
+        if report.weaknesses:
+            pdf.set_font(font, "B", 12)
+            pdf.cell(w, 8, "개선 필요", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font(font, "", 10)
+            for w_item in report.weaknesses:
+                pdf.cell(w, 6, f"  - {w_item.tag}: {w_item.ratio}%", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(4)
 
-            doc.build(story)
-            return buffer.getvalue()
+        # 액션 아이템
+        if report.action_items:
+            pdf.set_font(font, "B", 12)
+            pdf.cell(w, 8, "개선 액션 아이템", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font(font, "", 10)
+            for i, item in enumerate(report.action_items, 1):
+                pdf.ln(2)
+                pdf.set_font(font, "B", 10)
+                pdf.cell(w, 6, f"{i}. [{item.priority}] {item.category}", new_x="LMARGIN", new_y="NEXT")
+                pdf.set_font(font, "", 10)
+                pdf.multi_cell(w, 5, f"문제: {item.issue}")
+                pdf.multi_cell(w, 5, f"개선안: {item.action}")
+            pdf.ln(4)
 
-        except ImportError as e:
-            # 아무 라이브러리도 없으면 에러 발생
-            logging.error("No PDF library available")
-            raise RuntimeError(
-                "PDF generation not available. "
-                "Install weasyprint or reportlab."
-            ) from e
+        # 푸터
+        pdf.ln(10)
+        pdf.set_draw_color(200, 200, 200)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(5)
+        pdf.set_font(font, "", 8)
+        pdf.cell(0, 5, f"Generated by Carmore AI  |  {report.generated_at}", align="C")
+
+        return bytes(pdf.output())

@@ -332,9 +332,9 @@ async def api_download_report_pdf(
             end_date=parsed_end,
         )
 
-        # PDF 생성
+        # PDF 생성 (단순 텍스트 버전 - Docker 경량화)
         pdf_generator = PDFGenerator()
-        pdf_bytes = pdf_generator.generate(report)
+        pdf_bytes = pdf_generator.generate_simple(report)
 
         # 파일명 생성 (한글 인코딩 처리)
         import urllib.parse
