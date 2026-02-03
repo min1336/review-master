@@ -37,6 +37,9 @@ async def lifespan(app: FastAPI):
     print("  GET  /api/tags              - 태그 목록")
     print("=" * 60 + "\n")
 
+    # 고아 작업 복구 (서버 재시작 시 processing 상태로 방치된 작업 정리)
+    await _recover_stale_report_jobs()
+
     # 스케줄러 시작
     scheduler = get_scheduler()
     await scheduler.start()
@@ -45,6 +48,18 @@ async def lifespan(app: FastAPI):
 
     # 스케줄러 종료
     await scheduler.stop()
+
+
+async def _recover_stale_report_jobs():
+    """서버 시작 시 고아 리포트 작업 복구"""
+    try:
+        from api.v1.endpoints.deps import get_report_job_service
+        job_service = get_report_job_service()
+        recovered = await job_service.recover_stale_jobs(stale_minutes=30)
+        if recovered > 0:
+            print(f"[Startup] 고아 리포트 작업 {recovered}개 복구됨")
+    except Exception as e:
+        print(f"[Startup] 고아 작업 복구 실패 (무시됨): {e}")
 
 
 # ============================================================
