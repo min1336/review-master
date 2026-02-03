@@ -129,36 +129,17 @@ class PDFGenerator:
             pdf.multi_cell(w, 6, ", ".join(report.top_keywords))
             pdf.ln(6)
 
-        # 강점
-        if report.strengths:
+        # 차량별 평가 분석 (구현 예정)
+        if report.vehicle_analysis:
             pdf.set_font(font, "B", 12)
-            pdf.cell(w, 8, "강점", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(w, 8, "차량별 평가 분석", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font(font, "", 10)
-            for s in report.strengths:
-                pdf.cell(w, 6, f"  - {s.tag}: {s.ratio}%", new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(4)
-
-        # 약점
-        if report.weaknesses:
-            pdf.set_font(font, "B", 12)
-            pdf.cell(w, 8, "개선 필요", new_x="LMARGIN", new_y="NEXT")
-            pdf.set_font(font, "", 10)
-            for w_item in report.weaknesses:
-                pdf.cell(w, 6, f"  - {w_item.tag}: {w_item.ratio}%", new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(4)
-
-        # 액션 아이템
-        if report.action_items:
-            pdf.set_font(font, "B", 12)
-            pdf.cell(w, 8, "개선 액션 아이템", new_x="LMARGIN", new_y="NEXT")
-            pdf.set_font(font, "", 10)
-            for i, item in enumerate(report.action_items, 1):
-                pdf.ln(2)
-                pdf.set_font(font, "B", 10)
-                pdf.cell(w, 6, f"{i}. [{item.priority}] {item.category}", new_x="LMARGIN", new_y="NEXT")
-                pdf.set_font(font, "", 10)
-                pdf.multi_cell(w, 5, f"문제: {item.issue}")
-                pdf.multi_cell(w, 5, f"개선안: {item.action}")
+            for v in report.vehicle_analysis:
+                pdf.cell(w, 6, f"  - {v.model} ({v.count}건)", new_x="LMARGIN", new_y="NEXT")
+                if v.top_praise:
+                    pdf.cell(w, 5, f"    호평: {v.top_praise}", new_x="LMARGIN", new_y="NEXT")
+                if v.top_issue:
+                    pdf.cell(w, 5, f"    불만: {v.top_issue}", new_x="LMARGIN", new_y="NEXT")
             pdf.ln(4)
 
         # 푸터

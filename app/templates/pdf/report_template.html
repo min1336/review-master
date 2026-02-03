@@ -426,16 +426,12 @@
                 <div class="stat-label">총 리뷰 수</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ report.strengths|length }}</div>
-                <div class="stat-label">강점 항목</div>
+                <div class="stat-value">{{ report.top_keywords|length }}</div>
+                <div class="stat-label">핵심 키워드</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ report.weaknesses|length }}</div>
-                <div class="stat-label">개선 필요 항목</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ report.action_items|length }}</div>
-                <div class="stat-label">액션 아이템</div>
+                <div class="stat-value">{{ report.vehicle_analysis|length }}</div>
+                <div class="stat-label">차량 분석</div>
             </div>
         </div>
 
@@ -455,44 +451,6 @@
             </div>
         </div>
 
-        <!-- Sentiment Trend -->
-        <div class="section">
-            <div class="section-title">
-                <span class="section-icon">📈</span>
-                감정 추이
-            </div>
-            <div class="trend-chart">
-                {% for t in report.sentiment_trend[-6:] %}
-                {% set total = t.positive + t.neutral + t.negative %}
-                {% set pos_pct = (t.positive / total * 100) if total > 0 else 0 %}
-                {% set neu_pct = (t.neutral / total * 100) if total > 0 else 0 %}
-                {% set neg_pct = (t.negative / total * 100) if total > 0 else 0 %}
-                <div class="trend-bar-container">
-                    <div class="trend-label">{{ t.period }}</div>
-                    <div class="trend-bar">
-                        <div class="bar-positive" {{ 'style="width: %s%%"'|format(pos_pct)|safe }}></div>
-                        <div class="bar-neutral" {{ 'style="width: %s%%"'|format(neu_pct)|safe }}></div>
-                        <div class="bar-negative" {{ 'style="width: %s%%"'|format(neg_pct)|safe }}></div>
-                    </div>
-                    <div class="trend-count">{{ total }}건</div>
-                </div>
-                {% endfor %}
-            </div>
-            <div class="trend-legend">
-                <div class="legend-item">
-                    <div class="legend-dot positive"></div>
-                    <span>긍정</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-dot neutral"></div>
-                    <span>중립</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-dot negative"></div>
-                    <span>부정</span>
-                </div>
-            </div>
-        </div>
 
         <!-- Vehicle Analysis -->
         <div class="section">
@@ -538,71 +496,6 @@
             </table>
         </div>
 
-        <!-- Strengths & Weaknesses -->
-        <div class="section">
-            <div class="section-title">
-                <span class="section-icon">💪</span>
-                장단점 분석
-            </div>
-            <div class="sw-container">
-                <div class="sw-column">
-                    <div class="sw-title strengths">✓ 강점</div>
-                    {% if report.strengths %}
-                    {% for s in report.strengths %}
-                    <div class="strength-item">
-                        <span class="tag-name">{{ s.tag }}</span>
-                        <span class="ratio positive">{{ s.ratio }}%</span>
-                    </div>
-                    {% endfor %}
-                    {% else %}
-                    <div class="empty-message">분석된 강점이 없습니다.</div>
-                    {% endif %}
-                </div>
-                <div class="sw-column">
-                    <div class="sw-title weaknesses">✕ 개선 필요</div>
-                    {% if report.weaknesses %}
-                    {% for w in report.weaknesses %}
-                    <div class="weakness-item">
-                        <span class="tag-name">{{ w.tag }}</span>
-                        <span class="ratio negative">{{ w.ratio }}%</span>
-                    </div>
-                    {% endfor %}
-                    {% else %}
-                    <div class="empty-message">개선이 필요한 항목이 없습니다.</div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Action Items -->
-        <div class="section">
-            <div class="section-title">
-                <span class="section-icon">🎯</span>
-                개선 액션 아이템
-            </div>
-            {% if report.action_items %}
-            {% for item in report.action_items %}
-            {% if item.priority == "높음" %}
-            {% set priority_class = "high" %}
-            {% elif item.priority == "중간" %}
-            {% set priority_class = "medium" %}
-            {% else %}
-            {% set priority_class = "low" %}
-            {% endif %}
-            <div class="action-item">
-                <div class="action-header">
-                    <span class="action-number">{{ loop.index }}</span>
-                    <span class="priority {{ priority_class }}">{{ item.priority }}</span>
-                    <span class="category">{{ item.category }}</span>
-                </div>
-                <div class="action-issue">문제: {{ item.issue }}</div>
-                <div class="action-solution">개선안: {{ item.action }}</div>
-            </div>
-            {% endfor %}
-            {% else %}
-            <div class="empty-message">제안된 액션 아이템이 없습니다.</div>
-            {% endif %}
-        </div>
 
         <!-- Footer -->
         <div class="footer">

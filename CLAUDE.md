@@ -219,6 +219,9 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 ## Git Rules
 
 - **main/master 브랜치에 직접 푸시 금지**: 절대로 root 브랜치(main, master)에 직접 push하지 말 것. 반드시 feature 브랜치에서 작업 후 PR을 통해 병합할 것.
+- **Rebase Merge 사용**: PR 병합 시 merge commit 대신 rebase merge 사용
+- **커밋 메시지 규칙**: `FEAT:(AI-티켓번호) 내용` 또는 `FIX:(AI-티켓번호) 내용` 형식
+- **Git Worktree**: `.worktrees/` 디렉토리 사용 (gitignore에 추가됨)
 
 ## Database Tables
 
@@ -251,6 +254,7 @@ GET  /job/{job_id}   → 2초 간격 폴링 (progress: 0-100%)
 
 - **innerHTML 대신 DOM API 사용**: 보안 훅이 innerHTML에 XSS 경고 발생
   - `document.createElement()` + `container.replaceChildren()` 패턴 권장
+- **escapeHtml 함수 사용**: `dashboard_v2.html:1669`에 정의됨 - 사용자 데이터를 innerHTML에 삽입 시 필수
 - **let 변수 스코프**: 호이스팅 안 됨 - 사용하는 함수보다 위에 선언
 - **regenerate vs generate**: `regenerate_report()`는 내부적으로 `generate_report()` 호출 (동일 로직)
 
