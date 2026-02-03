@@ -1539,7 +1539,6 @@
                         <col style="width: 120px;"> <!-- Review Count -->
                         <col style="width: 250px;"> <!-- Tags -->
                         <col style="width: 100px;"> <!-- Status -->
-                        <col style="width: 80px;"> <!-- Action -->
                     </colgroup>
                     <thead>
                         <tr>
@@ -1550,12 +1549,11 @@
                                     id="sort-icon-review_count" class="sort-icon"></span></th>
                             <th>태그</th>
                             <th>상태</th>
-                            <th>작업</th>
                         </tr>
                     </thead>
                     <tbody id="summaries-table">
                         <tr>
-                            <td colspan="7" class="loading">
+                            <td colspan="5" class="loading">
                                 <div class="spinner"></div>로딩 중...
                             </td>
                         </tr>
@@ -2183,13 +2181,16 @@
                 if (!tableEl) return;
 
                 if (!data || data.length === 0) {
-                    tableEl.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--grey-5);">데이터 없음</td></tr>';
+                    tableEl.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--grey-5);">데이터 없음</td></tr>';
                     if (paginationInfo) paginationInfo.textContent = '0개 지점';
                     return;
                 }
 
                 const html = data.map(row => renderTableRow(row, onDetailClick)).join('');
                 tableEl.innerHTML = html;
+
+                // Add click handlers to table rows
+                attachRowClickHandlers();
 
                 if (paginationInfo) {
                     const start = state.pagination.currentPage * state.pagination.pageSize + 1;
@@ -2209,7 +2210,7 @@
                     : '<span style="color: var(--grey-5); font-style: italic;">-</span>';
 
                 return `
-                <tr style="vertical-align: middle;">
+                <tr class="clickable-row" data-branch-id="${row.branch_id}" style="vertical-align: middle; cursor: pointer; transition: background-color 0.2s;">
                     <td>
                         <div style="font-weight: 600; margin-bottom: 4px;">${row.branch_name || '-'}</div>
                         <div>${getStarRating(row.avg_rating)}</div>
@@ -2226,11 +2227,33 @@
                             ${row.status || 'draft'}
                         </span>
                     </td>
-                    <td style="text-align: center;">
-                        <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.showDetail(${row.branch_id})">상세</button>
-                    </td>
                 </tr>
             `;
+            }
+
+            function attachRowClickHandlers() {
+                const rows = document.querySelectorAll('.clickable-row');
+                rows.forEach(row => {
+                    row.addEventListener('click', function(e) {
+                        // Prevent row click if clicking on interactive elements
+                        if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.closest('a')) {
+                            return;
+                        }
+
+                        const branchId = this.getAttribute('data-branch-id');
+                        if (branchId) {
+                            window.dashboardHandlers.showDetail(parseInt(branchId));
+                        }
+                    });
+
+                    // Add hover effect
+                    row.addEventListener('mouseenter', function() {
+                        this.style.backgroundColor = 'var(--grey-7)';
+                    });
+                    row.addEventListener('mouseleave', function() {
+                        this.style.backgroundColor = '';
+                    });
+                });
             }
 
             function updateSortUI() {
@@ -2425,7 +2448,7 @@
                 const tableEl = getElement('summaries-table');
                 if (tableEl) {
                     const style = isError ? 'color: var(--error);' : 'color: var(--grey-5);';
-                    tableEl.innerHTML = `<tr><td colspan="7" style="text-align:center; ${style}">${escapeHtml(message)}</td></tr>`;
+                    tableEl.innerHTML = `<tr><td colspan="5" style="text-align:center; ${style}">${escapeHtml(message)}</td></tr>`;
                 }
             }
 
