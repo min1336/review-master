@@ -51,7 +51,7 @@ class HybridClassifier:
     ABSA + FastEmbed 임베딩 + 규칙 기반 매핑을 결합
     """
 
-    DEFAULT_MODEL = "intfloat/multilingual-e5-small"
+    DEFAULT_MODEL = "intfloat/multilingual-e5-large"
     DEFAULT_THRESHOLD = 0.3
 
     def __init__(

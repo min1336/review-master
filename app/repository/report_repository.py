@@ -175,3 +175,33 @@ class ReportRepository(BaseRepository):
         except Exception as e:
             logger.error(f"리포트 삭제 실패: {e}")
             return False
+
+    async def delete_by_branch_and_period(
+        self,
+        branch_id: int,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> bool:
+        """
+        특정 지점의 기간별 리포트 삭제
+
+        Args:
+            branch_id: 지점 ID
+            period_start: 시작일
+            period_end: 종료일
+
+        Returns:
+            삭제 성공 여부
+        """
+        try:
+            await self._client.table(self.TABLE).delete().eq(
+                "branch_id", branch_id
+            ).eq(
+                "period_start", period_start.strftime("%Y-%m-%d")
+            ).eq(
+                "period_end", period_end.strftime("%Y-%m-%d")
+            ).execute()
+            return True
+        except Exception as e:
+            logger.error(f"리포트 삭제 실패 (branch: {branch_id}, period: {period_start} ~ {period_end}): {e}")
+            return False

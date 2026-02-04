@@ -452,6 +452,25 @@
             background: rgba(255, 255, 255, 0.3);
         }
 
+        .header-icon-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .header-icon-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
         .report-modal-body {
             padding: 24px;
             overflow-y: auto;
@@ -1472,12 +1491,26 @@
         <!-- Branch Summaries Table -->
         <div class="card" style="margin-top: 24px;">
             <div class="filters">
+                <!-- [0] 지역 필터 -->
                 <div class="filter-group">
-                    <span class="filter-label">지역</span>
+                    <span class="filter-label">[0] 지역</span>
                     <select class="filter-select" id="filter-region">
                         <option value="">전체</option>
                     </select>
                 </div>
+
+                <!-- [1] 검색 필터 (ID/업체명/지점) -->
+                <div class="filter-group" style="flex: 1; max-width: 300px;">
+                    <span class="filter-label">[1] 검색</span>
+                    <div class="search-box">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="7" cy="7" r="5" />
+                            <path d="M12 12l3 3" />
+                        </svg>
+                        <input type="text" id="search-input" placeholder="ID/업체명/지점 검색...">
+                    </div>
+                </div>
+
                 <div class="filter-group">
                     <span class="filter-label">상태</span>
                     <select class="filter-select" id="filter-status">
@@ -1494,15 +1527,6 @@
                         readonly>
                     <button class="btn-clear-date" id="btn-clear-date"
                         onclick="window.dashboardHandlers.clearDateFilter()" style="display: none;">초기화</button>
-                </div>
-
-                <!-- Search (Right aligned) -->
-                <div class="search-box" style="margin-left: auto;">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="7" cy="7" r="5" />
-                        <path d="M12 12l3 3" />
-                    </svg>
-                    <input type="text" id="search-input" placeholder="업체명, 키워드 검색...">
                 </div>
             </div>
 
@@ -1568,7 +1592,18 @@
         <div class="report-modal">
             <div class="report-modal-header">
                 <h3 id="report-modal-title">📋 AI 리포트</h3>
-                <button class="report-modal-close" onclick="window.dashboardHandlers.closeReportModal()">&times;</button>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <button id="header-back-btn" class="header-icon-btn" title="목록으로" style="display: none;">
+                        ←
+                    </button>
+                    <button id="header-regen-btn" class="header-icon-btn" onclick="window.dashboardHandlers.regenerateReport()" title="재생성" style="display: none;">
+                        ↻
+                    </button>
+                    <button id="header-pdf-btn" class="header-icon-btn" onclick="window.dashboardHandlers.downloadReportPDF()" title="PDF 다운로드" style="display: none;">
+                        ↓
+                    </button>
+                    <button class="report-modal-close" onclick="window.dashboardHandlers.closeReportModal()">&times;</button>
+                </div>
             </div>
             <div class="report-modal-body" id="report-modal-body">
                 <!-- Content loaded dynamically -->
@@ -2446,7 +2481,8 @@
                     renderReportList,
                     loadSavedReport,
                     renderReportContent,
-                    downloadReportPDF
+                    downloadReportPDF,
+                    deleteReport
                 };
 
                 // Also expose to global for onclick in header
@@ -3078,6 +3114,12 @@
                 const body = getElement('report-modal-body');
                 if (!body) return;
 
+                // 헤더 버튼들 숨기기
+                ['header-back-btn', 'header-regen-btn', 'header-pdf-btn'].forEach(id => {
+                    const btn = document.getElementById(id);
+                    if (btn) btn.style.display = 'none';
+                });
+
                 let reportsHtml = reports.map(r => `
                     <div class="saved-report-item" onclick="window.dashboardHandlers.loadSavedReport('${r.period_start}', '${r.period_end}')" style="cursor: pointer; padding: 12px; border: 1px solid var(--grey-7); border-radius: 8px; margin-bottom: 8px; transition: all 0.2s;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -3085,7 +3127,17 @@
                                 <div style="font-weight: 500; color: var(--grey-2);">${r.period_start} ~ ${r.period_end}</div>
                                 <div style="font-size: 12px; color: var(--grey-5); margin-top: 4px;">총 ${r.total_reviews}건 리뷰 분석</div>
                             </div>
-                            <div style="font-size: 12px; color: var(--grey-5);">${new Date(r.created_at).toLocaleDateString('ko-KR')}</div>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="font-size: 12px; color: var(--grey-5);">${new Date(r.created_at).toLocaleDateString('ko-KR')}</div>
+                                <button
+                                    class="delete-report-btn"
+                                    onclick="event.stopPropagation(); window.dashboardHandlers.deleteReport('${r.period_start}', '${r.period_end}')"
+                                    style="background: transparent; border: none; cursor: pointer; font-size: 18px; color: var(--grey-5); padding: 4px 8px; transition: color 0.2s;"
+                                    title="리포트 삭제"
+                                    onmouseenter="this.style.color='#dc3545'"
+                                    onmouseleave="this.style.color='var(--grey-5)'"
+                                >🗑️</button>
+                            </div>
                         </div>
                     </div>
                 `).join('');
@@ -3146,6 +3198,37 @@
                 }
             }
 
+            async function deleteReport(startDate, endDate) {
+                if (!confirm(`리포트를 삭제하시겠습니까?\n기간: ${startDate} ~ ${endDate}`)) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(
+                        `${API_PREFIX}/v2/report/${reportState.branchId}?start_date=${startDate}&end_date=${endDate}`,
+                        { method: 'DELETE' }
+                    );
+                    const result = await response.json();
+
+                    if (result.success) {
+                        alert('리포트가 삭제되었습니다.');
+                        // 목록 새로고침
+                        const listResponse = await fetch(`${API_PREFIX}/v2/report/${reportState.branchId}/list?limit=5`);
+                        const listResult = await listResponse.json();
+                        if (listResult.success && listResult.data && listResult.data.length > 0) {
+                            renderReportList(listResult.data);
+                        } else {
+                            renderReportPeriodSelection();
+                        }
+                    } else {
+                        throw new Error(result.detail || '삭제 실패');
+                    }
+                } catch (error) {
+                    console.error('Report delete error:', error);
+                    alert(`리포트 삭제 실패: ${error.message}`);
+                }
+            }
+
             // 폴링 취소용 AbortController (전역 스코프)
             let reportPollingController = null;
 
@@ -3201,6 +3284,12 @@
             function renderReportPeriodSelection() {
                 const body = getElement('report-modal-body');
                 if (!body) return;
+
+                // 헤더 버튼들 숨기기
+                ['header-back-btn', 'header-regen-btn', 'header-pdf-btn'].forEach(id => {
+                    const btn = document.getElementById(id);
+                    if (btn) btn.style.display = 'none';
+                });
 
                 body.innerHTML = `
                     <div class="period-selection">
@@ -3447,49 +3536,36 @@
                 let vehicleRowsHtml = '';
                 if (data.vehicle_analysis && data.vehicle_analysis.length > 0) {
                     data.vehicle_analysis.forEach(v => {
-                        const stars = '★'.repeat(Math.round(v.avg_sentiment * 5)) + '☆'.repeat(5 - Math.round(v.avg_sentiment * 5));
-                        const starColor = v.avg_sentiment >= 0.7 ? '#10b981' : v.avg_sentiment >= 0.5 ? '#f59e0b' : '#ef4444';
                         vehicleRowsHtml += `
                             <tr>
                                 <td>${escapeHtml(v.model || '')}</td>
                                 <td style="text-align: center;">${v.count}건</td>
-                                <td style="text-align: center; color: ${starColor};">${stars}</td>
-                                <td>${escapeHtml(v.top_praise || '-')}</td>
+                                <td style="color: #10b981;">${escapeHtml(v.top_praise || '-')}</td>
                                 <td style="color: #ef4444;">${escapeHtml(v.top_issue || '-')}</td>
                             </tr>
                         `;
                     });
                 } else {
-                    vehicleRowsHtml = '<tr><td colspan="5" style="text-align: center; color: var(--grey-5);">차량별 데이터가 없습니다.</td></tr>';
+                    vehicleRowsHtml = '<tr><td colspan="4" style="text-align: center; color: var(--grey-5);">차량별 데이터가 없습니다.</td></tr>';
                 }
 
                 // 키워드 태그
                 const keywordsHtml = (data.top_keywords || []).map(kw => `<span class="report-keyword">${escapeHtml(kw)}</span>`).join('');
 
-                body.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <div>
-                            <span style="font-size: 13px; color: var(--grey-5);">분석 기간: ${data.period_start} ~ ${data.period_end}</span>
-                        </div>
-                        <button class="btn-download-pdf" onclick="window.dashboardHandlers.downloadReportPDF()">
-                            📄 PDF 다운로드
-                        </button>
-                    </div>
+                // 헤더 버튼들 표시
+                const headerBackBtn = document.getElementById('header-back-btn');
+                const headerRegenBtn = document.getElementById('header-regen-btn');
+                const headerPdfBtn = document.getElementById('header-pdf-btn');
+                if (headerBackBtn) {
+                    headerBackBtn.style.display = 'block';
+                    headerBackBtn.onclick = () => window.dashboardHandlers.openReportModal(data.branch_id, data.branch_name || '', data.affiliate_name || '');
+                }
+                if (headerRegenBtn) headerRegenBtn.style.display = 'block';
+                if (headerPdfBtn) headerPdfBtn.style.display = 'block';
 
-                    <!-- Stats Grid -->
-                    <div class="report-stats-grid">
-                        <div class="report-stat-card">
-                            <div class="report-stat-value">${data.total_reviews || 0}</div>
-                            <div class="report-stat-label">총 리뷰 수</div>
-                        </div>
-                        <div class="report-stat-card">
-                            <div class="report-stat-value">${(data.top_keywords || []).length}</div>
-                            <div class="report-stat-label">핵심 키워드</div>
-                        </div>
-                        <div class="report-stat-card">
-                            <div class="report-stat-value">${(data.vehicle_analysis || []).length}</div>
-                            <div class="report-stat-label">차량 분석</div>
-                        </div>
+                body.innerHTML = `
+                    <div style="margin-bottom: 16px;">
+                        <span style="font-size: 13px; color: var(--grey-5);">분석 기간: ${data.period_start} ~ ${data.period_end}</span>
                     </div>
 
                     <!-- Period Summary -->
@@ -3498,7 +3574,6 @@
                         <div class="report-summary-box">
                             ${escapeHtml(data.period_summary || '요약 정보가 없습니다.')}
                         </div>
-                        <div class="report-keywords">${keywordsHtml}</div>
                     </div>
 
 
@@ -3510,7 +3585,6 @@
                                 <tr>
                                     <th>차량 모델</th>
                                     <th style="text-align: center;">리뷰 수</th>
-                                    <th style="text-align: center;">평가</th>
                                     <th>주요 호평</th>
                                     <th>주요 불만</th>
                                 </tr>
@@ -3519,17 +3593,7 @@
                         </table>
                     </div>
 
-                    <!-- Action Buttons -->
-                    <div style="display: flex; gap: 8px; justify-content: center; padding: 16px 0; border-top: 1px solid var(--grey-7); margin-top: 16px;">
-                        <button class="btn btn-secondary" onclick="window.dashboardHandlers.openReportModal(${data.branch_id}, '${escapeHtml(data.branch_name || '')}', '${escapeHtml(data.affiliate_name || '')}')">
-                            ← 리포트 목록
-                        </button>
-                        <button class="btn btn-primary" onclick="window.dashboardHandlers.regenerateReport()" style="background: #f59e0b; border-color: #f59e0b;">
-                            🔄 리포트 재생성
-                        </button>
-                    </div>
-
-                    <div style="text-align: center; padding: 8px 0; color: var(--grey-5); font-size: 12px;">
+                    <div style="text-align: center; padding: 8px 0; color: var(--grey-5); font-size: 12px; margin-top: 16px; border-top: 1px solid var(--grey-7); padding-top: 16px;">
                         Generated by Carmore AI · ${data.generated_at || new Date().toLocaleString('ko-KR')}
                     </div>
                 `;

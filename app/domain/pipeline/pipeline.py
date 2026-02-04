@@ -87,7 +87,7 @@ class BasePipeline(ABC):
         self.kiwi = None
         self._supabase_client: AsyncClient | None = None
         self._sentiment_analyzer = None  # UnifiedSentimentAnalyzer
-        self._tag_classifier = None  # HybridClassifier (태그 분류용)
+        self._hybrid_classifier = None  # HybridClassifier (태그 분류용)
 
         self._init_kiwi()
 
@@ -708,11 +708,11 @@ class BatchPipeline(BasePipeline):
         print("[Step 4] 태그+감정 분류 (HybridClassifier)")
         print("=" * 60)
 
-        if self._tag_classifier is None:
+        if self._hybrid_classifier is None:
             try:
                 from ..analysis import HybridClassifier
 
-                self._tag_classifier = HybridClassifier(lazy_load=True)
+                self._hybrid_classifier = HybridClassifier(lazy_load=True)
                 print("   → HybridClassifier 로딩 (태그 분류용)")
             except ImportError as e:
                 print(f"   ⚠️ HybridClassifier 로드 실패: {e}")
@@ -737,7 +737,7 @@ class BatchPipeline(BasePipeline):
             tag_sentiment: dict[str, dict[str, list[str]]] = {}
 
             for pr in reviews:
-                result = self._tag_classifier.classify_review(
+                result = self._hybrid_classifier.classify_review(
                     review=pr.content, keywords=pr.keywords
                 )
 

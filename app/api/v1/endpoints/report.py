@@ -294,6 +294,45 @@ async def api_cancel_job(
     return {"success": cancelled, "message": "작업이 취소되었습니다." if cancelled else "취소할 수 없는 작업입니다."}
 
 
+@router.delete("/{branch_id}")
+async def api_delete_report(
+    branch_id: int,
+    start_date: str = Query(..., description="시작일 (YYYY-MM-DD)"),
+    end_date: str = Query(..., description="종료일 (YYYY-MM-DD)"),
+    service: ReportService = Depends(get_report_service),
+) -> dict[str, Any]:
+    """
+    AI 리포트 삭제
+
+    Args:
+        branch_id: 지점 ID
+        start_date: 시작일
+        end_date: 종료일
+
+    Returns:
+        삭제 성공 여부
+    """
+    parsed_start = parse_date(start_date)
+    parsed_end = parse_date(end_date, end_of_day=True)
+
+    try:
+        deleted = await service.delete_report(
+            branch_id=branch_id,
+            start_date=parsed_start,
+            end_date=parsed_end,
+        )
+        if deleted:
+            return {"success": True, "message": "리포트가 삭제되었습니다."}
+        else:
+            raise HTTPException(status_code=404, detail="삭제할 리포트를 찾을 수 없습니다.")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        import logging
+        logging.exception("리포트 삭제 오류")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @router.get("/{branch_id}/pdf")
 async def api_download_report_pdf(
     branch_id: int,

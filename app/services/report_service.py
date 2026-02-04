@@ -9,6 +9,7 @@ AI 리포트 서비스
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime
 from typing import Awaitable, Callable
 
@@ -22,6 +23,8 @@ class VehicleAnalysis(BaseModel):
     avg_sentiment: float = 0.0
     top_praise: str = ""
     top_issue: str = ""
+    like_ratio: int = 0  # 호평 비율 (0-100)
+    dislike_ratio: int = 0  # 불평 비율 (0-100)
 
 
 class ReportData(BaseModel):
@@ -256,8 +259,6 @@ class ReportService:
                     report_data=report.model_dump(),
                 )
             except Exception as e:
-                import logging
-
                 logging.warning(f"리포트 저장 실패 (생성은 성공): {e}")
 
         return report
@@ -377,8 +378,9 @@ class ReportService:
                 .eq("branch_id", branch_id)
                 .execute()
             )
-        except Exception:
+        except Exception as e:
             # car_model_tags 테이블이 없으면 빈 리스트 반환
+            logging.warning(f"차량별 분석 조회 실패 (branch_id={branch_id}): {e}")
             return []
 
         if not result.data:
@@ -429,32 +431,48 @@ class ReportService:
             total_positive = data["total_positive"]
             total_negative = data["total_negative"]
 
-            # avg_sentiment: (positive - negative) / total 형태로 계산
-            # -1.0 (모두 부정) ~ 1.0 (모두 긍정)
-            avg_sentiment = (total_positive - total_negative) / total if total > 0 else 0.0
+            # avg_sentiment: 0.0 ~ 1.0 범위로 정규화
+            # 공식: (positive_ratio - negative_ratio + 1) / 2
+            # 0.0 (모두 부정) ~ 0.5 (중립) ~ 1.0 (모두 긍정)
+            if total > 0:
+                positive_ratio = total_positive / total
+                negative_ratio = total_negative / total
+                avg_sentiment = (positive_ratio - negative_ratio + 1) / 2
+            else:
+                avg_sentiment = 0.5  # 중립
 
-            # top_praise: positive_count가 가장 높은 태그
+            # top_praise: positive_count가 가장 높은 태그 (비율 포함)
             top_praise_tag = ""
             max_positive = 0
             for tag_name, tag_stats in data["tags"].items():
                 if tag_stats["positive"] > max_positive:
                     max_positive = tag_stats["positive"]
-                    top_praise_tag = tag_name
+                    tag_total = tag_stats["total"]
+                    ratio = int(round((tag_stats["positive"] / tag_total) * 100)) if tag_total > 0 else 0
+                    top_praise_tag = f"{tag_name}({ratio}%)"
 
-            # top_issue: negative_count가 가장 높은 태그
+            # top_issue: negative_count가 가장 높은 태그 (비율 포함)
             top_issue_tag = ""
             max_negative = 0
             for tag_name, tag_stats in data["tags"].items():
                 if tag_stats["negative"] > max_negative:
                     max_negative = tag_stats["negative"]
-                    top_issue_tag = tag_name
+                    tag_total = tag_stats["total"]
+                    ratio = int(round((tag_stats["negative"] / tag_total) * 100)) if tag_total > 0 else 0
+                    top_issue_tag = f"{tag_name}({ratio}%)"
+
+            # 호불호 비율 계산 (퍼센트)
+            like_ratio = int(round((total_positive / total) * 100)) if total > 0 else 0
+            dislike_ratio = int(round((total_negative / total) * 100)) if total > 0 else 0
 
             vehicle_list.append(VehicleAnalysis(
                 model=car_model,
                 count=total,
                 avg_sentiment=round(avg_sentiment, 2),
                 top_praise=top_praise_tag,
-                top_issue=top_issue_tag
+                top_issue=top_issue_tag,
+                like_ratio=like_ratio,
+                dislike_ratio=dislike_ratio
             ))
 
         return vehicle_list
@@ -497,8 +515,6 @@ class ReportService:
 
             return response.content if hasattr(response, "content") else str(response)
         except Exception as e:
-            import logging
-
             logging.error(f"기간 요약 생성 실패: {e}")
 
         # 기본 요약
@@ -509,4 +525,28 @@ class ReportService:
             f"{branch_name}의 {start_str}부터 {end_str}까지 "
             f"총 {total_reviews}건의 리뷰를 분석했습니다. "
             f"주요 키워드는 {keywords_str}입니다."
+        )
+
+    async def delete_report(
+        self,
+        branch_id: int,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> bool:
+        """
+        리포트 삭제
+
+        Args:
+            branch_id: 지점 ID
+            start_date: 시작일
+            end_date: 종료일
+
+        Returns:
+            삭제 성공 여부
+        """
+        if not self.report_repo:
+            raise ValueError("리포트 repository가 초기화되지 않았습니다.")
+
+        return await self.report_repo.delete_by_branch_and_period(
+            branch_id, start_date, end_date
         )
