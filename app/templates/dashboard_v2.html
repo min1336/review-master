@@ -1459,49 +1459,22 @@
                     <div class="stat-value" id="stat-reviews">-</div>
                 </div>
             </div>
-            <div class="stat-card" style="--card-color: #4facfe; --card-color-end: #00f2fe;">
-                <div class="stat-icon">
-                    <svg viewBox="0 0 24 24">
-                        <polyline points="9 11 12 14 22 4"></polyline>
-                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-                    </svg>
-                </div>
-                <div class="stat-content">
-                    <div class="stat-label">게시 완료</div>
-                    <div class="stat-value" id="stat-published">-</div>
-                </div>
-            </div>
-            <div class="stat-card" style="--card-color: #43e97b; --card-color-end: #38f9d7; min-width: 200px;">
-                <div class="stat-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                    </svg>
-                </div>
-                <div class="stat-content" id="status-stats">
-                    <div class="stat-label">상태별 현황</div>
-                    <div style="display: flex; gap: 12px; font-size: 13px; margin-top: 2px;">
-                        <span>보류 <strong id="stat-draft">-</strong></span>
-                        <span>게시 <strong id="stat-pub">-</strong></span>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- Branch Summaries Table -->
         <div class="card" style="margin-top: 24px;">
             <div class="filters">
-                <!-- [0] 지역 필터 -->
+                <!-- 지역 필터 -->
                 <div class="filter-group">
-                    <span class="filter-label">[0] 지역</span>
+                    <span class="filter-label">지역</span>
                     <select class="filter-select" id="filter-region">
                         <option value="">전체</option>
                     </select>
                 </div>
 
-                <!-- [1] 검색 필터 (ID/업체명/지점) -->
+                <!-- 검색 필터 (ID/업체명/지점) -->
                 <div class="filter-group" style="flex: 1; max-width: 300px;">
-                    <span class="filter-label">[1] 검색</span>
+                    <span class="filter-label">검색</span>
                     <div class="search-box">
                         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="7" cy="7" r="5" />
@@ -1509,15 +1482,6 @@
                         </svg>
                         <input type="text" id="search-input" placeholder="ID/업체명/지점 검색...">
                     </div>
-                </div>
-
-                <div class="filter-group">
-                    <span class="filter-label">상태</span>
-                    <select class="filter-select" id="filter-status">
-                        <option value="">전체</option>
-                        <option value="draft">보류</option>
-                        <option value="published">게시</option>
-                    </select>
                 </div>
 
                 <!-- 기간 필터 -->
@@ -1534,21 +1498,22 @@
             <div class="table-container">
                 <table>
                     <colgroup>
-                        <col style="width: 250px;"> <!-- Name (Wider) -->
-                        <col style="width: 35%;"> <!-- Summary -->
-                        <col style="width: 120px;"> <!-- Review Count -->
-                        <col style="width: 250px;"> <!-- Tags -->
-                        <col style="width: 100px;"> <!-- Status -->
+                        <col style="width: 100px;"> <!-- Region -->
+                        <col style="width: 220px;"> <!-- Name -->
+                        <col style="width: 40%;"> <!-- Summary -->
+                        <col style="width: 100px;"> <!-- Review Count -->
+                        <col style="width: 240px;"> <!-- Tags -->
                     </colgroup>
                     <thead>
                         <tr>
+                            <th onclick="handleSort('region')" style="cursor: pointer;">지역 <span
+                                    id="sort-icon-region" class="sort-icon"></span></th>
                             <th onclick="handleSort('branch_name')" style="cursor: pointer;">업체명 <span
                                     id="sort-icon-branch_name" class="sort-icon"></span></th>
                             <th style="min-width: 200px;">요약</th>
                             <th onclick="handleSort('review_count')" style="cursor: pointer;">리뷰수 <span
                                     id="sort-icon-review_count" class="sort-icon"></span></th>
                             <th>태그</th>
-                            <th>상태</th>
                         </tr>
                     </thead>
                     <tbody id="summaries-table">
@@ -1634,7 +1599,7 @@
                     CARMORE_REVIEW_BASE: 'https://dev-admin.carmore.kr/partners/Reviewmanage'
                 },
                 PAGINATION: {
-                    DEFAULT_PAGE_SIZE: 10,
+                    DEFAULT_PAGE_SIZE: 30,
                     REVIEWS_PAGE_SIZE: 10
                 },
                 VALIDATION: {
@@ -1859,8 +1824,55 @@
                     models: []
                 },
                 summaries: [],
-                regionStats: []
+                regionStats: [],
+                favorites: JSON.parse(localStorage.getItem('dashboard_favorites') || '[]')
             };
+
+            // 즐겨찾기 함수
+            function isFavorite(branchId) {
+                return state.favorites.includes(Number(branchId));
+            }
+
+            function toggleFavorite(branchId) {
+                const id = Number(branchId);
+                const idx = state.favorites.indexOf(id);
+                if (idx > -1) {
+                    state.favorites.splice(idx, 1);
+                } else {
+                    state.favorites.push(id);
+                }
+                localStorage.setItem('dashboard_favorites', JSON.stringify(state.favorites));
+                return isFavorite(id);
+            }
+
+            // 지역 변환 (시/군/구 → 광역시/도)
+            function toMetroRegion(region) {
+                if (!region) return '-';
+                const r = region.trim();
+
+                // 광역시
+                if (r.startsWith('서울') || r === '서울특별시') return '서울특별시';
+                if (r.startsWith('부산') || r === '부산광역시') return '부산광역시';
+                if (r.startsWith('대구') || r === '대구광역시') return '대구광역시';
+                if (r.startsWith('인천') || r === '인천광역시') return '인천광역시';
+                if (r.startsWith('광주') || r === '광주광역시') return '광주광역시';
+                if (r.startsWith('대전') || r === '대전광역시') return '대전광역시';
+                if (r.startsWith('울산') || r === '울산광역시') return '울산광역시';
+                if (r.startsWith('세종') || r === '세종특별자치시') return '세종특별자치시';
+
+                // 도
+                if (r.startsWith('경기') || r.includes('경기도')) return '경기도';
+                if (r.startsWith('강원') || r.includes('강원')) return '강원특별자치도';
+                if (r.startsWith('충북') || r.includes('충청북')) return '충청북도';
+                if (r.startsWith('충남') || r.includes('충청남')) return '충청남도';
+                if (r.startsWith('전북') || r.includes('전라북') || r.includes('전북')) return '전북특별자치도';
+                if (r.startsWith('전남') || r.includes('전라남')) return '전라남도';
+                if (r.startsWith('경북') || r.includes('경상북')) return '경상북도';
+                if (r.startsWith('경남') || r.includes('경상남')) return '경상남도';
+                if (r.startsWith('제주') || r.includes('제주')) return '제주특별자치도';
+
+                return r; // 변환 불가시 원본 반환
+            }
 
             // State getters
             function getState() { return state; }
@@ -2013,9 +2025,23 @@
             }
 
             function buildSummariesParams(filters = {}) {
+                const favCount = state.favorites.length;
+                const pageSize = state.pagination.pageSize;
+                const currentPage = state.pagination.currentPage;
+
+                // 이전 페이지까지 표시된 즐겨찾기 수
+                const prevFavShown = Math.min(favCount, currentPage * pageSize);
+                // 이전 페이지까지 표시된 일반 항목 수
+                const prevNormalShown = Math.max(0, (currentPage * pageSize) - favCount);
+                // 일반 데이터 offset
+                const offset = prevNormalShown;
+
+                // 즐겨찾기 필터링 후에도 충분한 데이터가 남도록 여유분 추가
+                const limit = pageSize + favCount;
+
                 const params = new URLSearchParams({
-                    limit: state.pagination.pageSize,
-                    offset: state.pagination.currentPage * state.pagination.pageSize,
+                    limit: limit,
+                    offset: offset,
                     sort_by: state.sort.field,
                     order: state.sort.order,
                     min_reviews: 0
@@ -2123,17 +2149,9 @@
             function renderStats(stats) {
                 const statTotal = getElement('stat-total');
                 const statReviews = getElement('stat-reviews');
-                const statPublished = getElement('stat-published');
-                const statDraft = getElement('stat-draft');
-                const statPub = getElement('stat-pub');
 
                 if (statTotal) statTotal.textContent = stats.total?.toLocaleString() || '0';
                 if (statReviews) statReviews.textContent = stats.total_reviews?.toLocaleString() || '0';
-                if (statPublished) statPublished.textContent = stats.published?.toLocaleString() || '0';
-
-                // 상태별 현황 (소형 카드)
-                if (statDraft) statDraft.textContent = stats.draft?.toLocaleString() || '0';
-                if (statPub) statPub.textContent = stats.published?.toLocaleString() || '0';
             }
 
             function renderStatusBars(data) {
@@ -2209,10 +2227,15 @@
                     ? tags.map(t => `<span class="keyword" style="background: ${getKeywordColor(t.name)}; color: ${getKeywordTextColor(t.name)};">${t.name}</span>`).join('')
                     : '<span style="color: var(--grey-5); font-style: italic;">-</span>';
 
+                const isFav = isFavorite(row.branch_id);
+
                 return `
                 <tr class="clickable-row" data-branch-id="${row.branch_id}" style="vertical-align: middle; cursor: pointer; transition: background-color 0.2s;">
+                    <td style="text-align: center; color: var(--grey-3); font-size: 13px;">${toMetroRegion(row.region)}</td>
                     <td>
-                        <div style="font-weight: 600; margin-bottom: 4px;">${row.branch_name || '-'}</div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">
+                            ${isFav ? '<span style="color: #f59e0b; margin-right: 4px;">⭐</span>' : ''}${row.branch_name || '-'}
+                        </div>
                         <div>${getStarRating(row.avg_rating)}</div>
                     </td>
                     <td style="font-size: 13px; color: var(--grey-3); line-height: 1.5;">${summaryPreview}</td>
@@ -2221,11 +2244,6 @@
                         <div class="keywords" style="display: flex; flex-wrap: wrap; gap: 4px;">
                             ${tagsHtml}
                         </div>
-                    </td>
-                    <td style="text-align: center;">
-                        <span class="badge ${row.status === 'published' ? 'badge-success' : 'badge-grey'}">
-                            ${row.status || 'draft'}
-                        </span>
                     </td>
                 </tr>
             `;
@@ -2469,6 +2487,19 @@
                 console.log('✅ Dashboard initialized (inlined v2.0)');
             }
 
+            async function handleToggleFavorite(branchId) {
+                const isFav = toggleFavorite(branchId);
+                const btn = getElement('btn-favorite');
+                if (btn) {
+                    btn.textContent = isFav ? '⭐' : '☆';
+                    btn.title = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
+                }
+                showToast(isFav ? '즐겨찾기에 추가되었습니다' : '즐겨찾기가 해제되었습니다', 'success');
+                // 현재 페이지 유지, 백그라운드에서 테이블 업데이트
+                // (즐겨찾기 항목은 1페이지로 가면 최상단에 표시됨)
+                await loadSummaries();
+            }
+
             function registerGlobalHandlers() {
                 window.dashboardHandlers = {
                     showDetail,
@@ -2493,6 +2524,7 @@
                     closeModal,
                     clearDateFilter,
                     syncAffiliates,
+                    toggleFavorite: handleToggleFavorite,
                     // AI Report handlers
                     openReportModal,
                     closeReportModal,
@@ -2533,7 +2565,6 @@
 
                 const searchInput = getElement('search-input');
                 const filterRegion = getElement('filter-region');
-                const filterStatus = getElement('filter-status');
                 const modal = getElement('detail-modal');
 
                 if (searchInput) {
@@ -2545,13 +2576,6 @@
 
                 if (filterRegion) {
                     filterRegion.addEventListener('change', () => {
-                        resetPage();
-                        loadSummaries();
-                    });
-                }
-
-                if (filterStatus) {
-                    filterStatus.addEventListener('change', () => {
                         resetPage();
                         loadSummaries();
                     });
@@ -2606,20 +2630,57 @@
                 }
             }
 
+            // 광역시/도 → 검색 키워드 매핑
+            function getRegionSearchKey(metro) {
+                const map = {
+                    '서울특별시': '서울',
+                    '부산광역시': '부산',
+                    '대구광역시': '대구',
+                    '인천광역시': '인천',
+                    '광주광역시': '광주',
+                    '대전광역시': '대전',
+                    '울산광역시': '울산',
+                    '세종특별자치시': '세종',
+                    '경기도': '경기',
+                    '강원특별자치도': '강원',
+                    '충청북도': '충북',
+                    '충청남도': '충남',
+                    '전북특별자치도': '전북',
+                    '전라남도': '전남',
+                    '경상북도': '경북',
+                    '경상남도': '경남',
+                    '제주특별자치도': '제주'
+                };
+                return map[metro] || metro;
+            }
+
             async function loadRegionStatsData() {
                 try {
                     const data = await fetchRegionStats();
                     setRegionStats(data);
 
+                    // 광역시/도 단위로 집계
+                    const metroStats = {};
+                    data.forEach(r => {
+                        if (r.region && r.region !== '미분류') {
+                            const metro = toMetroRegion(r.region);
+                            if (!metroStats[metro]) {
+                                metroStats[metro] = { count: 0, total_reviews: 0 };
+                            }
+                            metroStats[metro].count += r.count || 0;
+                            metroStats[metro].total_reviews += r.total_reviews || 0;
+                        }
+                    });
+
                     const select = getElement('filter-region');
                     if (select) {
-                        data.forEach(r => {
-                            if (r.region && r.region !== '미분류') {
-                                const opt = document.createElement('option');
-                                opt.value = r.region;
-                                opt.textContent = `${r.region} (${r.count})`;
-                                select.appendChild(opt);
-                            }
+                        // 지점 수 기준 정렬
+                        const sorted = Object.entries(metroStats).sort((a, b) => b[1].count - a[1].count);
+                        sorted.forEach(([metro, stats]) => {
+                            const opt = document.createElement('option');
+                            opt.value = getRegionSearchKey(metro); // LIKE 검색용 키워드
+                            opt.textContent = `${metro} (${stats.count})`;
+                            select.appendChild(opt);
                         });
                     }
 
@@ -2636,16 +2697,60 @@
             async function loadSummaries() {
                 const filters = {
                     keyword: getElement('search-input')?.value || '',
-                    region: getElement('filter-region')?.value || '',
-                    status: getElement('filter-status')?.value || ''
+                    region: getElement('filter-region')?.value || ''
                 };
 
                 updateSortUI();
 
                 try {
                     let data = await fetchSummaries(filters);
+                    let favoriteData = [];
+                    const favoriteIds = state.favorites;
+                    const pageSize = state.pagination.pageSize;
+                    const currentPage = state.pagination.currentPage;
+                    const favCount = favoriteIds.length;
 
-                    const branchIds = data.map(d => d.branch_id).filter(Boolean);
+                    // 이전 페이지까지 표시된 즐겨찾기 수
+                    const prevFavShown = Math.min(favCount, currentPage * pageSize);
+                    // 이 페이지에 표시할 즐겨찾기 수
+                    const thisFavCount = Math.min(favCount - prevFavShown, pageSize);
+                    // 이 페이지에 표시할 일반 항목 수
+                    const thisNormalCount = pageSize - thisFavCount;
+
+                    // 즐겨찾기가 있고 이 페이지에 표시할 즐겨찾기가 있을 때
+                    if (thisFavCount > 0) {
+                        // 이 페이지에 표시할 즐겨찾기 ID들
+                        const thisFavIds = favoriteIds.slice(prevFavShown, prevFavShown + thisFavCount);
+
+                        // 현재 데이터에서 즐겨찾기 분리
+                        favoriteData = data.filter(d => thisFavIds.includes(d.branch_id));
+                        data = data.filter(d => !favoriteIds.includes(d.branch_id));
+
+                        // 현재 페이지 데이터에 없는 즐겨찾기는 별도 조회
+                        const loadedFavIds = favoriteData.map(d => d.branch_id);
+                        const missingFavIds = thisFavIds.filter(id => !loadedFavIds.includes(id));
+
+                        if (missingFavIds.length > 0) {
+                            const missingPromises = missingFavIds.map(id =>
+                                fetchSummaryDetail(id).catch(() => null)
+                            );
+                            const missingResults = await Promise.all(missingPromises);
+                            missingResults.forEach(item => {
+                                if (item) favoriteData.push(item);
+                            });
+                        }
+
+                        // 일반 데이터는 필요한 개수만
+                        data = data.slice(0, thisNormalCount);
+                    } else {
+                        // 이 페이지에 즐겨찾기가 없으면 일반 데이터만
+                        data = data.filter(d => !favoriteIds.includes(d.branch_id));
+                    }
+
+                    // 모든 데이터 합치기 (즐겨찾기가 먼저, 항상 pageSize개)
+                    const allData = [...favoriteData, ...data].slice(0, pageSize);
+
+                    const branchIds = allData.map(d => d.branch_id).filter(Boolean);
                     let tagsData = {};
 
                     if (branchIds.length > 0) {
@@ -2656,7 +2761,7 @@
                         }
                     }
 
-                    data.forEach(row => {
+                    allData.forEach(row => {
                         if (Array.isArray(row.keywords)) {
                             row.top_tags = row.keywords.map(k => ({ name: k }));
                         } else {
@@ -2664,8 +2769,8 @@
                         }
                     });
 
-                    setSummaries(data);
-                    renderTable(data, showDetail);
+                    setSummaries(allData);
+                    renderTable(allData, showDetail);
                 } catch (e) {
                     console.error('Summaries load error:', e);
                     showTableMessage('로드 실패', true);
@@ -2724,20 +2829,23 @@
 
             function buildDetailModalHtml(data) {
                 const pendingSummaries = data.pending_summaries || {};
+                const isFav = isFavorite(data.branch_id);
 
                 return `
                 <div class="modal-header-content" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
                     <div style="flex: 1;">
                         <div style="font-size: 14px; color: var(--grey-5); margin-bottom: 4px;">ID: ${data.branch_id}</div>
-                        <h2 style="font-size: 24px; font-weight: 700; color: var(--grey-1); margin: 0;">${data.branch_name}</h2>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <h2 style="font-size: 24px; font-weight: 700; color: var(--grey-1); margin: 0;">${data.branch_name}</h2>
+                            <button id="btn-favorite" onclick="window.dashboardHandlers.toggleFavorite(${data.branch_id})"
+                                style="background: none; border: none; cursor: pointer; font-size: 24px; padding: 0; line-height: 1;"
+                                title="${isFav ? '즐겨찾기 해제' : '즐겨찾기 추가'}">
+                                ${isFav ? '⭐' : '☆'}
+                            </button>
+                        </div>
                         <div id="region-display" style="font-size: 14px; color: var(--grey-3); margin-top: 4px;">${data.region || '지역 정보 없음'}</div>
                         <input type="text" id="region-input" value="${data.region || ''}" placeholder="지역 입력 (예: 서울 강남구)"
                             style="display: none; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 14px; width: 100%; max-width: 300px;">
-                    </div>
-                    <div>
-                        <span class="badge badge-${STATUS_CLASS_MAP[data.status] || 'grey'}" style="font-size: 14px; padding: 6px 12px;">
-                            ${STATUS_LABEL_MAP[data.status] || data.status}
-                        </span>
                     </div>
                 </div>
 
