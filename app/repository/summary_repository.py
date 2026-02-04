@@ -51,7 +51,11 @@ class SummaryRepository(BaseRepository[Summary]):
             query = query.ilike("region", f"%{region}%")
 
         is_desc = order.lower() == "desc"
-        query = query.order(sort_by, desc=is_desc)
+        # avg_rating 정렬 시 NULL을 가장 낮은 점수로 처리 (NULLS LAST)
+        if sort_by == "avg_rating":
+            query = query.order(sort_by, desc=is_desc, nullsfirst=False)
+        else:
+            query = query.order(sort_by, desc=is_desc)
         query = query.range(offset, offset + limit - 1)
 
         result = await query.execute()
@@ -173,20 +177,23 @@ class SummaryRepository(BaseRepository[Summary]):
         if max_rating is not None:
             query = query.lte("avg_rating", max_rating)
 
-        result = await query.order("branch_id").limit(limit).execute()
+        # 키워드 검색을 위해 더 많은 데이터를 가져옴
+        result = await query.order("branch_id").limit(5000).execute()
         data = result.data
 
-        # 키워드 필터링 (in-memory)
+        # 키워드 필터링 (in-memory) - branch_name, region, branch_id 검색
         if keyword and data:
             keyword_lower = keyword.lower()
             data = [
                 row
                 for row in data
                 if keyword_lower in (row.get("branch_name") or "").lower()
-                or keyword_lower in (row.get("keyword_1") or "").lower()
-                or keyword_lower in (row.get("keyword_2") or "").lower()
-                or keyword_lower in (row.get("keyword_3") or "").lower()
+                or keyword_lower in (row.get("region") or "").lower()
+                or keyword_lower in str(row.get("branch_id") or "")
             ]
+
+        # 필터링 후 limit 적용
+        data = data[:limit]
 
         return [self.model(**row) for row in data]
 

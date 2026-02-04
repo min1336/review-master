@@ -50,10 +50,10 @@
 
             /* Spacing */
             --spacing-xs: 4px;
-            --spacing-sm: 8px;
-            --spacing-md: 16px;
-            --spacing-lg: 24px;
-            --spacing-xl: 32px;
+            --spacing-sm: 6px;
+            --spacing-md: 12px;
+            --spacing-lg: 16px;
+            --spacing-xl: 24px;
         }
 
         * {
@@ -132,7 +132,7 @@
             width: 100%;
             max-width: var(--max-width);
             margin: 0 auto;
-            padding: var(--spacing-lg);
+            padding: 16px;
         }
 
         .inner {
@@ -143,7 +143,7 @@
 
         .grid {
             display: grid;
-            gap: var(--spacing-lg);
+            gap: 12px;
         }
 
         .grid-2 {
@@ -182,7 +182,7 @@
             background: white;
             border-radius: var(--radius);
             box-shadow: var(--shadow-sm);
-            padding: var(--spacing-lg);
+            padding: 16px;
             border: 1px solid var(--grey-7);
             transition: box-shadow 0.2s ease;
         }
@@ -211,14 +211,14 @@
             background: white;
             border-radius: var(--radius-sm);
             box-shadow: var(--shadow-sm);
-            padding: 12px 16px;
+            padding: 10px 12px;
             position: relative;
             overflow: hidden;
             transition: all 0.2s ease;
             border: 1px solid var(--grey-8);
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
         }
 
         .stat-card:hover {
@@ -412,6 +412,7 @@
                 opacity: 0;
                 transform: translateY(-20px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -823,7 +824,9 @@
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         .report-loading-text {
@@ -880,10 +883,6 @@
         .table-container {
             overflow-x: auto;
             min-height: 70vh;
-            margin: -24px;
-            margin-top: 0;
-            padding: 0;
-            border-radius: 0 0 var(--radius) var(--radius);
         }
 
         table {
@@ -895,12 +894,13 @@
         }
 
         th {
-            background: #f8fafc;
-            padding: 16px 24px;
+            background: var(--grey-9);
+            padding: 12px 20px;
             text-align: left;
-            font-weight: 700;
-            color: #334155;
-            border-bottom: 2px solid var(--grey-8);
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--grey-3);
+            border-bottom: 1px solid var(--grey-7);
             position: sticky;
             top: 0;
             z-index: 10;
@@ -908,12 +908,12 @@
         }
 
         td {
-            padding: 16px 24px;
+            padding: 14px 20px;
             text-align: left;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid var(--grey-8);
             color: var(--grey-1);
             vertical-align: middle;
-            font-size: 15px;
+            font-size: 14px;
         }
 
         tr:last-child td {
@@ -1011,44 +1011,52 @@
         /* Filters */
         .filters {
             display: flex;
-            gap: 16px;
-            margin-bottom: 24px;
+            gap: 24px;
+            margin-bottom: 0;
             flex-wrap: wrap;
             align-items: center;
-            padding: 24px 24px 0 24px;
-            border-bottom: none;
+            padding: 20px 24px;
+            background: var(--grey-9);
+            border-radius: var(--radius) var(--radius) 0 0;
+            border-bottom: 1px solid var(--grey-7);
         }
 
         .filter-group {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
         }
 
         .filter-label {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--grey-2);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--grey-4);
+            white-space: nowrap;
         }
 
         .filter-select,
         .search-box input {
-            padding: 8px 12px;
-            border: 1px solid var(--grey-7);
+            padding: 8px 14px;
+            border: 1px solid var(--grey-6);
             border-radius: var(--radius-sm);
-            font-size: 14px;
+            font-size: 13px;
             color: var(--grey-1);
             background: white;
-            min-width: 140px;
-            height: 40px;
+            min-width: 120px;
+            height: 36px;
             outline: none;
-            transition: all 0.2s;
+            transition: all 0.15s ease;
+        }
+
+        .filter-select:hover,
+        .search-box input:hover {
+            border-color: var(--grey-5);
         }
 
         .filter-select:focus,
         .search-box input:focus {
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px var(--primary-light);
+            box-shadow: 0 0 0 2px var(--primary-light);
         }
 
         .search-box {
@@ -1056,8 +1064,8 @@
         }
 
         .search-box input {
-            padding-left: 36px;
-            width: 250px;
+            padding-left: 34px;
+            width: 220px;
         }
 
         .search-box svg {
@@ -1274,6 +1282,39 @@
             font-style: italic;
         }
 
+        /* Summary Tooltip (마우스 따라다니는 요약 툴팁) */
+        .summary-tooltip {
+            position: fixed;
+            max-width: 400px;
+            padding: 12px 16px;
+            background: rgba(30, 30, 30, 0.95);
+            color: white;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            line-height: 1.6;
+            box-shadow: var(--shadow-lg);
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            white-space: pre-wrap;
+            word-break: keep-all;
+        }
+
+        .summary-tooltip.visible {
+            opacity: 1;
+        }
+
+        .summary-tooltip::before {
+            content: '📝 요약';
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--primary-light);
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+
         /* Keywords */
         .keywords {
             display: flex;
@@ -1287,6 +1328,20 @@
             padding: 4px 10px;
             border-radius: 20px;
             font-size: 13px;
+        }
+
+        /* 업체/지점 구분 스타일 */
+        .branch-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .branch-info .company-name {
+            font-weight: 600;
+        }
+        .branch-info .branch-name {
+            font-size: 12px;
+            color: var(--grey-4);
         }
 
         /* Loading */
@@ -1462,7 +1517,7 @@
         </div>
 
         <!-- Branch Summaries Table -->
-        <div class="card" style="margin-top: 24px;">
+        <div class="card" style="margin-top: 24px; padding: 0; overflow: hidden;">
             <div class="filters">
                 <!-- 지역 필터 -->
                 <div class="filter-group">
@@ -1473,14 +1528,14 @@
                 </div>
 
                 <!-- 검색 필터 (ID/업체명/지점) -->
-                <div class="filter-group" style="flex: 1; max-width: 300px;">
+                <div class="filter-group">
                     <span class="filter-label">검색</span>
                     <div class="search-box">
-                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="7" cy="7" r="5" />
-                            <path d="M12 12l3 3" />
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="6" cy="6" r="4.5" />
+                            <path d="M10 10l3 3" />
                         </svg>
-                        <input type="text" id="search-input" placeholder="ID/업체명/지점 검색...">
+                        <input type="text" id="search-input" placeholder="ID/업체명/지점...">
                     </div>
                 </div>
 
@@ -1498,22 +1553,23 @@
             <div class="table-container">
                 <table>
                     <colgroup>
-                        <col style="width: 100px;"> <!-- Region -->
-                        <col style="width: 220px;"> <!-- Name -->
-                        <col style="width: 40%;"> <!-- Summary -->
-                        <col style="width: 100px;"> <!-- Review Count -->
-                        <col style="width: 240px;"> <!-- Tags -->
+                        <col style="width: 80px;"> <!-- Region -->
+                        <col style="width: 200px;"> <!-- Name -->
+                        <col> <!-- Summary (flex) -->
+                        <col style="width: 80px;"> <!-- Rating -->
+                        <col style="width: 80px;"> <!-- Review Count -->
                     </colgroup>
                     <thead>
                         <tr>
-                            <th onclick="handleSort('region')" style="cursor: pointer;">지역 <span
-                                    id="sort-icon-region" class="sort-icon"></span></th>
+                            <th onclick="handleSort('region')" style="cursor: pointer;">지역 <span id="sort-icon-region"
+                                    class="sort-icon"></span></th>
                             <th onclick="handleSort('branch_name')" style="cursor: pointer;">업체명 <span
                                     id="sort-icon-branch_name" class="sort-icon"></span></th>
-                            <th style="min-width: 200px;">요약</th>
-                            <th onclick="handleSort('review_count')" style="cursor: pointer;">리뷰수 <span
+                            <th style="min-width: 120px; max-width: 180px;">요약</th>
+                            <th onclick="handleSort('avg_rating')" style="cursor: pointer; width: 70px; text-align: center;">별점 <span
+                                    id="sort-icon-avg_rating" class="sort-icon"></span></th>
+                            <th onclick="handleSort('review_count')" style="cursor: pointer; width: 80px; text-align: center;">리뷰수 <span
                                     id="sort-icon-review_count" class="sort-icon"></span></th>
-                            <th>태그</th>
                         </tr>
                     </thead>
                     <tbody id="summaries-table">
@@ -1559,13 +1615,16 @@
                     <button id="header-back-btn" class="header-icon-btn" title="목록으로" style="display: none;">
                         ←
                     </button>
-                    <button id="header-regen-btn" class="header-icon-btn" onclick="window.dashboardHandlers.regenerateReport()" title="재생성" style="display: none;">
+                    <button id="header-regen-btn" class="header-icon-btn"
+                        onclick="window.dashboardHandlers.regenerateReport()" title="재생성" style="display: none;">
                         ↻
                     </button>
-                    <button id="header-pdf-btn" class="header-icon-btn" onclick="window.dashboardHandlers.downloadReportPDF()" title="PDF 다운로드" style="display: none;">
+                    <button id="header-pdf-btn" class="header-icon-btn"
+                        onclick="window.dashboardHandlers.downloadReportPDF()" title="PDF 다운로드" style="display: none;">
                         ↓
                     </button>
-                    <button class="report-modal-close" onclick="window.dashboardHandlers.closeReportModal()">&times;</button>
+                    <button class="report-modal-close"
+                        onclick="window.dashboardHandlers.closeReportModal()">&times;</button>
                 </div>
             </div>
             <div class="report-modal-body" id="report-modal-body">
@@ -1796,7 +1855,7 @@
                     pageSize: CONFIG.PAGINATION.DEFAULT_PAGE_SIZE
                 },
                 sort: {
-                    field: 'review_count',
+                    field: 'avg_rating',
                     order: 'desc'
                 },
                 dateFilter: {
@@ -1850,28 +1909,43 @@
                 if (!region) return '-';
                 const r = region.trim();
 
-                // 광역시
-                if (r.startsWith('서울') || r === '서울특별시') return '서울특별시';
-                if (r.startsWith('부산') || r === '부산광역시') return '부산광역시';
-                if (r.startsWith('대구') || r === '대구광역시') return '대구광역시';
-                if (r.startsWith('인천') || r === '인천광역시') return '인천광역시';
-                if (r.startsWith('광주') || r === '광주광역시') return '광주광역시';
-                if (r.startsWith('대전') || r === '대전광역시') return '대전광역시';
-                if (r.startsWith('울산') || r === '울산광역시') return '울산광역시';
-                if (r.startsWith('세종') || r === '세종특별자치시') return '세종특별자치시';
+                // "경기 평택시", "서울 강남구" 형태 처리
+                const parts = r.split(' ');
 
-                // 도
-                if (r.startsWith('경기') || r.includes('경기도')) return '경기도';
-                if (r.startsWith('강원') || r.includes('강원')) return '강원특별자치도';
-                if (r.startsWith('충북') || r.includes('충청북')) return '충청북도';
-                if (r.startsWith('충남') || r.includes('충청남')) return '충청남도';
-                if (r.startsWith('전북') || r.includes('전라북') || r.includes('전북')) return '전북특별자치도';
-                if (r.startsWith('전남') || r.includes('전라남')) return '전라남도';
-                if (r.startsWith('경북') || r.includes('경상북')) return '경상북도';
-                if (r.startsWith('경남') || r.includes('경상남')) return '경상남도';
-                if (r.startsWith('제주') || r.includes('제주')) return '제주특별자치도';
+                if (parts.length >= 2) {
+                    const province = parts[0]; // 광역시/도
+                    const cityOrDistrict = parts[1]; // 시/구/군
 
-                return r; // 변환 불가시 원본 반환
+                    // "시"로 끝나는 경우: "시" 제거하고 반환 (예: "평택시" → "평택")
+                    if (cityOrDistrict.endsWith('시')) {
+                        return cityOrDistrict.replace(/시$/, '');
+                    }
+
+                    // "구"나 "군"으로 끝나는 경우: 광역시/도명만 반환
+                    if (cityOrDistrict.endsWith('구') || cityOrDistrict.endsWith('군')) {
+                        // 광역시/도명에서 불필요한 접미사 제거
+                        let cityName = province
+                            .replace('특별시', '')
+                            .replace('광역시', '')
+                            .replace('특별자치시', '')
+                            .replace('특별자치도', '')
+                            .replace('도', '');
+                        return cityName;
+                    }
+                }
+
+                // 공백이 없는 경우 (예: "제주", "서울")
+                if (parts.length === 1) {
+                    let cityName = r
+                        .replace('특별시', '')
+                        .replace('광역시', '')
+                        .replace('특별자치시', '')
+                        .replace('특별자치도', '')
+                        .replace('도', '');
+                    return cityName;
+                }
+
+                return r;
             }
 
             // State getters
@@ -2219,32 +2293,27 @@
 
             function renderTableRow(row, onDetailClick) {
                 const summaryPreview = row.summary_all
-                    ? (row.summary_all.length > 60 ? row.summary_all.substring(0, 60) + '...' : row.summary_all)
+                    ? (row.summary_all.length > 40 ? row.summary_all.substring(0, 40) + '...' : row.summary_all)
                     : '<span style="color: var(--grey-5); font-style: italic;">요약 없음</span>';
 
-                const tags = row.top_tags || [];
-                const tagsHtml = tags.length > 0
-                    ? tags.map(t => `<span class="keyword" style="background: ${getKeywordColor(t.name)}; color: ${getKeywordTextColor(t.name)};">${t.name}</span>`).join('')
-                    : '<span style="color: var(--grey-5); font-style: italic;">-</span>';
-
                 const isFav = isFavorite(row.branch_id);
+                const rating = row.avg_rating ? row.avg_rating.toFixed(1) : '-';
+                const fullSummary = row.summary_all ? escapeHtml(row.summary_all) : '';
 
                 return `
-                <tr class="clickable-row" data-branch-id="${row.branch_id}" style="vertical-align: middle; cursor: pointer; transition: background-color 0.2s;">
-                    <td style="text-align: center; color: var(--grey-3); font-size: 13px;">${toMetroRegion(row.region)}</td>
+                <tr class="clickable-row" data-branch-id="${row.branch_id}" data-summary="${fullSummary}" style="vertical-align: middle; cursor: pointer; transition: background-color 0.2s;">
+                    <td style="text-align: center; color: var(--grey-3); font-size: 11px;">${toMetroRegion(row.region)}</td>
                     <td>
-                        <div style="font-weight: 600; margin-bottom: 4px;">
-                            ${isFav ? '<span style="color: #f59e0b; margin-right: 4px;">⭐</span>' : ''}${row.branch_name || '-'}
+                        <div class="branch-info">
+                            <span class="company-name">
+                                ${isFav ? '<span style="color: #f59e0b; margin-right: 4px;">⭐</span>' : ''}${row.affiliate_name || row.branch_name || '-'}
+                            </span>
+                            ${row.affiliate_name && row.branch_name ? `<span class="branch-name">${row.branch_name}</span>` : ''}
                         </div>
-                        <div>${getStarRating(row.avg_rating)}</div>
                     </td>
-                    <td style="font-size: 13px; color: var(--grey-3); line-height: 1.5;">${summaryPreview}</td>
+                    <td class="summary-cell" style="font-size: 13px; color: var(--grey-3); line-height: 1.5;">${summaryPreview}</td>
+                    <td style="text-align: center; font-weight: 600; color: #f59e0b;">⭐ ${rating}</td>
                     <td style="text-align: center; font-weight: 600; font-size: 15px;">${row.review_count?.toLocaleString() || 0}</td>
-                    <td>
-                        <div class="keywords" style="display: flex; flex-wrap: wrap; gap: 4px;">
-                            ${tagsHtml}
-                        </div>
-                    </td>
                 </tr>
             `;
             }
@@ -2252,7 +2321,7 @@
             function attachRowClickHandlers() {
                 const rows = document.querySelectorAll('.clickable-row');
                 rows.forEach(row => {
-                    row.addEventListener('click', function(e) {
+                    row.addEventListener('click', function (e) {
                         // Prevent row click if clicking on interactive elements
                         if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.closest('a')) {
                             return;
@@ -2265,13 +2334,76 @@
                     });
 
                     // Add hover effect
-                    row.addEventListener('mouseenter', function() {
+                    row.addEventListener('mouseenter', function () {
                         this.style.backgroundColor = 'var(--grey-7)';
                     });
-                    row.addEventListener('mouseleave', function() {
+                    row.addEventListener('mouseleave', function () {
                         this.style.backgroundColor = '';
                     });
                 });
+
+                // Attach summary tooltip handlers
+                attachSummaryTooltipHandlers();
+            }
+
+            // Summary Tooltip - 마우스를 따라다니는 요약 툴팁
+            function attachSummaryTooltipHandlers() {
+                const tooltip = getOrCreateSummaryTooltip();
+                const summaryCells = document.querySelectorAll('.summary-cell');
+
+                summaryCells.forEach(cell => {
+                    const row = cell.closest('.clickable-row');
+                    const summary = row?.getAttribute('data-summary');
+
+                    if (!summary) return;
+
+                    cell.addEventListener('mouseenter', function(e) {
+                        tooltip.textContent = summary;
+                        tooltip.classList.add('visible');
+                        updateTooltipPosition(e, tooltip);
+                    });
+
+                    cell.addEventListener('mousemove', function(e) {
+                        updateTooltipPosition(e, tooltip);
+                    });
+
+                    cell.addEventListener('mouseleave', function() {
+                        tooltip.classList.remove('visible');
+                    });
+                });
+            }
+
+            function getOrCreateSummaryTooltip() {
+                let tooltip = document.getElementById('summary-tooltip');
+                if (!tooltip) {
+                    tooltip = document.createElement('div');
+                    tooltip.id = 'summary-tooltip';
+                    tooltip.className = 'summary-tooltip';
+                    document.body.appendChild(tooltip);
+                }
+                return tooltip;
+            }
+
+            function updateTooltipPosition(e, tooltip) {
+                const offsetX = 15;
+                const offsetY = 15;
+                const padding = 10;
+
+                let x = e.clientX + offsetX;
+                let y = e.clientY + offsetY;
+
+                // 화면 오른쪽 경계 체크
+                if (x + tooltip.offsetWidth + padding > window.innerWidth) {
+                    x = e.clientX - tooltip.offsetWidth - offsetX;
+                }
+
+                // 화면 아래쪽 경계 체크
+                if (y + tooltip.offsetHeight + padding > window.innerHeight) {
+                    y = e.clientY - tooltip.offsetHeight - offsetY;
+                }
+
+                tooltip.style.left = x + 'px';
+                tooltip.style.top = y + 'px';
             }
 
             function updateSortUI() {
@@ -2631,27 +2763,10 @@
             }
 
             // 광역시/도 → 검색 키워드 매핑
-            function getRegionSearchKey(metro) {
-                const map = {
-                    '서울특별시': '서울',
-                    '부산광역시': '부산',
-                    '대구광역시': '대구',
-                    '인천광역시': '인천',
-                    '광주광역시': '광주',
-                    '대전광역시': '대전',
-                    '울산광역시': '울산',
-                    '세종특별자치시': '세종',
-                    '경기도': '경기',
-                    '강원특별자치도': '강원',
-                    '충청북도': '충북',
-                    '충청남도': '충남',
-                    '전북특별자치도': '전북',
-                    '전라남도': '전남',
-                    '경상북도': '경북',
-                    '경상남도': '경남',
-                    '제주특별자치도': '제주'
-                };
-                return map[metro] || metro;
+            function getRegionSearchKey(cityName) {
+                // 시 이름을 그대로 검색 키워드로 사용
+                // 예: "평택" → "평택", "서울" → "서울"
+                return cityName;
             }
 
             async function loadRegionStatsData() {
@@ -2659,27 +2774,27 @@
                     const data = await fetchRegionStats();
                     setRegionStats(data);
 
-                    // 광역시/도 단위로 집계
-                    const metroStats = {};
+                    // 시 단위로 집계 (toMetroRegion 사용)
+                    const cityStats = {};
                     data.forEach(r => {
                         if (r.region && r.region !== '미분류') {
-                            const metro = toMetroRegion(r.region);
-                            if (!metroStats[metro]) {
-                                metroStats[metro] = { count: 0, total_reviews: 0 };
+                            const city = toMetroRegion(r.region);
+                            if (!cityStats[city]) {
+                                cityStats[city] = { count: 0, total_reviews: 0 };
                             }
-                            metroStats[metro].count += r.count || 0;
-                            metroStats[metro].total_reviews += r.total_reviews || 0;
+                            cityStats[city].count += r.count || 0;
+                            cityStats[city].total_reviews += r.total_reviews || 0;
                         }
                     });
 
                     const select = getElement('filter-region');
                     if (select) {
                         // 지점 수 기준 정렬
-                        const sorted = Object.entries(metroStats).sort((a, b) => b[1].count - a[1].count);
-                        sorted.forEach(([metro, stats]) => {
+                        const sorted = Object.entries(cityStats).sort((a, b) => b[1].count - a[1].count);
+                        sorted.forEach(([city, stats]) => {
                             const opt = document.createElement('option');
-                            opt.value = getRegionSearchKey(metro); // LIKE 검색용 키워드
-                            opt.textContent = `${metro} (${stats.count})`;
+                            opt.value = getRegionSearchKey(city); // 검색용 키워드
+                            opt.textContent = `${city} (${stats.count})`;
                             select.appendChild(opt);
                         });
                     }
@@ -2692,6 +2807,34 @@
                 } catch (e) {
                     console.error('Region stats error:', e);
                 }
+            }
+
+            // 필터 조건에 맞는지 확인하는 함수
+            function matchesFilters(item, filters) {
+                // 지역 필터 확인
+                if (filters.region && item.region !== filters.region) {
+                    return false;
+                }
+
+                // 기간 필터 확인 (리뷰 날짜 기준)
+                if (state.dateFilter.from || state.dateFilter.to) {
+                    // 업체의 최신 리뷰 날짜나 업데이트 날짜를 확인
+                    const itemDate = item.last_review_date || item.updated_at;
+                    if (itemDate) {
+                        const date = new Date(itemDate);
+                        if (state.dateFilter.from) {
+                            const fromDate = new Date(state.dateFilter.from);
+                            if (date < fromDate) return false;
+                        }
+                        if (state.dateFilter.to) {
+                            const toDate = new Date(state.dateFilter.to);
+                            toDate.setHours(23, 59, 59, 999); // 해당 날짜의 끝까지 포함
+                            if (date > toDate) return false;
+                        }
+                    }
+                }
+
+                return true;
             }
 
             async function loadSummaries() {
@@ -2739,6 +2882,9 @@
                                 if (item) favoriteData.push(item);
                             });
                         }
+
+                        // 즐겨찾기 데이터를 필터 조건에 맞게 필터링
+                        favoriteData = favoriteData.filter(item => matchesFilters(item, filters));
 
                         // 일반 데이터는 필요한 개수만
                         data = data.slice(0, thisNormalCount);

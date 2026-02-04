@@ -1,3 +1,11 @@
+# CLAUDE.md - Rental Car Review API Standards
+- Use FastAPI typed routes with Pydantic models
+- Error handling: try-except with proper status codes
+- Database: Use transaction context managers
+- Prefer explicit function names over one-liners
+- Type hints required for all functions
+- Avoid nested conditionals in business logic
+
 # Review Summary AI
 
 Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
