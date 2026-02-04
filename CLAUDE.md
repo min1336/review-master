@@ -218,6 +218,7 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 
 ## Git Rules
 
+- **push/PR은 사용자 허가 필수**: git push, PR 생성 전 반드시 사용자에게 확인받을 것
 - **main/master 브랜치에 직접 푸시 금지**: 절대로 root 브랜치(main, master)에 직접 push하지 말 것. 반드시 feature 브랜치에서 작업 후 PR을 통해 병합할 것.
 - **Rebase Merge 사용**: PR 병합 시 merge commit 대신 rebase merge 사용
 - **브랜치 병합 명령어**: `git checkout target && git rebase source` (일반 merge 금지)
