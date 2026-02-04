@@ -220,8 +220,11 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 
 - **main/master 브랜치에 직접 푸시 금지**: 절대로 root 브랜치(main, master)에 직접 push하지 말 것. 반드시 feature 브랜치에서 작업 후 PR을 통해 병합할 것.
 - **Rebase Merge 사용**: PR 병합 시 merge commit 대신 rebase merge 사용
+- **브랜치 병합 명령어**: `git checkout target && git rebase source` (일반 merge 금지)
 - **커밋 메시지 규칙**: `FEAT:(AI-티켓번호) 내용` 또는 `FIX:(AI-티켓번호) 내용` 형식
 - **Git Worktree**: `.worktrees/` 디렉토리 사용 (gitignore에 추가됨)
+- **Worktree 정리**: `git worktree remove <path> --force && git branch -D <branch>`
+- **브랜치 일괄 삭제**: `git branch | grep -v "main" | xargs git branch -D`
 
 ## Database Tables
 
@@ -257,6 +260,19 @@ GET  /job/{job_id}   → 2초 간격 폴링 (progress: 0-100%)
 - **escapeHtml 함수 사용**: `dashboard_v2.html:1669`에 정의됨 - 사용자 데이터를 innerHTML에 삽입 시 필수
 - **let 변수 스코프**: 호이스팅 안 됨 - 사용하는 함수보다 위에 선언
 - **regenerate vs generate**: `regenerate_report()`는 내부적으로 `generate_report()` 호출 (동일 로직)
+
+## 대시보드 UI 패턴
+
+### 지역 변환 함수
+`toMetroRegion()` - 상세 지역(전남 여수시)을 광역 단위(전라남도)로 변환
+- 위치: `dashboard_v2.html` 내 JavaScript
+- 17개 광역시/도 매핑 (서울, 부산, 대구, 인천, 광주, 대전, 울산, 세종, 경기, 강원, 충북, 충남, 전북, 전남, 경북, 경남, 제주)
+
+### 즐겨찾기 페이지네이션
+- `localStorage`에 `dashboard_favorites` 키로 branch_id 배열 저장
+- 페이지당 고정 개수 유지 (DEFAULT_PAGE_SIZE: 30)
+- 즐겨찾기가 페이지 넘치면 다음 페이지로 이동
+- offset 계산: `prevNormalShown = Math.max(0, (currentPage * pageSize) - favCount)`
 
 ## 개발 명령어
 
