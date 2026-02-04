@@ -121,15 +121,7 @@ class PDFGenerator:
         pdf.multi_cell(w, 6, report.period_summary or "요약 없음")
         pdf.ln(6)
 
-        # 키워드
-        if report.top_keywords:
-            pdf.set_font(font, "B", 12)
-            pdf.cell(w, 8, "핵심 키워드", new_x="LMARGIN", new_y="NEXT")
-            pdf.set_font(font, "", 10)
-            pdf.multi_cell(w, 6, ", ".join(report.top_keywords))
-            pdf.ln(6)
-
-        # 차량별 평가 분석 (구현 예정)
+        # 차량별 평가 분석
         if report.vehicle_analysis:
             pdf.set_font(font, "B", 12)
             pdf.cell(w, 8, "차량별 평가 분석", new_x="LMARGIN", new_y="NEXT")

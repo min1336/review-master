@@ -419,22 +419,6 @@
             </div>
         </div>
 
-        <!-- Stats Overview -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value">{{ report.total_reviews }}</div>
-                <div class="stat-label">총 리뷰 수</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ report.top_keywords|length }}</div>
-                <div class="stat-label">핵심 키워드</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ report.vehicle_analysis|length }}</div>
-                <div class="stat-label">차량 분석</div>
-            </div>
-        </div>
-
         <!-- Period Summary -->
         <div class="section">
             <div class="section-title">
@@ -443,11 +427,6 @@
             </div>
             <div class="summary-box">
                 {{ report.period_summary }}
-            </div>
-            <div class="keywords">
-                {% for kw in report.top_keywords %}
-                <span class="keyword">{{ kw }}</span>
-                {% endfor %}
             </div>
         </div>
 
@@ -463,7 +442,6 @@
                     <tr>
                         <th>차량 모델</th>
                         <th class="text-center">리뷰 수</th>
-                        <th class="text-center">평가</th>
                         <th>주요 호평</th>
                         <th>주요 불만</th>
                     </tr>
@@ -471,25 +449,16 @@
                 <tbody>
                     {% if report.vehicle_analysis %}
                     {% for v in report.vehicle_analysis %}
-                    {% set star_count = (v.avg_sentiment * 5)|int %}
-                    {% if v.avg_sentiment >= 0.7 %}
-                    {% set sentiment_class = "sentiment-positive" %}
-                    {% elif v.avg_sentiment >= 0.5 %}
-                    {% set sentiment_class = "sentiment-neutral" %}
-                    {% else %}
-                    {% set sentiment_class = "sentiment-negative" %}
-                    {% endif %}
                     <tr>
                         <td>{{ v.model }}</td>
                         <td class="text-center">{{ v.count }}건</td>
-                        <td class="text-center {{ sentiment_class }}">{{ "★" * star_count }}{{ "☆" * (5 - star_count) }}</td>
-                        <td>{{ v.top_praise or '-' }}</td>
+                        <td class="sentiment-positive">{{ v.top_praise or '-' }}</td>
                         <td class="sentiment-negative">{{ v.top_issue or '-' }}</td>
                     </tr>
                     {% endfor %}
                     {% else %}
                     <tr>
-                        <td colspan="5" class="empty-message">차량별 데이터가 없습니다.</td>
+                        <td colspan="4" class="empty-message">차량별 데이터가 없습니다.</td>
                     </tr>
                     {% endif %}
                 </tbody>
