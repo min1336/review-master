@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     # 로컬: /api, 프로덕션(Nginx): /review/api
     api_prefix: str = "/api"
 
+    # Public API
+    public_api_key: SecretStr = SecretStr("")
+
     # AWS Athena 설정
     aws_access_key_id: str = ""
     aws_secret_access_key: SecretStr = SecretStr("")

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import Depends
+from fastapi import Depends, Header, HTTPException, status
 from repository.session import get_client
 from supabase import AsyncClient
 
@@ -217,6 +217,26 @@ async def get_report_job_service(
 
 
 # ============================================================
+# Auth (Public API)
+# ============================================================
+
+
+async def require_public_api_key(
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+) -> None:
+    """Public API Key 검증"""
+    from core.config import get_settings
+
+    settings = get_settings()
+    expected = settings.public_api_key.get_secret_value()
+    if not expected or not x_api_key or x_api_key != expected:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
+
+
+# ============================================================
 # Scheduler Settings
 # ============================================================
 
@@ -235,5 +255,4 @@ async def get_scheduler_settings_service(
     from services.scheduler_settings_service import SchedulerSettingsService
 
     return SchedulerSettingsService(settings_repo)
-
 
