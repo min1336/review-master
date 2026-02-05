@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 
 from core.config import get_settings
 from infrastructure.athena import AthenaClient
@@ -19,17 +19,18 @@ logger = logging.getLogger(__name__)
 
 
 class SyncScheduler:
-    """리뷰 동기화 스케줄러"""
+    """리뷰 동기화 스케줄러 - 매일 특정 시간에 실행"""
 
-    # 허용 간격 범위 (분)
-    MIN_INTERVAL = 5
-    MAX_INTERVAL = 30
+    # 기본 실행 시간 (오전 7시)
+    DEFAULT_HOUR = 7
+    DEFAULT_MINUTE = 0
 
     def __init__(self) -> None:
         self._scheduler = AsyncIOScheduler()
         self._settings = get_settings()
         self._is_running = False
-        self._current_interval = self._settings.sync_interval_minutes
+        self._sync_hour = self._settings.sync_hour
+        self._sync_minute = self._settings.sync_minute
 
     async def start(self) -> None:
         """스케줄러 시작"""
@@ -41,21 +42,20 @@ class SyncScheduler:
             logger.warning("AWS 자격증명이 설정되지 않아 스케줄러를 시작하지 않습니다")
             return
 
-        # 동기화 작업 등록
+        # 동기화 작업 등록 - 매일 특정 시간에 실행
         self._scheduler.add_job(
             self._sync_reviews_job,
-            trigger=IntervalTrigger(minutes=self._current_interval),
+            trigger=CronTrigger(hour=self._sync_hour, minute=self._sync_minute),
             id="sync_reviews",
-            name="Athena 리뷰 동기화",
+            name="Athena 리뷰 동기화 (매일)",
             replace_existing=True,
-            next_run_time=datetime.now(),  # 시작 시 즉시 1회 실행
         )
 
         self._scheduler.start()
         self._is_running = True
 
-        logger.info(f"스케줄러 시작됨: {self._current_interval}분 간격으로 동기화")
-        print(f"[Scheduler] 리뷰 동기화 스케줄러 시작 (간격: {self._current_interval}분)")
+        logger.info(f"스케줄러 시작됨: 매일 {self._sync_hour:02d}:{self._sync_minute:02d}에 파이프라인 실행")
+        print(f"[DailyScheduler] 파이프라인 스케줄러 시작 (매일 {self._sync_hour:02d}:{self._sync_minute:02d})")
 
     async def stop(self) -> None:
         """스케줄러 종료"""
@@ -66,9 +66,9 @@ class SyncScheduler:
             print("[Scheduler] 리뷰 동기화 스케줄러 종료")
 
     async def _sync_reviews_job(self) -> None:
-        """리뷰 동기화 작업"""
-        logger.info("스케줄러: 리뷰 동기화 작업 시작")
-        print(f"[Scheduler] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - 리뷰 동기화 시작")
+        """리뷰 동기화 + 파이프라인 작업 (태그/감정 분석)"""
+        logger.info("스케줄러: 리뷰 파이프라인 작업 시작")
+        print(f"[DailyScheduler] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - 파이프라인 시작")
 
         try:
             # 서비스 인스턴스 생성
@@ -77,23 +77,23 @@ class SyncScheduler:
             athena_client = AthenaClient()
             sync_service = SyncService(review_repo, athena_client)
 
-            # 동기화 실행
+            # 동기화 + 파이프라인 실행
             result = await sync_service.sync_reviews()
 
             if result.success:
                 logger.info(
-                    f"스케줄러: 동기화 완료 - {result.synced_count}개 리뷰 ({result.duration_seconds:.1f}초)"
+                    f"스케줄러: 파이프라인 완료 - {result.synced_count}개 저장 ({result.duration_seconds:.1f}초)"
                 )
                 print(
-                    f"[Scheduler] 동기화 완료: {result.synced_count}개 리뷰 저장 ({result.duration_seconds:.1f}초)"
+                    f"[DailyScheduler] 완료: {result.synced_count}개 저장 ({result.duration_seconds:.1f}초)"
                 )
             else:
-                logger.error(f"스케줄러: 동기화 실패 - {result.error}")
-                print(f"[Scheduler] 동기화 실패: {result.error}")
+                logger.error(f"스케줄러: 파이프라인 실패 - {result.error}")
+                print(f"[DailyScheduler] 실패: {result.error}")
 
         except Exception as e:
-            logger.error(f"스케줄러: 동기화 작업 중 오류 발생 - {e}")
-            print(f"[Scheduler] 동기화 오류: {e}")
+            logger.error(f"스케줄러: 파이프라인 작업 중 오류 발생 - {e}")
+            print(f"[DailyScheduler] 오류: {e}")
 
     @property
     def is_running(self) -> bool:
@@ -110,38 +110,38 @@ class SyncScheduler:
             return job.next_run_time
         return None
 
-    def get_interval(self) -> int:
-        """현재 동기화 간격 (분) 조회"""
-        return self._current_interval
+    def get_schedule_time(self) -> tuple[int, int]:
+        """현재 동기화 예정 시간 (시, 분) 조회"""
+        return self._sync_hour, self._sync_minute
 
-    async def update_interval(self, minutes: int) -> bool:
+    async def update_schedule_time(self, hour: int, minute: int = 0) -> bool:
         """
-        동기화 간격 변경
+        동기화 실행 시간 변경
 
         Args:
-            minutes: 새 간격 (5~30분)
+            hour: 시간 (0~23)
+            minute: 분 (0~59)
 
         Returns:
             성공 여부
         """
         # 범위 검증
-        if minutes < self.MIN_INTERVAL or minutes > self.MAX_INTERVAL:
-            logger.warning(
-                f"간격 범위 초과: {minutes}분 (허용: {self.MIN_INTERVAL}~{self.MAX_INTERVAL}분)"
-            )
+        if not (0 <= hour <= 23) or not (0 <= minute <= 59):
+            logger.warning(f"시간 범위 초과: {hour:02d}:{minute:02d}")
             return False
 
-        self._current_interval = minutes
-        logger.info(f"스케줄러 간격 변경: {minutes}분")
-        print(f"[Scheduler] 동기화 간격 변경: {minutes}분")
+        self._sync_hour = hour
+        self._sync_minute = minute
+        logger.info(f"스케줄러 시간 변경: 매일 {hour:02d}:{minute:02d}")
+        print(f"[Scheduler] 동기화 시간 변경: 매일 {hour:02d}:{minute:02d}")
 
         # 실행 중이면 작업 재등록
         if self._is_running:
             self._scheduler.reschedule_job(
                 "sync_reviews",
-                trigger=IntervalTrigger(minutes=minutes),
+                trigger=CronTrigger(hour=hour, minute=minute),
             )
-            logger.info(f"스케줄러 작업 재등록됨: {minutes}분 간격")
+            logger.info(f"스케줄러 작업 재등록됨: 매일 {hour:02d}:{minute:02d}")
 
         return True
 
