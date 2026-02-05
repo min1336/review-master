@@ -441,8 +441,8 @@ class BranchReviewRepository(BaseRepository[Review]):
             # 전체 읽음의 경우 현재 is_new=true인 것만 대상
             query = query.eq("is_new", True)
 
-        # select()를 추가해야 반환된 데이터 개수를 알 수 있음 (Supabase 특성)
-        result = await query.select("review_id").execute()
+        # update() 후 execute()하면 수정된 행이 반환됨
+        result = await query.execute()
 
         return len(result.data) if result.data else 0
 
