@@ -134,6 +134,7 @@
             .filter-cascade {
                 flex-direction: column;
             }
+
             .filter-cascade .arrow {
                 display: none;
             }
@@ -342,6 +343,28 @@
             color: var(--grey-5);
         }
 
+        /* Collapsible */
+        .collapsible {
+            max-height: 500px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            opacity: 1;
+        }
+
+        .collapsible.collapsed {
+            max-height: 0;
+            opacity: 0;
+        }
+
+        .toggle-icon {
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        .toggle-icon.rotated {
+            transform: rotate(-180deg);
+        }
+
         .review-header-actions {
             display: flex;
             align-items: center;
@@ -366,7 +389,32 @@
         }
 
         .review-list {
-            /* 스크롤 제거 - 페이지네이션으로 탐색 */
+            /* 검색 결과 섹션은 페이지네이션으로 탐색 */
+        }
+
+        /* 신규 리뷰 섹션 스크롤 */
+        #newReviewList {
+            max-height: 450px;
+            overflow-y: auto;
+        }
+
+        /* 스크롤바 스타일링 */
+        #newReviewList::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #newReviewList::-webkit-scrollbar-track {
+            background: var(--grey-8);
+            border-radius: 4px;
+        }
+
+        #newReviewList::-webkit-scrollbar-thumb {
+            background: var(--grey-5);
+            border-radius: 4px;
+        }
+
+        #newReviewList::-webkit-scrollbar-thumb:hover {
+            background: var(--grey-3);
         }
 
         .review-item {
@@ -636,8 +684,15 @@
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
         }
 
         .scheduler-info {
@@ -698,20 +753,46 @@
         <h1>리뷰 분석</h1>
         <div class="header-actions">
             <!-- 스케줄러 상태 -->
-            <div class="scheduler-status" id="scheduler-status">
-                <div class="scheduler-indicator" id="scheduler-indicator"></div>
-                <div class="scheduler-info">
-                    <span class="scheduler-label" id="scheduler-label">스케줄러 확인 중...</span>
-                    <span class="scheduler-next" id="scheduler-next"></span>
+            <!-- 스케줄러 상태 (일일 동기화 + 신규 리뷰) -->
+            <div style="display: flex; gap: 8px;">
+                <!-- 일일 동기화 스케줄러 -->
+                <div class="scheduler-status" id="daily-scheduler">
+                    <div class="scheduler-indicator" id="daily-indicator"></div>
+                    <div class="scheduler-info">
+                        <span class="scheduler-label">일일 동기화</span>
+                        <span class="scheduler-next" id="daily-next"></span>
+                    </div>
+                    <select class="scheduler-interval" id="daily-hour" onchange="updateDailyTime(this.value)"
+                        title="매일 실행 시간">
+                        <option value="0">00시</option>
+                        <option value="1">01시</option>
+                        <option value="2">02시</option>
+                        <option value="3">03시</option>
+                        <option value="4">04시</option>
+                        <option value="5">05시</option>
+                        <option value="6">06시</option>
+                        <option value="7">07시</option>
+                        <option value="8">08시</option>
+                        <option value="9">09시</option>
+                        <option value="10">10시</option>
+                        <option value="11">11시</option>
+                        <option value="12">12시</option>
+                        <option value="13">13시</option>
+                        <option value="14">14시</option>
+                        <option value="15">15시</option>
+                        <option value="16">16시</option>
+                        <option value="17">17시</option>
+                        <option value="18">18시</option>
+                        <option value="19">19시</option>
+                        <option value="20">20시</option>
+                        <option value="21">21시</option>
+                        <option value="22">22시</option>
+                        <option value="23">23시</option>
+                    </select>
+                    <button class="scheduler-toggle" id="daily-toggle" onclick="toggleDailyScheduler()"
+                        disabled>Stop</button>
                 </div>
-                <select class="scheduler-interval" id="scheduler-interval" onchange="updateInterval(this.value)">
-                    <option value="5">5분</option>
-                    <option value="10">10분</option>
-                    <option value="15">15분</option>
-                    <option value="20">20분</option>
-                    <option value="30">30분</option>
-                </select>
-                <button class="scheduler-toggle" id="scheduler-toggle" onclick="toggleScheduler()" disabled>-</button>
+
             </div>
 
             <button class="btn btn-secondary" id="btn-mark-read" onclick="markAllAsRead()" style="display: none;">
@@ -727,6 +808,42 @@
     </header>
 
     <div class="container">
+        <!-- New Reviews Section -->
+        <div class="review-card" style="margin-bottom: var(--spacing-lg);">
+            <div class="review-header" style="cursor: pointer; user-select: none;" onclick="toggleNewReviews()">
+                <div class="review-title">
+                    신규 리뷰 <span class="review-count" id="newReviewCount">(0)</span>
+                    <svg id="toggleIcon" class="toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2"
+                        style="width: 20px; height: 20px; margin-left: 8px; transition: transform 0.3s ease;">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+            </div>
+
+            <div id="newReviewContainer" class="collapsible">
+                <div class="loading" id="newReviewLoading">
+                    <div class="spinner"></div>
+                </div>
+                <div class="review-list" id="newReviewList" style="display: none;"></div>
+                <div class="empty-state" id="newReviewEmpty" style="display: none;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                        </path>
+                    </svg>
+                    <span>신규 리뷰가 없습니다.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Section -->
+        <div class="review-card" style="margin-bottom: var(--spacing-md);">
+            <div class="review-header">
+                <div class="review-title">전체 리뷰 검색</div>
+            </div>
+        </div>
+
         <!-- Filter Section -->
         <div class="filter-card">
             <div class="filter-title">
@@ -824,7 +941,8 @@
                 <div class="filter-actions">
                     <button class="btn btn-secondary" onclick="resetFilters()">초기화</button>
                     <button class="btn btn-primary" onclick="applyFilters()">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <circle cx="11" cy="11" r="8"></circle>
                             <path d="M21 21l-4.35-4.35"></path>
                         </svg>
@@ -834,14 +952,15 @@
             </div>
         </div>
 
-        <!-- Review List -->
+        <!-- Search Results -->
         <div class="review-card">
             <div class="review-header">
-                <div class="review-title">리뷰 목록</div>
+                <div class="review-title">검색 결과</div>
                 <div class="review-header-actions">
                     <div class="review-count" id="reviewCount">총 0건</div>
                     <button class="btn btn-export" onclick="exportToExcel()" id="exportBtn" disabled>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
                             <polyline points="7,10 12,15 17,10"></polyline>
                             <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -852,13 +971,22 @@
             </div>
 
             <div id="reviewListContainer">
-                <div class="loading" id="loading">
+                <div class="empty-state" id="searchPrompt">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="M21 21l-4.35-4.35"></path>
+                    </svg>
+                    <span>검색 조건을 입력하고 검색해주세요</span>
+                </div>
+                <div class="loading" id="loading" style="display: none;">
                     <div class="spinner"></div>
                 </div>
                 <div class="review-list" id="reviewList" style="display: none;"></div>
                 <div class="empty-state" id="emptyState" style="display: none;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        <path
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                        </path>
                     </svg>
                     <span>조건에 맞는 리뷰가 없습니다.</span>
                 </div>
@@ -905,6 +1033,9 @@
         let dateFrom = null;
         let dateTo = null;
 
+        // Search state
+        let hasSearched = false;
+
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
             // 헤더 네비게이션 버튼
@@ -915,8 +1046,11 @@
                 });
             }
 
+            // 접기/펼치기 상태 복원
+            restoreCollapseState();
+
             // 스케줄러 상태 확인
-            await checkSchedulerStatus();
+            checkAllSchedulers();
 
             // 동기화 상태 확인
             await checkSyncStatus();
@@ -926,7 +1060,7 @@
                 mode: 'range',
                 dateFormat: 'Y-m-d',
                 locale: 'ko',
-                onChange: function(selectedDates) {
+                onChange: function (selectedDates) {
                     if (selectedDates.length === 2) {
                         // 로컬 날짜 포맷 (타임존 문제 방지)
                         const formatLocalDate = (date) => {
@@ -947,8 +1081,8 @@
             // Load filter options
             await loadFilterOptions();
 
-            // Load initial reviews
-            await loadReviews();
+            // Load new reviews (auto-load)
+            await loadNewReviews();
         });
 
         // Load filter options from API
@@ -1266,28 +1400,205 @@
             dateFrom = null;
             dateTo = null;
             currentSort = 'latest';
+            hasSearched = false;
 
             document.getElementById('sentimentFilter').value = '';
             document.getElementById('sortSelect').value = 'latest';
             flatpickr('#dateRangeFilter').clear();
 
-            renderChips('regionChips', [], () => {});
-            renderChips('companyChips', [], () => {});
-            renderChips('branchChips', [], () => {});
+            renderChips('regionChips', [], () => { });
+            renderChips('companyChips', [], () => { });
+            renderChips('branchChips', [], () => { });
 
             updateRegionSelect();
             updateCompanySelect();
             updateBranchSelect();
 
+            // Reset search results section to show prompt
+            document.getElementById('searchPrompt').style.display = 'flex';
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('reviewList').style.display = 'none';
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('pagination').style.display = 'none';
+            document.getElementById('reviewCount').textContent = '총 0건';
+            document.getElementById('exportBtn').disabled = true;
+
             currentPage = 1;
-            loadReviews();
         }
 
         // Apply filters and search
         function applyFilters() {
             currentPage = 1;
             currentSort = document.getElementById('sortSelect').value;
+            hasSearched = true;
             loadReviews();
+        }
+
+        // Toggle new reviews section (접기/펼치기)
+        function toggleNewReviews() {
+            const container = document.getElementById('newReviewContainer');
+            const icon = document.getElementById('toggleIcon');
+
+            container.classList.toggle('collapsed');
+            icon.classList.toggle('rotated');
+
+            // 상태 저장 (localStorage)
+            const isCollapsed = container.classList.contains('collapsed');
+            localStorage.setItem('newReviewsCollapsed', isCollapsed);
+        }
+
+        // 페이지 로드 시 저장된 상태 복원
+        function restoreCollapseState() {
+            const isCollapsed = localStorage.getItem('newReviewsCollapsed') === 'true';
+            if (isCollapsed) {
+                const container = document.getElementById('newReviewContainer');
+                const icon = document.getElementById('toggleIcon');
+                container.classList.add('collapsed');
+                icon.classList.add('rotated');
+            }
+        }
+
+        // Load new reviews (신규 리뷰 섹션 - 자동 로드)
+        async function loadNewReviews() {
+            const loading = document.getElementById('newReviewLoading');
+            const reviewList = document.getElementById('newReviewList');
+            const emptyState = document.getElementById('newReviewEmpty');
+            const countElement = document.getElementById('newReviewCount');
+
+            loading.style.display = 'flex';
+            reviewList.style.display = 'none';
+            emptyState.style.display = 'none';
+
+            try {
+                const params = new URLSearchParams({
+                    is_new: 'true',
+                    limit: 100,
+                    offset: 0,
+                    sort_by: 'latest'
+                });
+
+                const response = await fetch(`${API_PREFIX}/analysis/reviews?${params}`);
+                const data = await response.json();
+
+                const count = data.total || 0;
+                countElement.textContent = `(${count})`;
+
+                if (data.reviews && data.reviews.length > 0) {
+                    renderNewReviews(data.reviews);
+                    reviewList.style.display = 'block';
+                } else {
+                    emptyState.style.display = 'flex';
+                }
+
+            } catch (error) {
+                console.error('Failed to load new reviews:', error);
+                emptyState.style.display = 'flex';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        // Render new reviews (DOM API 사용)
+        function renderNewReviews(reviews) {
+            const reviewList = document.getElementById('newReviewList');
+            reviewList.replaceChildren();
+
+            reviews.forEach(review => {
+                const reviewItem = createReviewElement(review, true);
+                reviewList.appendChild(reviewItem);
+            });
+        }
+
+        // Create review element using DOM API
+        function createReviewElement(review, isNewSection = false) {
+            const reviewItem = document.createElement('div');
+            reviewItem.className = review.is_new === true ? 'review-item is-new' : 'review-item';
+            if (review.id) {
+                reviewItem.setAttribute('data-id', review.id);
+            }
+
+            // Meta container
+            const reviewMeta = document.createElement('div');
+            reviewMeta.className = 'review-meta';
+
+            // Info section
+            const reviewInfo = document.createElement('div');
+            reviewInfo.className = 'review-info';
+
+            const companySpan = document.createElement('span');
+            companySpan.className = 'info-company';
+            companySpan.textContent = review.company_name || '-';
+            reviewInfo.appendChild(companySpan);
+
+            const branchSpan = document.createElement('span');
+            branchSpan.className = 'info-branch';
+            branchSpan.textContent = review.branch_name || '-';
+            reviewInfo.appendChild(branchSpan);
+
+            const dateSpan = document.createElement('span');
+            dateSpan.className = 'info-date';
+            dateSpan.textContent = review.review_date
+                ? new Date(review.review_date).toLocaleDateString('ko-KR')
+                : '-';
+            reviewInfo.appendChild(dateSpan);
+
+            const idSpan = document.createElement('span');
+            idSpan.className = 'info-id';
+            idSpan.textContent = `#${review.review_id || '-'}`;
+            idSpan.title = '운영툴에서 보기';
+            idSpan.onclick = () => {
+                const reviewId = review.review_id || '-';
+                const reviewDate = review.review_date ? review.review_date.split('T')[0] : '';
+                const dbId = review.id || null;
+                openReservation(reviewId, reviewDate, dbId, isNewSection);
+            };
+            reviewInfo.appendChild(idSpan);
+
+            if (review.is_new === true) {
+                const newTag = document.createElement('span');
+                newTag.className = 'new-tag';
+                newTag.textContent = 'NEW';
+                reviewInfo.appendChild(newTag);
+            }
+
+            reviewMeta.appendChild(reviewInfo);
+
+            // Ratings section
+            const reviewRatings = document.createElement('div');
+            reviewRatings.className = 'review-ratings';
+
+            const ratingService = review.rating_service != null ? review.rating_service.toFixed(1) : '-';
+            const ratingCar = review.rating_car != null ? review.rating_car.toFixed(1) : '-';
+            const ratingConv = review.rating_convenience != null ? review.rating_convenience.toFixed(1) : '-';
+
+            const serviceRating = document.createElement('span');
+            serviceRating.className = 'rating-item';
+            serviceRating.title = '친절/편의성';
+            serviceRating.textContent = `서비스 ${ratingService}`;
+            reviewRatings.appendChild(serviceRating);
+
+            const carRating = document.createElement('span');
+            carRating.className = 'rating-item';
+            carRating.title = '차량평점';
+            carRating.textContent = `차량 ${ratingCar}`;
+            reviewRatings.appendChild(carRating);
+
+            const convRating = document.createElement('span');
+            convRating.className = 'rating-item';
+            convRating.title = '인수/반납편의성';
+            convRating.textContent = `편의성 ${ratingConv}`;
+            reviewRatings.appendChild(convRating);
+
+            reviewMeta.appendChild(reviewRatings);
+            reviewItem.appendChild(reviewMeta);
+
+            // Content section
+            const reviewContent = document.createElement('div');
+            reviewContent.className = 'review-content';
+            reviewContent.textContent = review.content || '-';
+            reviewItem.appendChild(reviewContent);
+
+            return reviewItem;
         }
 
         // Export to Excel
@@ -1370,12 +1681,18 @@
             }
         }
 
-        // Load reviews from API
+        // Load reviews from API (검색 결과 섹션)
         async function loadReviews() {
             const loading = document.getElementById('loading');
             const reviewList = document.getElementById('reviewList');
             const emptyState = document.getElementById('emptyState');
             const pagination = document.getElementById('pagination');
+            const searchPrompt = document.getElementById('searchPrompt');
+
+            // Hide search prompt once search is performed
+            if (hasSearched) {
+                searchPrompt.style.display = 'none';
+            }
 
             loading.style.display = 'flex';
             reviewList.style.display = 'none';
@@ -1448,58 +1765,19 @@
             }
         }
 
-        // Render reviews
+        // Render reviews (검색 결과 섹션 - DOM API 사용)
         function renderReviews(reviews) {
             const reviewList = document.getElementById('reviewList');
+            reviewList.replaceChildren();
 
-            reviewList.innerHTML = reviews.map(review => {
-                const sentimentClass = review.sentiment || 'neutral';
-                const sentimentText = {
-                    'positive': '긍정',
-                    'negative': '부정',
-                    'neutral': '중립'
-                }[sentimentClass] || '중립';
-
-                const date = review.review_date
-                    ? new Date(review.review_date).toLocaleDateString('ko-KR')
-                    : '-';
-
-                const reviewId = review.review_id || '-';
-                const dbId = review.id || null;
-                const reviewDate = review.review_date ? review.review_date.split('T')[0] : '';
-                const ratingService = review.rating_service != null ? review.rating_service.toFixed(1) : '-';
-                const ratingCar = review.rating_car != null ? review.rating_car.toFixed(1) : '-';
-                const ratingConv = review.rating_convenience != null ? review.rating_convenience.toFixed(1) : '-';
-
-                // 신규 리뷰 여부
-                const isNew = review.is_new === true;
-                const newTag = isNew ? '<span class="new-tag">NEW</span>' : '';
-                const itemClass = isNew ? 'review-item is-new' : 'review-item';
-
-                return `
-                    <div class="${itemClass}" data-id="${dbId}">
-                        <div class="review-meta">
-                            <div class="review-info">
-                                <span class="info-company">${review.company_name || '-'}</span>
-                                <span class="info-branch">${review.branch_name || '-'}</span>
-                                <span class="info-date">${date}</span>
-                                <span class="info-id" onclick="openReservation('${reviewId}', '${reviewDate}', ${dbId})" title="운영툴에서 보기">#${reviewId}</span>
-                                ${newTag}
-                            </div>
-                            <div class="review-ratings">
-                                <span class="rating-item" title="친절/편의성">서비스 ${ratingService}</span>
-                                <span class="rating-item" title="차량평점">차량 ${ratingCar}</span>
-                                <span class="rating-item" title="인수/반납편의성">편의성 ${ratingConv}</span>
-                            </div>
-                        </div>
-                        <div class="review-content">${review.content || '-'}</div>
-                    </div>
-                `;
-            }).join('');
+            reviews.forEach(review => {
+                const reviewItem = createReviewElement(review, false);
+                reviewList.appendChild(reviewItem);
+            });
         }
 
         // 운영툴에서 예약 보기 + 해당 리뷰 읽음 처리
-        async function openReservation(reviewId, reviewDate, dbId) {
+        async function openReservation(reviewId, reviewDate, dbId, isNewSection = false) {
             if (reviewId && reviewId !== '-') {
                 let url = `https://dev-admin.carmore.kr/partners/Reviewmanage?sp=reservation_idx&sv=${reviewId}`;
                 if (reviewDate) {
@@ -1509,13 +1787,13 @@
 
                 // 해당 리뷰 읽음 처리 (DB ID가 있는 경우)
                 if (dbId) {
-                    await markReviewAsRead(dbId);
+                    await markReviewAsRead(dbId, isNewSection);
                 }
             }
         }
 
         // 단일 리뷰 읽음 처리
-        async function markReviewAsRead(dbId) {
+        async function markReviewAsRead(dbId, isNewSection = false) {
             try {
                 const response = await fetch(`${API_PREFIX}/sync/reviews/read`, {
                     method: 'POST',
@@ -1525,13 +1803,33 @@
                 const data = await response.json();
 
                 if (data.success && data.marked_count > 0) {
-                    // UI에서 해당 리뷰의 NEW 태그 제거
-                    const reviewItem = document.querySelector(`.review-item[data-id="${dbId}"]`);
-                    if (reviewItem) {
-                        reviewItem.classList.remove('is-new');
-                        const newTag = reviewItem.querySelector('.new-tag');
-                        if (newTag) newTag.remove();
+                    if (isNewSection) {
+                        // 신규 리뷰 섹션에서 클릭한 경우: 해당 리뷰를 목록에서 제거
+                        const reviewItem = document.querySelector(`#newReviewList .review-item[data-id="${dbId}"]`);
+                        if (reviewItem) {
+                            reviewItem.remove();
+                        }
+
+                        // 남은 리뷰 수 업데이트
+                        const newReviewList = document.getElementById('newReviewList');
+                        const remainingCount = newReviewList.children.length;
+                        document.getElementById('newReviewCount').textContent = `(${remainingCount})`;
+
+                        // 리뷰가 모두 제거되면 빈 상태 표시
+                        if (remainingCount === 0) {
+                            newReviewList.style.display = 'none';
+                            document.getElementById('newReviewEmpty').style.display = 'flex';
+                        }
+                    } else {
+                        // 검색 결과 섹션에서 클릭한 경우: NEW 태그만 제거
+                        const reviewItem = document.querySelector(`#reviewList .review-item[data-id="${dbId}"]`);
+                        if (reviewItem) {
+                            reviewItem.classList.remove('is-new');
+                            const newTag = reviewItem.querySelector('.new-tag');
+                            if (newTag) newTag.remove();
+                        }
                     }
+
                     // 동기화 상태 갱신
                     await checkSyncStatus();
                 }
@@ -1585,107 +1883,95 @@
         // 스케줄러 관련 함수
         // =============================================
 
-        // 스케줄러 상태 확인
-        async function checkSchedulerStatus() {
+        // =============================================
+        // 스케줄러 관련 함수
+        // =============================================
+
+        // 모든 스케줄러 상태 확인
+        function checkAllSchedulers() {
+            checkDailyScheduler();
+        }
+
+        // 1. 일일 동기화 스케줄러 (SyncScheduler)
+        async function checkDailyScheduler() {
             try {
                 const response = await fetch(`${API_PREFIX}/sync/scheduler/status`);
                 const data = await response.json();
 
-                const indicator = document.getElementById('scheduler-indicator');
-                const label = document.getElementById('scheduler-label');
-                const nextRun = document.getElementById('scheduler-next');
-                const toggleBtn = document.getElementById('scheduler-toggle');
-                const intervalSelect = document.getElementById('scheduler-interval');
+                const indicator = document.getElementById('daily-indicator');
+                const nextRun = document.getElementById('daily-next');
+                const toggleBtn = document.getElementById('daily-toggle');
+                const hourSelect = document.getElementById('daily-hour');
 
-                // 현재 간격 선택
-                intervalSelect.value = data.interval_minutes;
+                // 시간 선택 설정
+                hourSelect.value = data.sync_hour;
 
                 if (data.is_running) {
                     indicator.classList.add('active');
-                    label.textContent = `자동 동기화`;
                     toggleBtn.textContent = '중지';
+                    toggleBtn.dataset.running = 'true';
                     toggleBtn.disabled = false;
 
                     if (data.next_run_time) {
                         const next = new Date(data.next_run_time);
-                        const now = new Date();
-                        const diffMs = next - now;
-                        const diffMin = Math.max(0, Math.floor(diffMs / 60000));
-                        const diffSec = Math.max(0, Math.floor((diffMs % 60000) / 1000));
-
-                        if (diffMin > 0) {
-                            nextRun.textContent = `다음: ${diffMin}분 ${diffSec}초 후`;
-                        } else {
-                            nextRun.textContent = `다음: ${diffSec}초 후`;
-                        }
+                        const hours = String(next.getHours()).padStart(2, '0');
+                        const minutes = String(next.getMinutes()).padStart(2, '0');
+                        nextRun.textContent = `다음: ${hours}:${minutes}`;
                     } else {
                         nextRun.textContent = '';
                     }
                 } else {
                     indicator.classList.remove('active');
-                    label.textContent = '자동 동기화 중지됨';
-                    nextRun.textContent = '';
+                    nextRun.textContent = '중지됨';
                     toggleBtn.textContent = '시작';
+                    toggleBtn.dataset.running = 'false';
                     toggleBtn.disabled = false;
                 }
             } catch (error) {
-                console.error('Failed to check scheduler status:', error);
-                document.getElementById('scheduler-label').textContent = '상태 확인 실패';
-                document.getElementById('scheduler-toggle').disabled = true;
+                console.error('Failed to check daily scheduler:', error);
             }
         }
 
-        // 스케줄러 토글
-        async function toggleScheduler() {
-            const toggleBtn = document.getElementById('scheduler-toggle');
-            const isRunning = document.getElementById('scheduler-indicator').classList.contains('active');
+        async function toggleDailyScheduler() {
+            const toggleBtn = document.getElementById('daily-toggle');
+            const isRunning = toggleBtn.dataset.running === 'true';
 
             toggleBtn.disabled = true;
-            toggleBtn.textContent = '처리 중...';
+            toggleBtn.textContent = '...';
 
             try {
                 const endpoint = isRunning ? 'stop' : 'start';
                 const response = await fetch(`${API_PREFIX}/sync/scheduler/${endpoint}`, {
                     method: 'POST'
                 });
-                const data = await response.json();
-
-                await checkSchedulerStatus();
+                await checkDailyScheduler();
             } catch (error) {
-                console.error('Failed to toggle scheduler:', error);
-                alert('스케줄러 상태 변경에 실패했습니다.');
+                console.error('Failed to toggle daily scheduler:', error);
+                alert('상태 변경 실패');
                 toggleBtn.disabled = false;
             }
         }
 
-        // 간격 변경
-        async function updateInterval(minutes) {
-            const intervalSelect = document.getElementById('scheduler-interval');
-
+        async function updateDailyTime(hour) {
             try {
-                const response = await fetch(`${API_PREFIX}/sync/scheduler/interval`, {
+                const response = await fetch(`${API_PREFIX}/sync/scheduler/time`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ interval_minutes: parseInt(minutes) })
+                    body: JSON.stringify({ hour: parseInt(hour), minute: 0 })
                 });
 
-                if (!response.ok) {
-                    const error = await response.json();
-                    alert(error.detail || '간격 변경에 실패했습니다.');
-                    await checkSchedulerStatus(); // 원래 값으로 복구
-                    return;
-                }
-
-                await checkSchedulerStatus();
+                if (!response.ok) throw new Error('Failed');
+                await checkDailyScheduler();
             } catch (error) {
-                console.error('Failed to update interval:', error);
-                alert('간격 변경에 실패했습니다.');
-                await checkSchedulerStatus();
+                console.error('Failed to update daily time:', error);
+                alert('시간 변경 실패');
+                await checkDailyScheduler();
             }
         }
 
-        // 주기적으로 스케줄러 상태 갱신 (10초마다)
-        setInterval(checkSchedulerStatus, 10000);
+        // 주기적으로 스케줄러 상태 갱신 (60초마다)
+        checkAllSchedulers();
+        setInterval(checkAllSchedulers, 60000);
 
         // =============================================
         // 동기화 관련 함수

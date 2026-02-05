@@ -65,7 +65,7 @@ app/
 │
 ├── services/                      # 서비스 레이어 (API 비즈니스 로직)
 │   ├── analysis_service.py        # 분석 페이지 로직
-│   ├── summary_service.py         # 요약 CRUD + 상세분석
+│   ├── summary_service.py         # 요약 + 상세분석
 │   ├── tag_service.py             # 태그/카테고리/매핑
 │   ├── sentiment_service.py       # 감정 통계
 │   ├── report_service.py          # AI 리포트 생성

@@ -14,7 +14,7 @@ from schemas.sync import (
     SchedulerStatusResponse,
     SyncResultResponse,
     SyncStatusResponse,
-    UpdateIntervalRequest,
+    UpdateScheduleTimeRequest,
 )
 
 from .deps import get_sync_service
@@ -81,16 +81,16 @@ async def get_scheduler_status() -> SchedulerStatusResponse:
 
     - 실행 중 여부
     - 다음 실행 시간
-    - 동기화 간격 (현재/최소/최대)
+    - 동기화 예정 시간 (시:분)
     """
     scheduler = get_scheduler()
+    hour, minute = scheduler.get_schedule_time()
 
     return SchedulerStatusResponse(
         is_running=scheduler.is_running,
         next_run_time=scheduler.get_next_run_time(),
-        interval_minutes=scheduler.get_interval(),
-        min_interval=scheduler.MIN_INTERVAL,
-        max_interval=scheduler.MAX_INTERVAL,
+        sync_hour=hour,
+        sync_minute=minute,
     )
 
 
@@ -98,14 +98,14 @@ async def get_scheduler_status() -> SchedulerStatusResponse:
 async def start_scheduler() -> SchedulerStatusResponse:
     """스케줄러 시작"""
     scheduler = get_scheduler()
+    hour, minute = scheduler.get_schedule_time()
 
     if scheduler.is_running:
         return SchedulerStatusResponse(
             is_running=True,
             next_run_time=scheduler.get_next_run_time(),
-            interval_minutes=scheduler.get_interval(),
-            min_interval=scheduler.MIN_INTERVAL,
-            max_interval=scheduler.MAX_INTERVAL,
+            sync_hour=hour,
+            sync_minute=minute,
         )
 
     await scheduler.start()
@@ -113,9 +113,8 @@ async def start_scheduler() -> SchedulerStatusResponse:
     return SchedulerStatusResponse(
         is_running=scheduler.is_running,
         next_run_time=scheduler.get_next_run_time(),
-        interval_minutes=scheduler.get_interval(),
-        min_interval=scheduler.MIN_INTERVAL,
-        max_interval=scheduler.MAX_INTERVAL,
+        sync_hour=hour,
+        sync_minute=minute,
     )
 
 
@@ -123,41 +122,43 @@ async def start_scheduler() -> SchedulerStatusResponse:
 async def stop_scheduler() -> SchedulerStatusResponse:
     """스케줄러 종료"""
     scheduler = get_scheduler()
+    hour, minute = scheduler.get_schedule_time()
 
     await scheduler.stop()
 
     return SchedulerStatusResponse(
         is_running=scheduler.is_running,
         next_run_time=None,
-        interval_minutes=scheduler.get_interval(),
-        min_interval=scheduler.MIN_INTERVAL,
-        max_interval=scheduler.MAX_INTERVAL,
+        sync_hour=hour,
+        sync_minute=minute,
     )
 
 
-@router.post("/scheduler/interval", response_model=SchedulerStatusResponse)
-async def update_scheduler_interval(
-    request: UpdateIntervalRequest,
+@router.post("/scheduler/time", response_model=SchedulerStatusResponse)
+async def update_scheduler_time(
+    request: UpdateScheduleTimeRequest,
 ) -> SchedulerStatusResponse:
     """
-    스케줄러 간격 변경
+    스케줄러 실행 시간 변경
 
-    - interval_minutes: 5~30분 사이 값
+    - hour: 0~23시
+    - minute: 0~59분 (기본값 0)
     """
     scheduler = get_scheduler()
 
-    success = await scheduler.update_interval(request.interval_minutes)
+    success = await scheduler.update_schedule_time(request.hour, request.minute)
 
     if not success:
         raise HTTPException(
             status_code=400,
-            detail=f"간격은 {scheduler.MIN_INTERVAL}~{scheduler.MAX_INTERVAL}분 사이여야 합니다",
+            detail="시간은 0~23시, 분은 0~59 사이여야 합니다",
         )
+
+    hour, minute = scheduler.get_schedule_time()
 
     return SchedulerStatusResponse(
         is_running=scheduler.is_running,
         next_run_time=scheduler.get_next_run_time(),
-        interval_minutes=scheduler.get_interval(),
-        min_interval=scheduler.MIN_INTERVAL,
-        max_interval=scheduler.MAX_INTERVAL,
+        sync_hour=hour,
+        sync_minute=minute,
     )

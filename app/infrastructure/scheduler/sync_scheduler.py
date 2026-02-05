@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 class SyncScheduler:
     """리뷰 동기화 스케줄러 - 매일 특정 시간에 실행"""
 
-    # 기본 실행 시간 (오전 7시)
-    DEFAULT_HOUR = 7
+    # 기본 실행 시간 (오전 6시)
+    DEFAULT_HOUR = 6
     DEFAULT_MINUTE = 0
 
     def __init__(self) -> None:

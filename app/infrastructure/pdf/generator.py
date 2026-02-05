@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from fpdf import FPDF
 
 if TYPE_CHECKING:
-    from app.services.report_service import ReportData
+    from services.report_service import ReportData
 
 logger = logging.getLogger(__name__)
 

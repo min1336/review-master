@@ -97,6 +97,28 @@ async def api_summaries(
     )
 
 
+@router.get("/summaries/pending")
+async def api_get_pending_summaries(
+    limit: int = Query(50, ge=1, le=200),
+    service: SummaryService = Depends(get_summary_service),
+) -> dict[str, Any]:
+    """
+    승인 대기 중인 요약 목록 조회
+
+    pending_summaries가 비어있지 않은 지점 목록을 반환합니다.
+    신규 요약이 생성되면 여기에 표시됩니다.
+    """
+    try:
+        pending_list = await service.summary_repo.get_pending_summaries(limit)
+        return {
+            "success": True,
+            "count": len(pending_list),
+            "data": [s.model_dump() for s in pending_list],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @router.get("/summaries/{branch_id}")
 async def api_summary_detail(
     branch_id: int, service: SummaryService = Depends(get_summary_service)
@@ -134,15 +156,22 @@ async def api_update_status(
 @router.post("/summaries/{branch_id}/regenerate")
 async def api_regenerate_summary(
     branch_id: int,
-    data: RegenerateRequest = None,
     service: SummaryService = Depends(get_summary_service),
 ) -> dict[str, Any]:
-    """AI 요약 재생성 (pending에 저장, 바로 적용 안 됨)"""
-    period = data.period if data else "all"
+    """
+    AI 요약 재생성 (태그+감정+리뷰 데이터 활용)
 
+    기간 자동 선택:
+    - 3개월 리뷰 >= 30개 → 3개월 요약
+    - 3개월 리뷰 < 30개 → 6개월로 확장
+    - 6개월 리뷰 < 30개 → 1년으로 확장
+    - 1년 리뷰 < 30개 → 리뷰 부족 메시지
+
+    생성된 요약은 바로 DB에 저장됩니다 (자동 게시).
+    """
     try:
-        summary = await service.regenerate_summary(branch_id, period)
-        return {"success": True, "summary": summary, "period": period, "pending": True}
+        result = await service.generate_summary_with_data(branch_id)
+        return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
@@ -183,20 +212,61 @@ async def api_discard_pending_summary(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
-@router.post("/summaries/{branch_id}/discard-pending")
-async def api_discard_pending_summary(
+@router.get("/summaries/{branch_id}/history")
+async def api_get_summary_history(
     branch_id: int,
-    data: RegenerateRequest = None,
-    service: SummaryService = Depends(get_summary_service)
-):
-    """대기 중인 요약 취소 (삭제)"""
-    period = data.period if data else "all"
+    limit: int = Query(10, ge=1, le=50),
+    service: SummaryService = Depends(get_summary_service),
+) -> dict[str, Any]:
+    """
+    요약 변경 히스토리 조회
 
+    시간에 따른 요약 변화를 추적합니다.
+    """
     try:
-        result = await service.discard_pending_summary(branch_id, period)
-        return {'success': True, **result}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        history = await service.summary_repo.get_history(branch_id, limit)
+        return {"success": True, "data": history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/summaries/{branch_id}/approve-pending")
+async def api_approve_pending_summary(
+    branch_id: int,
+    service: SummaryService = Depends(get_summary_service),
+) -> dict[str, Any]:
+    """
+    대기 중인 요약 승인
+
+    pending_summaries의 내용을 실제 요약 필드로 이동하고,
+    기존 요약은 히스토리에 저장됩니다.
+    """
+    try:
+        result = await service.summary_repo.approve_pending_summary(branch_id)
+        if result:
+            return {"success": True, "data": result.model_dump()}
+        raise HTTPException(status_code=404, detail="승인할 pending 요약이 없습니다.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/summaries/{branch_id}/reject-pending")
+async def api_reject_pending_summary(
+    branch_id: int,
+    service: SummaryService = Depends(get_summary_service),
+) -> dict[str, Any]:
+    """
+    대기 중인 요약 거부
+
+    pending_summaries를 초기화합니다 (기존 요약 유지).
+    """
+    try:
+        result = await service.summary_repo.reject_pending_summary(branch_id)
+        if result:
+            return {"success": True, "data": result.model_dump()}
+        raise HTTPException(status_code=404, detail="거부할 pending 요약이 없습니다.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/stats")

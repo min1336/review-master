@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan"""
     from infrastructure.scheduler import SyncScheduler
     from infrastructure.scheduler.sync_scheduler import get_scheduler
+    from infrastructure.scheduler.monthly_scheduler import get_monthly_scheduler
 
     print("\n" + "=" * 60)
     print("Review Summary AI - FastAPI 운영팀 모니터링 대시보드")
@@ -35,19 +36,25 @@ async def lifespan(app: FastAPI):
     print("\nAPI 엔드포인트:")
     print("  GET  /api/v2/summaries      - 요약 목록")
     print("  GET  /api/tags              - 태그 목록")
+    print("  GET  /api/analysis/reviews  - 리뷰 목록 (is_new=true 지원)")
     print("=" * 60 + "\n")
 
     # 고아 작업 복구 (서버 재시작 시 processing 상태로 방치된 작업 정리)
     await _recover_stale_report_jobs()
 
     # 스케줄러 시작
-    scheduler = get_scheduler()
-    await scheduler.start()
+    sync_scheduler = get_scheduler()
+    await sync_scheduler.start()
+
+    # 월간 AI 스케줄러 시작 (매월 1일)
+    monthly_scheduler = get_monthly_scheduler()
+    await monthly_scheduler.start()
 
     yield
 
     # 스케줄러 종료
-    await scheduler.stop()
+    await sync_scheduler.stop()
+    await monthly_scheduler.stop()
 
 
 async def _recover_stale_report_jobs():

@@ -333,6 +333,91 @@ async def api_delete_report(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.post("/{branch_id}/viewed/{report_id}")
+async def api_mark_report_viewed(
+    branch_id: int,
+    report_id: int,
+    service: ReportService = Depends(get_report_service),
+) -> dict[str, Any]:
+    """
+    리포트 조회 표시 (NEW 뱃지 제거)
+
+    Args:
+        branch_id: 지점 ID
+        report_id: 리포트 ID
+
+    Returns:
+        성공 여부
+    """
+    try:
+        success = await service.report_repo.mark_as_viewed(report_id)
+        return {"success": success}
+    except Exception as e:
+        import logging
+        logging.exception("리포트 조회 표시 오류")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/{branch_id}/history")
+async def api_get_report_history(
+    branch_id: int,
+    start_date: str = Query(..., description="시작일 (YYYY-MM-DD)"),
+    end_date: str = Query(..., description="종료일 (YYYY-MM-DD)"),
+    limit: int = Query(default=10, le=50),
+    service: ReportService = Depends(get_report_service),
+) -> dict[str, Any]:
+    """
+    특정 기간의 리포트 버전 히스토리 조회
+
+    Args:
+        branch_id: 지점 ID
+        start_date: 시작일
+        end_date: 종료일
+        limit: 조회 개수
+
+    Returns:
+        리포트 히스토리 목록 (버전별)
+    """
+    parsed_start = parse_date(start_date)
+    parsed_end = parse_date(end_date, end_of_day=True)
+
+    try:
+        history = await service.report_repo.get_report_history(
+            branch_id=branch_id,
+            period_start=parsed_start,
+            period_end=parsed_end,
+            limit=limit,
+        )
+        return {"success": True, "data": history}
+    except Exception as e:
+        import logging
+        logging.exception("리포트 히스토리 조회 오류")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/unviewed/count")
+async def api_get_unviewed_count(
+    branch_id: int | None = Query(default=None, description="지점 ID (없으면 전체)"),
+    service: ReportService = Depends(get_report_service),
+) -> dict[str, Any]:
+    """
+    미조회 리포트 개수 조회
+
+    Args:
+        branch_id: 지점 ID (없으면 전체)
+
+    Returns:
+        미조회 리포트 개수
+    """
+    try:
+        count = await service.report_repo.get_unviewed_count(branch_id)
+        return {"success": True, "count": count}
+    except Exception as e:
+        import logging
+        logging.exception("미조회 리포트 개수 조회 오류")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @router.get("/{branch_id}/pdf")
 async def api_download_report_pdf(
     branch_id: int,

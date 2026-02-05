@@ -136,3 +136,4 @@ data/*.npz
 /migrations
 # Git worktrees
 .worktrees/
+/docs/plans

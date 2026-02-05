@@ -117,10 +117,11 @@ async def get_summary_service(
     summary_repo: SummaryRepository = Depends(get_summary_repo),
     branch_tag_repo: BranchTagRepository = Depends(get_branch_tag_repo),
     review_repo: BranchReviewRepository = Depends(get_review_repo),
+    sentiment_repo: SentimentRepository = Depends(get_sentiment_repo),
 ) -> SummaryService:
     from services.summary_service import SummaryService
 
-    return SummaryService(summary_repo, branch_tag_repo, review_repo)
+    return SummaryService(summary_repo, branch_tag_repo, review_repo, sentiment_repo)
 
 
 async def get_tag_service(
@@ -213,3 +214,26 @@ async def get_report_job_service(
     from services.report_job_service import ReportJobService
 
     return ReportJobService(job_repo, report_service)
+
+
+# ============================================================
+# Scheduler Settings
+# ============================================================
+
+
+async def get_scheduler_settings_repo(
+    client: AsyncClient = Depends(get_db_client),
+):
+    from repository.scheduler_settings_repository import SchedulerSettingsRepository
+
+    return SchedulerSettingsRepository(client)
+
+
+async def get_scheduler_settings_service(
+    settings_repo=Depends(get_scheduler_settings_repo),
+):
+    from services.scheduler_settings_service import SchedulerSettingsService
+
+    return SchedulerSettingsService(settings_repo)
+
+

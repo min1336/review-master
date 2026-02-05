@@ -44,12 +44,37 @@ class SchedulerStatusResponse(BaseModel):
 
     is_running: bool
     next_run_time: datetime | None = None
-    interval_minutes: int = 0
-    min_interval: int = 5
-    max_interval: int = 30
+    sync_hour: int = 7  # 실행 시간 (시)
+    sync_minute: int = 0  # 실행 시간 (분)
 
 
-class UpdateIntervalRequest(BaseModel):
-    """간격 변경 요청"""
+class UpdateScheduleTimeRequest(BaseModel):
+    """실행 시간 변경 요청"""
 
-    interval_minutes: int
+    hour: int  # 0~23
+    minute: int = 0  # 0~59
+
+
+class MonthlySchedulerStatusResponse(BaseModel):
+    """월간 스케줄러 상태 응답"""
+
+    is_running: bool
+    next_run_time: datetime | None = None
+    run_day: int = 1  # 실행 일 (1~28)
+    run_hour: int = 3  # 실행 시간 (시)
+    run_minute: int = 0  # 실행 시간 (분)
+
+
+class UpdateMonthlyScheduleRequest(BaseModel):
+    """월간 스케줄러 시간 변경 요청"""
+
+    day: int = 1  # 1~28
+    hour: int = 3  # 0~23
+    minute: int = 0  # 0~59
+
+
+class MonthlyJobResultResponse(BaseModel):
+    """월간 작업 결과 응답"""
+
+    success: bool
+    message: str
