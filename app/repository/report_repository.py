@@ -91,12 +91,13 @@ class ReportRepository(BaseRepository):
             limit: 조회 개수
 
         Returns:
-            리포트 목록
+            리포트 목록 (is_viewed 포함)
         """
         try:
             result = await self._client.table(self.TABLE).select(
                 "id, branch_id, branch_name, affiliate_name, "
-                "period_start, period_end, total_reviews, created_at, updated_at"
+                "period_start, period_end, total_reviews, version, "
+                "is_viewed, viewed_at, created_at, updated_at"
             ).eq(
                 "branch_id", branch_id
             ).order(
@@ -119,7 +120,9 @@ class ReportRepository(BaseRepository):
         report_data: dict[str, Any],
     ) -> dict | None:
         """
-        리포트 저장 (upsert)
+        리포트 저장 (버전 관리)
+
+        동일 기간에 이미 리포트가 있으면 version을 증가시켜 히스토리 유지
 
         Args:
             branch_id: 지점 ID
@@ -134,6 +137,19 @@ class ReportRepository(BaseRepository):
             저장된 리포트 데이터
         """
         try:
+            # 기존 최신 버전 조회
+            existing = await self._client.table(self.TABLE).select("version").eq(
+                "branch_id", branch_id
+            ).eq(
+                "period_start", period_start.strftime("%Y-%m-%d")
+            ).eq(
+                "period_end", period_end.strftime("%Y-%m-%d")
+            ).order("version", desc=True).limit(1).execute()
+
+            next_version = 1
+            if existing.data:
+                next_version = (existing.data[0].get("version", 0) or 0) + 1
+
             data = {
                 "branch_id": branch_id,
                 "branch_name": branch_name,
@@ -142,13 +158,12 @@ class ReportRepository(BaseRepository):
                 "period_end": period_end.strftime("%Y-%m-%d"),
                 "total_reviews": total_reviews,
                 "report_data": json.dumps(report_data, ensure_ascii=False),
+                "version": next_version,
+                "is_viewed": False,  # 신규 리포트는 미조회 상태
                 "updated_at": datetime.now().isoformat(),
             }
 
-            result = await self._client.table(self.TABLE).upsert(
-                data,
-                on_conflict="branch_id,period_start,period_end"
-            ).execute()
+            result = await self._client.table(self.TABLE).insert(data).execute()
 
             if result.data:
                 return result.data[0]
@@ -175,6 +190,87 @@ class ReportRepository(BaseRepository):
         except Exception as e:
             logger.error(f"리포트 삭제 실패: {e}")
             return False
+
+    async def mark_as_viewed(self, report_id: int) -> bool:
+        """
+        리포트 조회 표시
+
+        Args:
+            report_id: 리포트 ID
+
+        Returns:
+            성공 여부
+        """
+        try:
+            await self._client.table(self.TABLE).update({
+                "is_viewed": True,
+                "viewed_at": datetime.now().isoformat(),
+            }).eq("id", report_id).execute()
+            return True
+        except Exception as e:
+            logger.error(f"리포트 조회 표시 실패: {e}")
+            return False
+
+    async def get_unviewed_count(self, branch_id: int | None = None) -> int:
+        """
+        미조회 리포트 개수 조회
+
+        Args:
+            branch_id: 지점 ID (None이면 전체)
+
+        Returns:
+            미조회 리포트 개수
+        """
+        try:
+            query = self._client.table(self.TABLE).select("id", count="exact").eq(
+                "is_viewed", False
+            )
+            if branch_id:
+                query = query.eq("branch_id", branch_id)
+
+            result = await query.execute()
+            return result.count or 0
+        except Exception as e:
+            logger.error(f"미조회 리포트 개수 조회 실패: {e}")
+            return 0
+
+    async def get_report_history(
+        self,
+        branch_id: int,
+        period_start: datetime,
+        period_end: datetime,
+        limit: int = 10,
+    ) -> list[dict]:
+        """
+        특정 기간의 리포트 히스토리 조회 (버전별)
+
+        Args:
+            branch_id: 지점 ID
+            period_start: 시작일
+            period_end: 종료일
+            limit: 조회 개수
+
+        Returns:
+            리포트 히스토리 목록
+        """
+        try:
+            result = await self._client.table(self.TABLE).select(
+                "id, branch_id, branch_name, version, total_reviews, "
+                "is_viewed, viewed_at, created_at, updated_at"
+            ).eq(
+                "branch_id", branch_id
+            ).eq(
+                "period_start", period_start.strftime("%Y-%m-%d")
+            ).eq(
+                "period_end", period_end.strftime("%Y-%m-%d")
+            ).order(
+                "version", desc=True
+            ).limit(limit).execute()
+
+            return result.data or []
+        except Exception as e:
+            logger.error(f"리포트 히스토리 조회 실패: {e}")
+            return []
 
     async def delete_by_branch_and_period(
         self,

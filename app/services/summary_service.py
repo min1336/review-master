@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+import logging
+from datetime import datetime, timedelta
 
 from schemas.dto import (
     BranchCarModelsDTO,
@@ -20,14 +21,25 @@ from schemas.dto import (
     TagSentimentCountDTO,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class SummaryService:
     """요약 비즈니스 로직"""
 
-    def __init__(self, summary_repo, branch_tag_repo, review_repo):
+    # 기간별 설정 (우선순위 순서)
+    PERIOD_CONFIGS = [
+        {"key": "3m", "field": "summary_3m", "months": 3, "label": "최근 3개월"},
+        {"key": "6m", "field": "summary_6m", "months": 6, "label": "최근 6개월"},
+        {"key": "1y", "field": "summary_1y", "months": 12, "label": "최근 1년"},
+    ]
+    MIN_REVIEWS_FOR_SUMMARY = 30
+
+    def __init__(self, summary_repo, branch_tag_repo, review_repo, sentiment_repo=None):
         self.summary_repo = summary_repo
         self.branch_tag_repo = branch_tag_repo
         self.review_repo = review_repo
+        self.sentiment_repo = sentiment_repo
 
     async def get_summaries(
         self,
@@ -200,58 +212,300 @@ class SummaryService:
         )
 
     async def regenerate_summary(self, branch_id: int, period: str = "all") -> str:
-        """AI 요약 재생성"""
-        from infrastructure.llm import get_provider
-        from infrastructure.llm.prompts import SummaryPromptBuilder
+        """
+        AI 요약 재생성 (generate_summary_with_data 사용)
 
+        Args:
+            branch_id: 지점 ID
+            period: 기간 (all, 1y, 6m, 3m, 1m) - 힌트용, 실제는 자동 결정
+
+        Returns:
+            str: 생성된 요약 텍스트
+        """
+        result = await self.generate_summary_with_data(branch_id)
+        return result.get("summary", "")
+
+    async def generate_summary_with_data(
+        self,
+        branch_id: int,
+        save_to_db: bool = True,
+    ) -> dict:
+        """
+        태그+감정+리뷰 데이터를 활용한 AI 요약 생성
+
+        기간 로직:
+        - 3개월 리뷰 >= 30개 → 3개월 요약
+        - 3개월 리뷰 < 30개 → 6개월로 확장
+        - 6개월 리뷰 < 30개 → 1년으로 확장
+        - 1년 리뷰 < 30개 → 실패 (리뷰 부족 메시지)
+
+        Args:
+            branch_id: 지점 ID
+            save_to_db: DB에 저장할지 여부 (기본 True)
+
+        Returns:
+            dict: {
+                "success": bool,
+                "summary": str,
+                "period": str (3m/6m/1y),
+                "period_label": str,
+                "start_date": str,
+                "end_date": str,
+                "review_count": int,
+                "error": str (실패 시)
+            }
+        """
+        from infrastructure.llm import get_provider
+        from infrastructure.llm.prompts import RichSummaryPromptBuilder
+        from repository.session import get_client
+
+        # 1. 지점 기본 정보 조회
         summary = await self.summary_repo.get_by_branch_id(branch_id)
         if not summary:
-            raise ValueError(f"지점 {branch_id}을(를) 찾을 수 없습니다")
+            return {
+                "success": False,
+                "summary": "",
+                "error": f"지점 {branch_id}을(를) 찾을 수 없습니다",
+            }
 
         summary_data = summary.model_dump()
         branch_name = summary_data.get("branch_name", f"지점 {branch_id}")
-        review_count = summary_data.get("review_count", 0)
-        keywords = summary_data.get("keywords") or []
 
-        period_labels = {
-            "all": "전체 기간",
-            "1y": "최근 1년",
-            "6m": "최근 6개월",
-            "3m": "최근 3개월",
-            "1m": "최근 1개월",
-        }
-        period_label = period_labels.get(period, "전체 기간")
+        # 2. 기간별 리뷰 수 확인 및 적절한 기간 선택
+        client = await get_client()
+        end_date = datetime.now()
+        selected_period = None
+        review_count = 0
+        start_date = None
 
-        system_prompt, user_prompt = SummaryPromptBuilder.create_summary_prompt(
-            keywords=keywords[:10] if keywords else ["리뷰"],
-            review_count=review_count,
-            representative_reviews=[],
+        for period_config in self.PERIOD_CONFIGS:
+            months = period_config["months"]
+            start_date = end_date - timedelta(days=months * 30)
+
+            # 해당 기간의 리뷰 수 조회
+            count_result = await (
+                client.table("branch_reviews")
+                .select("id", count="exact")
+                .eq("branch_id", branch_id)
+                .gte("review_date", start_date.isoformat())
+                .execute()
+            )
+            review_count = count_result.count or 0
+
+            if review_count >= self.MIN_REVIEWS_FOR_SUMMARY:
+                selected_period = period_config
+                break
+
+        # 3. 리뷰가 충분하지 않은 경우
+        if not selected_period:
+            insufficient_msg = RichSummaryPromptBuilder.get_insufficient_reviews_message(
+                branch_name, review_count
+            )
+            return {
+                "success": False,
+                "summary": insufficient_msg,
+                "period": None,
+                "period_label": None,
+                "review_count": review_count,
+                "error": "리뷰가 충분하지 않습니다",
+            }
+
+        period_key = selected_period["key"]
+        period_field = selected_period["field"]
+        period_label = selected_period["label"]
+
+        # 4. 태그별 감정 데이터 조회 (branch_tags)
+        tag_sentiments = []
+        try:
+            tags_result = await (
+                client.table("branch_tags")
+                .select("tag_id, count, weighted_score, tags(id, name)")
+                .eq("branch_id", branch_id)
+                .order("count", desc=True)
+                .limit(10)
+                .execute()
+            )
+
+            # 태그별 감정 개수 조회를 위해 branch_reviews에서 집계
+            # 실제 감정은 태그 매핑 테이블에서 가져와야 하지만,
+            # 현재 구조에서는 branch_tags에 count만 있으므로
+            # recent_reviews의 sentiment와 연계하여 계산
+            for tag_row in tags_result.data:
+                tag_info = tag_row.get("tags") or {}
+                tag_name = tag_info.get("name", "")
+                if tag_name:
+                    tag_sentiments.append({
+                        "name": tag_name,
+                        "positive": tag_row.get("count", 0),  # 임시로 count 사용
+                        "negative": 0,
+                        "neutral": 0,
+                        "total": tag_row.get("count", 0),
+                    })
+        except Exception as e:
+            logger.warning(f"태그 조회 실패 (branch_id={branch_id}): {e}")
+
+        # 5. 감정 통계 조회 (branch_sentiment_stats)
+        sentiment_stats = {"positive": 0, "negative": 0, "neutral": 0, "total": 0}
+        if self.sentiment_repo:
+            try:
+                stats = await self.sentiment_repo.get_stats(branch_id)
+                sentiment_stats = {
+                    "positive": stats.positive,
+                    "negative": stats.negative,
+                    "neutral": stats.neutral,
+                    "total": stats.total,
+                }
+            except Exception as e:
+                logger.warning(f"감정 통계 조회 실패 (branch_id={branch_id}): {e}")
+
+        # 6. 최근 리뷰 30개 조회 (recent_reviews)
+        sample_reviews = []
+        try:
+            reviews_result = await (
+                client.table("recent_reviews")
+                .select("content")
+                .eq("branch_id", branch_id)
+                .order("created_at", desc=True)
+                .limit(30)
+                .execute()
+            )
+            sample_reviews = [
+                r.get("content", "")[:200]
+                for r in reviews_result.data
+                if r.get("content")
+            ]
+        except Exception as e:
+            logger.warning(f"최근 리뷰 조회 실패 (branch_id={branch_id}): {e}")
+
+        # 7. 프롬프트 생성
+        start_date_str = start_date.strftime("%Y년 %m월 %d일")
+        end_date_str = end_date.strftime("%Y년 %m월 %d일")
+
+        system_prompt, user_prompt = RichSummaryPromptBuilder.create_prompt(
             branch_name=branch_name,
+            start_date=start_date_str,
+            end_date=end_date_str,
+            total_reviews=review_count,
+            tag_sentiments=tag_sentiments,
+            sentiment_stats=sentiment_stats,
+            sample_reviews=sample_reviews[:5],
         )
 
-        user_prompt = f"[분석 기간: {period_label}]\n\n" + user_prompt
+        # 8. LLM 호출
+        try:
+            llm_provider = get_provider()
+            response = await asyncio.to_thread(
+                llm_provider.generate,
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                max_tokens=400,
+                temperature=0.7,
+            )
+            generated_summary = (
+                response.content if hasattr(response, "content") else str(response)
+            )
+        except Exception as e:
+            logger.error(f"LLM 호출 실패 (branch_id={branch_id}): {e}")
+            return {
+                "success": False,
+                "summary": "",
+                "period": period_key,
+                "error": f"AI 요약 생성 실패: {e}",
+            }
 
-        llm_provider = get_provider()
-        response = await asyncio.to_thread(
-            llm_provider.generate,
-            prompt=user_prompt,
-            system_prompt=system_prompt,
-            max_tokens=300,
-            temperature=0.7,
-        )
+        # 9. DB 저장 (자동 게시)
+        if save_to_db:
+            try:
+                await self.summary_repo.upsert_by_branch_id({
+                    "branch_id": branch_id,
+                    period_field: generated_summary,
+                })
+                logger.info(
+                    f"요약 저장 완료: branch_id={branch_id}, period={period_key}"
+                )
+            except Exception as e:
+                logger.error(f"요약 저장 실패 (branch_id={branch_id}): {e}")
 
-        generated_summary = response.content if hasattr(response, 'content') else str(response)
+        return {
+            "success": True,
+            "summary": generated_summary,
+            "period": period_key,
+            "period_label": period_label,
+            "start_date": start_date.strftime("%Y-%m-%d"),
+            "end_date": end_date.strftime("%Y-%m-%d"),
+            "review_count": review_count,
+        }
 
-        # pending_summaries에 저장 (바로 덮어쓰지 않음)
-        existing_pending = summary_data.get('pending_summaries') or {}
-        existing_pending[period] = generated_summary
+    async def generate_pending_summary(
+        self,
+        branch_id: int,
+        period: str = "1m",
+    ) -> dict:
+        """
+        AI 요약을 생성하여 pending_summaries에 저장 (승인 대기 상태)
 
-        await self.summary_repo.upsert_by_branch_id({
-            'branch_id': branch_id,
-            'pending_summaries': existing_pending
-        })
+        스케줄러에서 자동으로 호출되며, 운영자 승인 후 실제 요약으로 적용됩니다.
 
-        return generated_summary
+        Args:
+            branch_id: 지점 ID
+            period: 기간 키 (1m, 3m, 6m, 1y, all)
+
+        Returns:
+            dict: {
+                "success": bool,
+                "summary": str,
+                "period": str,
+                "error": str (실패 시)
+            }
+        """
+        # 기존 generate_summary_with_data 로직 재사용 (save_to_db=False)
+        result = await self.generate_summary_with_data(branch_id, save_to_db=False)
+
+        if not result.get("success"):
+            return result
+
+        generated_summary = result.get("summary", "")
+        generated_period = result.get("period", period)
+
+        # pending_summaries에 저장
+        try:
+            # 현재 pending_summaries 조회
+            summary = await self.summary_repo.get_by_branch_id(branch_id)
+            if not summary:
+                return {
+                    "success": False,
+                    "summary": "",
+                    "period": generated_period,
+                    "error": f"지점 {branch_id}을(를) 찾을 수 없습니다",
+                }
+
+            current_pending = summary.pending_summaries or {}
+
+            # 새 pending 요약 추가
+            current_pending[generated_period] = generated_summary
+
+            # DB 업데이트
+            await self.summary_repo.set_pending_summary(branch_id, current_pending)
+
+            logger.info(
+                f"Pending 요약 생성 완료: branch_id={branch_id}, period={generated_period}"
+            )
+
+            return {
+                "success": True,
+                "summary": generated_summary,
+                "period": generated_period,
+                "period_label": result.get("period_label"),
+                "review_count": result.get("review_count"),
+            }
+        except Exception as e:
+            logger.error(f"Pending 요약 저장 실패 (branch_id={branch_id}): {e}")
+            return {
+                "success": False,
+                "summary": generated_summary,
+                "period": generated_period,
+                "error": f"Pending 저장 실패: {e}",
+            }
 
     async def apply_pending_summary(
         self, branch_id: int, period: str

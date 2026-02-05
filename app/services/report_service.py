@@ -199,13 +199,14 @@ class ReportService:
         Returns:
             dict: AI 분석 결과 (직렬화된 형태)
         """
-        # 기간 요약 생성
+        # 기간 요약 생성 (DB 저장 요약 우선 사용으로 토큰 절약)
         period_summary = await self._generate_period_summary(
             branch_name=data["branch_name"],
             total_reviews=data["total_reviews"],
             top_keywords=data["keywords"],
             start_date=data["start_date"],
             end_date=data["end_date"],
+            branch_id=data.get("branch_id"),
         )
 
         return {
@@ -484,8 +485,43 @@ class ReportService:
         top_keywords: list[str],
         start_date: datetime,
         end_date: datetime,
+        branch_id: int | None = None,
     ) -> str:
-        """기간 요약 생성"""
+        """
+        기간 요약 생성 (DB 저장된 요약 우선 사용)
+
+        토큰 절약을 위해 branch_summaries에 저장된 요약을 먼저 확인하고,
+        없는 경우에만 LLM을 호출합니다.
+
+        Args:
+            branch_name: 지점명
+            total_reviews: 총 리뷰 수
+            top_keywords: 핵심 키워드
+            start_date: 시작일
+            end_date: 종료일
+            branch_id: 지점 ID (DB 조회용)
+
+        Returns:
+            str: 기간 요약 텍스트
+        """
+        # 1. DB에 저장된 요약 확인 (토큰 절약)
+        if branch_id and self.summary_repo:
+            try:
+                summary = await self.summary_repo.get_by_branch_id(branch_id)
+                if summary:
+                    summary_data = summary.model_dump()
+                    # 기간에 맞는 요약 찾기 (3m → 6m → 1y → all 순서)
+                    for field in ["summary_3m", "summary_6m", "summary_1y", "summary_all"]:
+                        saved_summary = summary_data.get(field)
+                        if saved_summary:
+                            logging.info(
+                                f"DB 저장 요약 사용: branch_id={branch_id}, field={field}"
+                            )
+                            return saved_summary
+            except Exception as e:
+                logging.warning(f"DB 요약 조회 실패 (branch_id={branch_id}): {e}")
+
+        # 2. DB에 없으면 LLM 호출
         from infrastructure.llm import get_provider
 
         system_prompt = """당신은 렌터카 업체 분석 전문가입니다.

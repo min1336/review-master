@@ -77,6 +77,7 @@ async def get_reviews(
     ),
     limit: int = Query(20, ge=1, le=100, description="조회 개수 (기본 20, 최대 100)"),
     offset: int = Query(0, ge=0, description="페이징 오프셋"),
+    is_new: bool | None = Query(None, description="신규 리뷰 필터 (true: 신규만, false: 읽은 것만)"),
     service: AnalysisService = Depends(get_analysis_service),
 ) -> AnalysisReviewListDTO:
     """
@@ -98,6 +99,7 @@ async def get_reviews(
             sort_by=sort_by,
             limit=limit,
             offset=offset,
+            is_new=is_new,
         )
 
     except Exception as e:

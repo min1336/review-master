@@ -125,6 +125,7 @@ class AnalysisService:
         sort_by: str = "latest",
         limit: int = DEFAULT_PAGE_SIZE,
         offset: int = 0,
+        is_new: bool | None = None,
     ) -> AnalysisReviewListDTO:
         """
         필터링된 리뷰 조회
@@ -193,6 +194,7 @@ class AnalysisService:
                 sort_by=sort_by,
                 limit=limit,
                 offset=offset,
+                is_new=is_new,
             )
 
             # DTO 변환

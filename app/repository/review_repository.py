@@ -307,6 +307,7 @@ class BranchReviewRepository(BaseRepository[Review]):
         sort_by: str = "latest",
         limit: int = 20,
         offset: int = 0,
+        is_new: bool | None = None,
     ) -> BranchReviewsDTO:
         """
         다중 필터 조건으로 리뷰 검색
@@ -332,6 +333,10 @@ class BranchReviewRepository(BaseRepository[Review]):
         # 감정 필터
         if sentiment:
             query = query.eq("sentiment", sentiment)
+
+        # 신규 리뷰 필터
+        if is_new is not None:
+            query = query.eq("is_new", is_new)
 
         # 날짜 범위 필터
         if date_from:
@@ -360,3 +365,117 @@ class BranchReviewRepository(BaseRepository[Review]):
             reviews=result.data,
             total=result.count or 0,
         )
+
+    async def get_new_reviews(
+        self,
+        branch_id: int | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> BranchReviewsDTO:
+        """
+        신규 리뷰 조회 (is_new=true)
+
+        Args:
+            branch_id: 지점 ID
+            limit: 개수
+            offset: 오프셋
+
+        Returns:
+            BranchReviewsDTO: 리뷰 목록과 개수
+        """
+        query = (
+            self._client.table(self.table_name)
+            .select("*", count="exact")
+            .eq("is_new", True)
+        )
+
+        if branch_id:
+            query = query.eq("branch_id", branch_id)
+
+        query = query.order("review_date", desc=True).range(offset, offset + limit - 1)
+        result = await execute_with_retry(query)
+
+        return BranchReviewsDTO(
+            reviews=result.data,
+            total=result.count or 0,
+            car_models=[],
+        )
+
+    async def get_new_review_count(self, branch_id: int | None = None) -> int:
+        """
+        신규 리뷰 개수 조회
+
+        Args:
+            branch_id: 지점 ID
+
+        Returns:
+            신규 리뷰 수
+        """
+        query = (
+            self._client.table(self.table_name)
+            .select("review_id", count="exact", head=True)
+            .eq("is_new", True)
+        )
+
+        if branch_id:
+            query = query.eq("branch_id", branch_id)
+
+        result = await execute_with_retry(query)
+        return result.count or 0
+
+    async def mark_reviews_as_read(self, review_ids: list[int] | None = None) -> int:
+        """
+        리뷰 읽음 처리 (is_new=false)
+
+        Args:
+            review_ids: 대상 리뷰 ID 목록 (None이면 전체)
+
+        Returns:
+            수정된 리뷰 수
+        """
+        query = self._client.table(self.table_name).update({"is_new": False})
+
+        if review_ids:
+            query = query.in_("review_id", review_ids)
+        else:
+            # 전체 읽음의 경우 현재 is_new=true인 것만 대상
+            query = query.eq("is_new", True)
+
+        # select()를 추가해야 반환된 데이터 개수를 알 수 있음 (Supabase 특성)
+        result = await query.select("review_id").execute()
+
+        return len(result.data) if result.data else 0
+
+    async def delete_by_review_ids(self, review_ids: list[int], batch_size: int = 100) -> int:
+        """
+        리뷰 ID로 삭제 (soft delete된 리뷰 동기화용)
+
+        Args:
+            review_ids: 삭제할 리뷰 ID 목록
+            batch_size: 배치 크기
+
+        Returns:
+            삭제된 리뷰 수
+        """
+        if not review_ids:
+            return 0
+
+        deleted_count = 0
+        for i in range(0, len(review_ids), batch_size):
+            batch = review_ids[i : i + batch_size]
+            try:
+                result = await (
+                    self._client.table(self.table_name)
+                    .delete()
+                    .in_("review_id", batch)
+                    .execute()
+                )
+                deleted_count += len(result.data) if result.data else 0
+            except Exception as e:
+                logger.warning(f"Failed to delete reviews batch: {e}")
+
+        if deleted_count > 0:
+            logger.info(f"Deleted {deleted_count} reviews (soft deleted in source)")
+
+        return deleted_count
+

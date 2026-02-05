@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from app.core.config import REGION_CONFIG, BranchType
+from core.config import REGION_CONFIG, BranchType
 
 
 class SummaryPromptBuilder:
@@ -212,3 +212,135 @@ class SummaryPromptBuilder:
         if keywords:
             return f"{', '.join(keywords[:3])} 관련 긍정적인 리뷰가 많습니다."
         return "전반적으로 긍정적인 리뷰가 많습니다."
+
+
+class RichSummaryPromptBuilder:
+    """태그+감정+리뷰 기반 풍부한 요약 프롬프트 생성기"""
+
+    SYSTEM_PROMPT = """<role>
+당신은 카모아 렌터카 리뷰 분석 전문가입니다.
+태그별 감정 데이터와 실제 리뷰를 분석하여 객관적이고 균형 잡힌 요약을 작성합니다.
+</role>
+
+<task>
+주어진 태그별 감정 통계와 대표 리뷰를 바탕으로 해당 지점의 기간별 요약을 작성하세요.
+</task>
+
+<output_format>
+하나의 자연스러운 문단(200~300자)으로 작성:
+1. 기간과 총 리뷰 수 소개
+2. 긍정적 피드백이 많은 태그 언급
+3. 전반적인 평가로 마무리
+</output_format>
+
+<writing_style>
+- 객관적이고 분석적인 톤
+- 긍정과 부정을 균형 있게 서술
+- "~에 대한 긍정적인 피드백이 주를 이루는 반면" 같은 자연스러운 연결
+- 숫자 데이터를 활용한 구체적 표현
+</writing_style>
+
+<constraints>
+- 마크다운, 이모지, 특수문자 사용 금지
+- 과장 표현 금지: "최고", "완벽", "강력추천"
+- 제공되지 않은 정보 추측 금지
+</constraints>"""
+
+    @classmethod
+    def create_prompt(
+        cls,
+        branch_name: str,
+        start_date: str,
+        end_date: str,
+        total_reviews: int,
+        tag_sentiments: list[dict],
+        sentiment_stats: dict,
+        sample_reviews: list[str],
+    ) -> tuple[str, str]:
+        """
+        풍부한 요약 프롬프트 생성
+
+        Args:
+            branch_name: 지점명
+            start_date: 시작일 (YYYY년 M월 D일 형식)
+            end_date: 종료일
+            total_reviews: 총 리뷰 수
+            tag_sentiments: 태그별 감정 [{name, positive, negative, neutral, total}]
+            sentiment_stats: 전체 감정 통계 {positive, negative, neutral, total}
+            sample_reviews: 대표 리뷰 텍스트 리스트
+
+        Returns:
+            tuple: (system_prompt, user_prompt)
+        """
+        # 태그 감정 분석 텍스트 생성
+        positive_tags = []
+        negative_tags = []
+
+        for tag in tag_sentiments:
+            name = tag.get("name", "")
+            pos = tag.get("positive", 0)
+            neg = tag.get("negative", 0)
+            total = tag.get("total", 0)
+
+            if total == 0:
+                continue
+
+            pos_ratio = round(pos / total * 100) if total > 0 else 0
+            neg_ratio = round(neg / total * 100) if total > 0 else 0
+
+            if pos_ratio >= 60:
+                positive_tags.append(f"{name}(긍정 {pos_ratio}%)")
+            if neg_ratio >= 30:
+                negative_tags.append(f"{name}(부정 {neg_ratio}%)")
+
+        # 전체 감정 비율
+        total_sentiment = sentiment_stats.get("total", 0)
+        if total_sentiment > 0:
+            overall_positive = round(
+                sentiment_stats.get("positive", 0) / total_sentiment * 100
+            )
+            overall_negative = round(
+                sentiment_stats.get("negative", 0) / total_sentiment * 100
+            )
+        else:
+            overall_positive = 0
+            overall_negative = 0
+
+        # 대표 리뷰 포맷팅
+        reviews_text = ""
+        if sample_reviews:
+            for idx, review in enumerate(sample_reviews[:5], 1):
+                review_truncated = str(review)[:100]
+                reviews_text += f'{idx}. "{review_truncated}"\n'
+
+        user_prompt = f"""다음 데이터를 바탕으로 렌터카 지점의 기간별 요약을 작성해주세요.
+
+<data>
+- 지점명: {branch_name}
+- 분석 기간: {start_date} ~ {end_date}
+- 총 리뷰 수: {total_reviews}건
+- 전체 긍정률: {overall_positive}%, 부정률: {overall_negative}%
+</data>
+
+<tag_analysis>
+긍정 평가 높은 태그: {', '.join(positive_tags) if positive_tags else '없음'}
+부정 평가 있는 태그: {', '.join(negative_tags) if negative_tags else '없음'}
+</tag_analysis>
+
+<sample_reviews>
+{reviews_text if reviews_text else "(대표 리뷰 없음)"}
+</sample_reviews>
+
+위 데이터를 기반으로 자연스럽게 이어지는 하나의 문단(200~300자)을 작성하세요."""
+
+        return cls.SYSTEM_PROMPT, user_prompt
+
+    @classmethod
+    def get_insufficient_reviews_message(
+        cls, branch_name: str, review_count: int
+    ) -> str:
+        """리뷰 부족 시 기본 메시지"""
+        return (
+            f"{branch_name}의 분석 가능한 리뷰가 {review_count}건으로 충분하지 않습니다. "
+            "더 많은 리뷰가 축적되면 상세한 분석이 가능합니다."
+        )

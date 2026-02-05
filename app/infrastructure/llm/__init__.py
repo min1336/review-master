@@ -7,7 +7,7 @@ Rate Limiting, 프롬프트 관리, 출력 검증
 
 from __future__ import annotations
 
-from app.core.config import BranchType
+from core.config import BranchType
 
 from .base import LLMProvider, LLMResponse
 from .openai_provider import OpenAIProvider
@@ -34,7 +34,7 @@ def get_provider(provider_type: str = None) -> LLMProvider:
     Args:
         provider_type: 'openai' (기본값)
     """
-    from app.core.config import get_settings
+    from core.config import get_settings
 
     settings = get_settings()
     return OpenAIProvider(
