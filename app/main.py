@@ -113,8 +113,9 @@ from api.v1.endpoints.public_summary import router as public_summary_router
 # API 라우터 (/api/*)
 app.include_router(api_router, prefix="/api")
 
-# Public API 라우터 (/review/*) - n8n 연동용
-app.include_router(public_summary_router, prefix="/review")
+# Public API 라우터 - 외부 연동용
+app.include_router(public_summary_router, prefix="/review")   # 기존 n8n 호환
+app.include_router(public_summary_router, prefix="/public")   # 신규 깔끔한 경로
 
 # 페이지 라우터 (/)
 app.include_router(pages_router)

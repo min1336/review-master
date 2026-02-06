@@ -338,7 +338,7 @@
                     <span class="url-prefix" id="urlPrefix"></span>
                     <input type="number" id="branchIdInput" placeholder="지점 ID (숫자)" min="1">
                 </div>
-                <div class="hint">GET /review/{branch_id} - 해당 지점의 최신 요약을 조회합니다.</div>
+                <div class="hint">GET /public/{branch_id} - 해당 지점의 최신 요약을 조회합니다.</div>
             </div>
             <div class="btn-group">
                 <button class="btn btn-primary" id="executeBtn">실행</button>
@@ -371,7 +371,7 @@
 
             // URL prefix 표시
             const urlPrefix = document.getElementById('urlPrefix');
-            urlPrefix.textContent = window.location.origin + BASE_PATH + '/review/';
+            urlPrefix.textContent = window.location.origin + BASE_PATH + '/public/';
 
             const executeBtn = document.getElementById('executeBtn');
             const clearBtn = document.getElementById('clearBtn');
@@ -424,7 +424,7 @@
             results.classList.remove('show');
 
             try {
-                const url = window.location.origin + BASE_PATH + '/review/' + encodeURIComponent(branchId);
+                const url = window.location.origin + BASE_PATH + '/public/' + encodeURIComponent(branchId);
                 const response = await fetch(url, {
                     method: 'GET',
                     headers: { 'X-API-Key': apiKey }
