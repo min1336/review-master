@@ -3564,6 +3564,8 @@
             // 시뮬레이션 프로그레스 타이머
             let reportProgressTimer = null;
             let reportSimulatedProgress = 0;
+            // 현재 진행 중인 작업 ID (백엔드 취소용)
+            let reportActiveJobId = null;
 
             function closeReportModal() {
                 const modal = getElement('report-modal');
@@ -3574,6 +3576,14 @@
 
                 // 시뮬레이션 타이머 정리
                 stopSimulatedProgress();
+
+                // 진행 중인 백엔드 작업 취소
+                if (reportActiveJobId && reportState.branchId) {
+                    fetch(`${API_PREFIX}/v2/report/${reportState.branchId}/job/${reportActiveJobId}`, {
+                        method: 'DELETE'
+                    }).catch(function() {});
+                    reportActiveJobId = null;
+                }
 
                 // 진행 중인 폴링 취소
                 if (reportPollingController) {
@@ -3698,12 +3708,15 @@
                     }
 
                     const jobId = submitResult.job_id;
+                    reportActiveJobId = jobId;
 
                     // 2단계: 폴링으로 진행 상태 확인 (최대 2분)
                     await pollReportJob(jobId, true);
+                    reportActiveJobId = null;
 
                 } catch (error) {
                     stopSimulatedProgress();
+                    reportActiveJobId = null;
                     if (error.name === 'AbortError') {
                         console.log('Report generation aborted');
                         return;
@@ -3905,6 +3918,8 @@
                     }
 
                     if (jobData.status === 'completed') {
+                        // 완료된 작업은 취소 대상에서 제외
+                        reportActiveJobId = null;
                         // 100%까지 부드럽게 채운 뒤 리포트 표시
                         await completeReportProgress();
                         const reportData = await fetchReportData();
@@ -3914,6 +3929,7 @@
                         }
                         return;
                     } else if (jobData.status === 'failed') {
+                        reportActiveJobId = null;
                         throw new Error(jobData.error_message || '리포트 생성 실패');
                     }
 
@@ -3978,12 +3994,15 @@
                     }
 
                     const jobId = submitResult.job_id;
+                    reportActiveJobId = jobId;
 
                     // 폴링으로 진행 상태 확인
                     await pollReportJob(jobId, true);
+                    reportActiveJobId = null;
 
                 } catch (error) {
                     stopSimulatedProgress();
+                    reportActiveJobId = null;
                     if (error.name === 'AbortError') {
                         console.log('Report regeneration aborted');
                         return;
