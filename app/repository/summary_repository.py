@@ -169,7 +169,7 @@ class SummaryRepository(BaseRepository[Summary]):
         min_reviews: int = 0,
         limit: int = 50,
     ) -> list[Summary]:
-        """검색"""
+        """검색 (DB-side 키워드 필터링)"""
         query = self._client.table(self.table_name).select("*")
 
         if min_reviews > 0:
@@ -181,25 +181,22 @@ class SummaryRepository(BaseRepository[Summary]):
         if max_rating is not None:
             query = query.lte("avg_rating", max_rating)
 
-        # 키워드 검색을 위해 더 많은 데이터를 가져옴
-        result = await query.order("branch_id").limit(5000).execute()
-        data = result.data
+        if keyword:
+            keyword_pattern = f"%{keyword}%"
+            if keyword.isdigit():
+                query = query.or_(
+                    f"branch_name.ilike.{keyword_pattern},"
+                    f"region.ilike.{keyword_pattern},"
+                    f"branch_id.eq.{keyword}"
+                )
+            else:
+                query = query.or_(
+                    f"branch_name.ilike.{keyword_pattern},"
+                    f"region.ilike.{keyword_pattern}"
+                )
 
-        # 키워드 필터링 (in-memory) - branch_name, region, branch_id 검색
-        if keyword and data:
-            keyword_lower = keyword.lower()
-            data = [
-                row
-                for row in data
-                if keyword_lower in (row.get("branch_name") or "").lower()
-                or keyword_lower in (row.get("region") or "").lower()
-                or keyword_lower in str(row.get("branch_id") or "")
-            ]
-
-        # 필터링 후 limit 적용
-        data = data[:limit]
-
-        return [self.model(**row) for row in data]
+        result = await query.order("branch_id").limit(limit).execute()
+        return [self.model(**row) for row in result.data]
 
     async def delete_by_branch_id(self, branch_id: int) -> bool:
         """branch_id로 삭제"""

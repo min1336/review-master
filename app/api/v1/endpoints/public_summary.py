@@ -37,24 +37,16 @@ async def get_public_summary(
     summary_repo: SummaryRepository = Depends(get_summary_repo),
 ) -> dict:
     """
-    승인된 최신 요약 1개 조회 (Public)
+    최신 요약 1개 조회 (Public)
 
     - X-API-Key 헤더 필요
-    - status가 approved/published인 요약만 반환
     """
     try:
         summary = await summary_repo.get_by_branch_id(branch_id)
         if not summary:
             raise HTTPException(status_code=404, detail="Summary not found")
 
-        if summary.status not in {"approved", "published"}:
-            raise HTTPException(status_code=404, detail="Summary not approved")
-
-        latest = _pick_latest_summary(summary)
-        if not latest:
-            raise HTTPException(status_code=404, detail="Summary content not available")
-
-        return {
+        base = {
             "success": True,
             "branch_id": summary.branch_id,
             "branch_name": summary.branch_name,
@@ -62,9 +54,18 @@ async def get_public_summary(
             "status": summary.status,
             "review_count": summary.review_count,
             "avg_rating": summary.avg_rating,
-            "summary": latest,
             "updated_at": summary.updated_at,
         }
+
+        if summary.status == "published":
+            latest = _pick_latest_summary(summary)
+            if not latest:
+                raise HTTPException(status_code=404, detail="Summary content not available")
+            base["summary"] = latest
+        else:
+            base["summary"] = "요약이 대기중입니다."
+
+        return base
     except HTTPException:
         raise
     except Exception as e:

@@ -521,28 +521,37 @@ class ReportService:
             except Exception as e:
                 logging.warning(f"DB 요약 조회 실패 (branch_id={branch_id}): {e}")
 
-        # 2. DB에 없으면 LLM 호출
+        # 2. DB에 없으면 LLM 호출 (RichSummaryPromptBuilder 사용)
         from infrastructure.llm import get_provider
+        from infrastructure.llm.prompts import RichSummaryPromptBuilder
 
-        system_prompt = """당신은 렌터카 업체 분석 전문가입니다.
-주어진 데이터를 바탕으로 간결한 기간 요약을 작성합니다.
+        tag_sentiments_for_prompt = [
+            {"name": kw, "positive": 1, "negative": 0, "neutral": 0, "total": 1}
+            for kw in top_keywords[:7]
+        ]
+        sentiment_stats_for_prompt = {
+            "positive": total_reviews,
+            "negative": 0,
+            "neutral": 0,
+            "total": total_reviews,
+        }
 
-출력 형식:
-- 2~3문장의 자연스러운 문단
-- 핵심 키워드를 중심으로 전반적인 평가 분석
-- 마크다운, 이모지 사용 금지"""
+        start_date_str = start_date.strftime("%Y년 %m월 %d일")
+        end_date_str = end_date.strftime("%Y년 %m월 %d일")
 
-        user_prompt = f"""지점: {branch_name}
-분석 기간: {start_date.strftime("%Y-%m-%d")} ~ {end_date.strftime("%Y-%m-%d")}
-총 리뷰 수: {total_reviews}건
-핵심 키워드: {', '.join(top_keywords[:5])}
-
-위 데이터를 바탕으로 기간 요약을 작성해주세요."""
+        system_prompt, user_prompt = RichSummaryPromptBuilder.create_prompt(
+            branch_name=branch_name,
+            start_date=start_date_str,
+            end_date=end_date_str,
+            total_reviews=total_reviews,
+            tag_sentiments=tag_sentiments_for_prompt,
+            sentiment_stats=sentiment_stats_for_prompt,
+            sample_reviews=[],
+        )
 
         try:
             llm_provider = get_provider()
-            response = await asyncio.to_thread(
-                llm_provider.generate,
+            response = await llm_provider.async_generate(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 max_tokens=200,

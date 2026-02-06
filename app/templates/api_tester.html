@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 테스트 - Review Summary AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0d6ffc;
+            --primary-hover: #0b5ed7;
+            --primary-light: #e8f0fe;
+            --success: #10b981;
+            --success-bg: #dcfce7;
+            --success-text: #166534;
+            --warning: #f59e0b;
+            --warning-bg: #fef3c7;
+            --warning-text: #92400e;
+            --error: #ef4444;
+            --error-bg: #fee2e2;
+            --error-text: #991b1b;
+            --grey-1: #1e1e1e;
+            --grey-3: #555555;
+            --grey-5: #999999;
+            --grey-7: #dddddd;
+            --grey-8: #eeeeee;
+            --grey-9: #f8f8f8;
+            --radius: 8px;
+            --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--grey-9);
+            color: var(--grey-1);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid var(--grey-7);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        .card {
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--grey-3);
+        }
+
+        input[type="text"],
+        input[type="number"] {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius);
+            font-family: inherit;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        input::placeholder {
+            color: var(--grey-5);
+        }
+
+        .url-builder {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius);
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+
+        .url-builder:focus-within {
+            border-color: var(--primary);
+        }
+
+        .url-prefix {
+            padding: 10px 14px;
+            background: var(--grey-8);
+            color: var(--grey-5);
+            font-size: 14px;
+            white-space: nowrap;
+            border-right: 1px solid var(--grey-7);
+            user-select: all;
+        }
+
+        .url-builder input {
+            border: none;
+            border-radius: 0;
+            flex: 1;
+            min-width: 80px;
+        }
+
+        .url-builder input:focus {
+            outline: none;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-primary:disabled {
+            background: var(--grey-5);
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: var(--grey-8);
+            color: var(--grey-3);
+        }
+
+        .btn-secondary:hover {
+            background: var(--grey-7);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+
+        .loading.show {
+            display: flex;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--grey-7);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Results */
+        .results {
+            display: none;
+        }
+
+        .results.show {
+            display: block;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 16px;
+        }
+
+        .status-badge.published {
+            background: var(--success-bg);
+            color: var(--success-text);
+        }
+
+        .status-badge.draft {
+            background: var(--warning-bg);
+            color: var(--warning-text);
+        }
+
+        .status-badge.error {
+            background: var(--error-bg);
+            color: var(--error-text);
+        }
+
+        .result-meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .meta-item {
+            background: var(--grey-9);
+            padding: 12px 16px;
+            border-radius: var(--radius);
+        }
+
+        .meta-label {
+            font-size: 12px;
+            color: var(--grey-5);
+            margin-bottom: 4px;
+        }
+
+        .meta-value {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .summary-text {
+            background: var(--grey-9);
+            padding: 16px;
+            border-radius: var(--radius);
+            font-size: 14px;
+            line-height: 1.8;
+            white-space: pre-wrap;
+        }
+
+        .summary-text.published {
+            border-left: 4px solid var(--success);
+        }
+
+        .summary-text.draft {
+            border-left: 4px solid var(--warning);
+        }
+
+        .error-message {
+            background: var(--error-bg);
+            color: var(--error-text);
+            padding: 16px;
+            border-radius: var(--radius);
+            font-size: 14px;
+            border-left: 4px solid var(--error);
+        }
+
+        .hint {
+            font-size: 12px;
+            color: var(--grey-5);
+            margin-top: 6px;
+        }
+    </style>
+</head>
+
+<body>
+    <header class="header">
+        <h1>API 테스트</h1>
+        <div class="header-actions">
+            <button class="btn btn-secondary" id="btn-back">대시보드</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- API Key -->
+        <div class="card">
+            <div class="card-title">인증</div>
+            <div class="form-group">
+                <label class="form-label">X-API-Key</label>
+                <input type="text" id="apiKeyInput" placeholder="API 키를 입력하세요">
+                <div class="hint">Public Summary API 접근에 필요한 API 키입니다.</div>
+            </div>
+        </div>
+
+        <!-- URL Builder -->
+        <div class="card">
+            <div class="card-title">요청</div>
+            <div class="form-group">
+                <label class="form-label">Branch ID</label>
+                <div class="url-builder">
+                    <span class="url-prefix" id="urlPrefix"></span>
+                    <input type="number" id="branchIdInput" placeholder="지점 ID (숫자)" min="1">
+                </div>
+                <div class="hint">GET /review/{branch_id} - 해당 지점의 최신 요약을 조회합니다.</div>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-primary" id="executeBtn">실행</button>
+                <button class="btn btn-secondary" id="clearBtn">초기화</button>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+        </div>
+
+        <!-- Results -->
+        <div class="results" id="results">
+            <div class="card" id="resultCard"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_PREFIX = '{{ api_prefix }}';
+        const BASE_PATH = API_PREFIX.replace('/api', '');
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnBack = document.getElementById('btn-back');
+            if (btnBack) {
+                btnBack.addEventListener('click', () => {
+                    window.location.href = BASE_PATH + '/';
+                });
+            }
+
+            // URL prefix 표시
+            const urlPrefix = document.getElementById('urlPrefix');
+            urlPrefix.textContent = window.location.origin + '/review/';
+
+            const executeBtn = document.getElementById('executeBtn');
+            const clearBtn = document.getElementById('clearBtn');
+
+            executeBtn.addEventListener('click', executeRequest);
+            clearBtn.addEventListener('click', clearAll);
+
+            // Enter 키로 실행
+            document.getElementById('branchIdInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') executeRequest();
+            });
+            document.getElementById('apiKeyInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') executeRequest();
+            });
+        });
+
+        function clearAll() {
+            document.getElementById('branchIdInput').value = '';
+            document.getElementById('results').classList.remove('show');
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+
+        async function executeRequest() {
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+            const branchId = document.getElementById('branchIdInput').value.trim();
+
+            if (!apiKey) {
+                alert('API 키를 입력해주세요.');
+                document.getElementById('apiKeyInput').focus();
+                return;
+            }
+            if (!branchId) {
+                alert('Branch ID를 입력해주세요.');
+                document.getElementById('branchIdInput').focus();
+                return;
+            }
+
+            const btn = document.getElementById('executeBtn');
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+
+            btn.disabled = true;
+            btn.textContent = '요청 중...';
+            loading.classList.add('show');
+            results.classList.remove('show');
+
+            try {
+                const url = window.location.origin + '/review/' + encodeURIComponent(branchId);
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: { 'X-API-Key': apiKey }
+                });
+
+                const resultCard = document.getElementById('resultCard');
+
+                if (response.ok) {
+                    const data = await response.json();
+                    renderSuccess(resultCard, data);
+                } else if (response.status === 401) {
+                    renderError(resultCard, '401 Unauthorized', 'API 키가 유효하지 않습니다. 올바른 키를 입력해주세요.');
+                } else if (response.status === 404) {
+                    renderError(resultCard, '404 Not Found', '해당 Branch ID의 지점을 찾을 수 없습니다.');
+                } else {
+                    let detail = response.status + ' ' + response.statusText;
+                    try {
+                        const errData = await response.json();
+                        if (errData.detail) detail = errData.detail;
+                    } catch (_) { /* ignore */ }
+                    renderError(resultCard, 'Error ' + response.status, detail);
+                }
+
+                results.classList.add('show');
+            } catch (error) {
+                const resultCard = document.getElementById('resultCard');
+                renderError(resultCard, 'Network Error', error.message);
+                results.classList.add('show');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '실행';
+                loading.classList.remove('show');
+            }
+        }
+
+        function renderSuccess(container, data) {
+            const isPublished = data.status === 'published';
+            const statusLabel = isPublished ? 'published' : 'draft';
+            const statusText = isPublished ? '게시' : '보류';
+
+            const card = document.createElement('div');
+
+            // Status badge
+            const badge = document.createElement('span');
+            badge.className = 'status-badge ' + statusLabel;
+            badge.textContent = statusText;
+            card.appendChild(badge);
+
+            // Meta grid
+            const metaGrid = document.createElement('div');
+            metaGrid.className = 'result-meta';
+
+            const metaItems = [
+                { label: 'Branch ID', value: data.branch_id },
+                { label: '지점명', value: data.branch_name || '-' },
+                { label: '지역', value: data.region || '-' },
+                { label: '리뷰 수', value: data.review_count != null ? data.review_count + '건' : '-' },
+                { label: '평균 평점', value: data.avg_rating != null ? Number(data.avg_rating).toFixed(1) + '점' : '-' },
+                { label: '업데이트', value: data.updated_at ? new Date(data.updated_at).toLocaleDateString('ko-KR') : '-' },
+            ];
+
+            metaItems.forEach(item => {
+                const metaItem = document.createElement('div');
+                metaItem.className = 'meta-item';
+
+                const label = document.createElement('div');
+                label.className = 'meta-label';
+                label.textContent = item.label;
+
+                const value = document.createElement('div');
+                value.className = 'meta-value';
+                value.textContent = String(item.value);
+
+                metaItem.appendChild(label);
+                metaItem.appendChild(value);
+                metaGrid.appendChild(metaItem);
+            });
+            card.appendChild(metaGrid);
+
+            // Summary section title
+            const sectionTitle = document.createElement('div');
+            sectionTitle.style.cssText = 'font-size:14px;font-weight:600;color:var(--grey-3);margin-bottom:8px;';
+            sectionTitle.textContent = '요약';
+            card.appendChild(sectionTitle);
+
+            // Summary text
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = 'summary-text ' + statusLabel;
+            summaryDiv.textContent = data.summary || '-';
+            card.appendChild(summaryDiv);
+
+            container.replaceChildren(card);
+        }
+
+        function renderError(container, title, message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+
+            const titleEl = document.createElement('strong');
+            titleEl.textContent = title;
+
+            const br = document.createElement('br');
+
+            const msgEl = document.createTextNode(message);
+
+            errorDiv.appendChild(titleEl);
+            errorDiv.appendChild(br);
+            errorDiv.appendChild(msgEl);
+
+            container.replaceChildren(errorDiv);
+        }
+    </script>
+</body>
+
+</html>

@@ -44,6 +44,16 @@ async def tag_tester(request: Request):
     )
 
 
+@router.get("/api-tester", response_class=HTMLResponse)
+async def api_tester(request: Request):
+    """API 테스트 페이지"""
+    return templates.TemplateResponse(
+        request=request,
+        name="api_tester.html",
+        context={"api_prefix": settings.api_prefix},
+    )
+
+
 @router.get("/analysis", response_class=HTMLResponse)
 async def analysis(request: Request):
     """리뷰 분석 페이지"""

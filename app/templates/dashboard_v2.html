@@ -304,6 +304,16 @@
             transform: translateY(-1px);
         }
 
+        .btn-outline {
+            background: white;
+            color: var(--primary);
+            border: 1.5px solid var(--primary);
+        }
+
+        .btn-outline:hover {
+            background: #e8f0fe;
+        }
+
         .btn-secondary {
             background: white;
             color: var(--grey-2);
@@ -1481,6 +1491,7 @@
     <header class="header">
         <h1>Review Summary AI - 운영팀 대시보드</h1>
         <div class="header-actions">
+            <button class="btn btn-outline" id="btn-api-tester">API 테스트</button>
             <button class="btn btn-primary" id="btn-analysis">분석</button>
             <button class="btn btn-secondary" id="btn-tag-tester">태그 분석 테스트</button>
         </div>
@@ -2681,9 +2692,15 @@
 
             function bindEvents() {
                 // 헤더 네비게이션 버튼
+                const btnApiTester = document.getElementById('btn-api-tester');
                 const btnAnalysis = document.getElementById('btn-analysis');
                 const btnTagTester = document.getElementById('btn-tag-tester');
 
+                if (btnApiTester) {
+                    btnApiTester.addEventListener('click', () => {
+                        window.location.href = `${BASE_PATH}/api-tester`;
+                    });
+                }
                 if (btnAnalysis) {
                     btnAnalysis.addEventListener('click', () => {
                         window.location.href = `${BASE_PATH}/analysis`;

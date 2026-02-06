@@ -256,7 +256,7 @@ class SummaryService:
             }
         """
         from infrastructure.llm import get_provider
-        from infrastructure.llm.prompts import RichSummaryPromptBuilder
+        from infrastructure.llm.prompts import SummaryPromptBuilder
         from repository.session import get_client
 
         # 1. 지점 기본 정보 조회
@@ -298,7 +298,7 @@ class SummaryService:
 
         # 3. 리뷰가 충분하지 않은 경우
         if not selected_period:
-            insufficient_msg = RichSummaryPromptBuilder.get_insufficient_reviews_message(
+            insufficient_msg = SummaryPromptBuilder.get_insufficient_reviews_message(
                 branch_name, review_count
             )
             return {
@@ -314,32 +314,53 @@ class SummaryService:
         period_field = selected_period["field"]
         period_label = selected_period["label"]
 
-        # 4. 태그별 감정 데이터 조회 (branch_tags)
+        # 4. 태그별 감정 데이터 조회 (branch_tags: period_type별 분리)
         tag_sentiments = []
         try:
-            tags_result = await (
+            all_result = await (
                 client.table("branch_tags")
-                .select("tag_id, count, weighted_score, tags(id, name)")
+                .select("tag_id, count, tags(id, name)")
                 .eq("branch_id", branch_id)
+                .eq("period_type", "all")
                 .order("count", desc=True)
                 .limit(10)
                 .execute()
             )
 
-            # 태그별 감정 개수 조회를 위해 branch_reviews에서 집계
-            # 실제 감정은 태그 매핑 테이블에서 가져와야 하지만,
-            # 현재 구조에서는 branch_tags에 count만 있으므로
-            # recent_reviews의 sentiment와 연계하여 계산
-            for tag_row in tags_result.data:
+            pos_result = await (
+                client.table("branch_tags")
+                .select("tag_id, count")
+                .eq("branch_id", branch_id)
+                .eq("period_type", "positive")
+                .execute()
+            )
+
+            neg_result = await (
+                client.table("branch_tags")
+                .select("tag_id, count")
+                .eq("branch_id", branch_id)
+                .eq("period_type", "negative")
+                .execute()
+            )
+
+            pos_map = {row["tag_id"]: row.get("count", 0) for row in pos_result.data}
+            neg_map = {row["tag_id"]: row.get("count", 0) for row in neg_result.data}
+
+            for tag_row in all_result.data:
                 tag_info = tag_row.get("tags") or {}
                 tag_name = tag_info.get("name", "")
-                if tag_name:
+                tag_id = tag_row.get("tag_id")
+                if tag_name and tag_id:
+                    positive = pos_map.get(tag_id, 0)
+                    negative = neg_map.get(tag_id, 0)
+                    total = tag_row.get("count", 0)
+                    neutral = max(0, total - positive - negative)
                     tag_sentiments.append({
                         "name": tag_name,
-                        "positive": tag_row.get("count", 0),  # 임시로 count 사용
-                        "negative": 0,
-                        "neutral": 0,
-                        "total": tag_row.get("count", 0),
+                        "positive": positive,
+                        "negative": negative,
+                        "neutral": neutral,
+                        "total": total,
                     })
         except Exception as e:
             logger.warning(f"태그 조회 실패 (branch_id={branch_id}): {e}")
@@ -378,24 +399,19 @@ class SummaryService:
             logger.warning(f"최근 리뷰 조회 실패 (branch_id={branch_id}): {e}")
 
         # 7. 프롬프트 생성
-        start_date_str = start_date.strftime("%Y년 %m월 %d일")
-        end_date_str = end_date.strftime("%Y년 %m월 %d일")
+        tag_keywords = [ts["name"] for ts in tag_sentiments if ts.get("name")]
 
-        system_prompt, user_prompt = RichSummaryPromptBuilder.create_prompt(
+        system_prompt, user_prompt = SummaryPromptBuilder.create_summary_prompt(
+            keywords=tag_keywords,
+            review_count=review_count,
+            representative_reviews=sample_reviews[:5],
             branch_name=branch_name,
-            start_date=start_date_str,
-            end_date=end_date_str,
-            total_reviews=review_count,
-            tag_sentiments=tag_sentiments,
-            sentiment_stats=sentiment_stats,
-            sample_reviews=sample_reviews[:5],
         )
 
         # 8. LLM 호출
         try:
             llm_provider = get_provider()
-            response = await asyncio.to_thread(
-                llm_provider.generate,
+            response = await llm_provider.async_generate(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 max_tokens=400,

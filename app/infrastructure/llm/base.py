@@ -4,6 +4,7 @@ LLM Provider 추상 클래스
 
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -54,3 +55,15 @@ class LLMProvider(ABC):
     def model_name(self) -> str:
         """현재 모델명"""
         pass
+
+    async def async_generate(
+        self,
+        prompt: str,
+        system_prompt: str = None,
+        max_tokens: int = 300,
+        temperature: float = 0.7,
+    ) -> LLMResponse:
+        """텍스트 생성 (비동기). 기본 구현은 sync generate()를 to_thread로 래핑."""
+        return await asyncio.to_thread(
+            self.generate, prompt, system_prompt, max_tokens, temperature
+        )

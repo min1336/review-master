@@ -213,6 +213,16 @@ class SummaryPromptBuilder:
             return f"{', '.join(keywords[:3])} 관련 긍정적인 리뷰가 많습니다."
         return "전반적으로 긍정적인 리뷰가 많습니다."
 
+    @classmethod
+    def get_insufficient_reviews_message(
+        cls, branch_name: str, review_count: int
+    ) -> str:
+        """리뷰 부족 시 기본 메시지"""
+        return (
+            f"{branch_name}의 분석 가능한 리뷰가 {review_count}건으로 충분하지 않습니다. "
+            "더 많은 리뷰가 축적되면 상세한 분석이 가능합니다."
+        )
+
 
 class RichSummaryPromptBuilder:
     """태그+감정+리뷰 기반 풍부한 요약 프롬프트 생성기"""
