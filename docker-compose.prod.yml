@@ -17,5 +17,6 @@ services:
       - AWS_REGION
       - ATHENA_DATABASE
       - ATHENA_OUTPUT_BUCKET
+      - PUBLIC_API_KEY
     cpus: "0.5"
     mem_limit: "512m"

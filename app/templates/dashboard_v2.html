@@ -905,6 +905,47 @@
             transform: none;
         }
 
+        /* Review Count Info */
+        .period-count-badge {
+            font-size: 11px;
+            font-weight: 400;
+            color: var(--grey-5);
+            margin-left: 2px;
+        }
+        .period-preset-btn.has-count.sufficient {
+            border-color: #a7f3d0;
+        }
+        .period-preset-btn.has-count.sufficient .period-count-badge {
+            color: #10b981;
+            font-weight: 600;
+        }
+        .review-count-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px 14px;
+            margin: 0 0 12px 0;
+            border-radius: 8px;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        .review-count-info.loading {
+            background: var(--grey-8);
+            color: var(--grey-5);
+        }
+        .review-count-info.sufficient {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .review-count-info.insufficient {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .review-count-info .count-number {
+            font-weight: 700;
+        }
+
         /* PDF Download Button */
         .btn-download-pdf {
             background: #2563eb;
@@ -1712,6 +1753,8 @@
                     REVIEW_ID_PATTERN: /^[a-zA-Z0-9_-]+$/
                 }
             });
+
+            const REPORT_REVIEW_THRESHOLD = 30;
 
             const STATUS_CLASS_MAP = Object.freeze({
                 'draft': 'grey',
@@ -2709,6 +2752,7 @@
                     closeReportModal,
                     setReportPeriod,
                     onReportDateChange,
+                    checkReviewCount,
                     generateReport,
                     regenerateReport,
                     renderReportPeriodSelection,
@@ -3391,6 +3435,7 @@
                 endDate: '',
                 reportData: null
             };
+            let reviewCountCache = null;
 
             async function openReportModal(branchId, branchName, affiliateName) {
                 reportState.branchId = branchId;
@@ -3625,6 +3670,15 @@
                     btn.classList.remove('active');
                 });
                 document.querySelector(`.period-preset-btn[data-months="${months}"]`)?.classList.add('active');
+
+                // 캐시된 리뷰 수로 info bar 업데이트
+                if (reviewCountCache) {
+                    const key = months === 'all' ? 'all' : `${months}m`;
+                    const count = reviewCountCache.period_counts[key];
+                    if (count !== undefined) {
+                        updateReviewCountInfoBar(count);
+                    }
+                }
             }
 
             function renderReportPeriodSelection() {
@@ -3637,26 +3691,80 @@
                     if (btn) btn.style.display = 'none';
                 });
 
-                body.innerHTML = `
-                    <div class="period-selection">
-                        <label>분석 기간을 선택하세요</label>
-                        <div class="period-presets">
-                            <button class="period-preset-btn" data-months="1" onclick="window.dashboardHandlers.setReportPeriod(1)">최근 1개월</button>
-                            <button class="period-preset-btn active" data-months="3" onclick="window.dashboardHandlers.setReportPeriod(3)">최근 3개월</button>
-                            <button class="period-preset-btn" data-months="6" onclick="window.dashboardHandlers.setReportPeriod(6)">최근 6개월</button>
-                            <button class="period-preset-btn" data-months="12" onclick="window.dashboardHandlers.setReportPeriod(12)">최근 1년</button>
-                            <button class="period-preset-btn" data-months="all" onclick="window.dashboardHandlers.setReportPeriod('all')">전체</button>
-                        </div>
-                        <div class="date-range-inputs">
-                            <input type="date" id="report-start-date" value="${reportState.startDate}" onchange="window.dashboardHandlers.onReportDateChange()">
-                            <span>~</span>
-                            <input type="date" id="report-end-date" value="${reportState.endDate}" onchange="window.dashboardHandlers.onReportDateChange()">
-                        </div>
-                    </div>
-                    <button class="btn-generate-report" onclick="window.dashboardHandlers.generateReport()">
-                        🚀 리포트 생성하기
-                    </button>
-                `;
+                // DOM API로 구성
+                const container = document.createElement('div');
+
+                // 기간 선택 섹션
+                const periodSection = document.createElement('div');
+                periodSection.className = 'period-selection';
+
+                const label = document.createElement('label');
+                label.textContent = '분석 기간을 선택하세요';
+                periodSection.appendChild(label);
+
+                // 프리셋 버튼들
+                const presets = document.createElement('div');
+                presets.className = 'period-presets';
+                const presetData = [
+                    { months: '1', label: '최근 1개월', countId: 'count-1m' },
+                    { months: '3', label: '최근 3개월', countId: 'count-3m', active: true },
+                    { months: '6', label: '최근 6개월', countId: 'count-6m' },
+                    { months: '12', label: '최근 1년', countId: 'count-12m' },
+                    { months: 'all', label: '전체', countId: 'count-all' },
+                ];
+                presetData.forEach(p => {
+                    const btn = document.createElement('button');
+                    btn.className = 'period-preset-btn' + (p.active ? ' active' : '');
+                    btn.dataset.months = p.months;
+                    btn.textContent = p.label;
+                    const badge = document.createElement('span');
+                    badge.className = 'period-count-badge';
+                    badge.id = p.countId;
+                    btn.appendChild(badge);
+                    btn.addEventListener('click', () => window.dashboardHandlers.setReportPeriod(p.months === 'all' ? 'all' : Number(p.months)));
+                    presets.appendChild(btn);
+                });
+                periodSection.appendChild(presets);
+
+                // 날짜 입력
+                const dateRange = document.createElement('div');
+                dateRange.className = 'date-range-inputs';
+                const startInput = document.createElement('input');
+                startInput.type = 'date';
+                startInput.id = 'report-start-date';
+                startInput.value = reportState.startDate;
+                startInput.addEventListener('change', () => window.dashboardHandlers.onReportDateChange());
+                const sep = document.createElement('span');
+                sep.textContent = '~';
+                const endInput = document.createElement('input');
+                endInput.type = 'date';
+                endInput.id = 'report-end-date';
+                endInput.value = reportState.endDate;
+                endInput.addEventListener('change', () => window.dashboardHandlers.onReportDateChange());
+                dateRange.appendChild(startInput);
+                dateRange.appendChild(sep);
+                dateRange.appendChild(endInput);
+                periodSection.appendChild(dateRange);
+
+                container.appendChild(periodSection);
+
+                // 리뷰 수 info bar
+                const infoBar = document.createElement('div');
+                infoBar.className = 'review-count-info loading';
+                infoBar.id = 'review-count-info';
+                infoBar.textContent = '리뷰 수 확인 중...';
+                container.appendChild(infoBar);
+
+                // 생성 버튼
+                const genBtn = document.createElement('button');
+                genBtn.className = 'btn-generate-report';
+                genBtn.textContent = '리포트 생성하기';
+                genBtn.addEventListener('click', () => window.dashboardHandlers.checkReviewCount());
+                container.appendChild(genBtn);
+
+                body.replaceChildren(container);
+
+                fetchReviewCounts();
             }
 
             function onReportDateChange() {
@@ -3669,6 +3777,100 @@
                 document.querySelectorAll('.period-preset-btn').forEach(btn => {
                     btn.classList.remove('active');
                 });
+
+                // 커스텀 날짜에 대해 리뷰 수 다시 조회
+                fetchReviewCounts();
+            }
+
+            async function fetchReviewCounts() {
+                const infoBar = document.getElementById('review-count-info');
+                try {
+                    const resp = await fetch(
+                        `${API_PREFIX}/v2/report/${reportState.branchId}/review-count?start_date=${reportState.startDate}&end_date=${reportState.endDate}`
+                    );
+                    if (!resp.ok) {
+                        if (infoBar) infoBar.style.display = 'none';
+                        reviewCountCache = null;
+                        return;
+                    }
+                    const json = await resp.json();
+                    reviewCountCache = json.data;
+
+                    // 프리셋 버튼에 count badge 표시
+                    const periodKeys = { '1': '1m', '3': '3m', '6': '6m', '12': '12m', 'all': 'all' };
+                    Object.entries(periodKeys).forEach(([months, key]) => {
+                        const badge = document.getElementById('count-' + key);
+                        const btn = document.querySelector(`.period-preset-btn[data-months="${months}"]`);
+                        if (badge && reviewCountCache.period_counts[key] !== undefined) {
+                            const count = reviewCountCache.period_counts[key];
+                            badge.textContent = ` (${count}건)`;
+                            if (btn) {
+                                btn.classList.add('has-count');
+                                if (count >= REPORT_REVIEW_THRESHOLD) {
+                                    btn.classList.add('sufficient');
+                                } else {
+                                    btn.classList.remove('sufficient');
+                                }
+                            }
+                        }
+                    });
+
+                    // info bar 업데이트
+                    updateReviewCountInfoBar(reviewCountCache.selected_count);
+                } catch (e) {
+                    if (infoBar) infoBar.style.display = 'none';
+                    reviewCountCache = null;
+                }
+            }
+
+            function updateReviewCountInfoBar(count) {
+                const infoBar = document.getElementById('review-count-info');
+                if (!infoBar) return;
+
+                infoBar.style.display = 'flex';
+                infoBar.className = 'review-count-info';
+
+                if (count >= REPORT_REVIEW_THRESHOLD) {
+                    infoBar.classList.add('sufficient');
+                    infoBar.textContent = '';
+                    const icon = document.createElement('span');
+                    icon.textContent = '\u2713';
+                    const text = document.createElement('span');
+                    text.textContent = '선택 기간 리뷰 ';
+                    const num = document.createElement('span');
+                    num.className = 'count-number';
+                    num.textContent = `${count}건`;
+                    infoBar.appendChild(icon);
+                    infoBar.appendChild(text);
+                    infoBar.appendChild(num);
+                } else {
+                    infoBar.classList.add('insufficient');
+                    infoBar.textContent = '';
+                    const icon = document.createElement('span');
+                    icon.textContent = '\u26A0';
+                    const text = document.createElement('span');
+                    text.textContent = '선택 기간 리뷰 ';
+                    const num = document.createElement('span');
+                    num.className = 'count-number';
+                    num.textContent = `${count}건`;
+                    const hint = document.createElement('span');
+                    hint.textContent = ` (권장: ${REPORT_REVIEW_THRESHOLD}건 이상)`;
+                    infoBar.appendChild(icon);
+                    infoBar.appendChild(text);
+                    infoBar.appendChild(num);
+                    infoBar.appendChild(hint);
+                }
+            }
+
+            function checkReviewCount() {
+                // 캐시된 데이터로 리뷰 수 확인
+                if (reviewCountCache && reviewCountCache.selected_count < REPORT_REVIEW_THRESHOLD) {
+                    const count = reviewCountCache.selected_count;
+                    if (!confirm(`선택 기간의 리뷰가 ${count}건입니다.\n권장 기준(${REPORT_REVIEW_THRESHOLD}건) 미만이면 리포트 품질이 낮을 수 있습니다.\n\n그대로 생성하시겠습니까?`)) {
+                        return;
+                    }
+                }
+                generateReport();
             }
 
             async function generateReport() {

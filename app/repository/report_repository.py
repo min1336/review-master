@@ -47,9 +47,13 @@ class ReportRepository(BaseRepository):
                 "period_start", period_start.strftime("%Y-%m-%d")
             ).eq(
                 "period_end", period_end.strftime("%Y-%m-%d")
-            ).single().execute()
+            ).order(
+                "version", desc=True
+            ).limit(1).execute()
 
-            return result.data
+            if result.data:
+                return result.data[0]
+            return None
         except Exception as e:
             logger.debug(f"리포트 조회 실패 (없음): {e}")
             return None

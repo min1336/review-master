@@ -151,6 +151,9 @@ jobs:
           # 임시 파일 삭제
           rm -f /tmp/bastion_key /tmp/prod_key
 
+      - name: Prepare atomic deployment file
+        run: cp docker-compose.prod.yml docker-compose.prod.yml.new
+
       - name: Copy deployment files to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -162,7 +165,7 @@ jobs:
           proxy_username: ${{ secrets.AWS_TM2_BASTION_USERNAME }}
           proxy_key: ${{ secrets.AWS_TM2_BASTION_KEY }}
           proxy_port: ${{ secrets.AWS_TM2_BASTION_PORT }}
-          source: "docker-compose.prod.yml"
+          source: "docker-compose.prod.yml.new"
           target: "/home/${{ secrets.PROD_SERVER_USER }}/${{ env.default_directory }}/"
           debug: true
 
@@ -200,6 +203,9 @@ jobs:
             cd /home/${{ secrets.PROD_SERVER_USER }}/${{ env.default_directory }}
             echo "현재 디렉토리: $(pwd)"
             echo "사용자: $(whoami)"
+            
+            # Atomic File Swap (원자적 교체)
+            mv -f docker-compose.prod.yml.new docker-compose.prod.yml
             
             # .env 생성 (GitHub Secrets 주입)
             umask 077

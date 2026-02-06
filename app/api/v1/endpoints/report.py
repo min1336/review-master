@@ -7,6 +7,7 @@ Router: /api/report
 
 from __future__ import annotations
 
+import calendar
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -17,9 +18,11 @@ from pydantic import BaseModel
 from services.report_job_service import ReportJobService
 from services.report_service import ReportService
 
-from .deps import get_report_job_service, get_report_service
+from .deps import get_report_job_service, get_report_service, get_review_repo
 
 router = APIRouter(tags=["report"])
+
+MINIMUM_REVIEW_THRESHOLD = 30
 
 
 class ReportRequest(BaseModel):
@@ -40,6 +43,77 @@ def parse_date(date_str: str, end_of_day: bool = False) -> datetime:
             status_code=400,
             detail=f"Invalid date format: '{date_str}'. Expected YYYY-MM-DD format.",
         ) from e
+
+
+@router.get("/{branch_id}/review-count")
+async def api_get_review_count(
+    branch_id: int,
+    start_date: str = Query(..., description="시작일 (YYYY-MM-DD)"),
+    end_date: str = Query(..., description="종료일 (YYYY-MM-DD)"),
+    review_repo: "BranchReviewRepository" = Depends(get_review_repo),
+) -> dict[str, Any]:
+    """
+    리포트 생성 전 리뷰 수 사전 확인
+
+    선택된 기간과 표준 5개 기간(1m/3m/6m/12m/all)의 리뷰 수를 한번에 반환합니다.
+    threshold(30건) 이상인 최단 기간을 recommended_period로 제시합니다.
+    """
+    parsed_start = parse_date(start_date)
+    parsed_end = parse_date(end_date, end_of_day=True)
+
+    if parsed_start > parsed_end:
+        raise HTTPException(status_code=400, detail="시작일이 종료일보다 늦을 수 없습니다.")
+
+    try:
+        # 선택된 기간의 리뷰 수
+        selected_count = await review_repo.count_by_branch(
+            branch_id, review_date_from=parsed_start, review_date_to=parsed_end,
+        )
+
+        # 표준 5개 기간 카운트
+        today = datetime.now()
+        period_defs = [
+            ("1m", 1), ("3m", 3), ("6m", 6), ("12m", 12),
+        ]
+        period_counts: dict[str, int] = {}
+        for label, months in period_defs:
+            from_date = datetime(today.year, today.month, today.day)
+            # month 연산: 년도 넘김 처리
+            m = from_date.month - months
+            y = from_date.year
+            while m <= 0:
+                m += 12
+                y -= 1
+            last_day = calendar.monthrange(y, m)[1]
+            from_date = from_date.replace(year=y, month=m, day=min(from_date.day, last_day))
+            period_counts[label] = await review_repo.count_by_branch(
+                branch_id, review_date_from=from_date, review_date_to=today,
+            )
+        # 전체 기간
+        period_counts["all"] = await review_repo.count_by_branch(branch_id)
+
+        # 추천 기간: threshold 이상인 최단 기간
+        recommended_period = None
+        for label, _months in period_defs:
+            if period_counts[label] >= MINIMUM_REVIEW_THRESHOLD:
+                recommended_period = label
+                break
+        if recommended_period is None and period_counts["all"] >= MINIMUM_REVIEW_THRESHOLD:
+            recommended_period = "all"
+
+        return {
+            "success": True,
+            "data": {
+                "selected_count": selected_count,
+                "period_counts": period_counts,
+                "threshold": MINIMUM_REVIEW_THRESHOLD,
+                "recommended_period": recommended_period,
+            },
+        }
+    except Exception as e:
+        import logging
+        logging.exception("리뷰 수 확인 오류")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/{branch_id}")
@@ -449,8 +523,8 @@ async def api_download_report_pdf(
         )
 
     try:
-        # 리포트 데이터 생성
-        report = await service.generate_report(
+        # 저장된 리포트 우선 사용 (없으면 신규 생성)
+        report, _is_new = await service.get_or_generate_report(
             branch_id=branch_id,
             start_date=parsed_start,
             end_date=parsed_end,

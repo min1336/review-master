@@ -150,13 +150,13 @@ class ReportService:
 
     async def _step_collect(self, branch_id: int) -> dict:
         """
-        Step 1: 지점 기본 정보 및 키워드 수집
+        Step 1: 지점 기본 정보 수집
 
         Args:
             branch_id: 지점 ID
 
         Returns:
-            dict: 수집된 기본 정보
+            dict: 수집된 기본 정보 (keywords는 _step_tags 후 태그명으로 대체됨)
         """
         summary = await self.summary_repo.get_by_branch_id(branch_id)
         if not summary:
@@ -183,6 +183,9 @@ class ReportService:
 
         branch_tags 테이블에서 positive/negative 기간 타입별 카운트를 조회하여
         태그별 긍정/부정 비율을 계산합니다.
+
+        Note: branch_tags는 기간 필터를 지원하지 않아 전체 기간 집계입니다.
+              기간별 태그 분석이 필요하면 별도 집계 테이블 도입이 필요합니다.
 
         Args:
             branch_id: 지점 ID
@@ -265,6 +268,42 @@ class ReportService:
         Returns:
             dict: AI 분석 결과 (직렬화된 형태)
         """
+        # 대표 리뷰 수집 (리포트 모드일 때만, 기간 필터 적용)
+        sample_reviews: list[str] = []
+        if data.get("tag_sentiments") and self.review_repo:
+            try:
+                result = await self.review_repo.get_by_branch(
+                    branch_id=data.get("branch_id"),
+                    review_date_from=data.get("start_date"),
+                    review_date_to=data.get("end_date"),
+                    limit=10,
+                )
+                sample_reviews = [
+                    r.get("content", "") for r in result.reviews if r.get("content")
+                ]
+            except Exception as e:
+                logging.warning(f"대표 리뷰 조회 실패: {e}")
+
+        # 차량 분석 요약 텍스트 생성
+        vehicle_summary = None
+        vehicle_analysis = data.get("vehicle_analysis", [])
+        if vehicle_analysis:
+            lines = []
+            for v in vehicle_analysis[:5]:
+                model = v.get("model", "")
+                count = v.get("count", 0)
+                praise = v.get("top_praise", "")
+                issue = v.get("top_issue", "")
+                like = v.get("like_ratio", 0)
+                line = f"{model}({count}건, 호평 {like}%"
+                if praise:
+                    line += f", 강점: {praise}"
+                if issue:
+                    line += f", 개선: {issue}"
+                line += ")"
+                lines.append(line)
+            vehicle_summary = ", ".join(lines)
+
         # 기간 요약 생성 (DB 저장 요약 우선 사용으로 토큰 절약)
         period_summary = await self._generate_period_summary(
             branch_name=data["branch_name"],
@@ -275,6 +314,8 @@ class ReportService:
             branch_id=data.get("branch_id"),
             tag_sentiments=data.get("tag_sentiments"),
             sentiment_stats=data.get("sentiment_stats"),
+            sample_reviews=sample_reviews,
+            vehicle_summary=vehicle_summary,
         )
 
         return {
@@ -377,10 +418,28 @@ class ReportService:
                 generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
             )
 
+        # 기간별 실제 리뷰 수 조회 (all-time count 대신)
+        if self.review_repo:
+            try:
+                period_count = await self.review_repo.count_by_branch(
+                    branch_id=branch_id,
+                    review_date_from=start_date,
+                    review_date_to=end_date,
+                )
+                collected["total_reviews"] = period_count
+            except Exception as e:
+                logging.warning(f"기간별 리뷰 수 조회 실패: {e}")
+
         # Step 2: 태그 분석 (30-50%)
         await update_progress(30)
         tags = await self._step_tags(branch_id)
         await update_progress(50)
+
+        # 태그 데이터가 있으면 태그명으로 keywords 대체 (과거 NLP 키워드 대신 최신 태그 사용)
+        if tags.get("tag_sentiments"):
+            collected["keywords"] = [
+                t["name"] for t in tags["tag_sentiments"] if t.get("name")
+            ]
 
         # Step 3: AI 분석 (70-90%)
         await update_progress(70)
@@ -556,6 +615,8 @@ class ReportService:
         branch_id: int | None = None,
         tag_sentiments: list[dict] | None = None,
         sentiment_stats: dict | None = None,
+        sample_reviews: list[str] | None = None,
+        vehicle_summary: str | None = None,
     ) -> str:
         """
         기간 요약 생성 (DB 저장된 요약 우선 사용)
@@ -572,6 +633,8 @@ class ReportService:
             branch_id: 지점 ID (DB 조회용)
             tag_sentiments: 태그별 감정 데이터 (Step 2에서 조회)
             sentiment_stats: 전체 감정 통계 (Step 2에서 조회)
+            sample_reviews: 대표 리뷰 리스트 (리포트 모드용)
+            vehicle_summary: 차량 분석 요약 텍스트 (리포트 모드용)
 
         Returns:
             str: 기간 요약 텍스트
@@ -594,7 +657,7 @@ class ReportService:
             except Exception as e:
                 logging.warning(f"DB 요약 조회 실패 (branch_id={branch_id}): {e}")
 
-        # 2. DB에 없으면 LLM 호출 (RichSummaryPromptBuilder 사용)
+        # 2. DB에 없으면 LLM 호출
         from infrastructure.llm import get_provider
         from infrastructure.llm.prompts import RichSummaryPromptBuilder
 
@@ -620,30 +683,50 @@ class ReportService:
         start_date_str = start_date.strftime("%Y년 %m월 %d일")
         end_date_str = end_date.strftime("%Y년 %m월 %d일")
 
-        system_prompt, user_prompt = RichSummaryPromptBuilder.create_prompt(
-            branch_name=branch_name,
-            start_date=start_date_str,
-            end_date=end_date_str,
-            total_reviews=total_reviews,
-            tag_sentiments=tag_sentiments_for_prompt,
-            sentiment_stats=sentiment_stats_for_prompt,
-            sample_reviews=[],
-        )
+        # 리포트 모드(태그 데이터 있음) → 구조화된 리포트 프롬프트
+        # 일반 모드 → 기존 단문 요약 프롬프트
+        if tag_sentiments:
+            system_prompt, user_prompt = RichSummaryPromptBuilder.create_report_prompt(
+                branch_name=branch_name,
+                start_date=start_date_str,
+                end_date=end_date_str,
+                total_reviews=total_reviews,
+                tag_sentiments=tag_sentiments_for_prompt,
+                sentiment_stats=sentiment_stats_for_prompt,
+                sample_reviews=sample_reviews or [],
+                vehicle_summary=vehicle_summary,
+            )
+            max_tokens = 600
+        else:
+            system_prompt, user_prompt = RichSummaryPromptBuilder.create_prompt(
+                branch_name=branch_name,
+                start_date=start_date_str,
+                end_date=end_date_str,
+                total_reviews=total_reviews,
+                tag_sentiments=tag_sentiments_for_prompt,
+                sentiment_stats=sentiment_stats_for_prompt,
+                sample_reviews=[],
+            )
+            max_tokens = 200
 
         try:
             llm_provider = get_provider()
             response = await llm_provider.async_generate(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
-                max_tokens=200,
+                max_tokens=max_tokens,
                 temperature=0.7,
             )
 
             content = response.content if hasattr(response, "content") else str(response)
 
             # LLM 응답 품질 검증 및 자동 정제
-            from infrastructure.llm.validator import validate_summary, FORBIDDEN_WORDS
-            is_valid, errors = validate_summary(content)
+            from infrastructure.llm.validator import validate_summary, FORBIDDEN_WORDS, strip_markdown_formatting
+            validation_mode = "report" if tag_sentiments else "summary"
+            # 마크다운 서식 항상 제거 (검증 전에 먼저 정제)
+            content = strip_markdown_formatting(content)
+
+            is_valid, errors = validate_summary(content, mode=validation_mode)
             if not is_valid:
                 logging.warning(
                     f"LLM 응답 검증 실패 (branch_id={branch_id}): {errors}"
@@ -669,11 +752,11 @@ class ReportService:
         # 기본 요약
         start_str = start_date.strftime('%Y년 %m월')
         end_str = end_date.strftime('%Y년 %m월')
-        keywords_str = ', '.join(top_keywords[:3])
+        tags_str = ', '.join(top_keywords[:3])
         return (
             f"{branch_name}의 {start_str}부터 {end_str}까지 "
             f"총 {total_reviews}건의 리뷰를 분석했습니다. "
-            f"주요 키워드는 {keywords_str}입니다."
+            f"주요 태그는 {tags_str}입니다."
         )
 
     async def delete_report(

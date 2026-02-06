@@ -265,6 +265,26 @@ class BranchReviewRepository(BaseRepository[Review]):
             car_models=car_models,
         )
 
+    async def count_by_branch(
+        self,
+        branch_id: int,
+        review_date_from: datetime | None = None,
+        review_date_to: datetime | None = None,
+    ) -> int:
+        """기간별 리뷰 수 카운트 (head=True로 데이터 전송 없이 count만 조회)"""
+        query = (
+            self._client.table(self.table_name)
+            .select("review_id", count="exact", head=True)
+            .eq("branch_id", branch_id)
+        )
+        if review_date_from:
+            query = query.gte("review_date", review_date_from.isoformat())
+        if review_date_to:
+            next_day = review_date_to + timedelta(days=1)
+            query = query.lt("review_date", next_day.isoformat())
+        result = await execute_with_retry(query)
+        return result.count or 0
+
     async def get_stats(self) -> list[dict]:
         """지점별 리뷰 통계"""
         result = (

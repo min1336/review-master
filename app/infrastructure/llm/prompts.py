@@ -38,14 +38,14 @@ class SummaryPromptBuilder:
 - 마케팅 카피처럼 매끄럽고 설득력 있게
 - 문장 간 자연스러운 연결 (접속사 활용: 또한, 특히, 덕분에)
 - 읽는 사람이 방문하고 싶어지는 느낌
-- 핵심 키워드를 자연스럽게 녹여서 표현
+- 핵심 태그를 자연스럽게 녹여서 표현
 </writing_style>
 
 <constraints>
 - 마크다운, 이모지, 특수문자 사용 금지
 - 과장 표현 금지: "최고", "완벽", "강력추천", "무조건"
 - 부정적 내용 작성 금지
-- 제공된 키워드 중 최소 3개 자연스럽게 포함
+- 제공된 태그 중 최소 3개 자연스럽게 포함
 </constraints>"""
 
     # ============================================================
@@ -54,33 +54,33 @@ class SummaryPromptBuilder:
     EXAMPLES_AIRPORT = """
 <examples>
 [공항 지점 예시]
-키워드: 친절, 셔틀, 깨끗, 빠른, 편리
+태그: 친절도, 청결, 차량상태, 딜리버리, 가격
 출력:
-친절한 직원들의 빠른 응대로 공항 도착 후 바로 차량을 인수받을 수 있습니다. 깨끗하게 관리된 차량 상태가 인상적이며, 무료 셔틀버스가 정시 운행되어 터미널 이동도 수월합니다. 특히 픽업부터 반납까지 모든 절차가 간편하게 진행되어, 여행의 시작과 마무리를 편리하게 할 수 있는 지점입니다.
+친절한 직원들의 빠른 응대로 공항 도착 후 바로 차량을 인수받을 수 있습니다. 청결하게 관리된 차량 상태가 인상적이며, 딜리버리 서비스가 정시 운행되어 터미널 이동도 수월합니다. 특히 합리적인 가격에 픽업부터 반납까지 모든 절차가 간편하게 진행되어, 여행의 시작과 마무리를 편리하게 할 수 있는 지점입니다.
 </examples>"""
 
     EXAMPLES_CITY = """
 <examples>
 [시내 지점 예시]
-키워드: 친절, 가성비, 위치, 깨끗, 반납
+태그: 친절도, 가격, 청결, 차량상태, 딜리버리
 출력:
-친절한 직원분들의 신속한 응대로 대기 시간 없이 바로 출발할 수 있습니다. 차량은 항상 깨끗하게 관리되어 있고, 합리적인 가격으로 가성비가 뛰어납니다. 역에서 가까운 위치 덕분에 접근성이 좋으며, 반납 절차도 간편해서 비즈니스 출장이나 일상적인 이용에 적합한 지점입니다.
+친절한 직원분들의 신속한 응대로 대기 시간 없이 바로 출발할 수 있습니다. 차량은 항상 청결하게 관리되어 있고, 합리적인 가격으로 가성비가 뛰어납니다. 차량 상태도 양호하여 안심하고 이용할 수 있으며, 반납 절차도 간편해서 비즈니스 출장이나 일상적인 이용에 적합한 지점입니다.
 </examples>"""
 
     EXAMPLES_TOURIST = """
 <examples>
 [관광지 지점 예시]
-키워드: 친절, 픽업, 깨끗, 가성비, 편리
+태그: 친절도, 딜리버리, 청결, 가격, 차량상태
 출력:
-친절한 직원분들이 상세한 안내와 함께 여행 정보까지 제공해주셔서 든든합니다. 깨끗하게 관리된 차량으로 쾌적한 드라이브를 즐길 수 있으며, 공항 픽업 서비스도 원활하게 운영됩니다. 합리적인 가격에 편리한 서비스까지 갖춰, 여행을 더욱 즐겁게 만들어주는 지점입니다.
+친절한 직원분들이 상세한 안내와 함께 여행 정보까지 제공해주셔서 든든합니다. 청결하게 관리된 차량으로 쾌적한 드라이브를 즐길 수 있으며, 딜리버리 서비스도 원활하게 운영됩니다. 합리적인 가격에 차량 상태까지 양호해, 여행을 더욱 즐겁게 만들어주는 지점입니다.
 </examples>"""
 
     EXAMPLES_DEFAULT = """
 <examples>
 [기본 예시]
-키워드: 친절, 깨끗, 가성비, 위치, 서비스
+태그: 친절도, 청결, 가격, 차량상태, 딜리버리
 출력:
-친절한 직원분들의 빠른 응대로 기분 좋게 이용을 시작할 수 있습니다. 차량은 깨끗하게 관리되어 있어 쾌적하며, 합리적인 가격으로 가성비도 뛰어납니다. 좋은 위치와 체계적인 서비스 덕분에 처음 이용하시는 분들도 편하게 이용하실 수 있는 지점입니다.
+친절한 직원분들의 빠른 응대로 기분 좋게 이용을 시작할 수 있습니다. 차량은 청결하게 관리되어 있어 쾌적하며, 합리적인 가격으로 가성비도 뛰어납니다. 차량 상태가 양호하고 체계적인 서비스 덕분에 처음 이용하시는 분들도 편하게 이용하실 수 있는 지점입니다.
 </examples>"""
 
     @classmethod
@@ -195,7 +195,7 @@ class SummaryPromptBuilder:
 <data>
 - 지점명: {branch_name or "미지정"}
 - 분석 리뷰 수: {review_count}개
-- 핵심 키워드: {", ".join(keywords[:5])}{region_text}
+- 핵심 태그: {", ".join(keywords[:5])}{region_text}
 </data>
 
 <representative_reviews>
@@ -344,6 +344,143 @@ class RichSummaryPromptBuilder:
 위 데이터를 기반으로 자연스럽게 이어지는 하나의 문단(200~300자)을 작성하세요."""
 
         return cls.SYSTEM_PROMPT, user_prompt
+
+    # ============================================================
+    # 리포트 전용 프롬프트 (구조화된 분석 리포트)
+    # ============================================================
+    REPORT_SYSTEM_PROMPT = """<role>
+당신은 카모아 렌터카의 지점 운영 컨설턴트입니다.
+고객 리뷰 데이터를 분석하여 지점 운영에 실질적으로 도움이 되는 분석 리포트를 작성합니다.
+</role>
+
+<task>
+주어진 태그별 감정 데이터, 차량 분석, 실제 리뷰를 종합하여 하나의 자연스러운 리포트 문단을 작성하세요.
+</task>
+
+<output_format>
+하나의 흐름으로 이어지는 설명식 문단(400~600자)으로 작성합니다.
+분석 기간과 리뷰 수 개요로 시작하여, 긍정률/부정률 수치와 주요 강점을 서술하고,
+개선이 필요한 부분을 언급한 뒤, 운영 관점의 제안으로 자연스럽게 마무리합니다.
+섹션 구분이나 제목 없이 문장이 매끄럽게 이어지도록 작성하세요.
+</output_format>
+
+<writing_style>
+- 객관적이고 분석적인 톤
+- 숫자 데이터를 근거로 활용
+- 실제 리뷰 내용을 자연스럽게 인용
+- 운영자 관점에서 실용적인 인사이트 제공
+- 접속사를 활용해 문장 간 자연스럽게 연결
+</writing_style>
+
+<constraints>
+- 마크다운 서식 전면 금지: **, *, -, #, [], () 등 일체 사용 금지
+- 번호 매기기(1. 2. 3.) 금지, 글머리 기호(-, *) 금지
+- 대괄호 섹션 제목([핵심 요약] 등) 금지
+- 이모지, 특수문자 사용 금지
+- 과장 표현 금지: "최고", "완벽", "강력추천", "무조건"
+- 제공되지 않은 정보 추측 금지
+- 전체 400~600자 분량
+- 반드시 순수 텍스트 문단으로만 작성
+</constraints>"""
+
+    @classmethod
+    def create_report_prompt(
+        cls,
+        branch_name: str,
+        start_date: str,
+        end_date: str,
+        total_reviews: int,
+        tag_sentiments: list[dict],
+        sentiment_stats: dict,
+        sample_reviews: list[str],
+        vehicle_summary: str | None = None,
+    ) -> tuple[str, str]:
+        """
+        리포트 전용 프롬프트 생성 (구조화된 3섹션 리포트)
+
+        Args:
+            branch_name: 지점명
+            start_date: 시작일
+            end_date: 종료일
+            total_reviews: 총 리뷰 수
+            tag_sentiments: 태그별 감정 데이터
+            sentiment_stats: 전체 감정 통계
+            sample_reviews: 대표 리뷰 텍스트 리스트
+            vehicle_summary: 차량 분석 요약 텍스트
+
+        Returns:
+            tuple: (system_prompt, user_prompt)
+        """
+        # 태그 감정 분석 텍스트 생성
+        positive_tags = []
+        negative_tags = []
+
+        for tag in tag_sentiments:
+            name = tag.get("name", "")
+            pos = tag.get("positive", 0)
+            neg = tag.get("negative", 0)
+            total = tag.get("total", 0)
+
+            if total == 0:
+                continue
+
+            pos_ratio = round(pos / total * 100) if total > 0 else 0
+            neg_ratio = round(neg / total * 100) if total > 0 else 0
+
+            if pos_ratio >= 60:
+                positive_tags.append(f"{name}(긍정 {pos_ratio}%, {pos}/{total}건)")
+            if neg_ratio >= 20:
+                negative_tags.append(f"{name}(부정 {neg_ratio}%, {neg}/{total}건)")
+
+        # 전체 감정 비율
+        total_sentiment = sentiment_stats.get("total", 0)
+        if total_sentiment > 0:
+            overall_positive = round(
+                sentiment_stats.get("positive", 0) / total_sentiment * 100
+            )
+            overall_negative = round(
+                sentiment_stats.get("negative", 0) / total_sentiment * 100
+            )
+        else:
+            overall_positive = 0
+            overall_negative = 0
+
+        # 대표 리뷰 포맷팅 (최대 8개)
+        reviews_text = ""
+        if sample_reviews:
+            for idx, review in enumerate(sample_reviews[:8], 1):
+                review_truncated = str(review)[:150]
+                reviews_text += f'{idx}. "{review_truncated}"\n'
+
+        # 차량 분석 텍스트
+        vehicle_text = vehicle_summary if vehicle_summary else "(차량 분석 데이터 없음)"
+
+        user_prompt = f"""다음 데이터를 바탕으로 렌터카 지점 운영 리포트를 작성해주세요.
+
+<data>
+- 지점명: {branch_name}
+- 분석 기간: {start_date} ~ {end_date}
+- 총 리뷰 수: {total_reviews}건
+- 전체 긍정률: {overall_positive}%, 부정률: {overall_negative}%
+</data>
+
+<tag_analysis>
+긍정 평가 높은 태그: {', '.join(positive_tags) if positive_tags else '없음'}
+부정 평가 있는 태그: {', '.join(negative_tags) if negative_tags else '없음'}
+</tag_analysis>
+
+<vehicle_analysis>
+{vehicle_text}
+</vehicle_analysis>
+
+<sample_reviews>
+{reviews_text if reviews_text else "(대표 리뷰 없음)"}
+</sample_reviews>
+
+위 데이터를 기반으로 하나의 자연스러운 문단으로 분석 리포트를 작성하세요.
+개요, 강점, 개선점, 운영 제안이 끊김 없이 이어지도록 서술하세요."""
+
+        return cls.REPORT_SYSTEM_PROMPT, user_prompt
 
     @classmethod
     def get_insufficient_reviews_message(

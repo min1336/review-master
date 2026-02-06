@@ -21,13 +21,20 @@ MAX_CHAR_COUNT = 350  # 최대 글자 수 (좋은점 220자 + 아쉬운점 80자
 MIN_SENTENCES = 3  # 최소 문장 수
 MAX_SENTENCES = 8  # 최대 문장 수
 
+# 리포트 모드 검증 기준
+REPORT_MIN_CHAR_COUNT = 200
+REPORT_MAX_CHAR_COUNT = 800
+REPORT_MIN_SENTENCES = 5
+REPORT_MAX_SENTENCES = 20
 
-def validate_summary(text: str) -> tuple[bool, list[str]]:
+
+def validate_summary(text: str, mode: str = "summary") -> tuple[bool, list[str]]:
     """
     요약 출력 검증
 
     Args:
         text: 검증할 요약 텍스트
+        mode: "summary" (유저용 요약) 또는 "report" (리포트 요약)
 
     Returns:
         Tuple[bool, List[str]]: (통과 여부, 오류 목록)
@@ -38,19 +45,31 @@ def validate_summary(text: str) -> tuple[bool, list[str]]:
     errors = []
     text = text.strip()
 
+    # 모드별 기준값 선택
+    if mode == "report":
+        min_char = REPORT_MIN_CHAR_COUNT
+        max_char = REPORT_MAX_CHAR_COUNT
+        min_sent = REPORT_MIN_SENTENCES
+        max_sent = REPORT_MAX_SENTENCES
+    else:
+        min_char = MIN_CHAR_COUNT
+        max_char = MAX_CHAR_COUNT
+        min_sent = MIN_SENTENCES
+        max_sent = MAX_SENTENCES
+
     # 1. 문장 수 체크 (마침표 기준) - 범위 허용
     sentences = _count_sentences(text)
-    if sentences < MIN_SENTENCES:
-        errors.append(f"문장 수 부족: {sentences}개 (최소 {MIN_SENTENCES}개)")
-    elif sentences > MAX_SENTENCES:
-        errors.append(f"문장 수 초과: {sentences}개 (최대 {MAX_SENTENCES}개)")
+    if sentences < min_sent:
+        errors.append(f"문장 수 부족: {sentences}개 (최소 {min_sent}개)")
+    elif sentences > max_sent:
+        errors.append(f"문장 수 초과: {sentences}개 (최대 {max_sent}개)")
 
     # 2. 글자 수 체크
     char_count = len(text)
-    if char_count < MIN_CHAR_COUNT:
-        errors.append(f"글자 수 부족: {char_count}자 (최소 {MIN_CHAR_COUNT}자)")
-    elif char_count > MAX_CHAR_COUNT:
-        errors.append(f"글자 수 초과: {char_count}자 (최대 {MAX_CHAR_COUNT}자)")
+    if char_count < min_char:
+        errors.append(f"글자 수 부족: {char_count}자 (최소 {min_char}자)")
+    elif char_count > max_char:
+        errors.append(f"글자 수 초과: {char_count}자 (최대 {max_char}자)")
 
     # 3. 금지어 체크
     found_forbidden = _check_forbidden_words(text)
@@ -92,7 +111,8 @@ def _has_markdown_or_emoji(text: str) -> bool:
         r"\[.+\]\(.+\)",  # link: [text](url)
         r"`[^`]+`",  # code: `code`
         r"^\s*[-*•]\s+",  # bullet list (-, *, •)
-        # r'^\s*\d+\.\s+',   # numbered list - 문단에서 숫자 사용 가능하므로 허용
+        r"^\s*\d+\.\s+",  # numbered list (1. 2. 3.)
+        r"\[[^\]]{2,}\]",  # 대괄호 섹션 제목: [핵심 요약] 등
     ]
 
     for pattern in markdown_patterns:
@@ -116,6 +136,26 @@ def _has_markdown_or_emoji(text: str) -> bool:
     )
 
     return bool(emoji_pattern.search(text))
+
+
+def strip_markdown_formatting(text: str) -> str:
+    """마크다운 서식 문자를 자동 제거"""
+    # 대괄호 섹션 제목 제거: [핵심 요약] → 핵심 요약
+    text = re.sub(r"\[([^\]]+)\]", r"\1", text)
+    # bold (**text** → text)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    # italic (*text* → text)
+    text = re.sub(r"(?<!\w)\*([^*]+)\*(?!\w)", r"\1", text)
+    # 줄 시작 글머리 기호 제거 (-, *, •)
+    text = re.sub(r"^\s*[-*•]\s+", "", text, flags=re.MULTILINE)
+    # 줄 시작 번호 매기기 제거 (1. 2. 3.)
+    text = re.sub(r"^\s*\d+\.\s+", "", text, flags=re.MULTILINE)
+    # heading (#) 제거
+    text = re.sub(r"^#+\s+", "", text, flags=re.MULTILINE)
+    # 연속 공백/줄바꿈 정리
+    text = re.sub(r"\n{2,}", "\n", text)
+    text = re.sub(r"  +", " ", text)
+    return text.strip()
 
 
 def validate_and_log(text: str, branch_name: str = None) -> tuple[bool, str]:
