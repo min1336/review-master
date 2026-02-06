@@ -179,6 +179,7 @@ jobs:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           ATHENA_DATABASE: ${{ secrets.ATHENA_DATABASE }}
           ATHENA_OUTPUT_BUCKET: ${{ secrets.ATHENA_OUTPUT_BUCKET }}
+          PUBLIC_API_KEY: ${{ secrets.PUBLIC_API_KEY }}
         with:
           host: ${{ secrets.PROD_SERVER_HOST }}
           username: ${{ secrets.PROD_SERVER_USER }}
@@ -190,7 +191,7 @@ jobs:
           proxy_port: ${{ secrets.AWS_TM2_BASTION_PORT }}
           debug: true
           script_stop: true
-          envs: API_PREFIX,OPENAI_API_KEY,LLM_PROVIDER,SUPABASE_URL,SUPABASE_KEY,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,ATHENA_DATABASE,ATHENA_OUTPUT_BUCKET
+          envs: API_PREFIX,OPENAI_API_KEY,LLM_PROVIDER,SUPABASE_URL,SUPABASE_KEY,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,ATHENA_DATABASE,ATHENA_OUTPUT_BUCKET,PUBLIC_API_KEY
           script: |
             echo "🚀 배포 시작..."
             
@@ -213,6 +214,7 @@ jobs:
             printf 'AWS_REGION=%s\n' "$AWS_REGION" >> .env
             printf 'ATHENA_DATABASE=%s\n' "$ATHENA_DATABASE" >> .env
             printf 'ATHENA_OUTPUT_BUCKET=%s\n' "$ATHENA_OUTPUT_BUCKET" >> .env
+            printf 'PUBLIC_API_KEY=%s\n' "$PUBLIC_API_KEY" >> .env
             echo "✅ .env created"
             
             # GitHub Container Registry 로그인
