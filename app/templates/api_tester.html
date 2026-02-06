@@ -371,7 +371,7 @@
 
             // URL prefix 표시
             const urlPrefix = document.getElementById('urlPrefix');
-            urlPrefix.textContent = window.location.origin + '/review/';
+            urlPrefix.textContent = window.location.origin + BASE_PATH + '/review/';
 
             const executeBtn = document.getElementById('executeBtn');
             const clearBtn = document.getElementById('clearBtn');
@@ -424,7 +424,7 @@
             results.classList.remove('show');
 
             try {
-                const url = window.location.origin + '/review/' + encodeURIComponent(branchId);
+                const url = window.location.origin + BASE_PATH + '/review/' + encodeURIComponent(branchId);
                 const response = await fetch(url, {
                     method: 'GET',
                     headers: { 'X-API-Key': apiKey }
