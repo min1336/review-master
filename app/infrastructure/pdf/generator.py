@@ -121,17 +121,107 @@ class PDFGenerator:
         pdf.multi_cell(w, 6, report.period_summary or "요약 없음")
         pdf.ln(6)
 
-        # 차량별 평가 분석
+        # 차량별 평가 분석 (하이라이트 + 전체 축소 테이블)
         if report.vehicle_analysis:
             pdf.set_font(font, "B", 12)
             pdf.cell(w, 8, "차량별 평가 분석", new_x="LMARGIN", new_y="NEXT")
-            pdf.set_font(font, "", 10)
-            for v in report.vehicle_analysis:
-                pdf.cell(w, 6, f"  - {v.model} ({v.count}건)", new_x="LMARGIN", new_y="NEXT")
-                if v.top_praise:
-                    pdf.cell(w, 5, f"    호평: {v.top_praise}", new_x="LMARGIN", new_y="NEXT")
-                if v.top_issue:
-                    pdf.cell(w, 5, f"    불만: {v.top_issue}", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(2)
+
+            vehicles = sorted(
+                report.vehicle_analysis, key=lambda v: v.count, reverse=True,
+            )
+
+            # --- 1단: 주목할 차량 하이라이트 ---
+            top_n = min(3, len(vehicles))
+
+            sorted_best = sorted(vehicles, key=lambda v: v.like_ratio, reverse=True)
+            top_best = sorted_best[:top_n]
+
+            best_models = {v.model for v in top_best}
+            sorted_worst = sorted(vehicles, key=lambda v: v.dislike_ratio, reverse=True)
+            top_worst = [
+                v for v in sorted_worst
+                if v.model not in best_models and v.dislike_ratio > 0
+            ][:top_n]
+
+            pdf.set_font(font, "B", 10)
+            pdf.cell(w, 6, "  우수 차량", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font(font, "", 9)
+            for v in top_best:
+                praise = f", 특히 '{v.top_praise}' 평가 우수" if v.top_praise else ""
+                pdf.cell(
+                    w, 5,
+                    f"    {v.model}({v.count}건) - 호평률 {v.like_ratio}%{praise}",
+                    new_x="LMARGIN", new_y="NEXT",
+                )
+            pdf.ln(2)
+
+            if top_worst:
+                pdf.set_font(font, "B", 10)
+                pdf.cell(w, 6, "  개선 필요 차량", new_x="LMARGIN", new_y="NEXT")
+                pdf.set_font(font, "", 9)
+                for v in top_worst:
+                    issue = f", '{v.top_issue}' 관련 불만 집중" if v.top_issue else ""
+                    pdf.cell(
+                        w, 5,
+                        f"    {v.model}({v.count}건) - 불만률 {v.dislike_ratio}%{issue}",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                pdf.ln(2)
+
+            pdf.ln(3)
+
+            # --- 2단: 전체 차량 현황 (축소 2열 테이블) ---
+            pdf.set_font(font, "B", 9)
+            pdf.cell(w, 6, f"  전체 차량 현황 ({len(vehicles)}대)", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(1)
+
+            left_x = pdf.l_margin
+            col_gap = 4
+            half_w = (w - col_gap) / 2
+            model_w = 35
+            praise_w = 29
+            issue_w = half_w - model_w - praise_w
+            row_h = 4.5
+            right_x = left_x + half_w + col_gap
+
+            mid = (len(vehicles) + 1) // 2
+            left_list = vehicles[:mid]
+            right_list = vehicles[mid:]
+
+            # 헤더
+            pdf.set_font(font, "B", 7)
+            pdf.set_fill_color(240, 240, 240)
+
+            pdf.set_x(left_x)
+            pdf.cell(model_w, row_h, " 차량(건수)", border=1, fill=True)
+            pdf.cell(praise_w, row_h, " 호평", border=1, fill=True)
+            pdf.cell(issue_w, row_h, " 불만", border=1, fill=True)
+
+            if right_list:
+                pdf.set_x(right_x)
+                pdf.cell(model_w, row_h, " 차량(건수)", border=1, fill=True)
+                pdf.cell(praise_w, row_h, " 호평", border=1, fill=True)
+                pdf.cell(issue_w, row_h, " 불만", border=1, fill=True)
+            pdf.ln(row_h)
+
+            # 데이터 행
+            pdf.set_font(font, "", 7)
+            for i in range(len(left_list)):
+                lv = left_list[i]
+                pdf.set_x(left_x)
+                pdf.cell(model_w, row_h, f" {lv.model}({lv.count})", border=1)
+                pdf.cell(praise_w, row_h, f" {lv.top_praise or '-'}", border=1)
+                pdf.cell(issue_w, row_h, f" {lv.top_issue or '-'}", border=1)
+
+                if i < len(right_list):
+                    rv = right_list[i]
+                    pdf.set_x(right_x)
+                    pdf.cell(model_w, row_h, f" {rv.model}({rv.count})", border=1)
+                    pdf.cell(praise_w, row_h, f" {rv.top_praise or '-'}", border=1)
+                    pdf.cell(issue_w, row_h, f" {rv.top_issue or '-'}", border=1)
+
+                pdf.ln(row_h)
             pdf.ln(4)
 
         # 푸터
