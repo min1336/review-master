@@ -179,15 +179,81 @@ class ReportService:
 
     async def _step_tags(self, branch_id: int) -> dict:
         """
-        Step 2: 태그 조회 (현재는 사용하지 않음, 향후 확장 가능)
+        Step 2: 지점별 태그 감정 데이터 조회
+
+        branch_tags 테이블에서 positive/negative 기간 타입별 카운트를 조회하여
+        태그별 긍정/부정 비율을 계산합니다.
 
         Args:
             branch_id: 지점 ID
 
         Returns:
-            dict: 빈 딕셔너리
+            dict: tag_sentiments 리스트와 sentiment_stats
         """
-        return {}
+        try:
+            positive_tags = await self.branch_tag_repo.get_by_branch(
+                branch_id, period_type="positive", limit=20
+            )
+            negative_tags = await self.branch_tag_repo.get_by_branch(
+                branch_id, period_type="negative", limit=20
+            )
+        except Exception as e:
+            logging.warning(f"태그 조회 실패 (branch_id={branch_id}): {e}")
+            return {}
+
+        # 태그별 긍정/부정 카운트 병합
+        tag_map: dict[str, dict] = {}
+
+        for bt in positive_tags:
+            tag_info = bt.model_dump().get("tags") or {}
+            name = tag_info.get("name", "")
+            if not name:
+                continue
+            tag_map.setdefault(name, {"positive": 0, "negative": 0, "neutral": 0})
+            tag_map[name]["positive"] = bt.count or 0
+
+        for bt in negative_tags:
+            tag_info = bt.model_dump().get("tags") or {}
+            name = tag_info.get("name", "")
+            if not name:
+                continue
+            tag_map.setdefault(name, {"positive": 0, "negative": 0, "neutral": 0})
+            tag_map[name]["negative"] = bt.count or 0
+
+        if not tag_map:
+            return {}
+
+        # tag_sentiments 형식으로 변환
+        tag_sentiments = []
+        total_pos = 0
+        total_neg = 0
+
+        for name, counts in tag_map.items():
+            pos = counts["positive"]
+            neg = counts["negative"]
+            total = pos + neg
+            tag_sentiments.append({
+                "name": name,
+                "positive": pos,
+                "negative": neg,
+                "neutral": 0,
+                "total": total,
+            })
+            total_pos += pos
+            total_neg += neg
+
+        total_all = total_pos + total_neg
+        sentiment_stats = {
+            "positive": total_pos,
+            "negative": total_neg,
+            "neutral": 0,
+            "total": total_all,
+        }
+
+        return {
+            "tag_sentiments": tag_sentiments,
+            "sentiment_stats": sentiment_stats,
+        }
 
     async def _step_ai(self, data: dict) -> dict:
         """
@@ -207,6 +273,8 @@ class ReportService:
             start_date=data["start_date"],
             end_date=data["end_date"],
             branch_id=data.get("branch_id"),
+            tag_sentiments=data.get("tag_sentiments"),
+            sentiment_stats=data.get("sentiment_stats"),
         )
 
         return {
@@ -486,6 +554,8 @@ class ReportService:
         start_date: datetime,
         end_date: datetime,
         branch_id: int | None = None,
+        tag_sentiments: list[dict] | None = None,
+        sentiment_stats: dict | None = None,
     ) -> str:
         """
         기간 요약 생성 (DB 저장된 요약 우선 사용)
@@ -500,17 +570,20 @@ class ReportService:
             start_date: 시작일
             end_date: 종료일
             branch_id: 지점 ID (DB 조회용)
+            tag_sentiments: 태그별 감정 데이터 (Step 2에서 조회)
+            sentiment_stats: 전체 감정 통계 (Step 2에서 조회)
 
         Returns:
             str: 기간 요약 텍스트
         """
         # 1. DB에 저장된 요약 확인 (토큰 절약)
-        if branch_id and self.summary_repo:
+        # 단, 태그 데이터가 있으면 리포트 모드 → DB 유저용 요약(긍정만) 건너뛰고
+        # LLM으로 긍정+부정 포함한 정확한 분석 생성
+        if not tag_sentiments and branch_id and self.summary_repo:
             try:
                 summary = await self.summary_repo.get_by_branch_id(branch_id)
                 if summary:
                     summary_data = summary.model_dump()
-                    # 기간에 맞는 요약 찾기 (3m → 6m → 1y → all 순서)
                     for field in ["summary_3m", "summary_6m", "summary_1y", "summary_all"]:
                         saved_summary = summary_data.get(field)
                         if saved_summary:
@@ -525,16 +598,24 @@ class ReportService:
         from infrastructure.llm import get_provider
         from infrastructure.llm.prompts import RichSummaryPromptBuilder
 
-        tag_sentiments_for_prompt = [
-            {"name": kw, "positive": 1, "negative": 0, "neutral": 0, "total": 1}
-            for kw in top_keywords[:7]
-        ]
-        sentiment_stats_for_prompt = {
-            "positive": total_reviews,
-            "negative": 0,
-            "neutral": 0,
-            "total": total_reviews,
-        }
+        # 실제 태그 데이터가 있으면 사용, 없으면 키워드 기반 폴백
+        if tag_sentiments:
+            tag_sentiments_for_prompt = tag_sentiments
+        else:
+            tag_sentiments_for_prompt = [
+                {"name": kw, "positive": 1, "negative": 0, "neutral": 0, "total": 1}
+                for kw in top_keywords[:7]
+            ]
+
+        if sentiment_stats:
+            sentiment_stats_for_prompt = sentiment_stats
+        else:
+            sentiment_stats_for_prompt = {
+                "positive": total_reviews,
+                "negative": 0,
+                "neutral": 0,
+                "total": total_reviews,
+            }
 
         start_date_str = start_date.strftime("%Y년 %m월 %d일")
         end_date_str = end_date.strftime("%Y년 %m월 %d일")
