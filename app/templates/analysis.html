@@ -1513,8 +1513,8 @@
         function createReviewElement(review, isNewSection = false) {
             const reviewItem = document.createElement('div');
             reviewItem.className = review.is_new === true ? 'review-item is-new' : 'review-item';
-            if (review.id) {
-                reviewItem.setAttribute('data-id', review.id);
+            if (review.review_id) {
+                reviewItem.setAttribute('data-id', review.review_id);
             }
 
             // Meta container
@@ -1549,7 +1549,7 @@
             idSpan.onclick = () => {
                 const reviewId = review.review_id || '-';
                 const reviewDate = review.review_date ? review.review_date.split('T')[0] : '';
-                const dbId = review.id || null;
+                const dbId = review.review_id || null;
                 openReservation(reviewId, reviewDate, dbId, isNewSection);
             };
             reviewInfo.appendChild(idSpan);
@@ -1987,12 +1987,14 @@
                 const markReadBtn = document.getElementById('btn-mark-read');
 
                 if (data.new_reviews > 0) {
-                    badge.textContent = data.new_reviews;
-                    badge.style.display = 'inline';
-                    markReadBtn.style.display = 'inline-flex';
+                    if (badge) {
+                        badge.textContent = data.new_reviews;
+                        badge.style.display = 'inline';
+                    }
+                    if (markReadBtn) markReadBtn.style.display = 'inline-flex';
                 } else {
-                    badge.style.display = 'none';
-                    markReadBtn.style.display = 'none';
+                    if (badge) badge.style.display = 'none';
+                    if (markReadBtn) markReadBtn.style.display = 'none';
                 }
             } catch (error) {
                 console.error('Failed to check sync status:', error);
@@ -2015,6 +2017,7 @@
                     <circle cx="12" cy="12" r="10"></circle>
                 </svg>
                 처리 중...
+                <span class="new-badge" id="new-count-badge" style="display: none;">0</span>
             `;
 
             try {
@@ -2027,7 +2030,10 @@
 
                 if (data.success) {
                     await checkSyncStatus();
-                    await loadReviews();
+                    await loadNewReviews();
+                    if (hasSearched) {
+                        await loadReviews();
+                    }
                 }
             } catch (error) {
                 console.error('Failed to mark all as read:', error);
@@ -2040,6 +2046,7 @@
                         <polyline points="22 4 12 14.01 9 11.01"></polyline>
                     </svg>
                     모두 읽음
+                    <span class="new-badge" id="new-count-badge" style="display: none;">0</span>
                 `;
             }
         }
