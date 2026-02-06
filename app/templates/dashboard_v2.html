@@ -3671,11 +3671,12 @@
                 });
                 document.querySelector(`.period-preset-btn[data-months="${months}"]`)?.classList.add('active');
 
-                // 캐시된 리뷰 수로 info bar 업데이트
+                // 캐시된 리뷰 수로 info bar + selected_count 업데이트
                 if (reviewCountCache) {
                     const key = months === 'all' ? 'all' : `${months}m`;
                     const count = reviewCountCache.period_counts[key];
                     if (count !== undefined) {
+                        reviewCountCache.selected_count = count;
                         updateReviewCountInfoBar(count);
                     }
                 }
@@ -3814,6 +3815,19 @@
                             }
                         }
                     });
+
+                    // 선택 기간 리뷰 0건이면 권장 기간으로 자동 전환
+                    if (reviewCountCache.selected_count === 0 && reviewCountCache.recommended_period) {
+                        const periodMap = { '1m': 1, '3m': 3, '6m': 6, '12m': 12, 'all': 'all' };
+                        const months = periodMap[reviewCountCache.recommended_period];
+                        if (months !== undefined) {
+                            setReportPeriod(months);
+                            const newCount = reviewCountCache.period_counts[reviewCountCache.recommended_period] || 0;
+                            updateReviewCountInfoBar(newCount);
+                            showToast(`선택 기간에 리뷰가 없어 리뷰가 있는 기간으로 자동 전환했습니다.`, 'info');
+                            return;
+                        }
+                    }
 
                     // info bar 업데이트
                     updateReviewCountInfoBar(reviewCountCache.selected_count);
@@ -4235,8 +4249,8 @@
                     vehicleRowsHtml = '<tr><td colspan="4" style="text-align: center; color: var(--grey-5);">차량별 데이터가 없습니다.</td></tr>';
                 }
 
-                // 키워드 태그
-                const keywordsHtml = (data.top_keywords || []).map(kw => `<span class="report-keyword">${escapeHtml(kw)}</span>`).join('');
+                // 태그
+                const tagsHtml = (data.top_tags || []).map(t => `<span class="report-keyword">${escapeHtml(t)}</span>`).join('');
 
                 // 헤더 버튼들 표시
                 const headerBackBtn = document.getElementById('header-back-btn');

@@ -115,11 +115,13 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 from api.v1.api import api_router
 from api.v1.endpoints.pages import router as pages_router
 from api.v1.endpoints.public_summary import router as public_summary_router
+from api.v1.endpoints.public_report import router as public_report_router
 
 # API 라우터 (/api/*)
 app.include_router(api_router, prefix="/api")
 
-# Public API 라우터 - 외부 연동용
+# Public API 라우터 - 외부 연동용 (구체적 경로를 먼저 등록)
+app.include_router(public_report_router, prefix="/public/report")  # AI 리포트 외부 제공
 app.include_router(public_summary_router, prefix="/review")   # 기존 n8n 호환
 app.include_router(public_summary_router, prefix="/public")   # 신규 깔끔한 경로
 
