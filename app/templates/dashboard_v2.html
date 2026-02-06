@@ -844,6 +844,42 @@
             font-size: 14px;
         }
 
+        .report-progress-wrap {
+            width: 100%;
+            max-width: 320px;
+            margin: 20px auto 0;
+        }
+
+        .report-progress-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--grey-8);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .report-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #10b981, #059669);
+            border-radius: 3px;
+            transition: width 0.4s ease;
+        }
+
+        .report-progress-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--grey-5);
+        }
+
+        .report-progress-percent {
+            font-weight: 600;
+            color: #10b981;
+        }
+
         /* Generate Button */
         .btn-generate-report {
             width: 100%;
@@ -3525,6 +3561,9 @@
 
             // 폴링 취소용 AbortController (전역 스코프)
             let reportPollingController = null;
+            // 시뮬레이션 프로그레스 타이머
+            let reportProgressTimer = null;
+            let reportSimulatedProgress = 0;
 
             function closeReportModal() {
                 const modal = getElement('report-modal');
@@ -3532,6 +3571,9 @@
                     modal.style.display = 'none';
                 }
                 reportState.reportData = null;
+
+                // 시뮬레이션 타이머 정리
+                stopSimulatedProgress();
 
                 // 진행 중인 폴링 취소
                 if (reportPollingController) {
@@ -3629,8 +3671,9 @@
                 }
                 reportPollingController = new AbortController();
 
-                // 로딩 표시
-                showReportLoadingUI(body, 'AI가 리포트를 생성 중입니다...');
+                // 로딩 표시 + 시뮬레이션 프로그레스 시작
+                showReportLoadingUI(body, '지점 데이터를 수집하고 있습니다...');
+                startSimulatedProgress();
 
                 try {
                     // 1단계: 비동기 작업 제출 (즉시 반환)
@@ -3660,6 +3703,7 @@
                     await pollReportJob(jobId, true);
 
                 } catch (error) {
+                    stopSimulatedProgress();
                     if (error.name === 'AbortError') {
                         console.log('Report generation aborted');
                         return;
@@ -3680,10 +3724,129 @@
 
                 const textDiv = document.createElement('div');
                 textDiv.className = 'report-loading-text';
+                textDiv.id = 'report-loading-message';
                 textDiv.textContent = message;
                 loadingDiv.appendChild(textDiv);
 
+                // 프로그레스 바
+                const progressWrap = document.createElement('div');
+                progressWrap.className = 'report-progress-wrap';
+                progressWrap.id = 'report-progress-wrap';
+
+                const progressBar = document.createElement('div');
+                progressBar.className = 'report-progress-bar';
+
+                const progressFill = document.createElement('div');
+                progressFill.className = 'report-progress-fill';
+                progressFill.id = 'report-progress-fill';
+                progressBar.appendChild(progressFill);
+                progressWrap.appendChild(progressBar);
+
+                const progressInfo = document.createElement('div');
+                progressInfo.className = 'report-progress-info';
+
+                const progressStep = document.createElement('span');
+                progressStep.id = 'report-progress-step';
+                progressStep.textContent = '';
+                progressInfo.appendChild(progressStep);
+
+                const progressPercent = document.createElement('span');
+                progressPercent.className = 'report-progress-percent';
+                progressPercent.id = 'report-progress-percent';
+                progressPercent.textContent = '0%';
+                progressInfo.appendChild(progressPercent);
+
+                progressWrap.appendChild(progressInfo);
+                loadingDiv.appendChild(progressWrap);
+
                 container.replaceChildren(loadingDiv);
+            }
+
+            function updateReportProgressUI(progress) {
+                const wrap = document.getElementById('report-progress-wrap');
+                const fill = document.getElementById('report-progress-fill');
+                const percent = document.getElementById('report-progress-percent');
+                const step = document.getElementById('report-progress-step');
+                const msg = document.getElementById('report-loading-message');
+                if (!wrap || !fill) return;
+
+                const rounded = Math.round(progress);
+                fill.style.width = rounded + '%';
+                if (percent) percent.textContent = rounded + '%';
+
+                // 단계별 메시지 매핑
+                let stepText = '';
+                let loadingText = '';
+                if (rounded <= 20) {
+                    stepText = '데이터 수집';
+                    loadingText = '지점 데이터를 수집하고 있습니다...';
+                } else if (rounded <= 50) {
+                    stepText = '태그 분석';
+                    loadingText = '리뷰 태그를 분석하고 있습니다...';
+                } else if (rounded <= 90) {
+                    stepText = 'AI 분석';
+                    loadingText = 'AI가 리포트를 작성하고 있습니다...';
+                } else {
+                    stepText = '리포트 저장';
+                    loadingText = '거의 완료되었습니다...';
+                }
+                if (step) step.textContent = stepText;
+                if (msg) msg.textContent = loadingText;
+            }
+
+            function startSimulatedProgress() {
+                stopSimulatedProgress();
+                reportSimulatedProgress = 0;
+                updateReportProgressUI(0);
+
+                // 200ms마다 조금씩 증가, 90%에서 느려지며 멈춤
+                reportProgressTimer = setInterval(function() {
+                    if (reportSimulatedProgress >= 92) {
+                        // 90% 이후는 실제 완료 신호 올 때까지 대기
+                        return;
+                    }
+                    // 진행 구간별 속도 차등
+                    let increment;
+                    if (reportSimulatedProgress < 20) {
+                        increment = 1.2;   // 데이터 수집: 빠르게
+                    } else if (reportSimulatedProgress < 50) {
+                        increment = 0.8;   // 태그 분석: 보통
+                    } else if (reportSimulatedProgress < 80) {
+                        increment = 0.4;   // AI 분석: 느리게
+                    } else {
+                        increment = 0.15;  // 90% 근처: 아주 느리게
+                    }
+                    reportSimulatedProgress = Math.min(92, reportSimulatedProgress + increment);
+                    updateReportProgressUI(reportSimulatedProgress);
+                }, 200);
+            }
+
+            function stopSimulatedProgress() {
+                if (reportProgressTimer) {
+                    clearInterval(reportProgressTimer);
+                    reportProgressTimer = null;
+                }
+            }
+
+            function syncReportProgress(serverProgress) {
+                // 서버 값이 시뮬레이션보다 크면 동기화
+                if (serverProgress > reportSimulatedProgress) {
+                    reportSimulatedProgress = serverProgress;
+                    updateReportProgressUI(serverProgress);
+                }
+            }
+
+            async function completeReportProgress() {
+                stopSimulatedProgress();
+                // 현재 값에서 100%까지 부드럽게 채움
+                const start = reportSimulatedProgress;
+                const steps = 10;
+                const stepSize = (100 - start) / steps;
+                for (let i = 1; i <= steps; i++) {
+                    reportSimulatedProgress = start + (stepSize * i);
+                    updateReportProgressUI(reportSimulatedProgress);
+                    await new Promise(function(r) { setTimeout(r, 40); });
+                }
             }
 
             function showReportErrorUI(container, title, message, retryHandler) {
@@ -3736,8 +3899,14 @@
                     const statusResult = await statusResponse.json();
                     const jobData = statusResult.data;
 
+                    // 서버 진행률과 시뮬레이션 동기화
+                    if (typeof jobData.progress === 'number' && jobData.progress > 0) {
+                        syncReportProgress(jobData.progress);
+                    }
+
                     if (jobData.status === 'completed') {
-                        // 완료 - 리포트 데이터 가져오기
+                        // 100%까지 부드럽게 채운 뒤 리포트 표시
+                        await completeReportProgress();
                         const reportData = await fetchReportData();
                         if (reportData) {
                             reportState.reportData = reportData;
@@ -3782,8 +3951,9 @@
                 }
                 reportPollingController = new AbortController();
 
-                // 로딩 표시
-                showReportLoadingUI(body, 'AI가 리포트를 재생성 중입니다...');
+                // 로딩 표시 + 시뮬레이션 프로그레스 시작
+                showReportLoadingUI(body, '지점 데이터를 수집하고 있습니다...');
+                startSimulatedProgress();
 
                 try {
                     // 비동기 작업 제출 (/generate/async는 regenerate와 동일한 로직 사용)
@@ -3813,6 +3983,7 @@
                     await pollReportJob(jobId, true);
 
                 } catch (error) {
+                    stopSimulatedProgress();
                     if (error.name === 'AbortError') {
                         console.log('Report regeneration aborted');
                         return;
