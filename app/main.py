@@ -60,9 +60,15 @@ async def lifespan(app: FastAPI):
 async def _recover_stale_report_jobs():
     """서버 시작 시 고아 리포트 작업 복구"""
     try:
-        from api.v1.endpoints.deps import get_report_job_service
-        job_service = get_report_job_service()
-        recovered = await job_service.recover_stale_jobs(stale_minutes=30)
+        from repository.report_job_repository import ReportJobRepository
+        from repository.session import get_client
+
+        client = await get_client()
+        job_repo = ReportJobRepository(client)
+        recovered = await job_repo.mark_stale_jobs_failed(
+            stale_minutes=30,
+            error_message="서버 재시작으로 인한 작업 중단. 다시 시도해주세요.",
+        )
         if recovered > 0:
             print(f"[Startup] 고아 리포트 작업 {recovered}개 복구됨")
     except Exception as e:
