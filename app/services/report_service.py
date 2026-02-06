@@ -558,7 +558,30 @@ class ReportService:
                 temperature=0.7,
             )
 
-            return response.content if hasattr(response, "content") else str(response)
+            content = response.content if hasattr(response, "content") else str(response)
+
+            # LLM 응답 품질 검증 및 자동 정제
+            from infrastructure.llm.validator import validate_summary, FORBIDDEN_WORDS
+            is_valid, errors = validate_summary(content)
+            if not is_valid:
+                logging.warning(
+                    f"LLM 응답 검증 실패 (branch_id={branch_id}): {errors}"
+                )
+                # 금지어 자동 제거
+                for word in FORBIDDEN_WORDS:
+                    content = content.replace(word, "")
+                # 이모지 자동 제거
+                import re
+                content = re.sub(
+                    "["
+                    "\U0001f600-\U0001f64f\U0001f300-\U0001f5ff"
+                    "\U0001f680-\U0001f6ff\U0001f900-\U0001f9ff"
+                    "\U00002600-\U000026ff\U00002700-\U000027bf"
+                    "]+", "", content
+                )
+                content = content.strip()
+
+            return content
         except Exception as e:
             logging.error(f"기간 요약 생성 실패: {e}")
 
