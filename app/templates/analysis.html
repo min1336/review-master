@@ -848,7 +848,7 @@
         <div class="filter-card">
             <div class="filter-title">
                 필터 조건
-                <span class="cascade-hint">지역 → 업체 → 지점 순서로 선택</span>
+                <span class="cascade-hint">지역 → 업체·지점 순서로 선택</span>
             </div>
 
             <!-- Cascading Filters -->
@@ -872,36 +872,17 @@
 
                 <div class="arrow">→</div>
 
-                <!-- Step 2: 업체 -->
+                <!-- Step 2: 업체·지점 -->
                 <div class="filter-step">
                     <div class="filter-group">
                         <label class="filter-label">
                             <span class="step-number">2</span>
-                            업체명
-                            <span class="count-badge" id="companyCount">0</span>
-                        </label>
-                        <div class="filter-select-wrapper">
-                            <select class="filter-select" id="companySelect" onchange="onCompanyChange()">
-                                <option value="">전체 업체</option>
-                            </select>
-                        </div>
-                        <div class="selected-chips" id="companyChips"></div>
-                    </div>
-                </div>
-
-                <div class="arrow">→</div>
-
-                <!-- Step 3: 지점 -->
-                <div class="filter-step">
-                    <div class="filter-group">
-                        <label class="filter-label">
-                            <span class="step-number">3</span>
-                            지점
+                            업체·지점
                             <span class="count-badge" id="branchCount">0</span>
                         </label>
                         <div class="filter-select-wrapper">
                             <select class="filter-select" id="branchSelect" onchange="onBranchChange()">
-                                <option value="">전체 지점</option>
+                                <option value="">업체·지점 선택...</option>
                             </select>
                         </div>
                         <div class="selected-chips" id="branchChips"></div>
@@ -1011,16 +992,18 @@
         // Full data from API
         let allBranches = [];  // Contains: branch_id, branch_name, region, company_name
         let allRegions = [];
-        let allCompanies = [];
 
         // Selected filters (multi-select via chips)
         let selectedRegions = [];
-        let selectedCompanies = [];
         let selectedBranches = [];
 
         // Filtered options based on cascading
-        let availableCompanies = [];
         let availableBranches = [];
+
+        // Region simplification
+        let regionMapping = {};        // 단순화이름 → [원본regions]
+        let simplifiedRegionList = []; // 정렬된 단순화 이름 목록
+        let selectedSimplified = [];   // 선택된 단순화 이름 (칩 표시용)
 
         // Pagination
         let currentPage = 1;
@@ -1092,17 +1075,17 @@
                 const data = await response.json();
 
                 allRegions = data.regions || [];
-                allCompanies = data.companies || [];
                 allBranches = data.branches || [];
+
+                // Build region mapping
+                buildRegionMapping();
 
                 // Initialize dropdowns
                 updateRegionSelect();
-                updateCompanySelect();
                 updateBranchSelect();
 
                 // Update counts
-                document.getElementById('regionCount').textContent = allRegions.length;
-                document.getElementById('companyCount').textContent = allCompanies.length;
+                document.getElementById('regionCount').textContent = simplifiedRegionList.length;
                 document.getElementById('branchCount').textContent = allBranches.length;
 
             } catch (error) {
@@ -1110,128 +1093,100 @@
             }
         }
 
-        // Update region dropdown (계층형)
+        // Region simplification logic
+        const METRO_CITIES = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종'];
+
+        function simplifyRegion(region) {
+            const parts = region.split(' ');
+            const province = parts[0];
+
+            // 광역시/특별시: 도시명만 반환
+            if (METRO_CITIES.includes(province)) {
+                return province;
+            }
+
+            // 제주
+            if (province === '제주') {
+                return '제주';
+            }
+
+            // 해외 등 단독 항목
+            if (parts.length === 1) {
+                return region;
+            }
+
+            // 도 지역: 시/군/구 접미사 제거
+            const city = parts.slice(1).join(' ');
+            return city.replace(/[시군구]$/, '');
+        }
+
+        function buildRegionMapping() {
+            regionMapping = {};
+            allRegions.forEach(region => {
+                const simplified = simplifyRegion(region);
+                if (!regionMapping[simplified]) regionMapping[simplified] = [];
+                regionMapping[simplified].push(region);
+            });
+            simplifiedRegionList = Object.keys(regionMapping).sort();
+        }
+
+        // Update region dropdown (단순화)
         function updateRegionSelect() {
             const select = document.getElementById('regionSelect');
-            select.innerHTML = '<option value="">지역 선택...</option>';
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = '지역 선택...';
+            select.replaceChildren(placeholder);
 
-            // 지역을 도/시 기준으로 그룹화
-            const grouped = {};
-            const standalone = []; // 하위 지역 없는 단독 항목
-
-            allRegions.forEach(region => {
-                if (selectedRegions.includes(region)) return;
-
-                const parts = region.split(' ');
-                if (parts.length >= 2) {
-                    // "강원 강릉시" → 강원 그룹에 강릉시 추가
-                    const province = parts[0];
-                    if (!grouped[province]) grouped[province] = [];
-                    grouped[province].push(region);
-                } else {
-                    // "강원", "서울" 등 단독 항목
-                    standalone.push(region);
-                }
-            });
-
-            const provinces = Object.keys(grouped).sort();
-
-            provinces.forEach(province => {
-                const optgroup = document.createElement('optgroup');
-                optgroup.label = province;
-
-                // "전체" 옵션 추가 (도/시 전체 선택) - 그룹이 있으면 항상 표시
-                if (!selectedRegions.includes(province)) {
-                    const allOption = document.createElement('option');
-                    allOption.value = province;
-                    allOption.textContent = '전체';
-                    optgroup.appendChild(allOption);
-                }
-
-                // 해당 도/시의 하위 지역들
-                grouped[province].sort().forEach(region => {
-                    const option = document.createElement('option');
-                    option.value = region;
-                    // "강원 강릉시" → "강릉시"로 표시
-                    option.textContent = region.split(' ').slice(1).join(' ');
-                    optgroup.appendChild(option);
-                });
-
-                select.appendChild(optgroup);
-            });
-
-            // 하위 지역 없는 단독 항목 (기타, 해외 등) - 그룹에 포함되지 않은 것만
-            standalone.filter(r => !provinces.includes(r)).sort().forEach(region => {
+            simplifiedRegionList.forEach(name => {
+                if (selectedSimplified.includes(name)) return;
                 const option = document.createElement('option');
-                option.value = region;
-                option.textContent = region;
+                option.value = name;
+                option.textContent = name;
                 select.appendChild(option);
             });
         }
 
-        // Update company dropdown (filtered by selected regions)
-        function updateCompanySelect() {
-            const select = document.getElementById('companySelect');
-            select.innerHTML = '<option value="">업체 선택...</option>';
-
-            // Get available companies based on selected regions
-            // 지역 미선택 시 전체 포함 (region 없는 지점 포함)
-            const companiesInRegions = new Set();
-            allBranches.forEach(b => {
-                if (selectedRegions.length === 0) {
-                    // 지역 미선택: 모든 업체 포함
-                    if (b.company_name) {
-                        companiesInRegions.add(b.company_name);
-                    }
-                } else {
-                    // 지역 선택됨: 해당 지역 업체만
-                    if (selectedRegions.includes(b.region) && b.company_name) {
-                        companiesInRegions.add(b.company_name);
-                    }
-                }
-            });
-            availableCompanies = [...companiesInRegions].sort();
-
-            availableCompanies.forEach(company => {
-                if (!selectedCompanies.includes(company)) {
-                    const option = document.createElement('option');
-                    option.value = company;
-                    option.textContent = company;
-                    select.appendChild(option);
-                }
-            });
-
-            document.getElementById('companyCount').textContent = availableCompanies.length;
-        }
-
-        // Update branch dropdown (filtered by selected regions & companies)
+        // Update branch dropdown (업체별 optgroup으로 표시)
         function updateBranchSelect() {
             const select = document.getElementById('branchSelect');
-            select.innerHTML = '<option value="">지점 선택...</option>';
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = '업체·지점 선택...';
+            select.replaceChildren(placeholder);
 
-            // Filter branches based on selections
-            // 지역 미선택 시 전체 포함 (region 없는 지점 포함)
+            // 지역 필터 적용
             availableBranches = allBranches.filter(b => {
-                // If regions selected, branch must be in one of them (region 없는 지점 제외)
                 if (selectedRegions.length > 0 && !selectedRegions.includes(b.region)) {
                     return false;
                 }
-                // If companies selected, branch must belong to one of them
-                if (selectedCompanies.length > 0 && !selectedCompanies.includes(b.company_name)) {
-                    return false;
-                }
-                // Exclude already selected branches
                 if (selectedBranches.includes(b.branch_id)) {
                     return false;
                 }
                 return true;
             });
 
-            availableBranches.forEach(branch => {
-                const option = document.createElement('option');
-                option.value = branch.branch_id;
-                option.textContent = branch.branch_name;
-                select.appendChild(option);
+            // 업체별 그룹핑
+            const grouped = {};
+            availableBranches.forEach(b => {
+                const company = b.company_name || '기타';
+                if (!grouped[company]) grouped[company] = [];
+                grouped[company].push(b);
+            });
+
+            // 업체명 정렬 후 optgroup으로 렌더링
+            Object.keys(grouped).sort().forEach(company => {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = company;
+
+                grouped[company].sort((a, b) => (a.branch_name || '').localeCompare(b.branch_name || '')).forEach(branch => {
+                    const option = document.createElement('option');
+                    option.value = branch.branch_id;
+                    option.textContent = branch.branch_name;
+                    optgroup.appendChild(option);
+                });
+
+                select.appendChild(optgroup);
             });
 
             document.getElementById('branchCount').textContent = availableBranches.length;
@@ -1242,59 +1197,26 @@
             const select = document.getElementById('regionSelect');
             const value = select.value;
 
-            if (value && !selectedRegions.includes(value)) {
-                // 선택된 값이 상위 지역(예: "강원", "서울")인지 확인
-                const parts = value.split(' ');
-                const isParentRegion = parts.length === 1;
+            if (value && !selectedSimplified.includes(value)) {
+                selectedSimplified.push(value);
 
-                if (isParentRegion) {
-                    // 상위 지역 선택 시: 해당 지역 + 모든 하위 지역 함께 선택
-                    const regionsToAdd = allRegions.filter(r => {
-                        // 정확히 일치하거나 해당 지역으로 시작하는 모든 하위 지역
-                        return r === value || r.startsWith(value + ' ');
-                    });
+                // 매핑된 원본 지역들을 selectedRegions에 추가
+                const originals = regionMapping[value] || [];
+                originals.forEach(r => {
+                    if (!selectedRegions.includes(r)) {
+                        selectedRegions.push(r);
+                    }
+                });
 
-                    regionsToAdd.forEach(r => {
-                        if (!selectedRegions.includes(r)) {
-                            selectedRegions.push(r);
-                        }
-                    });
-                } else {
-                    // 하위 지역 선택 시: 해당 지역만 추가
-                    selectedRegions.push(value);
-                }
-
-                renderChips('regionChips', selectedRegions, removeRegion);
+                renderChips('regionChips', selectedSimplified, removeRegion);
 
                 // Reset downstream selections
-                selectedCompanies = [];
                 selectedBranches = [];
-                renderChips('companyChips', selectedCompanies, removeCompany);
-                renderChips('branchChips', selectedBranches, removeBranch);
+                renderBranchChips();
             }
 
             select.value = '';
             updateRegionSelect();
-            updateCompanySelect();
-            updateBranchSelect();
-        }
-
-        // Company selection handler
-        function onCompanyChange() {
-            const select = document.getElementById('companySelect');
-            const value = select.value;
-
-            if (value && !selectedCompanies.includes(value)) {
-                selectedCompanies.push(value);
-                renderChips('companyChips', selectedCompanies, removeCompany);
-
-                // Reset downstream selections
-                selectedBranches = [];
-                renderChips('branchChips', selectedBranches, removeBranch);
-            }
-
-            select.value = '';
-            updateCompanySelect();
             updateBranchSelect();
         }
 
@@ -1305,97 +1227,94 @@
 
             if (value && !selectedBranches.includes(value)) {
                 selectedBranches.push(value);
-                const branchNames = selectedBranches.map(id => {
-                    const b = allBranches.find(x => x.branch_id === id);
-                    return b ? b.branch_name : id;
-                });
-                renderChips('branchChips', branchNames, (name) => {
-                    const b = allBranches.find(x => x.branch_name === name);
-                    if (b) removeBranch(b.branch_id);
-                });
+                renderBranchChips();
             }
 
             select.value = '';
             updateBranchSelect();
         }
 
-        // Remove region
-        function removeRegion(region) {
-            selectedRegions = selectedRegions.filter(r => r !== region);
-            renderChips('regionChips', selectedRegions, removeRegion);
+        // Render branch chips with "업체명 > 지점명" format (DOM API)
+        function renderBranchChips() {
+            const container = document.getElementById('branchChips');
+            container.replaceChildren();
 
-            // Clear downstream if affected
-            updateCompanySelect();
-            selectedCompanies = selectedCompanies.filter(c => availableCompanies.includes(c));
-            renderChips('companyChips', selectedCompanies, removeCompany);
-
-            updateBranchSelect();
-            selectedBranches = selectedBranches.filter(id =>
-                availableBranches.some(b => b.branch_id === id)
-            );
-            const branchNames = selectedBranches.map(id => {
+            selectedBranches.forEach(id => {
                 const b = allBranches.find(x => x.branch_id === id);
-                return b ? b.branch_name : id;
-            });
-            renderChips('branchChips', branchNames, (name) => {
-                const b = allBranches.find(x => x.branch_name === name);
-                if (b) removeBranch(b.branch_id);
-            });
+                const label = b
+                    ? (b.company_name ? `${b.company_name} > ${b.branch_name}` : b.branch_name)
+                    : String(id);
 
-            updateRegionSelect();
+                const chip = document.createElement('span');
+                chip.className = 'chip';
+                chip.textContent = label;
+
+                const removeBtn = document.createElement('span');
+                removeBtn.className = 'remove';
+                removeBtn.textContent = '\u00D7';
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeBranch(id);
+                });
+
+                chip.appendChild(removeBtn);
+                container.appendChild(chip);
+            });
         }
 
-        // Remove company
-        function removeCompany(company) {
-            selectedCompanies = selectedCompanies.filter(c => c !== company);
-            renderChips('companyChips', selectedCompanies, removeCompany);
+        // Remove region
+        function removeRegion(simplified) {
+            selectedSimplified = selectedSimplified.filter(s => s !== simplified);
 
-            // Clear downstream if affected
+            // 해당 단순화 이름에 매핑된 원본 지역들 제거
+            const originals = regionMapping[simplified] || [];
+            selectedRegions = selectedRegions.filter(r => !originals.includes(r));
+
+            renderChips('regionChips', selectedSimplified, removeRegion);
+
             updateBranchSelect();
             selectedBranches = selectedBranches.filter(id =>
                 availableBranches.some(b => b.branch_id === id)
             );
-            const branchNames = selectedBranches.map(id => {
-                const b = allBranches.find(x => x.branch_id === id);
-                return b ? b.branch_name : id;
-            });
-            renderChips('branchChips', branchNames, (name) => {
-                const b = allBranches.find(x => x.branch_name === name);
-                if (b) removeBranch(b.branch_id);
-            });
+            renderBranchChips();
 
-            updateCompanySelect();
+            updateRegionSelect();
         }
 
         // Remove branch
         function removeBranch(branchId) {
             selectedBranches = selectedBranches.filter(id => id !== branchId);
-            const branchNames = selectedBranches.map(id => {
-                const b = allBranches.find(x => x.branch_id === id);
-                return b ? b.branch_name : id;
-            });
-            renderChips('branchChips', branchNames, (name) => {
-                const b = allBranches.find(x => x.branch_name === name);
-                if (b) removeBranch(b.branch_id);
-            });
+            renderBranchChips();
             updateBranchSelect();
         }
 
-        // Render chips
+        // Render chips (DOM API - XSS safe)
         function renderChips(containerId, items, removeCallback) {
             const container = document.getElementById(containerId);
-            container.innerHTML = items.map(item => `
-                <span class="chip">
-                    ${item}
-                    <span class="remove" onclick="event.stopPropagation(); (${removeCallback.toString()})(${typeof item === 'string' ? `'${item}'` : item})">&times;</span>
-                </span>
-            `).join('');
+            container.replaceChildren();
+
+            items.forEach(item => {
+                const chip = document.createElement('span');
+                chip.className = 'chip';
+                chip.textContent = item;
+
+                const removeBtn = document.createElement('span');
+                removeBtn.className = 'remove';
+                removeBtn.textContent = '\u00D7';
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeCallback(item);
+                });
+
+                chip.appendChild(removeBtn);
+                container.appendChild(chip);
+            });
         }
 
         // Reset all filters
         function resetFilters() {
             selectedRegions = [];
-            selectedCompanies = [];
+            selectedSimplified = [];
             selectedBranches = [];
             dateFrom = null;
             dateTo = null;
@@ -1407,11 +1326,9 @@
             flatpickr('#dateRangeFilter').clear();
 
             renderChips('regionChips', [], () => { });
-            renderChips('companyChips', [], () => { });
-            renderChips('branchChips', [], () => { });
+            renderBranchChips();
 
             updateRegionSelect();
-            updateCompanySelect();
             updateBranchSelect();
 
             // Reset search results section to show prompt
@@ -1625,9 +1542,6 @@
                 if (selectedRegions.length > 0) {
                     selectedRegions.forEach(r => params.append('regions', r));
                 }
-                if (selectedCompanies.length > 0) {
-                    selectedCompanies.forEach(c => params.append('companies', c));
-                }
                 if (selectedBranches.length > 0) {
                     selectedBranches.forEach(b => params.append('branch_ids', b));
                 }
@@ -1709,9 +1623,6 @@
                 // Add filters
                 if (selectedRegions.length > 0) {
                     selectedRegions.forEach(r => params.append('regions', r));
-                }
-                if (selectedCompanies.length > 0) {
-                    selectedCompanies.forEach(c => params.append('companies', c));
                 }
                 if (selectedBranches.length > 0) {
                     selectedBranches.forEach(b => params.append('branch_ids', b));
