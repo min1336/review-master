@@ -61,6 +61,7 @@ class SyncScheduler:
         """스케줄러 종료"""
         if self._is_running:
             self._scheduler.shutdown(wait=False)
+            self._scheduler = AsyncIOScheduler()  # shutdown 후 재시작 위해 새 인스턴스 생성
             self._is_running = False
             logger.info("스케줄러 종료됨")
             print("[Scheduler] 리뷰 동기화 스케줄러 종료")
