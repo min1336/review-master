@@ -75,6 +75,43 @@ class ReviewDTO:
         }
 
     @classmethod
+    def from_athena_row(cls, row: dict[str, Any]) -> "ReviewDTO":
+        """Athena 쿼리 결과에서 ReviewDTO 생성 (모든 값이 문자열)"""
+        created_at = None
+        review_date = row.get("review_date")
+        if review_date:
+            try:
+                created_at = datetime.fromisoformat(str(review_date))
+            except ValueError:
+                created_at = None
+
+        def safe_int(val, default=0):
+            try:
+                return int(val) if val else default
+            except (ValueError, TypeError):
+                return default
+
+        def safe_float(val, default=None):
+            try:
+                return float(val) if val else default
+            except (ValueError, TypeError):
+                return default
+
+        return cls(
+            id=safe_int(row.get("review_id")),
+            branch_id=safe_int(row.get("branch_id")),
+            content=(row.get("content") or "").strip(),
+            branch_name=row.get("branch_name") or "",
+            rating=safe_float(row.get("rating_service")),
+            created_at=created_at,
+            like_count=safe_int(row.get("helpful_count")),
+            is_blind=False,
+            car_model=row.get("car_type") or "",
+            company_name=row.get("company_name") or "",
+            status=row.get("status") or "1",
+        )
+
+    @classmethod
     def from_db_row(cls, row: dict[str, Any]) -> "ReviewDTO":
         """DB row에서 ReviewDTO 생성"""
         created_at = row.get("review_date") or row.get("created_at")
@@ -112,6 +149,8 @@ class ProcessedReviewDTO:
     sentiment: Literal["positive", "neutral", "negative"] = "neutral"
     sentiment_score: float = 0.5
     is_negative_filtered: bool = False
+    tag_sentiments: dict[str, dict[str, list[str]]] = field(default_factory=dict)
+    # 구조: {"친절도": {"positive": ["친절", "좋은"], "negative": [], "neutral": []}, ...}
 
     @property
     def branch_id(self) -> int:
@@ -924,10 +963,18 @@ class AnalysisReviewDTO:
         if isinstance(review_date, datetime):
             review_date = review_date.isoformat()
 
-        # 평점 추출
-        rating_service = row.get("rating_service")
-        rating_car = row.get("rating_car")
-        rating_convenience = row.get("rating_convenience")
+        # 평점 추출 (Athena는 문자열 반환 → float 변환)
+        def _safe_float(val: Any) -> float | None:
+            if val is None:
+                return None
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return None
+
+        rating_service = _safe_float(row.get("rating_service"))
+        rating_car = _safe_float(row.get("rating_car"))
+        rating_convenience = _safe_float(row.get("rating_convenience"))
 
         # 감정 계산: 평점 + DB 감정 결합
         db_sentiment = row.get("sentiment")

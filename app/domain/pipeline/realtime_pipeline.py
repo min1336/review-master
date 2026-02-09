@@ -1,8 +1,9 @@
 """
 실시간 단건 리뷰 처리 파이프라인
 
-신규 리뷰 1개를 받아 즉시 처리하고 집계 데이터만 DB에 저장합니다.
-리뷰 원본은 저장하지 않고, 감정 통계와 태그별 통계만 증분 업데이트합니다.
+신규 리뷰 1개를 받아 즉시 처리하고 집계 데이터를 DB에 저장합니다.
+감정 통계와 태그별 통계를 증분 업데이트합니다.
+리뷰 원본 저장은 SyncService가 담당합니다.
 
 Usage:
     pipeline = RealtimePipeline()
@@ -56,7 +57,6 @@ class RealtimePipeline(BasePipeline):
     - 리뷰 1개를 받아 즉시 처리
     - 내용 유무에 따라 분기 처리
     - branch_sentiment_stats + branch_tags 증분 업데이트
-    - 리뷰 원본은 저장하지 않음
     """
 
     def __init__(self) -> None:
