@@ -64,6 +64,8 @@ class BranchTag(BaseModel):
     tag_id: int
     period_type: str = "all"
     count: int = 0
+    positive_count: int = 0
+    negative_count: int = 0
     weighted_score: float | None = 0
     rank: int | None = None
     created_at: datetime | None = None

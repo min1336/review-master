@@ -8,7 +8,6 @@ AI 리포트 서비스
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime
 from typing import Awaitable, Callable
@@ -191,8 +190,8 @@ class ReportService:
         """
         Step 2: 지점별 태그 감정 데이터 조회
 
-        branch_tags 테이블에서 positive/negative 기간 타입별 카운트를 조회하여
-        태그별 긍정/부정 비율을 계산합니다.
+        branch_tags 테이블에서 전체 태그를 한 번에 조회하고,
+        positive_count/negative_count 컬럼을 직접 사용하여 감정 비율을 계산합니다.
 
         Note: branch_tags는 기간 필터를 지원하지 않아 전체 기간 집계입니다.
               기간별 태그 분석이 필요하면 별도 집계 테이블 도입이 필요합니다.
@@ -204,47 +203,36 @@ class ReportService:
             dict: tag_sentiments 리스트와 sentiment_stats
         """
         try:
-            positive_tags = await self.branch_tag_repo.get_by_branch(
-                branch_id, period_type="positive", limit=20
-            )
-            negative_tags = await self.branch_tag_repo.get_by_branch(
-                branch_id, period_type="negative", limit=20
+            # 1회 조회 (period_type="all")
+            all_tags = await self.branch_tag_repo.get_by_branch(
+                branch_id, period_type="all", limit=20
             )
         except Exception as e:
             logging.warning(f"태그 조회 실패 (branch_id={branch_id}): {e}")
             return {}
 
-        # 태그별 긍정/부정 카운트 병합
-        tag_map: dict[str, dict] = {}
-
-        for bt in positive_tags:
-            tag_info = bt.model_dump().get("tags") or {}
-            name = tag_info.get("name", "")
-            if not name:
-                continue
-            tag_map.setdefault(name, {"positive": 0, "negative": 0, "neutral": 0})
-            tag_map[name]["positive"] = bt.count or 0
-
-        for bt in negative_tags:
-            tag_info = bt.model_dump().get("tags") or {}
-            name = tag_info.get("name", "")
-            if not name:
-                continue
-            tag_map.setdefault(name, {"positive": 0, "negative": 0, "neutral": 0})
-            tag_map[name]["negative"] = bt.count or 0
-
-        if not tag_map:
+        if not all_tags:
             return {}
 
-        # tag_sentiments 형식으로 변환
+        # 태그별 긍정/부정 카운트 직접 사용
         tag_sentiments = []
         total_pos = 0
         total_neg = 0
 
-        for name, counts in tag_map.items():
-            pos = counts["positive"]
-            neg = counts["negative"]
+        for bt in all_tags:
+            try:
+                tag_info = bt.model_dump().get("tags") or {}
+            except Exception:
+                tag_info = {}
+            name = tag_info.get("name", "")
+            if not name:
+                continue
+
+            # 직접 컬럼 사용
+            pos = bt.positive_count or 0
+            neg = bt.negative_count or 0
             total = pos + neg
+
             tag_sentiments.append({
                 "name": name,
                 "positive": pos,
@@ -254,6 +242,9 @@ class ReportService:
             })
             total_pos += pos
             total_neg += neg
+
+        if not tag_sentiments:
+            return {}
 
         total_all = total_pos + total_neg
         sentiment_stats = {
