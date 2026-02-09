@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -19,6 +20,7 @@ from schemas.dto import (
 )
 
 if TYPE_CHECKING:
+    from infrastructure.athena import AthenaClient
     from repository.review_repository import BranchReviewRepository
     from repository.summary_repository import SummaryRepository
 
@@ -66,9 +68,11 @@ class AnalysisService:
         self,
         review_repo: BranchReviewRepository,
         summary_repo: SummaryRepository,
+        athena_client: AthenaClient | None = None,
     ):
         self.review_repo = review_repo
         self.summary_repo = summary_repo
+        self.athena_client = athena_client
 
     async def get_filter_options(self) -> FilterOptionsDTO:
         """
@@ -185,7 +189,20 @@ class AnalysisService:
             if effective_branch_ids is not None and len(effective_branch_ids) == 0:
                 return AnalysisReviewListDTO(reviews=[], total=0)
 
-            # 리뷰 조회 (company_names 대신 branch_ids 사용)
+            # Athena 분기: Athena 원본(new_review_list)에는 sentiment/is_new 컬럼이 없으므로,
+            # 해당 필터가 있으면 Supabase(branch_reviews)에서 처리한다.
+            use_athena = (
+                self.athena_client is not None
+                and sentiment is None
+                and is_new is None
+            )
+
+            if use_athena:
+                return await self._search_via_athena(
+                    effective_branch_ids, date_from, date_to, sort_by, limit, offset
+                )
+
+            # 기존 Supabase 경로
             result = await self.review_repo.search_with_filters(
                 branch_ids=effective_branch_ids,
                 sentiment=sentiment,
@@ -211,6 +228,53 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"Failed to get filtered reviews: {e}")
             raise ReviewSearchError(f"리뷰 검색 실패: {e}") from e
+
+    async def _search_via_athena(
+        self,
+        branch_ids: list[int] | None,
+        date_from: str | None,
+        date_to: str | None,
+        sort_by: str,
+        limit: int,
+        offset: int,
+    ) -> AnalysisReviewListDTO:
+        """Athena를 통한 리뷰 검색 (블로킹 방지: to_thread)"""
+        try:
+            rows, total = await asyncio.to_thread(
+                self.athena_client.fetch_reviews_with_filters,
+                branch_ids=branch_ids,
+                date_from=date_from,
+                date_to=date_to,
+                sort_by=sort_by,
+                limit=limit,
+                offset=offset,
+            )
+
+            # 파이프라인 감정 보강: branch_reviews에서 sentiment 병합
+            review_ids = [int(r["review_id"]) for r in rows if r.get("review_id")]
+            if review_ids:
+                sentiment_map = await self.review_repo.get_sentiments_by_review_ids(review_ids)
+                for row in rows:
+                    rid = int(row["review_id"]) if row.get("review_id") else None
+                    if rid and rid in sentiment_map:
+                        row["sentiment"] = sentiment_map[rid]
+
+            reviews = [AnalysisReviewDTO.from_db_row(row) for row in rows]
+            return AnalysisReviewListDTO(reviews=reviews, total=total)
+
+        except Exception as e:
+            logger.warning(f"Athena 검색 실패, Supabase 폴백: {e}")
+            # Supabase 폴백
+            result = await self.review_repo.search_with_filters(
+                branch_ids=branch_ids,
+                date_from=date_from,
+                date_to=date_to,
+                sort_by=sort_by,
+                limit=limit,
+                offset=offset,
+            )
+            reviews = [AnalysisReviewDTO.from_db_row(row) for row in result.reviews]
+            return AnalysisReviewListDTO(reviews=reviews, total=result.total)
 
     async def _get_company_and_branch_options_with_region(
         self, region_map: dict[int, str]

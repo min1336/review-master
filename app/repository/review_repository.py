@@ -443,6 +443,25 @@ class BranchReviewRepository(BaseRepository[Review]):
         result = await execute_with_retry(query)
         return result.count or 0
 
+    async def get_sentiments_by_review_ids(
+        self, review_ids: list[int]
+    ) -> dict[int, str]:
+        """review_id → sentiment 매핑 조회 (Athena 결과 보강용)"""
+        if not review_ids:
+            return {}
+
+        result = await execute_with_retry(
+            self._client.table(self.table_name)
+            .select("review_id, sentiment")
+            .in_("review_id", review_ids)
+        )
+
+        return {
+            row["review_id"]: row["sentiment"]
+            for row in (result.data or [])
+            if row.get("sentiment")
+        }
+
     async def mark_reviews_as_read(self, review_ids: list[int] | None = None) -> int:
         """
         리뷰 읽음 처리 (is_new=false)

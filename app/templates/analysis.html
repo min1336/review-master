@@ -659,7 +659,105 @@
             margin-left: 8px;
         }
 
+        /* 신규 리뷰 다중 선택 */
+        .new-review-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
+        }
+
+        .new-review-actions .btn-sm {
+            padding: 4px 10px;
+            font-size: 11px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+        }
+
+        .new-review-actions .btn-sm:hover:not(:disabled) {
+            background: var(--bg-secondary);
+        }
+
+        .new-review-actions .btn-sm:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .new-review-actions .btn-sm.btn-primary-sm {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .new-review-actions .btn-sm.btn-primary-sm:hover:not(:disabled) {
+            background: var(--primary);
+            opacity: 0.85;
+        }
+
+        .review-checkbox {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--primary);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .review-item.has-checkbox {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .review-item.has-checkbox .review-content-wrap {
+            flex: 1;
+            min-width: 0;
+        }
+
         /* 스케줄러 상태 UI */
+        .manual-sync-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            border-radius: 20px;
+            font-size: 12px;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-weight: 500;
+        }
+
+        .manual-sync-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .manual-sync-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .manual-sync-btn svg {
+            transition: transform 0.3s;
+        }
+
+        .manual-sync-btn.syncing svg {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
         .scheduler-status {
             display: flex;
             align-items: center;
@@ -755,6 +853,15 @@
             <!-- 스케줄러 상태 -->
             <!-- 스케줄러 상태 (일일 동기화 + 신규 리뷰) -->
             <div style="display: flex; gap: 8px;">
+                <!-- 수동 동기화 -->
+                <button class="manual-sync-btn" id="btn-manual-sync" onclick="manualSync()" title="수동 동기화">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    수동 동기화
+                </button>
                 <!-- 일일 동기화 스케줄러 -->
                 <div class="scheduler-status" id="daily-scheduler">
                     <div class="scheduler-indicator" id="daily-indicator"></div>
@@ -795,14 +902,6 @@
 
             </div>
 
-            <button class="btn btn-secondary" id="btn-mark-read" onclick="markAllAsRead()" style="display: none;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                </svg>
-                모두 읽음
-                <span class="new-badge" id="new-count-badge" style="display: none;">0</span>
-            </button>
             <button class="btn btn-secondary" id="btn-back">대시보드로 돌아가기</button>
         </div>
     </header>
@@ -810,14 +909,26 @@
     <div class="container">
         <!-- New Reviews Section -->
         <div class="review-card" style="margin-bottom: var(--spacing-lg);">
-            <div class="review-header" style="cursor: pointer; user-select: none;" onclick="toggleNewReviews()">
-                <div class="review-title">
+            <div class="review-header" style="user-select: none; display: flex; align-items: center;">
+                <div class="review-title" style="cursor: pointer;" onclick="toggleNewReviews()">
                     신규 리뷰 <span class="review-count" id="newReviewCount">(0)</span>
                     <svg id="toggleIcon" class="toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                         stroke-width="2"
                         style="width: 20px; height: 20px; margin-left: 8px; transition: transform 0.3s ease;">
                         <polyline points="6 9 12 15 18 9"></polyline>
                     </svg>
+                </div>
+                <div class="new-review-actions" id="newReviewActions" style="display: none;">
+                    <label style="display: flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer;">
+                        <input type="checkbox" class="review-checkbox" id="selectAllNew" onchange="toggleSelectAllNew()" />
+                        전체
+                    </label>
+                    <button class="btn-sm btn-primary-sm" id="btn-mark-selected" onclick="markSelectedAsRead()" disabled>
+                        선택 읽음
+                    </button>
+                    <button class="btn-sm" id="btn-mark-read" onclick="markAllAsRead()">
+                        모두 읽음
+                    </button>
                 </div>
             </div>
 
@@ -961,6 +1072,7 @@
                 </div>
                 <div class="loading" id="loading" style="display: none;">
                     <div class="spinner"></div>
+                    <span id="loadingMessage" style="margin-top: 8px; color: #888; font-size: 13px;"></span>
                 </div>
                 <div class="review-list" id="reviewList" style="display: none;"></div>
                 <div class="empty-state" id="emptyState" style="display: none;">
@@ -1404,6 +1516,7 @@
                     renderNewReviews(data.reviews);
                     reviewList.style.display = 'block';
                 } else {
+                    renderNewReviews([]);
                     emptyState.style.display = 'flex';
                 }
 
@@ -1424,6 +1537,71 @@
                 const reviewItem = createReviewElement(review, true);
                 reviewList.appendChild(reviewItem);
             });
+
+            // 액션 버튼 표시/숨기기
+            const actions = document.getElementById('newReviewActions');
+            if (actions) {
+                actions.style.display = reviews.length > 0 ? 'flex' : 'none';
+            }
+            // 전체 선택 초기화
+            const selectAll = document.getElementById('selectAllNew');
+            if (selectAll) selectAll.checked = false;
+            updateSelectedCount();
+        }
+
+        // 선택 개수 갱신
+        function updateSelectedCount() {
+            const checked = document.querySelectorAll('#newReviewList .review-checkbox:checked');
+            const btn = document.getElementById('btn-mark-selected');
+            if (btn) {
+                btn.disabled = checked.length === 0;
+            }
+        }
+
+        // 전체 선택/해제
+        function toggleSelectAllNew() {
+            const selectAll = document.getElementById('selectAllNew');
+            const checkboxes = document.querySelectorAll('#newReviewList .review-checkbox');
+            checkboxes.forEach(cb => cb.checked = selectAll.checked);
+            updateSelectedCount();
+        }
+
+        // 선택 읽음 처리
+        async function markSelectedAsRead() {
+            const checked = document.querySelectorAll('#newReviewList .review-checkbox:checked');
+            if (checked.length === 0) return;
+
+            const reviewIds = Array.from(checked).map(cb => parseInt(cb.dataset.reviewId));
+
+            if (!confirm(`${reviewIds.length}개의 선택된 리뷰를 읽음 처리하시겠습니까?`)) return;
+
+            const btn = document.getElementById('btn-mark-selected');
+            btn.disabled = true;
+            btn.textContent = '처리 중...';
+
+            try {
+                const response = await fetch(`${API_PREFIX}/sync/reviews/read`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ review_ids: reviewIds })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    await checkSyncStatus();
+                    await loadNewReviews();
+                    if (hasSearched) await loadReviews();
+                }
+            } catch (error) {
+                console.error('Failed to mark selected as read:', error);
+                alert('읽음 처리 중 오류가 발생했습니다.');
+            } finally {
+                const btn = document.getElementById('btn-mark-selected');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = '선택 읽음';
+                }
+            }
         }
 
         // Create review element using DOM API
@@ -1433,6 +1611,30 @@
             if (review.review_id) {
                 reviewItem.setAttribute('data-id', review.review_id);
             }
+
+            // 신규 리뷰 섹션: 체크박스 추가
+            if (isNewSection && review.review_id) {
+                reviewItem.classList.add('has-checkbox');
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'review-checkbox';
+                checkbox.dataset.reviewId = review.review_id;
+                checkbox.onchange = () => {
+                    updateSelectedCount();
+                    // 전체 선택 체크박스 동기화
+                    const all = document.querySelectorAll('#newReviewList .review-checkbox');
+                    const checked = document.querySelectorAll('#newReviewList .review-checkbox:checked');
+                    const selectAll = document.getElementById('selectAllNew');
+                    if (selectAll) selectAll.checked = all.length === checked.length;
+                };
+                checkbox.onclick = (e) => e.stopPropagation();
+                reviewItem.appendChild(checkbox);
+            }
+
+            // Wrap content for checkbox layout
+            const contentWrap = isNewSection ? document.createElement('div') : null;
+            if (contentWrap) contentWrap.className = 'review-content-wrap';
 
             // Meta container
             const reviewMeta = document.createElement('div');
@@ -1506,14 +1708,30 @@
             convRating.textContent = `편의성 ${ratingConv}`;
             reviewRatings.appendChild(convRating);
 
+            // Sentiment badge
+            if (review.sentiment) {
+                const sentimentBadge = document.createElement('span');
+                sentimentBadge.className = 'review-sentiment ' + review.sentiment;
+                const sentimentLabels = { positive: '긍정', negative: '부정', neutral: '중립' };
+                sentimentBadge.textContent = sentimentLabels[review.sentiment] || review.sentiment;
+                reviewRatings.appendChild(sentimentBadge);
+            }
+
             reviewMeta.appendChild(reviewRatings);
-            reviewItem.appendChild(reviewMeta);
 
             // Content section
             const reviewContent = document.createElement('div');
             reviewContent.className = 'review-content';
             reviewContent.textContent = review.content || '-';
-            reviewItem.appendChild(reviewContent);
+
+            if (contentWrap) {
+                contentWrap.appendChild(reviewMeta);
+                contentWrap.appendChild(reviewContent);
+                reviewItem.appendChild(contentWrap);
+            } else {
+                reviewItem.appendChild(reviewMeta);
+                reviewItem.appendChild(reviewContent);
+            }
 
             return reviewItem;
         }
@@ -1613,6 +1831,9 @@
             emptyState.style.display = 'none';
             pagination.style.display = 'none';
 
+            // Athena 검색 여부에 따라 로딩 메시지 표시
+            const loadingMsg = document.getElementById('loadingMessage');
+
             try {
                 const params = new URLSearchParams({
                     limit: pageSize,
@@ -1637,6 +1858,16 @@
                 }
                 if (dateTo) {
                     params.append('date_to', dateTo);
+                }
+
+                // sentiment/is_new 없으면 Athena 경로 → 로딩 메시지 변경
+                const isNewFilter = document.getElementById('isNewFilter');
+                const isNewVal = isNewFilter ? isNewFilter.value : '';
+                const useAthena = !sentiment && !isNewVal;
+                if (useAthena) {
+                    loadingMsg.textContent = '전체 리뷰 검색 중... (2~4초 소요)';
+                } else {
+                    loadingMsg.textContent = '';
                 }
 
                 const response = await fetch(`${API_PREFIX}/analysis/reviews?${params}`);
@@ -1673,6 +1904,7 @@
                 emptyState.style.display = 'flex';
             } finally {
                 loading.style.display = 'none';
+                loadingMsg.textContent = '';
             }
         }
 
@@ -1715,22 +1947,8 @@
 
                 if (data.success && data.marked_count > 0) {
                     if (isNewSection) {
-                        // 신규 리뷰 섹션에서 클릭한 경우: 해당 리뷰를 목록에서 제거
-                        const reviewItem = document.querySelector(`#newReviewList .review-item[data-id="${dbId}"]`);
-                        if (reviewItem) {
-                            reviewItem.remove();
-                        }
-
-                        // 남은 리뷰 수 업데이트
-                        const newReviewList = document.getElementById('newReviewList');
-                        const remainingCount = newReviewList.children.length;
-                        document.getElementById('newReviewCount').textContent = `(${remainingCount})`;
-
-                        // 리뷰가 모두 제거되면 빈 상태 표시
-                        if (remainingCount === 0) {
-                            newReviewList.style.display = 'none';
-                            document.getElementById('newReviewEmpty').style.display = 'flex';
-                        }
+                        // 신규 리뷰 섹션: API 재조회로 개수 통일
+                        await loadNewReviews();
                     } else {
                         // 검색 결과 섹션에서 클릭한 경우: NEW 태그만 제거
                         const reviewItem = document.querySelector(`#reviewList .review-item[data-id="${dbId}"]`);
@@ -1740,16 +1958,13 @@
                             if (newTag) newTag.remove();
                         }
                     }
-
-                    // 동기화 상태 갱신
-                    await checkSyncStatus();
                 }
             } catch (error) {
                 console.error('Failed to mark review as read:', error);
             }
         }
 
-        // Render pagination
+        // Render pagination (순차 탐색만 허용 - 마지막 페이지 점프 불가)
         function renderPagination() {
             const pageNumbers = document.getElementById('pageNumbers');
             const prevBtn = document.getElementById('prevBtn');
@@ -1765,18 +1980,8 @@
             }
 
             let html = '';
-            if (startPage > 1) {
-                html += `<button class="page-btn" onclick="goToPage(1)">1</button>`;
-                if (startPage > 2) html += `<span class="page-info">...</span>`;
-            }
-
             for (let i = startPage; i <= endPage; i++) {
                 html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
-            }
-
-            if (endPage < totalPages) {
-                if (endPage < totalPages - 1) html += `<span class="page-info">...</span>`;
-                html += `<button class="page-btn" onclick="goToPage(${totalPages})">${totalPages}</button>`;
             }
 
             pageNumbers.innerHTML = html;
@@ -1791,8 +1996,42 @@
         }
 
         // =============================================
-        // 스케줄러 관련 함수
+        // 수동 동기화
         // =============================================
+        async function manualSync() {
+            const btn = document.getElementById('btn-manual-sync');
+            if (btn.disabled) return;
+
+            btn.disabled = true;
+            btn.classList.add('syncing');
+
+            try {
+                const response = await fetch(`${API_PREFIX}/sync/reviews`, {
+                    method: 'POST',
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    const msg = data.new_reviews > 0
+                        ? `동기화 완료: 신규 리뷰 ${data.new_reviews}건`
+                        : '동기화 완료: 신규 리뷰가 없습니다.';
+                    alert(msg);
+                    await checkSyncStatus();
+                    if (data.new_reviews > 0) {
+                        await loadNewReviews();
+                        await loadReviews();
+                    }
+                } else {
+                    alert(data.detail || '동기화에 실패했습니다.');
+                }
+            } catch (error) {
+                console.error('Manual sync failed:', error);
+                alert('동기화 중 오류가 발생했습니다.');
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('syncing');
+            }
+        }
 
         // =============================================
         // 스케줄러 관련 함수
@@ -1888,34 +2127,15 @@
         // 동기화 관련 함수
         // =============================================
 
-        // 동기화 상태 확인 (신규 리뷰 수)
+        // 동기화 상태 확인 (배지는 loadNewReviews에서 통일 관리)
         async function checkSyncStatus() {
-            try {
-                const response = await fetch(`${API_PREFIX}/sync/status`);
-                const data = await response.json();
-
-                const badge = document.getElementById('new-count-badge');
-                const markReadBtn = document.getElementById('btn-mark-read');
-
-                if (data.new_reviews > 0) {
-                    if (badge) {
-                        badge.textContent = data.new_reviews;
-                        badge.style.display = 'inline';
-                    }
-                    if (markReadBtn) markReadBtn.style.display = 'inline-flex';
-                } else {
-                    if (badge) badge.style.display = 'none';
-                    if (markReadBtn) markReadBtn.style.display = 'none';
-                }
-            } catch (error) {
-                console.error('Failed to check sync status:', error);
-            }
+            // loadNewReviews가 배지/카운트를 통일 갱신하므로 여기서는 추가 처리 없음
         }
 
         // 전체 읽음 처리
         async function markAllAsRead() {
-            const badge = document.getElementById('new-count-badge');
-            const count = badge.textContent || '0';
+            const countEl = document.getElementById('newReviewCount');
+            const count = countEl ? countEl.textContent.replace(/[()]/g, '') || '0' : '0';
 
             if (!confirm(`${count}개의 신규 리뷰를 모두 읽음 처리하시겠습니까?`)) {
                 return;
@@ -1923,13 +2143,8 @@
 
             const btn = document.getElementById('btn-mark-read');
             btn.disabled = true;
-            btn.innerHTML = `
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinning">
-                    <circle cx="12" cy="12" r="10"></circle>
-                </svg>
-                처리 중...
-                <span class="new-badge" id="new-count-badge" style="display: none;">0</span>
-            `;
+            const originalText = btn.textContent;
+            btn.textContent = '처리 중...';
 
             try {
                 const response = await fetch(`${API_PREFIX}/sync/reviews/read`, {
@@ -1951,14 +2166,7 @@
                 alert('읽음 처리 중 오류가 발생했습니다.');
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = `
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                    </svg>
-                    모두 읽음
-                    <span class="new-badge" id="new-count-badge" style="display: none;">0</span>
-                `;
+                btn.textContent = '모두 읽음';
             }
         }
     </script>

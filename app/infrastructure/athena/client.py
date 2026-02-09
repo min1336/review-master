@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import re
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import boto3
 
@@ -15,6 +18,9 @@ if TYPE_CHECKING:
     from mypy_boto3_athena import AthenaClient as AthenaClientType
 
 logger = logging.getLogger(__name__)
+
+# 캐시 TTL (초)
+_CACHE_TTL = 300  # 5분
 
 
 # 리뷰 조회 쿼리 (원본 테이블 직접 JOIN - 파트너스/JEJU_API/GLOBAL_API 전체 지원)
@@ -159,6 +165,145 @@ ORDER BY nrl.register_date DESC
 """
 
 
+# 필터 검색 쿼리 (동적 WHERE 조건)
+SEARCH_QUERY_BASE = """
+SELECT
+    nrl.serial              AS review_id,
+    nrl.reservation_idx     AS reservation_id,
+    nrl.company_serial      AS company_id,
+    nrl.branch_serial       AS branch_id,
+    r."예약_업체명"         AS company_name,
+    b."예약_지점명"         AS branch_name,
+    nrl.branch_evaluation   AS rating_service,
+    nrl.car_evaluation      AS rating_car,
+    nrl.take_evaluation     AS rating_convenience,
+    nrl.opinion             AS content,
+    nrl.register_date       AS review_date,
+    nrl.status              AS status,
+    r."차종"                AS car_type,
+    COUNT(*) OVER()         AS total_count
+FROM carmore.new_review_list nrl
+LEFT JOIN (
+    SELECT
+        CAST(trl.f_reservationidx AS VARCHAR) AS reservationNumber,
+        nrc.name AS "예약_업체명",
+        CASE TRY_CAST(trl.trl_car_type_flag AS INTEGER)
+            WHEN 0 THEN '경형' WHEN 1 THEN '소형' WHEN 2 THEN '준중형'
+            WHEN 3 THEN '중형' WHEN 4 THEN '대형' WHEN 5 THEN '수입'
+            WHEN 6 THEN 'RV' WHEN 7 THEN 'SUV' ELSE NULL
+        END AS "차종",
+        CASE TRY_CAST(trl.reserv_rent_type AS INTEGER)
+            WHEN 1 THEN 'SHORT' WHEN 2 THEN 'MONTH' ELSE 'SUBSCRIPTION'
+        END AS rentType
+    FROM carmore.tbl_reservation_list trl
+    INNER JOIN carmore.new_rentCompany nrc ON trl.company_serial = nrc.serial
+
+    UNION ALL
+
+    SELECT
+        CAST(wari_reserv_idx AS VARCHAR) AS reservationNumber,
+        waa_name AS "예약_업체명",
+        CASE TRY_CAST(wari.wari_car_type_flag AS INTEGER)
+            WHEN 0 THEN '경형' WHEN 1 THEN '소형' WHEN 2 THEN '준중형'
+            WHEN 3 THEN '중형' WHEN 4 THEN '대형' WHEN 5 THEN '수입'
+            WHEN 6 THEN 'RV' WHEN 7 THEN 'SUV' ELSE NULL
+        END AS "차종",
+        CASE
+            WHEN date_diff('day', wari.wari_rental_start, wari.wari_rental_end) < 15 THEN 'SHORT'
+            WHEN date_diff('day', wari.wari_rental_start, wari.wari_rental_end) < 30 THEN 'MONTH'
+            ELSE 'SUBSCRIPTION'
+        END AS rentType
+    FROM carmore.workspace_api_reservation_inventory wari
+    INNER JOIN carmore.workspace_api_affiliate ON wari_waa_idx = waa_idx
+
+    UNION ALL
+
+    SELECT
+        CAST(cgar_reservation_number AS VARCHAR) AS reservationNumber,
+        cgaa_name AS "예약_업체명",
+        CASE TRY_CAST(cim.carinfomst_type AS INTEGER)
+            WHEN 0 THEN '경형' WHEN 1 THEN '소형' WHEN 2 THEN '준중형'
+            WHEN 3 THEN '중형' WHEN 4 THEN '대형' WHEN 5 THEN '수입'
+            WHEN 6 THEN 'RV' WHEN 7 THEN 'SUV' ELSE NULL
+        END AS "차종",
+        CASE
+            WHEN date_diff('day', cgar.cgar_rent_start_datetime, cgar.cgar_rent_end_datetime) < 15 THEN 'SHORT'
+            WHEN date_diff('day', cgar.cgar_rent_start_datetime, cgar.cgar_rent_end_datetime) < 30 THEN 'MONTH'
+            ELSE 'SUBSCRIPTION'
+        END AS rentType
+    FROM carmore.carmore_global_api_reservation cgar
+    INNER JOIN carmore.carmore_global_api_affiliates ON cgar_cgaa_index = cgaa_index
+    INNER JOIN carmore.carinfo_master cim ON cgar_cimaster_index = carinfo_idx
+) r ON CAST(nrl.reservation_idx AS VARCHAR) = r.reservationNumber
+LEFT JOIN (
+    SELECT branch.branchName AS "예약_지점명",
+        CONCAT(branch.address, ' ', branch.detailAddress) AS "주소",
+        CAST(branch.serial AS VARCHAR) AS serial, 1 AS type
+    FROM carmore.new_rentCompany_branch branch
+    UNION ALL
+    SELECT branch.waab_name AS "예약_지점명",
+        CONCAT(branch.waab_main_address, ' ', branch.waab_sub_address) AS "주소",
+        CAST(branch.waab_idx AS VARCHAR) AS serial, 2 AS type
+    FROM carmore.workspace_api_affiliate_branch branch
+    UNION ALL
+    SELECT CONCAT(branch.cgaa_name, ' ', branch.cgaa_location_name) AS "예약_지점명",
+        '' AS "주소",
+        CAST(branch.cgaa_index AS VARCHAR) AS serial, 3 AS type
+    FROM carmore.carmore_global_api_affiliates branch
+) b ON CAST(nrl.branch_serial AS VARCHAR) = b.serial
+    AND TRY_CAST(nrl.nrl_affiliate_type AS INTEGER) = b.type
+WHERE TRY_CAST(nrl.status AS INTEGER) = 1
+"""
+
+
+class _SearchCache:
+    """간단한 TTL 메모리 캐시"""
+
+    def __init__(self, ttl: int = _CACHE_TTL) -> None:
+        self._ttl = ttl
+        self._store: dict[str, tuple[float, Any]] = {}
+
+    @staticmethod
+    def _make_key(params: dict) -> str:
+        raw = json.dumps(params, sort_keys=True, default=str)
+        return hashlib.sha256(raw.encode()).hexdigest()
+
+    def get(self, params: dict) -> Any | None:
+        key = self._make_key(params)
+        entry = self._store.get(key)
+        if entry is None:
+            return None
+        ts, value = entry
+        if time.time() - ts > self._ttl:
+            del self._store[key]
+            return None
+        return value
+
+    def set(self, params: dict, value: Any) -> None:
+        key = self._make_key(params)
+        now = time.time()
+        # 만료된 항목 항상 정리
+        self._store = {
+            k: v for k, v in self._store.items() if now - v[0] <= self._ttl
+        }
+        self._store[key] = (time.time(), value)
+
+
+_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _validate_date(value: str, name: str) -> str:
+    """YYYY-MM-DD 형식 검증 (SQL Injection 방지)"""
+    if not _DATE_PATTERN.match(value):
+        raise ValueError(f"잘못된 날짜 형식 ({name}): {value!r} — YYYY-MM-DD 필요")
+    # 실제 유효한 날짜인지 확인
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError(f"유효하지 않은 날짜 ({name}): {value!r}")
+    return value
+
+
 class AthenaClient:
     """AWS Athena 클라이언트"""
 
@@ -172,6 +317,94 @@ class AthenaClient:
         )
         self._database = settings.athena_database
         self._output_bucket = settings.athena_output_bucket
+        self._search_cache = _SearchCache()
+
+    def fetch_reviews_with_filters(
+        self,
+        branch_ids: list[int] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        sort_by: str = "latest",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[dict], int]:
+        """
+        필터 조건으로 리뷰 검색 (분석 페이지용)
+
+        Args:
+            branch_ids: 지점 ID 필터
+            date_from: 시작일 (YYYY-MM-DD)
+            date_to: 종료일 (YYYY-MM-DD)
+            sort_by: 정렬 (latest, rating_low)
+            limit: 조회 개수
+            offset: 페이징 오프셋
+
+        Returns:
+            (리뷰 목록, 전체 개수)
+        """
+        cache_params = {
+            "branch_ids": branch_ids,
+            "date_from": date_from,
+            "date_to": date_to,
+            "sort_by": sort_by,
+            "limit": limit,
+            "offset": offset,
+        }
+
+        cached = self._search_cache.get(cache_params)
+        if cached is not None:
+            logger.info("Athena 검색 캐시 히트")
+            return cached
+
+        # 동적 WHERE 절 빌드 (입력값 검증으로 SQL Injection 방지)
+        where_parts: list[str] = []
+
+        if branch_ids:
+            safe_ids = [int(bid) for bid in branch_ids]
+            ids_str = ", ".join(str(bid) for bid in safe_ids)
+            where_parts.append(f"AND nrl.branch_serial IN ({ids_str})")
+
+        if date_from:
+            safe_from = _validate_date(date_from, "date_from")
+            where_parts.append(f"AND nrl.register_date >= TIMESTAMP '{safe_from} 00:00:00'")
+
+        if date_to:
+            safe_to = _validate_date(date_to, "date_to")
+            where_parts.append(f"AND nrl.register_date < TIMESTAMP '{safe_to} 23:59:59'")
+
+        # ORDER BY (화이트리스트)
+        if sort_by == "rating_low":
+            order_clause = "ORDER BY nrl.branch_evaluation ASC"
+        else:
+            order_clause = "ORDER BY nrl.register_date DESC"
+
+        safe_limit = int(limit)
+        safe_offset = int(offset)
+        query = SEARCH_QUERY_BASE + "\n".join(where_parts) + f"\n{order_clause}\nOFFSET {safe_offset}\nLIMIT {safe_limit}"
+
+        logger.info(f"Athena 필터 검색: branch_ids={branch_ids}, date={date_from}~{date_to}")
+
+        try:
+            rows = self._execute_query(query)
+
+            total = 0
+            if rows:
+                total_val = rows[0].get("total_count")
+                if total_val:
+                    total = int(total_val)
+
+            # total_count 컬럼 제거
+            for row in rows:
+                row.pop("total_count", None)
+
+            result = (rows, total)
+            self._search_cache.set(cache_params, result)
+            logger.info(f"Athena 필터 검색 완료: {len(rows)}개 / 전체 {total}개")
+            return result
+
+        except Exception as e:
+            logger.error(f"Athena 필터 검색 실패: {e}")
+            raise
 
     def fetch_reviews_since(
         self, since: datetime, limit: int | None = None
@@ -186,10 +419,11 @@ class AthenaClient:
         Returns:
             리뷰 딕셔너리 리스트
         """
-        query = REVIEW_QUERY.format(since=since.strftime("%Y-%m-%d %H:%M:%S"))
+        safe_since = since.strftime("%Y-%m-%d %H:%M:%S")
+        query = REVIEW_QUERY.format(since=safe_since)
 
         if limit:
-            query += f"\nLIMIT {limit}"
+            query += f"\nLIMIT {int(limit)}"
 
         logger.info(f"Athena 쿼리 실행: since={since}")
         print(f"[DEBUG] Athena 쿼리:\n{query[:500]}...")

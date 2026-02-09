@@ -15,11 +15,14 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from fastapi import Depends, Header, HTTPException, status
 from repository.session import get_client
 from supabase import AsyncClient
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from repository.affiliate_repository import AffiliateRepository
@@ -156,7 +159,19 @@ async def get_analysis_service(
 ) -> AnalysisService:
     from services.analysis_service import AnalysisService
 
-    return AnalysisService(review_repo, summary_repo)
+    # Athena 클라이언트 초기화 (설정이 있는 경우에만)
+    athena_client = None
+    try:
+        from core.config import get_settings
+        from infrastructure.athena import AthenaClient
+
+        settings = get_settings()
+        if settings.aws_access_key_id and settings.athena_output_bucket:
+            athena_client = AthenaClient()
+    except Exception as e:
+        logger.debug(f"Athena 클라이언트 초기화 스킵: {e}")
+
+    return AnalysisService(review_repo, summary_repo, athena_client)
 
 
 async def get_sync_service(
@@ -173,8 +188,8 @@ async def get_sync_service(
         settings = get_settings()
         if settings.aws_access_key_id and settings.athena_output_bucket:
             athena_client = AthenaClient()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Athena 클라이언트 초기화 스킵: {e}")
 
     return SyncService(review_repo, athena_client)
 
