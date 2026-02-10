@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+
+from core.timezone import utc_now
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -35,7 +37,7 @@ class SchedulerSettingsRepository:
     async def upsert(self, data: dict) -> dict | None:
         """설정 생성/수정"""
         try:
-            data["updated_at"] = datetime.now().isoformat()
+            data["updated_at"] = utc_now().isoformat()
 
             result = await self._client.table(self.TABLE_NAME).upsert(
                 data, on_conflict="branch_id"
@@ -54,7 +56,7 @@ class SchedulerSettingsRepository:
             await self._client.table(self.TABLE_NAME).update({
                 "last_summary_at": last_summary_at.isoformat(),
                 "next_summary_at": next_summary_at.isoformat(),
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": utc_now().isoformat(),
             }).eq("branch_id", branch_id).execute()
 
             return True
@@ -65,7 +67,7 @@ class SchedulerSettingsRepository:
     async def get_branches_due_for_summary(self) -> list[dict]:
         """요약 생성이 필요한 업체 목록 조회"""
         try:
-            now = datetime.now().isoformat()
+            now = utc_now().isoformat()
 
             result = await self._client.table(self.TABLE_NAME).select(
                 "*"

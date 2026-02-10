@@ -7,6 +7,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+from core.timezone import utc_now
+
 from models.affiliate import Affiliate, CarModel
 
 from .base import BaseRepository
@@ -87,7 +89,7 @@ class AffiliateRepository(BaseRepository[Affiliate]):
             "total": 0,
             "success": 0,
             "error": None,
-            "synced_at": datetime.now().isoformat(),
+            "synced_at": utc_now().isoformat(),
         }
 
         try:
@@ -207,7 +209,7 @@ class CarModelRepository(BaseRepository[CarModel]):
             "total": 0,
             "success": 0,
             "error": None,
-            "synced_at": datetime.now().isoformat(),
+            "synced_at": utc_now().isoformat(),
         }
 
         try:

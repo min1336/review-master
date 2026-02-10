@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import sys
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
@@ -16,6 +19,32 @@ sys.path.insert(0, str(APP_DIR.parent))
 from core.config import get_settings
 
 settings = get_settings()
+
+
+# ============================================================
+# TZ-Aware JSON Response (안전망)
+# ============================================================
+class _TZAwareEncoder(json.JSONEncoder):
+    """naive datetime에 자동으로 +00:00 offset을 부착하는 인코더."""
+
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, datetime):
+            if obj.tzinfo is None:
+                from core.timezone import UTC
+                obj = obj.replace(tzinfo=UTC)
+            return obj.isoformat()
+        return super().default(obj)
+
+
+class TZAwareJSONResponse(JSONResponse):
+    """모든 API 응답에서 datetime이 항상 offset을 포함하도록 보장."""
+
+    def render(self, content: Any) -> bytes:
+        return json.dumps(
+            content,
+            cls=_TZAwareEncoder,
+            ensure_ascii=False,
+        ).encode("utf-8")
 
 
 # ============================================================
@@ -83,6 +112,7 @@ app = FastAPI(
     description="운영팀 모니터링 대시보드 - Carmore 리뷰 요약 시스템",
     version="2.0.0",
     lifespan=lifespan,
+    default_response_class=TZAwareJSONResponse,
 )
 
 

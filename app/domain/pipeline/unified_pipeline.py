@@ -2,6 +2,8 @@ import logging
 import time
 from datetime import datetime
 
+from core.timezone import utc_now
+
 from repository.session import get_client
 from schemas.dto import PipelineResultDTO, PipelineStepResultDTO
 
@@ -36,7 +38,7 @@ class UnifiedPipeline:
         Returns:
             PipelineResultDTO: 파이프라인 실행 결과
         """
-        started_at = datetime.now()
+        started_at = utc_now()
         result = PipelineResultDTO(
             success=False, total_reviews=len(reviews),
             processed_reviews=0, total_branches=0,
@@ -49,7 +51,7 @@ class UnifiedPipeline:
         except Exception as e:
             logger.error(f"DB 연결 실패: {e}")
             result.error_message = str(e)
-            result.finished_at = datetime.now()
+            result.finished_at = utc_now()
             return result
 
         # Step 1: 전처리 + 키워드 + 감정 + 태그 분류 (동기)
@@ -71,12 +73,12 @@ class UnifiedPipeline:
                 duration_seconds=round(time.monotonic() - t0, 3),
             ))
             result.error_message = f"전처리 실패: {e}"
-            result.finished_at = datetime.now()
+            result.finished_at = utc_now()
             return result
 
         if not processed:
             result.success = True
-            result.finished_at = datetime.now()
+            result.finished_at = utc_now()
             return result
 
         input_count = len(processed)
@@ -177,13 +179,13 @@ class UnifiedPipeline:
             ))
 
         # 최종 결과
-        elapsed = (datetime.now() - started_at).total_seconds()
+        elapsed = (utc_now() - started_at).total_seconds()
         branch_ids = {pr.branch_id for pr in processed}
 
         result.processed_reviews = len(processed)
         result.total_branches = len(branch_ids)
         result.total_duration_seconds = elapsed
-        result.finished_at = datetime.now()
+        result.finished_at = utc_now()
 
         if result.failed_steps:
             result.success = False

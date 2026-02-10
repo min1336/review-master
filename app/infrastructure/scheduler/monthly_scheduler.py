@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
+from core.timezone import utc_now
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -84,7 +86,7 @@ class MonthlyScheduler:
         """월간 AI 요약/리포트 생성 작업"""
         logger.info("월간 스케줄러: AI 작업 시작")
         print(
-            f"[MonthlyScheduler] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - AI 작업 시작"
+            f"[MonthlyScheduler] {utc_now().strftime('%Y-%m-%d %H:%M:%S')} - AI 작업 시작"
         )
 
         try:
@@ -117,7 +119,7 @@ class MonthlyScheduler:
                 )
 
                 # 지난 달 기간 계산
-                today = datetime.now()
+                today = utc_now()
                 first_day_this_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
                 last_day_last_month = first_day_this_month - timedelta(days=1)
                 first_day_last_month = last_day_last_month.replace(day=1)

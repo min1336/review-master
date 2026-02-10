@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+
+from core.timezone import utc_now
 from typing import Any
 from uuid import UUID
 
@@ -263,7 +265,7 @@ class ReportJobRepository(BaseRepository):
         try:
             from datetime import timedelta
 
-            cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+            cutoff = (utc_now() - timedelta(days=days)).isoformat()
 
             result = (
                 await self._client.table(self.TABLE)
@@ -298,7 +300,7 @@ class ReportJobRepository(BaseRepository):
         try:
             from datetime import timedelta
 
-            cutoff = (datetime.now() - timedelta(minutes=stale_minutes)).isoformat()
+            cutoff = (utc_now() - timedelta(minutes=stale_minutes)).isoformat()
 
             result = (
                 await self._client.table(self.TABLE)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
+
+from core.timezone import utc_now
 from typing import Literal
 
 from pydantic import BaseModel
@@ -116,7 +118,7 @@ class SchedulerSettingsService:
             if not settings:
                 return False
 
-        now = datetime.now()
+        now = utc_now()
         next_summary = self._calculate_next_summary(now, settings.summary_cycle)
 
         return await self.settings_repo.update_last_summary(

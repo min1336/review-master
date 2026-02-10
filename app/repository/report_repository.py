@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
+
+from core.timezone import utc_now
 from typing import Any
 
 from supabase._async.client import AsyncClient
@@ -164,7 +166,7 @@ class ReportRepository(BaseRepository):
                 "report_data": json.dumps(report_data, ensure_ascii=False),
                 "version": next_version,
                 "is_viewed": False,  # 신규 리포트는 미조회 상태
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": utc_now().isoformat(),
             }
 
             result = await self._client.table(self.TABLE).insert(data).execute()
@@ -208,7 +210,7 @@ class ReportRepository(BaseRepository):
         try:
             await self._client.table(self.TABLE).update({
                 "is_viewed": True,
-                "viewed_at": datetime.now().isoformat(),
+                "viewed_at": utc_now().isoformat(),
             }).eq("id", report_id).execute()
             return True
         except Exception as e:

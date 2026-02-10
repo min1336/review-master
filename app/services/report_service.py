@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+
+from core.timezone import to_kst, utc_now
 from typing import Awaitable, Callable
 
 from pydantic import BaseModel, model_validator
@@ -354,7 +356,7 @@ class ReportService:
             top_tags=collected["tags"],
             period_summary=ai["period_summary"],
             vehicle_analysis=[VehicleAnalysis(**v) for v in collected.get("vehicle_analysis", [])],
-            generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
+            generated_at=to_kst(utc_now()).strftime("%Y-%m-%d %H:%M"),
         )
 
         # DB 저장
@@ -416,7 +418,7 @@ class ReportService:
                 period_start=start_date.strftime("%Y-%m-%d"),
                 period_end=end_date.strftime("%Y-%m-%d"),
                 total_reviews=0,
-                generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
+                generated_at=to_kst(utc_now()).strftime("%Y-%m-%d %H:%M"),
             )
 
         # 기간별 실제 리뷰 수 조회 (all-time count 대신)

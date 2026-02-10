@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
+from core.timezone import utc_now
+
 from domain.pipeline.unified_pipeline import UnifiedPipeline
 from infrastructure.athena import AthenaClient
 from repository.review_repository import BranchReviewRepository
@@ -56,7 +58,7 @@ class SyncService:
         3. UnifiedPipeline 실행 (감정/태그 통계 저장)
         4. last_sync_at 업데이트
         """
-        start_time = datetime.now()
+        start_time = utc_now()
 
         if not self._athena_client:
             return SyncResultResponse(
@@ -72,7 +74,7 @@ class SyncService:
             # 1. 마지막 동기화 시간 조회
             last_sync_at = await metadata_repo.get_last_sync_at(SYNC_TYPE)
             if not last_sync_at:
-                last_sync_at = datetime.now() - timedelta(days=7)
+                last_sync_at = utc_now() - timedelta(days=7)
 
             logger.info(f"동기화 시작: {last_sync_at} 이후 리뷰 조회")
             print(f"[DailyPipeline] 시작: {last_sync_at} 이후 리뷰 조회")
@@ -87,7 +89,7 @@ class SyncService:
                     message="신규 리뷰가 없습니다",
                     synced_count=0,
                     new_reviews=0,
-                    duration_seconds=(datetime.now() - start_time).total_seconds(),
+                    duration_seconds=(utc_now() - start_time).total_seconds(),
                 )
 
             # 3. 중복 제거
@@ -117,7 +119,7 @@ class SyncService:
             # 6. last_sync_at 업데이트
             await metadata_repo.update_last_sync_at(SYNC_TYPE)
 
-            duration = (datetime.now() - start_time).total_seconds()
+            duration = (utc_now() - start_time).total_seconds()
 
             logger.info(
                 f"동기화 완료: {saved_count}개 저장, {processed_count}개 분석, "
@@ -138,7 +140,7 @@ class SyncService:
                 success=False,
                 message="동기화 실행 중 오류가 발생했습니다",
                 error=str(e),
-                duration_seconds=(datetime.now() - start_time).total_seconds(),
+                duration_seconds=(utc_now() - start_time).total_seconds(),
             )
 
     async def mark_reviews_as_read(

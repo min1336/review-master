@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
+from core.timezone import utc_now
+
 # ==============================================================================
 # Review 관련 DTO
 # ==============================================================================
@@ -81,7 +83,7 @@ class ReviewDTO:
         review_date = row.get("review_date")
         if review_date:
             try:
-                created_at = datetime.fromisoformat(str(review_date))
+                created_at = datetime.fromisoformat(str(review_date).replace("Z", "+00:00"))
             except ValueError:
                 created_at = None
 
@@ -323,7 +325,7 @@ class SummaryResponseDTO:
     tokens_used: int = 0
     is_valid: bool = True
     validation_errors: list[str] = field(default_factory=list)
-    generated_at: datetime = field(default_factory=datetime.now)
+    generated_at: datetime = field(default_factory=utc_now)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -434,7 +436,7 @@ class PipelineResultDTO:
     steps: list[PipelineStepResultDTO] = field(default_factory=list)
     total_duration_seconds: float = 0.0
     error_message: str | None = None
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime = field(default_factory=utc_now)
     finished_at: datetime | None = None
 
     def add_step(self, step: PipelineStepResultDTO):

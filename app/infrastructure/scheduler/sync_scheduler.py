@@ -6,6 +6,8 @@ import asyncio
 import logging
 from datetime import datetime
 
+from core.timezone import utc_now
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -69,7 +71,7 @@ class SyncScheduler:
     async def _sync_reviews_job(self) -> None:
         """리뷰 동기화 + 파이프라인 작업 (태그/감정 분석)"""
         logger.info("스케줄러: 리뷰 파이프라인 작업 시작")
-        print(f"[DailyScheduler] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - 파이프라인 시작")
+        print(f"[DailyScheduler] {utc_now().strftime('%Y-%m-%d %H:%M:%S')} - 파이프라인 시작")
 
         try:
             # 서비스 인스턴스 생성

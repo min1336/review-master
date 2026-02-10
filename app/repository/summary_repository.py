@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
+from core.timezone import utc_now
+
 from models.summary import Summary
 from schemas.dto import SummaryStatsDTO
 
@@ -395,7 +397,7 @@ class SummaryRepository(BaseRepository[Summary]):
         try:
             result = await self._client.table(self.table_name).update({
                 "pending_summaries": pending_data,
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": utc_now().isoformat(),
             }).eq("branch_id", branch_id).execute()
 
             if result.data:
@@ -443,7 +445,7 @@ class SummaryRepository(BaseRepository[Summary]):
             update_data = {
                 "pending_summaries": {},  # pending 초기화
                 "status": "draft",  # 승인 후 draft 상태
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": utc_now().isoformat(),
             }
 
             # pending에 있는 필드만 업데이트
@@ -476,7 +478,7 @@ class SummaryRepository(BaseRepository[Summary]):
         try:
             result = await self._client.table(self.table_name).update({
                 "pending_summaries": {},
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": utc_now().isoformat(),
             }).eq("branch_id", branch_id).execute()
 
             if result.data:

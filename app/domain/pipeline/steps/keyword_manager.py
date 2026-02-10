@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from datetime import datetime
+
+from core.timezone import utc_now
 from typing import TYPE_CHECKING
 
 from schemas.dto import ProcessedReviewDTO
@@ -42,7 +44,7 @@ class KeywordManager:
             review_date = (
                 pr.review.created_at.isoformat()
                 if pr.review.created_at
-                else datetime.now().isoformat()
+                else utc_now().isoformat()
             )
 
             for keyword in pr.keywords:

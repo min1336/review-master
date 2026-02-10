@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
+from core.timezone import utc_now
+
 from repository.session import execute_with_retry
 from supabase import AsyncClient
 
@@ -44,13 +46,13 @@ class SyncMetadataRepository:
     ) -> bool:
         """마지막 동기화 시간 업데이트"""
         try:
-            sync_at = sync_at or datetime.now()
+            sync_at = sync_at or utc_now()
             query = (
                 self._client.table(self.TABLE_NAME)
                 .upsert({
                     "sync_type": sync_type,
                     "last_sync_at": sync_at.isoformat(),
-                    "updated_at": datetime.now().isoformat(),
+                    "updated_at": utc_now().isoformat(),
                 }, on_conflict="sync_type")
             )
             await execute_with_retry(query)
@@ -66,7 +68,7 @@ class SyncMetadataRepository:
         - 30분 이상 락이 걸려있으면 강제 해제 후 획득
         """
         try:
-            now = datetime.now()
+            now = utc_now()
 
             # 1. 타임아웃된 락 강제 해제 (30분 이상)
             await self._release_stale_lock(sync_type)
@@ -107,7 +109,7 @@ class SyncMetadataRepository:
     async def _release_stale_lock(self, sync_type: str) -> None:
         """타임아웃된 락 강제 해제 (30분 이상)"""
         try:
-            timeout_threshold = datetime.now() - timedelta(minutes=LOCK_TIMEOUT_MINUTES)
+            timeout_threshold = utc_now() - timedelta(minutes=LOCK_TIMEOUT_MINUTES)
 
             query = (
                 self._client.table(self.TABLE_NAME)
