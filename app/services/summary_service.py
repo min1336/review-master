@@ -48,7 +48,7 @@ class SummaryService:
         keyword: str | None = None,
         min_rating: float | None = None,
         max_rating: float | None = None,
-        min_reviews: int = 30,
+        min_reviews: int = 0,
         limit: int = 50,
         offset: int = 0,
         sort_by: str = "branch_id",
@@ -314,12 +314,12 @@ class SummaryService:
         period_field = selected_period["field"]
         period_label = selected_period["label"]
 
-        # 4. 태그별 감정 데이터 조회 (branch_tags: period_type별 분리)
+        # 4. 태그별 감정 데이터 조회 (1회 쿼리 - positive_count/negative_count 컬럼 사용)
         tag_sentiments = []
         try:
             all_result = await (
                 client.table("branch_tags")
-                .select("tag_id, count, tags(id, name)")
+                .select("tag_id, count, positive_count, negative_count, tags(id, name)")
                 .eq("branch_id", branch_id)
                 .eq("period_type", "all")
                 .order("count", desc=True)
@@ -327,32 +327,13 @@ class SummaryService:
                 .execute()
             )
 
-            pos_result = await (
-                client.table("branch_tags")
-                .select("tag_id, count")
-                .eq("branch_id", branch_id)
-                .eq("period_type", "positive")
-                .execute()
-            )
-
-            neg_result = await (
-                client.table("branch_tags")
-                .select("tag_id, count")
-                .eq("branch_id", branch_id)
-                .eq("period_type", "negative")
-                .execute()
-            )
-
-            pos_map = {row["tag_id"]: row.get("count", 0) for row in pos_result.data}
-            neg_map = {row["tag_id"]: row.get("count", 0) for row in neg_result.data}
-
             for tag_row in all_result.data:
                 tag_info = tag_row.get("tags") or {}
                 tag_name = tag_info.get("name", "")
                 tag_id = tag_row.get("tag_id")
                 if tag_name and tag_id:
-                    positive = pos_map.get(tag_id, 0)
-                    negative = neg_map.get(tag_id, 0)
+                    positive = tag_row.get("positive_count", 0) or 0
+                    negative = tag_row.get("negative_count", 0) or 0
                     total = tag_row.get("count", 0)
                     neutral = max(0, total - positive - negative)
                     tag_sentiments.append({
@@ -379,14 +360,14 @@ class SummaryService:
             except Exception as e:
                 logger.warning(f"감정 통계 조회 실패 (branch_id={branch_id}): {e}")
 
-        # 6. 최근 리뷰 30개 조회 (recent_reviews)
+        # 6. 최근 리뷰 30개 조회 (branch_reviews)
         sample_reviews = []
         try:
             reviews_result = await (
-                client.table("recent_reviews")
+                client.table("branch_reviews")
                 .select("content")
                 .eq("branch_id", branch_id)
-                .order("created_at", desc=True)
+                .order("review_date", desc=True)
                 .limit(30)
                 .execute()
             )

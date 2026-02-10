@@ -60,6 +60,7 @@ async def api_summaries(
     keyword: str | None = Query(None, description="키워드/업체명 검색"),
     min_rating: float | None = Query(None, description="최소 평점"),
     max_rating: float | None = Query(None, description="최대 평점"),
+    min_reviews: int = Query(0, ge=0, description="최소 리뷰 수"),
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     sort_by: str = Query("branch_id"),
@@ -88,6 +89,7 @@ async def api_summaries(
         keyword=keyword,
         min_rating=min_rating,
         max_rating=max_rating,
+        min_reviews=min_reviews,
         limit=limit,
         offset=offset,
         sort_by=sort_by,
@@ -380,7 +382,7 @@ async def api_car_model_tags(
           "name": "아반떼",
           "review_count": 50,
           "tags": [
-            {"name": "차량청결", "positive": 40, "negative": 5, "total": 45},
+            {"name": "차량이 청결함", "positive": 40, "negative": 5, "total": 45},
             {"name": "가성비", "positive": 35, "negative": 3, "total": 38}
           ]
         }

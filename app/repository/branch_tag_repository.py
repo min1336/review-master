@@ -42,7 +42,7 @@ class BranchTagRepository(BaseRepository[BranchTag]):
         return [self.model(**row) for row in result.data]
 
     async def get_batch_top_tags(
-        self, branch_ids: list[int], period_type: str = "positive", top_n: int = 3
+        self, branch_ids: list[int], period_type: str = "all", top_n: int = 3
     ) -> dict:
         """여러 지점의 TOP N 태그 일괄 조회"""
         if not branch_ids:
