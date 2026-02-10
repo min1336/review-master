@@ -982,7 +982,7 @@
 
         th {
             background: var(--grey-9);
-            padding: 12px 20px;
+            padding: 8px 10px;
             text-align: left;
             font-weight: 600;
             font-size: 13px;
@@ -995,7 +995,7 @@
         }
 
         td {
-            padding: 14px 20px;
+            padding: 10px 10px;
             text-align: left;
             border-bottom: 1px solid var(--grey-8);
             color: var(--grey-1);
@@ -1098,20 +1098,23 @@
         /* Filters */
         .filters {
             display: flex;
-            gap: 24px;
+            gap: 12px;
             margin-bottom: 0;
             flex-wrap: wrap;
             align-items: center;
-            padding: 20px 24px;
+            padding: 10px 14px;
             background: var(--grey-9);
             border-radius: var(--radius) var(--radius) 0 0;
             border-bottom: 1px solid var(--grey-7);
+            width: 100%;
         }
 
         .filter-group {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
+            flex: 1;
+            min-width: 0;
         }
 
         .filter-label {
@@ -1148,11 +1151,14 @@
 
         .search-box {
             position: relative;
+            flex: 1;
+            min-width: 0;
         }
 
         .search-box input {
             padding-left: 34px;
-            width: 220px;
+            padding-right: 30px;
+            width: 100%;
         }
 
         .search-box svg {
@@ -1164,22 +1170,55 @@
             pointer-events: none;
         }
 
+        .search-clear {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            border: none;
+            background: var(--grey-7);
+            border-radius: 50%;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            color: var(--grey-4);
+            font-size: 12px;
+            line-height: 1;
+            transition: background 0.15s;
+        }
+
+        .search-clear:hover {
+            background: var(--grey-6);
+            color: var(--grey-2);
+        }
+
+        .search-box.has-value .search-clear {
+            display: flex;
+        }
+
         /* Date Range Picker */
         .date-range-filter {
             display: flex;
             align-items: center;
             gap: 8px;
+            flex: 1;
+            min-width: 0;
         }
 
         .date-range-input {
             padding: 8px 12px;
             border: 1px solid var(--grey-7);
             border-radius: var(--radius-sm);
-            font-size: 14px;
+            font-size: 13px;
             color: var(--grey-1);
             background: white;
-            width: 220px;
-            height: 40px;
+            flex: 1;
+            min-width: 120px;
+            height: 36px;
             cursor: pointer;
             outline: none;
             transition: all 0.2s;
@@ -1195,14 +1234,14 @@
         }
 
         .btn-clear-date {
-            padding: 8px 12px;
+            padding: 6px 12px;
             background: var(--grey-8);
             border: 1px solid var(--grey-7);
             border-radius: var(--radius-sm);
             font-size: 13px;
             color: var(--grey-3);
             cursor: pointer;
-            height: 40px;
+            height: 36px;
             transition: all 0.2s;
         }
 
@@ -1456,6 +1495,78 @@
             }
         }
 
+        /* Skeleton Loading */
+        .skeleton {
+            background: #e8e8e8;
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .skeleton::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .skeleton-row td {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--grey-8);
+        }
+
+        .skeleton-line {
+            height: 14px;
+            background: #e8e8e8;
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .skeleton-line::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+            animation: shimmer 1.5s infinite;
+        }
+
+        .skeleton-line.short { width: 40px; margin: 0 auto; }
+        .skeleton-line.medium { width: 80%; }
+        .skeleton-line.long { width: 90%; }
+
+        .skeleton-stat {
+            height: 24px;
+            width: 60px;
+            background: #e8e8e8;
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .skeleton-stat::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+            animation: shimmer 1.5s infinite;
+        }
+
         /* Tabs */
         .tabs {
             display: flex;
@@ -1618,12 +1729,13 @@
                 <!-- 검색 필터 (ID/업체명/지점) -->
                 <div class="filter-group">
                     <span class="filter-label">검색</span>
-                    <div class="search-box">
+                    <div class="search-box" id="search-box">
                         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="6" cy="6" r="4.5" />
                             <path d="M10 10l3 3" />
                         </svg>
                         <input type="text" id="search-input" placeholder="ID/업체명/지점...">
+                        <button type="button" class="search-clear" id="search-clear" title="검색어 지우기">&times;</button>
                     </div>
                 </div>
 
@@ -1641,11 +1753,11 @@
             <div class="table-container">
                 <table>
                     <colgroup>
-                        <col style="width: 80px;"> <!-- Region -->
-                        <col style="width: 200px;"> <!-- Name -->
-                        <col> <!-- Summary (flex) -->
-                        <col style="width: 80px;"> <!-- Rating -->
-                        <col style="width: 80px;"> <!-- Review Count -->
+                        <col style="width: 50px;"> <!-- Region -->
+                        <col style="width: 160px;"> <!-- Name -->
+                        <col style="width: 130px;"> <!-- Summary -->
+                        <col style="width: 60px;"> <!-- Rating -->
+                        <col style="width: 60px;"> <!-- Review Count -->
                     </colgroup>
                     <thead>
                         <tr>
@@ -1653,7 +1765,7 @@
                                     class="sort-icon"></span></th>
                             <th onclick="handleSort('branch_name')" style="cursor: pointer;">업체명 <span
                                     id="sort-icon-branch_name" class="sort-icon"></span></th>
-                            <th style="min-width: 120px; max-width: 180px;">요약</th>
+                            <th>요약</th>
                             <th onclick="handleSort('avg_rating')" style="cursor: pointer; width: 70px; text-align: center;">별점 <span
                                     id="sort-icon-avg_rating" class="sort-icon"></span></th>
                             <th onclick="handleSort('review_count')" style="cursor: pointer; width: 80px; text-align: center;">리뷰수 <span
@@ -1661,18 +1773,23 @@
                         </tr>
                     </thead>
                     <tbody id="summaries-table">
-                        <tr>
-                            <td colspan="5" class="loading">
-                                <div class="spinner"></div>로딩 중...
-                            </td>
-                        </tr>
+                        <script>
+                            (function(){
+                                var tb=document.getElementById('summaries-table');
+                                if(!tb)return;
+                                var h='';
+                                for(var i=0;i<8;i++){
+                                    h+='<tr class="skeleton-row"><td><div class="skeleton-line short" style="width:36px;height:12px;"></div></td><td><div class="skeleton-line medium" style="height:14px;margin-bottom:6px;"></div><div class="skeleton-line" style="width:50%;height:10px;"></div></td><td><div class="skeleton-line long" style="height:14px;"></div></td><td><div class="skeleton-line short" style="width:44px;height:14px;"></div></td><td><div class="skeleton-line short" style="width:36px;height:14px;"></div></td></tr>';
+                                }
+                                tb.innerHTML=h;
+                            })();
+                        </script>
                     </tbody>
                 </table>
             </div>
 
             <!-- Pagination -->
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
-                <span id="pagination-info" style="font-size: 13px; color: var(--grey-5);">-</span>
+            <div style="display: flex; justify-content: center; align-items: center; padding: 16px 0;">
                 <div style="display: flex; gap: 8px;">
                     <button class="btn btn-secondary btn-sm" id="prev-btn" onclick="prevPage()">이전</button>
                     <button class="btn btn-secondary btn-sm" id="next-btn" onclick="nextPage()">다음</button>
@@ -1945,7 +2062,7 @@
                     pageSize: CONFIG.PAGINATION.DEFAULT_PAGE_SIZE
                 },
                 sort: {
-                    field: 'avg_rating',
+                    field: 'review_count',
                     order: 'desc'
                 },
                 dateFilter: {
@@ -2247,10 +2364,9 @@
                 });
             }
 
-            async function apiRegenerateSummary(branchId, period = 'all') {
+            async function apiRegenerateSummary(branchId) {
                 return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/regenerate`, {
-                    method: 'POST',
-                    body: JSON.stringify({ period })
+                    method: 'POST'
                 });
             }
 
@@ -2317,6 +2433,22 @@
                 return el || elements[id];
             }
 
+            function renderSkeletonTable(rowCount = 8) {
+                const tableEl = getElement('summaries-table');
+                if (!tableEl) return;
+                let html = '';
+                for (let i = 0; i < rowCount; i++) {
+                    html += `<tr class="skeleton-row">
+                        <td><div class="skeleton-line short" style="width: 36px; height: 12px;"></div></td>
+                        <td><div class="skeleton-line medium" style="width: ${60 + Math.random() * 40}%; height: 14px; margin-bottom: 6px;"></div><div class="skeleton-line" style="width: 50%; height: 10px;"></div></td>
+                        <td><div class="skeleton-line long" style="height: 14px;"></div></td>
+                        <td><div class="skeleton-line short" style="width: 44px; height: 14px;"></div></td>
+                        <td><div class="skeleton-line short" style="width: 36px; height: 14px;"></div></td>
+                    </tr>`;
+                }
+                tableEl.innerHTML = html;
+            }
+
             function renderStats(stats) {
                 const statTotal = getElement('stat-total');
                 const statReviews = getElement('stat-reviews');
@@ -2365,13 +2497,11 @@
 
             function renderTable(data, onDetailClick) {
                 const tableEl = getElement('summaries-table');
-                const paginationInfo = getElement('pagination-info');
 
                 if (!tableEl) return;
 
                 if (!data || data.length === 0) {
                     tableEl.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--grey-5);">데이터 없음</td></tr>';
-                    if (paginationInfo) paginationInfo.textContent = '0개 지점';
                     return;
                 }
 
@@ -2380,22 +2510,26 @@
 
                 // Add click handlers to table rows
                 attachRowClickHandlers();
+            }
 
-                if (paginationInfo) {
-                    const start = state.pagination.currentPage * state.pagination.pageSize + 1;
-                    const end = start + data.length - 1;
-                    paginationInfo.textContent = `${start}-${end}개 표시`;
+            function getBestSummary(row) {
+                const priorities = ['1m', '3m', '6m', '1y', 'all'];
+                for (const p of priorities) {
+                    const s = row['summary_' + p];
+                    if (s) return s;
                 }
+                return '';
             }
 
             function renderTableRow(row, onDetailClick) {
-                const summaryPreview = row.summary_all
-                    ? (row.summary_all.length > 40 ? row.summary_all.substring(0, 40) + '...' : row.summary_all)
+                const bestSummary = getBestSummary(row);
+                const summaryPreview = bestSummary
+                    ? (bestSummary.length > 40 ? bestSummary.substring(0, 40) + '...' : bestSummary)
                     : '<span style="color: var(--grey-5); font-style: italic;">요약 없음</span>';
 
                 const isFav = isFavorite(row.branch_id);
                 const rating = row.avg_rating ? row.avg_rating.toFixed(1) : '-';
-                const fullSummary = row.summary_all ? escapeHtml(row.summary_all) : '';
+                const fullSummary = bestSummary ? escapeHtml(bestSummary) : '';
 
                 return `
                 <tr class="clickable-row" data-branch-id="${row.branch_id}" data-summary="${fullSummary}" style="vertical-align: middle; cursor: pointer; transition: background-color 0.2s;">
@@ -2803,11 +2937,31 @@
                 const filterRegion = getElement('filter-region');
                 const modal = getElement('detail-modal');
 
+                const searchBox = getElement('search-box');
+                const searchClear = getElement('search-clear');
+
                 if (searchInput) {
                     searchInput.addEventListener('input', debounce(() => {
                         resetPage();
                         loadSummaries();
                     }, 300));
+
+                    // X 버튼 표시 토글
+                    searchInput.addEventListener('input', () => {
+                        if (searchBox) {
+                            searchBox.classList.toggle('has-value', searchInput.value.length > 0);
+                        }
+                    });
+                }
+
+                if (searchClear) {
+                    searchClear.addEventListener('click', () => {
+                        searchInput.value = '';
+                        if (searchBox) searchBox.classList.remove('has-value');
+                        resetPage();
+                        loadSummaries();
+                        searchInput.focus();
+                    });
                 }
 
                 if (filterRegion) {
@@ -2948,6 +3102,7 @@
                 };
 
                 updateSortUI();
+                renderSkeletonTable();
 
                 try {
                     let data = await fetchSummaries(filters);
@@ -3070,6 +3225,14 @@
                     const modalHtml = buildDetailModalHtml(data);
                     getElement('modal-body').innerHTML = modalHtml;
 
+                    // innerHTML 설정 후 bestPeriod 초기화 (script 태그 대신 직접 실행)
+                    const headerWrap = document.getElementById('summary-header-wrap');
+                    const bestPeriod = headerWrap ? headerWrap.dataset.bestPeriod : 'all';
+                    window._bestPeriod = bestPeriod;
+                    const periodLabel = document.getElementById('summary-period-label');
+                    const periodMap = {'1m':'1개월 요약','3m':'3개월 요약','6m':'6개월 요약','1y':'1년 요약','all':'전체 기간 요약'};
+                    if (periodLabel) periodLabel.textContent = periodMap[bestPeriod] || '';
+
                     await loadBranchTags(data, branchId);
                 } catch (e) {
                     console.error('Detail load error:', e);
@@ -3082,7 +3245,7 @@
                 const isFav = isFavorite(data.branch_id);
 
                 return `
-                <div class="modal-header-content" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
+                <div class="modal-header-content" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
                     <div style="flex: 1;">
                         <div style="font-size: 14px; color: var(--grey-5); margin-bottom: 4px;">ID: ${data.branch_id}</div>
                         <div style="display: flex; align-items: center; gap: 12px;">
@@ -3117,7 +3280,7 @@
                 </div>
 
                 <!-- Stats Grid -->
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 32px;">
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px;">
                     <div style="background: var(--grey-9); padding: 16px; border-radius: var(--radius);">
                         <div style="font-size: 13px; color: var(--grey-5);">총 리뷰 수</div>
                         <div style="font-size: 20px; font-weight: 700; color: var(--grey-1); margin-top: 4px;">${data.review_count?.toLocaleString() || 0}건</div>
@@ -3128,16 +3291,16 @@
                     </div>
                 </div>
 
-                <!-- Summary Tabs -->
+                <!-- Summary Header -->
+                <div data-best-period="${(() => {
+                    const pp = ['1m', '3m', '6m', '1y', 'all'];
+                    for (const p of pp) { if (data['summary_' + p]) return p; }
+                    return 'all';
+                })()}" id="summary-header-wrap"></div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <div class="tabs" style="display: flex; gap: 8px;">
-                        ${['all', '1y', '6m', '3m', '1m'].map((p, i) => `
-                            <div class="tab ${i === 0 ? 'active' : ''}" onclick="window.dashboardHandlers.showSummaryTab(this, '${p}')"
-                                style="padding: 8px 16px; cursor: pointer; font-weight: 500; font-size: 13px; border-radius: 20px;
-                                background: ${i === 0 ? 'var(--grey-2)' : 'var(--grey-8)'}; color: ${i === 0 ? 'white' : 'var(--grey-3)'}; transition: all 0.2s;">
-                                ${PERIOD_LABELS[p]}
-                            </div>
-                        `).join('')}
+                    <div style="display: flex; align-items: baseline; gap: 8px;">
+                        <span style="font-size: 14px; font-weight: 600; color: var(--grey-3);">요약</span>
+                        <span id="summary-period-label" style="font-size: 12px; color: var(--grey-5);"></span>
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <button class="btn-ai-report" onclick="window.dashboardHandlers.openReportModal(${data.branch_id}, '${data.branch_name}', '${data.affiliate_name || ''}')" title="AI 리포트 생성">
@@ -3149,29 +3312,45 @@
                     </div>
                 </div>
 
-                <!-- Summary Content -->
-                <div id="summary-content" style="min-height: 200px; background: white; border-radius: 0 0 var(--radius) var(--radius);">
-                    ${['all', '1y', '6m', '3m', '1m'].map((period, i) => {
-                    const hasPending = !!pendingSummaries[period];
-                    return `
-                        <div class="summary-panel" id="panel-${period}" style="display: ${i === 0 ? 'block' : 'none'};">
-                            <div class="summary-text" id="summary-text-${period}" style="font-size: 15px; line-height: 1.7; color: var(--grey-2); white-space: pre-line;">
-                                ${data['summary_' + period] || '<span class="summary-empty" style="color: var(--grey-5); font-style: italic;">작성된 요약이 없습니다.</span>'}
-                            </div>
-                            <textarea id="edit-summary-${period}" style="display: none; width: 100%; min-height: 120px; padding: 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 14px; line-height: 1.6; resize: vertical; font-family: inherit;">${data['summary_' + period] || ''}</textarea>
+                <!-- Summary Content (단일 요약) -->
+                <div id="summary-content" style="background: white; border-radius: var(--radius);">
+                    ${(() => {
+                        const periodPriority = ['1m', '3m', '6m', '1y', 'all'];
+                        let bestPeriod = 'all';
+                        for (const p of periodPriority) {
+                            if (data['summary_' + p]) { bestPeriod = p; break; }
+                        }
+                        const bestSummary = data['summary_' + bestPeriod] || '';
+                        const hasPending = !!pendingSummaries[bestPeriod];
+                        const periodMonthsMap = {'1m': '1개월', '3m': '3개월', '6m': '6개월', '1y': '1년', 'all': '전체'};
 
-                            <div id="pending-section-${period}" class="pending-summary-section" style="display: ${hasPending ? 'block' : 'none'}; margin-top: 16px; padding: 16px; background: var(--primary-light); border: 2px dashed var(--primary); border-radius: var(--radius-sm);">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                    <span style="font-size: 13px; font-weight: 600; color: var(--primary);">✨ 신규 생성 요약</span>
-                                    <div style="display: flex; gap: 8px;">
-                                        <button class="btn btn-primary btn-sm" onclick="window.dashboardHandlers.applyPendingSummary(${data.branch_id}, '${period}')" style="font-size: 12px; padding: 4px 12px;">변경</button>
-                                        <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.discardPendingSummary(${data.branch_id}, '${period}')" style="font-size: 12px; padding: 4px 12px;">취소</button>
+                        // 모든 기간 패널 (수정 모드용 hidden + 현재 기간 표시)
+                        let panels = '';
+                        for (const period of ['all', '1y', '6m', '3m', '1m']) {
+                            const isVisible = period === bestPeriod;
+                            const pHasPending = !!pendingSummaries[period];
+                            panels += `
+                                <div class="summary-panel" id="panel-${period}" style="display: ${isVisible ? 'block' : 'none'};">
+                                    <div class="summary-text" id="summary-text-${period}" style="font-size: 15px; line-height: 1.7; color: var(--grey-2);">
+                                        ${data['summary_' + period] || '<span class="summary-empty" style="color: var(--grey-5); font-style: italic;">작성된 요약이 없습니다.</span>'}
                                     </div>
-                                </div>
-                                <div id="pending-text-${period}" style="font-size: 14px; line-height: 1.6; color: var(--grey-2); white-space: pre-line;">${pendingSummaries[period] || ''}</div>
-                            </div>
-                        </div>
-                    `}).join('')}
+                                    <textarea id="edit-summary-${period}" style="display: none; width: 100%; min-height: 120px; padding: 12px; border: 1px solid var(--grey-7); border-radius: var(--radius-sm); font-size: 14px; line-height: 1.6; resize: vertical; font-family: inherit;">${data['summary_' + period] || ''}</textarea>
+
+                                    <div id="pending-section-${period}" class="pending-summary-section" style="display: ${pHasPending ? 'block' : 'none'}; margin-top: 16px; padding: 16px; background: var(--primary-light); border: 2px dashed var(--primary); border-radius: var(--radius-sm);">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                            <span style="font-size: 13px; font-weight: 600; color: var(--primary);">✨ 신규 생성 요약</span>
+                                            <div style="display: flex; gap: 8px;">
+                                                <button class="btn btn-primary btn-sm" onclick="window.dashboardHandlers.applyPendingSummary(${data.branch_id}, '${period}')" style="font-size: 12px; padding: 4px 12px;">변경</button>
+                                                <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.discardPendingSummary(${data.branch_id}, '${period}')" style="font-size: 12px; padding: 4px 12px;">취소</button>
+                                            </div>
+                                        </div>
+                                        <div id="pending-text-${period}" style="font-size: 14px; line-height: 1.6; color: var(--grey-2);">${pendingSummaries[period] || ''}</div>
+                                    </div>
+                                </div>`;
+                        }
+
+                        return panels;
+                    })()}
                 </div>
 
                 <!-- Action Buttons -->
@@ -3293,7 +3472,7 @@
                         updateSummaryState(branchId, {
                             region,
                             top_tags: state.editMode.selectedTags.map(t => ({ name: t })),
-                            summary_all: summariesData.summary_all
+                            ...summariesData
                         });
 
                         renderTable(state.summaries, showDetail);
@@ -3348,9 +3527,7 @@
             }
 
             async function regenerateSummary(branchId, e) {
-                const period = state.editMode.currentPeriod;
-
-                if (!confirm(`[${PERIOD_LABELS[period]}] 기간의 요약을 AI로 재생성하시겠습니까?\n\n새 요약이 생성되며, "변경" 버튼을 눌러야 적용됩니다.`)) {
+                if (!confirm('AI로 요약을 재생성하시겠습니까?\n\n새 요약이 생성되며, "변경" 버튼을 눌러야 적용됩니다.')) {
                     return;
                 }
 
@@ -3361,20 +3538,39 @@
                     btn.innerHTML = '⏳ 생성 중...';
                     btn.disabled = true;
 
-                    const result = await apiRegenerateSummary(branchId, period);
+                    const result = await apiRegenerateSummary(branchId);
 
-                    if (result.success) {
-                        const pendingSection = getElement(`pending-section-${period}`);
-                        const pendingText = getElement(`pending-text-${period}`);
+                    // 내부 success 확인 (api_response envelope의 success가 아닌 실제 결과)
+                    const innerSuccess = result.data?.success !== false;
+                    if (result.success && innerSuccess && result.data?.period) {
+                        // 백엔드가 자동 선택한 기간을 사용
+                        const generatedPeriod = result.data.period;
+
+                        // 해당 기간 패널 표시
+                        ['all', '1y', '6m', '3m', '1m'].forEach(p => {
+                            const panel = getElement(`panel-${p}`);
+                            if (panel) panel.style.display = p === generatedPeriod ? 'block' : 'none';
+                        });
+
+                        const pendingSection = getElement(`pending-section-${generatedPeriod}`);
+                        const pendingText = getElement(`pending-text-${generatedPeriod}`);
 
                         if (pendingSection && pendingText) {
                             pendingText.innerHTML = result.data.summary;
                             pendingSection.style.display = 'block';
                         }
 
-                        showToast(`✨ [${PERIOD_LABELS[period]}] 새 요약이 생성되었습니다.`, 'success');
+                        // 기간 레이블 업데이트
+                        const periodMap = {'1m':'1개월 요약','3m':'3개월 요약','6m':'6개월 요약','1y':'1년 요약','all':'전체 기간 요약'};
+                        const lbl = getElement('summary-period-label');
+                        if (lbl) lbl.textContent = periodMap[generatedPeriod] || '';
+
+                        window._bestPeriod = generatedPeriod;
+                        setCurrentPeriod(generatedPeriod);
+
+                        showToast('✨ 새 요약이 생성되었습니다.', 'success');
                     } else {
-                        throw new Error(result.error || '요약 생성 실패');
+                        throw new Error(result.data?.error || result.error || '요약 생성 실패');
                     }
                 } catch (error) {
                     console.error('Regenerate error:', error);
@@ -3386,7 +3582,7 @@
             }
 
             async function applyPendingSummary(branchId, period) {
-                if (!confirm(`[${PERIOD_LABELS[period]}] 새 요약을 적용하시겠습니까?`)) {
+                if (!confirm('새 요약을 적용하시겠습니까?')) {
                     return;
                 }
 
@@ -3402,7 +3598,7 @@
                         if (editEl) editEl.value = result.data.applied;
                         if (pendingSection) pendingSection.style.display = 'none';
 
-                        showToast(`✅ [${PERIOD_LABELS[period]}] 요약이 적용되었습니다`, 'success');
+                        showToast('✅ 요약이 적용되었습니다', 'success');
                     }
                 } catch (error) {
                     console.error('Apply error:', error);
@@ -3411,7 +3607,7 @@
             }
 
             async function discardPendingSummary(branchId, period) {
-                if (!confirm(`[${PERIOD_LABELS[period]}] 새 요약을 취소하시겠습니까?`)) {
+                if (!confirm('새 요약을 취소하시겠습니까?')) {
                     return;
                 }
 
@@ -3422,7 +3618,7 @@
                         const pendingSection = getElement(`pending-section-${period}`);
                         if (pendingSection) pendingSection.style.display = 'none';
 
-                        showToast(`🗑️ [${PERIOD_LABELS[period]}] 새 요약이 취소되었습니다`, 'success');
+                        showToast('🗑️ 새 요약이 취소되었습니다', 'success');
                     }
                 } catch (error) {
                     console.error('Discard error:', error);
@@ -3450,12 +3646,12 @@
                 reportState.affiliateName = affiliateName;
                 reportState.reportData = null;
 
-                // 기본 날짜 설정 (최근 3개월)
+                // 기본 날짜 설정 (최근 1개월 → 30건 미만이면 자동 확장)
                 const today = new Date();
-                const threeMonthsAgo = new Date(today);
-                threeMonthsAgo.setMonth(today.getMonth() - 3);
+                const oneMonthAgo = new Date(today);
+                oneMonthAgo.setMonth(today.getMonth() - 1);
 
-                reportState.startDate = formatReportDate(threeMonthsAgo);
+                reportState.startDate = formatReportDate(oneMonthAgo);
                 reportState.endDate = formatReportDate(today);
 
                 const modal = getElement('report-modal');
@@ -3714,8 +3910,8 @@
                 const presets = document.createElement('div');
                 presets.className = 'period-presets';
                 const presetData = [
-                    { months: '1', label: '최근 1개월', countId: 'count-1m' },
-                    { months: '3', label: '최근 3개월', countId: 'count-3m', active: true },
+                    { months: '1', label: '최근 1개월', countId: 'count-1m', active: true },
+                    { months: '3', label: '최근 3개월', countId: 'count-3m' },
                     { months: '6', label: '최근 6개월', countId: 'count-6m' },
                     { months: '12', label: '최근 1년', countId: 'count-12m' },
                     { months: 'all', label: '전체', countId: 'count-all' },
