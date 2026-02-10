@@ -287,3 +287,57 @@ GET  /job/{job_id}   → 2초 간격 폴링 (progress: 0-100%)
 
 - `python -m py_compile <file.py>` - Python 문법 검사
 - Supabase MCP로 마이그레이션: `mcp__supabase__apply_migration`
+
+## Claude Code 도구 레퍼런스
+
+### 슬래시 커맨드 (Skill tool)
+
+| 커맨드 | 용도 |
+|--------|------|
+| `/code-review` | PR 코드 리뷰 |
+| `/feature-dev` | 가이드 기반 기능 개발 (코드베이스 이해 + 아키텍처) |
+| `/review-pr` | 종합 PR 리뷰 (전문 에이전트 활용) |
+| `/revise-claude-md` | 세션 학습으로 CLAUDE.md 업데이트 |
+| `/claude-md-improver` | CLAUDE.md 감사/개선 |
+| `/frontend-design` | 프론트엔드 인터페이스 생성 |
+| `/claude-automation-recommender` | Claude Code 자동화 추천 |
+| `/ralph-loop` | Ralph Loop 시작 |
+| `/cancel-ralph` | Ralph Loop 취소 |
+| `/hookify` | 훅 규칙 생성 |
+| `/writing-plans` | 구현 계획 작성 |
+| `/executing-plans` | 구현 계획 실행 |
+| `/brainstorming` | 구현 전 브레인스토밍 |
+| `/systematic-debugging` | 체계적 디버깅 |
+| `/test-driven-development` | TDD 기반 개발 |
+| `/verification-before-completion` | 완료 전 검증 |
+| `/requesting-code-review` | 코드 리뷰 요청 |
+| `/receiving-code-review` | 코드 리뷰 피드백 처리 |
+| `/finishing-a-development-branch` | 개발 브랜치 마무리 (merge/PR/cleanup) |
+| `/using-git-worktrees` | Git worktree 격리 작업 |
+| `/dispatching-parallel-agents` | 병렬 에이전트 디스패치 |
+| `/subagent-driven-development` | 서브에이전트 기반 구현 |
+
+### MCP 서버
+
+| 서버 | 주요 기능 | 사용 시점 |
+|------|----------|----------|
+| **Supabase** | DB 테이블 조회, SQL 실행, 마이그레이션, Edge Functions, 타입 생성 | DB 스키마 변경, 데이터 조회, Edge Function 배포 |
+| **Context7** | 라이브러리 문서/코드 예제 검색 | 외부 라이브러리 사용법 확인 시 |
+| **Playwright** | 브라우저 자동화 (스크린샷, 클릭, 폼 입력, DOM 스냅샷) | 프론트엔드 테스트, UI 확인 |
+
+### Task 에이전트 (Task tool)
+
+| 에이전트 | 용도 | 사용 시점 |
+|---------|------|----------|
+| `Explore` | 코드베이스 탐색 | 파일/패턴 검색, 아키텍처 이해 |
+| `Plan` | 구현 설계 | 구현 전략 수립 |
+| `feature-dev:code-reviewer` | 버그, 보안, 품질 리뷰 | 코드 작성 후 |
+| `feature-dev:code-explorer` | 실행 경로/아키텍처 분석 | 기존 코드 깊이 이해 |
+| `feature-dev:code-architect` | 기능 아키텍처 설계 | 새 기능 설계 시 |
+| `pr-review-toolkit:code-reviewer` | PR 코드 리뷰 | PR 생성 전 |
+| `pr-review-toolkit:silent-failure-hunter` | 사일런트 실패 탐지 | 에러 핸들링 리뷰 |
+| `pr-review-toolkit:type-design-analyzer` | 타입 설계 분석 | 새 타입 도입 시 |
+| `pr-review-toolkit:comment-analyzer` | 코멘트 정확성 분석 | 문서 주석 추가 후 |
+| `pr-review-toolkit:pr-test-analyzer` | 테스트 커버리지 분석 | PR 테스트 검증 |
+| `episodic-memory` | 세션 간 기억 검색 | 이전 세션 결정/해결책 복원 |
+| `claude-code-guide` | Claude Code 사용 가이드 | Claude Code 기능 질문 |
