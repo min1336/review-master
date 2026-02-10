@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 
 class Review(BaseModel):
-    """recent_reviews 테이블 엔티티"""
+    """branch_reviews 테이블 엔티티"""
 
     id: int | None = None
     branch_id: int

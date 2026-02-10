@@ -13,7 +13,7 @@ from __future__ import annotations
 from .affiliate_repository import AffiliateRepository, CarModelRepository
 from .base import BaseRepository
 from .branch_tag_repository import BranchTagRepository
-from .review_repository import BranchReviewRepository, ReviewRepository
+from .review_repository import BranchReviewRepository
 from .sentiment_repository import SentimentRepository
 from .summary_repository import SummaryRepository
 from .tag_repository import CategoryRepository, MappingRepository, TagRepository
@@ -29,7 +29,6 @@ __all__ = [
     "MappingRepository",
     "BranchTagRepository",
     # Reviews
-    "ReviewRepository",
     "BranchReviewRepository",
     # Sentiment
     "SentimentRepository",
