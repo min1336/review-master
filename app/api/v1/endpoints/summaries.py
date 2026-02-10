@@ -147,19 +147,17 @@ async def api_regenerate_summary(
     AI 요약 재생성 (태그+감정+리뷰 데이터 활용)
 
     기간 자동 선택:
-    - 3개월 리뷰 >= 30개 → 3개월 요약
+    - 1개월 리뷰 >= 30개 → 1개월 요약
+    - 1개월 리뷰 < 30개 → 3개월로 확장
     - 3개월 리뷰 < 30개 → 6개월로 확장
     - 6개월 리뷰 < 30개 → 1년으로 확장
     - 1년 리뷰 < 30개 → 리뷰 부족 메시지
 
-    모드:
-    - marketing: 마케팅 카피 스타일 (기본값)
-    - operational: 운영 분석 스타일 (강점+개선영역+인사이트)
-
-    생성된 요약은 바로 DB에 저장됩니다 (자동 게시).
+    생성된 요약은 pending_summaries에 저장됩니다 (승인 대기 상태).
+    운영자가 '변경' 버튼으로 승인해야 실제 요약에 반영됩니다.
     """
     try:
-        result = await service.generate_summary_with_data(branch_id, mode=mode)
+        result = await service.generate_pending_summary(branch_id)
         return api_response(result)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

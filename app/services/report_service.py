@@ -838,7 +838,7 @@ class ReportService:
                 summary = await self.summary_repo.get_by_branch_id(branch_id)
                 if summary:
                     summary_data = summary.model_dump()
-                    for field in ["summary_3m", "summary_6m", "summary_1y", "summary_all"]:
+                    for field in ["summary_1m", "summary_3m", "summary_6m", "summary_1y", "summary_all"]:
                         saved_summary = summary_data.get(field)
                         if saved_summary:
                             logging.info(

@@ -31,6 +31,7 @@ class SummaryService:
 
     # 기간별 설정 (우선순위 순서)
     PERIOD_CONFIGS = [
+        {"key": "1m", "field": "summary_1m", "months": 1, "label": "최근 1개월"},
         {"key": "3m", "field": "summary_3m", "months": 3, "label": "최근 3개월"},
         {"key": "6m", "field": "summary_6m", "months": 6, "label": "최근 6개월"},
         {"key": "1y", "field": "summary_1y", "months": 12, "label": "최근 1년"},
@@ -240,7 +241,8 @@ class SummaryService:
         태그+감정+리뷰 데이터를 활용한 AI 요약 생성
 
         기간 로직:
-        - 3개월 리뷰 >= 30개 → 3개월 요약
+        - 1개월 리뷰 >= 30개 → 1개월 요약
+        - 1개월 리뷰 < 30개 → 3개월로 확장
         - 3개월 리뷰 < 30개 → 6개월로 확장
         - 6개월 리뷰 < 30개 → 1년으로 확장
         - 1년 리뷰 < 30개 → 실패 (리뷰 부족 메시지)
@@ -306,20 +308,36 @@ class SummaryService:
                 selected_period = period_config
                 break
 
-        # 3. 리뷰가 충분하지 않은 경우
+        # 3. 어떤 기간도 30개 이상이 아닌 경우 → 전체 기간으로 폴백
         if not selected_period:
-            insufficient_msg = SummaryPromptBuilder.get_insufficient_reviews_message(
-                branch_name, review_count
+            # 전체 리뷰 수 확인
+            total_result = await (
+                client.table("branch_reviews")
+                .select("id", count="exact")
+                .eq("branch_id", branch_id)
+                .execute()
             )
-            return {
-                "success": False,
-                "summary": insufficient_msg,
-                "period": None,
-                "period_label": None,
-                "review_count": review_count,
-                "mode": mode,
-                "error": "리뷰가 충분하지 않습니다",
-            }
+            total_count = total_result.count or 0
+
+            if total_count == 0:
+                # 리뷰가 아예 없는 경우만 실패
+                insufficient_msg = SummaryPromptBuilder.get_insufficient_reviews_message(
+                    branch_name, 0
+                )
+                return {
+                    "success": False,
+                    "summary": insufficient_msg,
+                    "period": None,
+                    "period_label": None,
+                    "review_count": 0,
+                    "mode": mode,
+                    "error": "리뷰가 없습니다",
+                }
+
+            # 리뷰가 있으면 전체 기간으로 진행
+            selected_period = {"key": "all", "field": "summary_all", "months": None, "label": "전체 기간"}
+            review_count = total_count
+            start_date = None  # 전체 기간이므로 시작일 없음
 
         period_key = selected_period["key"]
         period_field = selected_period["field"]
@@ -430,7 +448,7 @@ class SummaryService:
             "summary": generated_summary,
             "period": period_key,
             "period_label": period_label,
-            "start_date": start_date.strftime("%Y-%m-%d"),
+            "start_date": start_date.strftime("%Y-%m-%d") if start_date else None,
             "end_date": end_date.strftime("%Y-%m-%d"),
             "review_count": review_count,
             "mode": mode,
@@ -521,12 +539,16 @@ class SummaryService:
 
         try:
             # 긍정 리뷰 조회
-            pos_result = await (
+            pos_query = (
                 client.table("branch_reviews")
                 .select("content")
                 .eq("branch_id", branch_id)
                 .eq("sentiment", "positive")
-                .gte("review_date", start_date.isoformat())
+            )
+            if start_date is not None:
+                pos_query = pos_query.gte("review_date", start_date.isoformat())
+            pos_result = await (
+                pos_query
                 .order("review_date", desc=True)
                 .limit(30)
                 .execute()
@@ -537,12 +559,16 @@ class SummaryService:
             result["positive"] = self._sample_evenly(pos_reviews, pos_limit)
 
             # 부정 리뷰 조회
-            neg_result = await (
+            neg_query = (
                 client.table("branch_reviews")
                 .select("content")
                 .eq("branch_id", branch_id)
                 .eq("sentiment", "negative")
-                .gte("review_date", start_date.isoformat())
+            )
+            if start_date is not None:
+                neg_query = neg_query.gte("review_date", start_date.isoformat())
+            neg_result = await (
+                neg_query
                 .order("review_date", desc=True)
                 .limit(30)
                 .execute()

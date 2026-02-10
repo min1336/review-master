@@ -98,7 +98,7 @@ async def api_get_review_count(
             if period_counts[label] >= MINIMUM_REVIEW_THRESHOLD:
                 recommended_period = label
                 break
-        if recommended_period is None and period_counts["all"] >= MINIMUM_REVIEW_THRESHOLD:
+        if recommended_period is None:
             recommended_period = "all"
 
         return api_response({
