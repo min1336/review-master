@@ -206,6 +206,230 @@ class SummaryPromptBuilder:
 
         return system_prompt, user_prompt
 
+    # ============================================================
+    # Enhanced Few-shot 예시 (카테고리 + 세분화 태그 형식)
+    # ============================================================
+    ENHANCED_EXAMPLES_AIRPORT = """
+<examples>
+[공항 지점 예시]
+태그 분석:
+[직원이 친절함]
+- 친절 (긍정 88%, 150건)
+- 안내 (긍정 75%, 60건)
+- 예약 (긍정 70%, 35건)
+
+[배달 서비스가 우수함]
+- 딜리버리 (긍정 82%, 90건)
+- 픽업 (긍정 78%, 55건)
+
+[차량이 청결함]
+- 청결 (긍정 80%, 70건)
+
+출력:
+친절한 직원들의 빠른 응대와 상세한 안내로 공항 도착 후 바로 차량을 인수받을 수 있습니다. 딜리버리 서비스가 정시에 운행되어 터미널 이동도 수월하며, 픽업 과정이 간편합니다. 청결하게 관리된 차량 상태가 인상적이고, 합리적인 가격에 예약부터 반납까지 모든 절차가 편리하게 진행되는 지점입니다.
+</examples>"""
+
+    ENHANCED_EXAMPLES_CITY = """
+<examples>
+[시내 지점 예시]
+태그 분석:
+[직원이 친절함]
+- 친절 (긍정 85%, 120건)
+- 응대속도 (긍정 78%, 50건)
+
+[가격이 저렴함]
+- 가격 (긍정 80%, 90건)
+
+[차량이 청결함]
+- 청결 (긍정 75%, 65건)
+
+출력:
+친절한 직원분들의 신속한 응대로 대기 시간 없이 바로 출발할 수 있습니다. 차량은 항상 청결하게 관리되어 있고, 합리적인 가격으로 가성비가 뛰어납니다. 차량 상태도 양호하여 안심하고 이용할 수 있으며, 반납 절차도 간편해서 비즈니스 출장이나 일상적인 이용에 적합한 지점입니다.
+</examples>"""
+
+    ENHANCED_EXAMPLES_TOURIST = """
+<examples>
+[관광지 지점 예시]
+태그 분석:
+[직원이 친절함]
+- 친절 (긍정 86%, 130건)
+- 안내 (긍정 80%, 70건)
+
+[배달 서비스가 우수함]
+- 딜리버리 (긍정 84%, 85건)
+
+[차량이 청결함]
+- 청결 (긍정 78%, 60건)
+
+출력:
+친절한 직원분들이 상세한 안내와 함께 여행 정보까지 제공해주셔서 든든합니다. 청결하게 관리된 차량으로 쾌적한 드라이브를 즐길 수 있으며, 딜리버리 서비스도 원활하게 운영됩니다. 합리적인 가격에 차량 상태까지 양호해, 여행을 더욱 즐겁게 만들어주는 지점입니다.
+</examples>"""
+
+    ENHANCED_EXAMPLES_DEFAULT = """
+<examples>
+[기본 예시]
+태그 분석:
+[직원이 친절함]
+- 친절 (긍정 85%, 120건)
+- 안내 (긍정 72%, 45건)
+
+[차량이 청결함]
+- 청결 (긍정 80%, 70건)
+
+[가격이 저렴함]
+- 가격 (긍정 75%, 55건)
+
+출력:
+친절한 직원분들의 상세한 안내 덕분에 기분 좋게 이용을 시작할 수 있습니다. 차량은 청결하게 관리되어 있어 쾌적하며, 합리적인 가격으로 가성비도 뛰어납니다. 체계적인 서비스 운영 덕분에 처음 이용하시는 분들도 편하게 이용하실 수 있는 지점입니다.
+</examples>"""
+
+    @classmethod
+    def create_enhanced_summary_prompt(
+        cls,
+        tag_sentiments: list[dict],
+        review_count: int,
+        representative_reviews: dict[str, list[str]] | None = None,
+        branch_name: str | None = None,
+        period_label: str | None = None,
+        sentiment_stats: dict | None = None,
+    ) -> tuple[str, str]:
+        """
+        카테고리 그룹핑된 태그+감정 데이터를 포함한 향상된 요약 프롬프트 생성
+
+        Args:
+            tag_sentiments: 카테고리별 그룹핑된 태그 감정 데이터
+                [{"category": "직원이 친절함", "tags": [{"name": "친절", "positive_ratio": 85, "total": 120}, ...]}]
+            review_count: 리뷰 수
+            representative_reviews: 감정별 리뷰 {"positive": [...], "negative": [...]}
+            branch_name: 지점명
+            period_label: 기간 라벨 (예: "최근 3개월")
+            sentiment_stats: 전체 감정 통계 {"positive": N, "negative": N, "total": N}
+
+        Returns:
+            tuple: (system_prompt, user_prompt)
+        """
+        branch_type = cls.detect_branch_type(branch_name)
+        region = cls.extract_region(branch_name)
+        region_emphasis = (
+            REGION_CONFIG["region_emphasis"].get(region, []) if region else []
+        )
+
+        # 시스템 프롬프트 = 기본 + 유형별 enhanced 예시
+        enhanced_examples_map = {
+            BranchType.AIRPORT: cls.ENHANCED_EXAMPLES_AIRPORT,
+            BranchType.CITY: cls.ENHANCED_EXAMPLES_CITY,
+            BranchType.TOURIST: cls.ENHANCED_EXAMPLES_TOURIST,
+            BranchType.DEFAULT: cls.ENHANCED_EXAMPLES_DEFAULT,
+        }
+        examples = enhanced_examples_map.get(branch_type, cls.ENHANCED_EXAMPLES_DEFAULT)
+
+        system_prompt = cls.SUMMARY_SYSTEM + examples
+
+        # 카테고리별 태그 분석 텍스트
+        tag_analysis_text = cls._format_tag_sentiments(tag_sentiments)
+
+        # 리뷰 텍스트 포맷팅
+        reviews_text = cls._format_representative_reviews(representative_reviews)
+
+        # 전체 감정 비율
+        sentiment_text = cls._format_sentiment_text(sentiment_stats)
+
+        # 지역 텍스트
+        region_text = ""
+        if region:
+            region_text = f"\n- 지역: {region}"
+            if region_emphasis:
+                region_text += f" (강조 포인트: {', '.join(region_emphasis)})"
+
+        # 유저 프롬프트
+        user_prompt = f"""다음 데이터를 바탕으로 렌터카 지점 소개 문구를 작성해주세요.
+
+<data>
+- 지점명: {branch_name or "미지정"}
+- 분석 기간: {period_label or "전체"}
+- 분석 리뷰 수: {review_count}개{sentiment_text}{region_text}
+</data>
+
+<tag_analysis>
+{tag_analysis_text if tag_analysis_text else "(태그 데이터 없음)"}
+</tag_analysis>
+
+<representative_reviews>
+{reviews_text if reviews_text else "(리뷰 없음)"}
+</representative_reviews>
+
+위 태그 분석과 리뷰를 기반으로 자연스럽게 이어지는 하나의 문단(200~250자)을 작성하세요.
+카테고리별 핵심 강점을 자연스럽게 녹여서 표현하세요."""
+
+        return system_prompt, user_prompt
+
+    @classmethod
+    def _format_tag_sentiments(cls, tag_sentiments: list[dict]) -> str:
+        """카테고리별 그룹핑된 태그 감정 데이터를 텍스트로 포맷팅"""
+        if not tag_sentiments:
+            return ""
+
+        lines = []
+        for group in tag_sentiments:
+            category = group.get("category", "기타")
+            tags = group.get("tags", [])
+            if not tags:
+                continue
+
+            lines.append(f"[{category}]")
+            for tag in tags:
+                name = tag.get("name", "")
+                pos_ratio = tag.get("positive_ratio", 0)
+                neg_ratio = tag.get("negative_ratio", 0)
+                total = tag.get("total", 0)
+
+                if neg_ratio > pos_ratio:
+                    lines.append(f"- {name} (부정 {neg_ratio}%, {total}건)")
+                else:
+                    lines.append(f"- {name} (긍정 {pos_ratio}%, {total}건)")
+
+            lines.append("")  # 그룹 간 빈 줄
+
+        return "\n".join(lines).strip()
+
+    @classmethod
+    def _format_representative_reviews(
+        cls, reviews: dict[str, list[str]] | None
+    ) -> str:
+        """감정별 분리된 리뷰 텍스트 포맷팅"""
+        if not reviews:
+            return ""
+
+        lines = []
+        positive = reviews.get("positive", [])
+        negative = reviews.get("negative", [])
+
+        if positive:
+            lines.append("긍정 리뷰:")
+            for idx, review in enumerate(positive, 1):
+                lines.append(f'{idx}. "{review[:200]}"')
+
+        if negative:
+            if lines:
+                lines.append("")
+            lines.append("부정 리뷰:")
+            for idx, review in enumerate(negative, 1):
+                lines.append(f'{idx}. "{review[:200]}"')
+
+        return "\n".join(lines)
+
+    @classmethod
+    def _format_sentiment_text(cls, sentiment_stats: dict | None) -> str:
+        """전체 감정 비율 텍스트 생성 (두 빌더 공통)"""
+        if not sentiment_stats:
+            return ""
+        total = sentiment_stats.get("total", 0)
+        if total <= 0:
+            return ""
+        pos_pct = round(sentiment_stats.get("positive", 0) / total * 100)
+        neg_pct = round(sentiment_stats.get("negative", 0) / total * 100)
+        return f"\n- 전체 긍정률: {pos_pct}%, 부정률: {neg_pct}%"
+
     @classmethod
     def get_default_summary(cls, keywords: list[str]) -> str:
         """기본 요약 (LLM 실패시)"""
@@ -491,3 +715,132 @@ class RichSummaryPromptBuilder:
             f"{branch_name}의 분석 가능한 리뷰가 {review_count}건으로 충분하지 않습니다. "
             "더 많은 리뷰가 축적되면 상세한 분석이 가능합니다."
         )
+
+
+class OperationalSummaryPromptBuilder:
+    """운영 분석 요약 프롬프트 생성기
+
+    마케팅 카피와 달리 객관적/분석적 톤으로 강점+개선영역+인사이트를 제공합니다.
+    """
+
+    SYSTEM_PROMPT = """<role>
+당신은 카모아 렌터카 운영팀의 데이터 분석 전문가입니다.
+고객 리뷰 데이터를 분석하여 지점 운영 개선에 도움이 되는 객관적인 분석 요약을 작성합니다.
+</role>
+
+<task>
+주어진 카테고리별 태그 감정 데이터와 대표 리뷰를 바탕으로 운영 분석 요약을 작성하세요.
+강점과 개선이 필요한 영역을 균형 있게 서술하고, 운영 인사이트를 제공합니다.
+</task>
+
+<output_format>
+하나의 자연스러운 문단(250~350자)으로 작성:
+1. 분석 기간과 전체 감정 비율 개요
+2. 강점 영역 (긍정 비율 높은 카테고리/태그)
+3. 개선 필요 영역 (부정 비율 높은 태그 + 구체적 피드백)
+4. 운영 인사이트 (데이터 기반 제안)
+
+문장들이 자연스럽게 흘러가도록 연결하세요.
+</output_format>
+
+<writing_style>
+- 객관적이고 분석적인 톤
+- 숫자 데이터를 근거로 활용 (긍정률, 건수)
+- 부정 피드백은 구체적으로 서술 (어떤 문제인지)
+- 운영자 관점에서 실용적인 인사이트 제공
+- 접속사를 활용해 문장 간 자연스럽게 연결
+</writing_style>
+
+<constraints>
+- 마크다운, 이모지, 특수문자 사용 금지
+- 과장 표현 금지: "최고", "완벽", "강력추천", "무조건"
+- 긍정 편향 금지: 부정 피드백도 반드시 포함
+- 제공되지 않은 정보 추측 금지
+</constraints>"""
+
+    EXAMPLES = """
+<examples>
+[운영 분석 예시 1]
+태그 분석:
+[직원이 친절함]
+- 친절 (긍정 88%, 150건)
+- 안내 (긍정 72%, 60건)
+- 전화응대 (부정 35%, 20건)
+
+[차량이 청결함]
+- 청결 (긍정 65%, 80건)
+- 냄새 (부정 45%, 15건)
+
+출력:
+최근 3개월간 총 245건의 리뷰를 분석한 결과, 전체 긍정률 78%로 양호한 수준입니다. 직원 친절도가 88%의 높은 긍정률을 기록하며 핵심 강점으로 확인되었고, 안내 서비스에 대해서도 72%의 만족도를 보이고 있습니다. 다만 전화응대 관련 부정 피드백이 35%로 나타나 응대 품질 개선이 필요하며, 차량 냄새에 대한 불만도 45%로 높아 실내 청소 프로세스 점검이 권장됩니다. 전반적으로 대면 서비스 품질은 우수하나, 비대면 채널과 차량 관리 부문에 집중적인 개선이 이루어지면 고객 만족도를 한 단계 높일 수 있을 것으로 분석됩니다.
+
+[운영 분석 예시 2]
+태그 분석:
+[가격이 저렴함]
+- 가격 (긍정 82%, 95건)
+- 보험 (부정 40%, 25건)
+
+[배달 서비스가 우수함]
+- 딜리버리 (긍정 90%, 110건)
+
+출력:
+최근 6개월간 230건의 리뷰를 분석한 결과 전체 긍정률이 81%입니다. 딜리버리 서비스가 90%의 높은 긍정률로 가장 강력한 차별화 요소이며, 가격 만족도도 82%로 우수합니다. 반면 보험 관련 불만이 40%로 나타나, 보험 옵션 안내 과정의 투명성 강화가 필요합니다. 딜리버리 서비스의 높은 만족도를 마케팅에 적극 활용하면서, 보험 안내 프로세스를 개선하면 전환율 향상에 기여할 수 있을 것입니다.
+</examples>"""
+
+    @classmethod
+    def create_prompt(
+        cls,
+        tag_sentiments: list[dict],
+        review_count: int,
+        representative_reviews: dict[str, list[str]] | None = None,
+        branch_name: str | None = None,
+        period_label: str | None = None,
+        sentiment_stats: dict | None = None,
+    ) -> tuple[str, str]:
+        """
+        운영 분석 요약 프롬프트 생성
+
+        Args:
+            tag_sentiments: 카테고리별 그룹핑된 태그 감정 데이터
+            review_count: 리뷰 수
+            representative_reviews: 감정별 리뷰 {"positive": [...], "negative": [...]}
+            branch_name: 지점명
+            period_label: 기간 라벨
+            sentiment_stats: 전체 감정 통계
+
+        Returns:
+            tuple: (system_prompt, user_prompt)
+        """
+        system_prompt = cls.SYSTEM_PROMPT + cls.EXAMPLES
+
+        # 카테고리별 태그 분석 (SummaryPromptBuilder의 포맷터 재사용)
+        tag_analysis_text = SummaryPromptBuilder._format_tag_sentiments(tag_sentiments)
+
+        # 리뷰 텍스트 포맷팅
+        reviews_text = SummaryPromptBuilder._format_representative_reviews(
+            representative_reviews
+        )
+
+        # 전체 감정 비율 (SummaryPromptBuilder의 공유 메서드 재사용)
+        sentiment_text = SummaryPromptBuilder._format_sentiment_text(sentiment_stats)
+
+        user_prompt = f"""다음 데이터를 바탕으로 렌터카 지점의 운영 분석 요약을 작성해주세요.
+
+<data>
+- 지점명: {branch_name or "미지정"}
+- 분석 기간: {period_label or "전체"}
+- 분석 리뷰 수: {review_count}개{sentiment_text}
+</data>
+
+<tag_analysis>
+{tag_analysis_text if tag_analysis_text else "(태그 데이터 없음)"}
+</tag_analysis>
+
+<representative_reviews>
+{reviews_text if reviews_text else "(리뷰 없음)"}
+</representative_reviews>
+
+위 데이터를 기반으로 강점, 개선 영역, 운영 인사이트를 포함한 분석 요약(250~350자)을 작성하세요.
+부정 피드백이 있다면 구체적으로 언급하고, 데이터 기반의 운영 제안을 포함하세요."""
+
+        return system_prompt, user_prompt

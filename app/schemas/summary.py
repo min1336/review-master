@@ -24,6 +24,6 @@ class StatusUpdate(BaseModel):
 
 
 class RegenerateRequest(BaseModel):
-    """AI 요약 재생성 요청"""
+    """AI 요약 재생성 요청 (apply-pending/discard-pending용)"""
 
     period: str = Field("all", pattern="^(all|1y|6m|3m|1m)$")

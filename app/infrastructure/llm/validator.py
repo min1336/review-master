@@ -27,6 +27,12 @@ REPORT_MAX_CHAR_COUNT = 800
 REPORT_MIN_SENTENCES = 5
 REPORT_MAX_SENTENCES = 20
 
+# 운영 분석 모드 검증 기준
+OPERATIONAL_MIN_CHAR_COUNT = 150
+OPERATIONAL_MAX_CHAR_COUNT = 450
+OPERATIONAL_MIN_SENTENCES = 3
+OPERATIONAL_MAX_SENTENCES = 10
+
 
 def validate_summary(text: str, mode: str = "summary") -> tuple[bool, list[str]]:
     """
@@ -34,7 +40,7 @@ def validate_summary(text: str, mode: str = "summary") -> tuple[bool, list[str]]
 
     Args:
         text: 검증할 요약 텍스트
-        mode: "summary" (유저용 요약) 또는 "report" (리포트 요약)
+        mode: "summary" | "report" | "operational"
 
     Returns:
         Tuple[bool, List[str]]: (통과 여부, 오류 목록)
@@ -51,6 +57,11 @@ def validate_summary(text: str, mode: str = "summary") -> tuple[bool, list[str]]
         max_char = REPORT_MAX_CHAR_COUNT
         min_sent = REPORT_MIN_SENTENCES
         max_sent = REPORT_MAX_SENTENCES
+    elif mode == "operational":
+        min_char = OPERATIONAL_MIN_CHAR_COUNT
+        max_char = OPERATIONAL_MAX_CHAR_COUNT
+        min_sent = OPERATIONAL_MIN_SENTENCES
+        max_sent = OPERATIONAL_MAX_SENTENCES
     else:
         min_char = MIN_CHAR_COUNT
         max_char = MAX_CHAR_COUNT

@@ -22,7 +22,7 @@ class OpenAIProvider(LLMProvider):
     def __init__(
         self,
         api_key: str = None,
-        model: str = "gpt-3.5-turbo",
+        model: str = "gpt-4o-mini",
         rpm: int = 3500,
         organization: str = None,
         project: str = None,
@@ -30,7 +30,7 @@ class OpenAIProvider(LLMProvider):
         """
         Args:
             api_key: OpenAI API 키 (환경변수 OPENAI_API_KEY 사용 가능)
-            model: 사용할 모델 (기본값: gpt-3.5-turbo)
+            model: 사용할 모델 (기본값: gpt-4o-mini)
             rpm: 분당 최대 요청 수
             organization: OpenAI Organization ID
             project: OpenAI Project ID

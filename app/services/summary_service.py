@@ -4,6 +4,8 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
+from core.timezone import utc_now
+
 from schemas.dto import (
     BranchCarModelsDTO,
     BranchDetailDTO,
@@ -211,24 +213,28 @@ class SummaryService:
             distribution=distribution,
         )
 
-    async def regenerate_summary(self, branch_id: int, period: str = "all") -> str:
+    async def regenerate_summary(
+        self, branch_id: int, period: str = "all", mode: str = "marketing"
+    ) -> str:
         """
         AI 요약 재생성 (generate_summary_with_data 사용)
 
         Args:
             branch_id: 지점 ID
             period: 기간 (all, 1y, 6m, 3m, 1m) - 힌트용, 실제는 자동 결정
+            mode: "marketing" | "operational"
 
         Returns:
             str: 생성된 요약 텍스트
         """
-        result = await self.generate_summary_with_data(branch_id)
+        result = await self.generate_summary_with_data(branch_id, mode=mode)
         return result.get("summary", "")
 
     async def generate_summary_with_data(
         self,
         branch_id: int,
         save_to_db: bool = True,
+        mode: str = "marketing",
     ) -> dict:
         """
         태그+감정+리뷰 데이터를 활용한 AI 요약 생성
@@ -242,6 +248,7 @@ class SummaryService:
         Args:
             branch_id: 지점 ID
             save_to_db: DB에 저장할지 여부 (기본 True)
+            mode: "marketing" (마케팅 카피) | "operational" (운영 분석)
 
         Returns:
             dict: {
@@ -252,11 +259,15 @@ class SummaryService:
                 "start_date": str,
                 "end_date": str,
                 "review_count": int,
+                "mode": str,
                 "error": str (실패 시)
             }
         """
         from infrastructure.llm import get_provider
-        from infrastructure.llm.prompts import SummaryPromptBuilder
+        from infrastructure.llm.prompts import (
+            OperationalSummaryPromptBuilder,
+            SummaryPromptBuilder,
+        )
         from repository.session import get_client
 
         # 1. 지점 기본 정보 조회
@@ -273,7 +284,7 @@ class SummaryService:
 
         # 2. 기간별 리뷰 수 확인 및 적절한 기간 선택
         client = await get_client()
-        end_date = datetime.now()
+        end_date = utc_now()
         selected_period = None
         review_count = 0
         start_date = None
@@ -282,7 +293,6 @@ class SummaryService:
             months = period_config["months"]
             start_date = end_date - timedelta(days=months * 30)
 
-            # 해당 기간의 리뷰 수 조회
             count_result = await (
                 client.table("branch_reviews")
                 .select("id", count="exact")
@@ -307,6 +317,7 @@ class SummaryService:
                 "period": None,
                 "period_label": None,
                 "review_count": review_count,
+                "mode": mode,
                 "error": "리뷰가 충분하지 않습니다",
             }
 
@@ -314,37 +325,10 @@ class SummaryService:
         period_field = selected_period["field"]
         period_label = selected_period["label"]
 
-        # 4. 태그별 감정 데이터 조회 (1회 쿼리 - positive_count/negative_count 컬럼 사용)
-        tag_sentiments = []
-        try:
-            all_result = await (
-                client.table("branch_tags")
-                .select("tag_id, count, positive_count, negative_count, tags(id, name)")
-                .eq("branch_id", branch_id)
-                .eq("period_type", "all")
-                .order("count", desc=True)
-                .limit(10)
-                .execute()
-            )
-
-            for tag_row in all_result.data:
-                tag_info = tag_row.get("tags") or {}
-                tag_name = tag_info.get("name", "")
-                tag_id = tag_row.get("tag_id")
-                if tag_name and tag_id:
-                    positive = tag_row.get("positive_count", 0) or 0
-                    negative = tag_row.get("negative_count", 0) or 0
-                    total = tag_row.get("count", 0)
-                    neutral = max(0, total - positive - negative)
-                    tag_sentiments.append({
-                        "name": tag_name,
-                        "positive": positive,
-                        "negative": negative,
-                        "neutral": neutral,
-                        "total": total,
-                    })
-        except Exception as e:
-            logger.warning(f"태그 조회 실패 (branch_id={branch_id}): {e}")
+        # 4. 태그 조회 — BranchTagRepository 활용 (카테고리 조인 포함)
+        grouped_tag_sentiments = await self._fetch_grouped_tags(
+            branch_id, period_key
+        )
 
         # 5. 감정 통계 조회 (branch_sentiment_stats)
         sentiment_stats = {"positive": 0, "negative": 0, "neutral": 0, "total": 0}
@@ -360,43 +344,46 @@ class SummaryService:
             except Exception as e:
                 logger.warning(f"감정 통계 조회 실패 (branch_id={branch_id}): {e}")
 
-        # 6. 최근 리뷰 30개 조회 (branch_reviews)
-        sample_reviews = []
-        try:
-            reviews_result = await (
-                client.table("branch_reviews")
-                .select("content")
-                .eq("branch_id", branch_id)
-                .order("review_date", desc=True)
-                .limit(30)
-                .execute()
-            )
-            sample_reviews = [
-                r.get("content", "")[:200]
-                for r in reviews_result.data
-                if r.get("content")
-            ]
-        except Exception as e:
-            logger.warning(f"최근 리뷰 조회 실패 (branch_id={branch_id}): {e}")
-
-        # 7. 프롬프트 생성
-        tag_keywords = [ts["name"] for ts in tag_sentiments if ts.get("name")]
-
-        system_prompt, user_prompt = SummaryPromptBuilder.create_summary_prompt(
-            keywords=tag_keywords,
-            review_count=review_count,
-            representative_reviews=sample_reviews[:5],
-            branch_name=branch_name,
+        # 6. 감정별 리뷰 샘플링 (다양성 확보)
+        representative_reviews = await self._fetch_representative_reviews(
+            client, branch_id, start_date, mode
         )
 
-        # 8. LLM 호출
+        # 7. 프롬프트 생성 (모드별 분기)
+        if mode == "operational":
+            system_prompt, user_prompt = OperationalSummaryPromptBuilder.create_prompt(
+                tag_sentiments=grouped_tag_sentiments,
+                review_count=review_count,
+                representative_reviews=representative_reviews,
+                branch_name=branch_name,
+                period_label=period_label,
+                sentiment_stats=sentiment_stats,
+            )
+        else:
+            system_prompt, user_prompt = (
+                SummaryPromptBuilder.create_enhanced_summary_prompt(
+                    tag_sentiments=grouped_tag_sentiments,
+                    review_count=review_count,
+                    representative_reviews=representative_reviews,
+                    branch_name=branch_name,
+                    period_label=period_label,
+                    sentiment_stats=sentiment_stats,
+                )
+            )
+
+        # 8. LLM 호출 (모드별 파라미터)
+        llm_params = {
+            "marketing": {"max_tokens": 400, "temperature": 0.7},
+            "operational": {"max_tokens": 500, "temperature": 0.5},
+        }
+        params = llm_params.get(mode, llm_params["marketing"])
+
         try:
             llm_provider = get_provider()
             response = await llm_provider.async_generate(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
-                max_tokens=400,
-                temperature=0.7,
+                **params,
             )
             generated_summary = (
                 response.content if hasattr(response, "content") else str(response)
@@ -407,10 +394,25 @@ class SummaryService:
                 "success": False,
                 "summary": "",
                 "period": period_key,
+                "mode": mode,
                 "error": f"AI 요약 생성 실패: {e}",
             }
 
-        # 9. DB 저장 (자동 게시)
+        # 9. 검증 및 마크다운 정리
+        from infrastructure.llm.validator import (
+            strip_markdown_formatting,
+            validate_summary,
+        )
+
+        generated_summary = strip_markdown_formatting(generated_summary)
+        validation_mode = "operational" if mode == "operational" else "summary"
+        is_valid, errors = validate_summary(generated_summary, mode=validation_mode)
+        if not is_valid:
+            logger.warning(
+                f"검증 실패 (branch_id={branch_id}, mode={mode}): {errors}"
+            )
+
+        # 10. DB 저장 (자동 게시)
         if save_to_db:
             try:
                 await self.summary_repo.upsert_by_branch_id({
@@ -418,7 +420,7 @@ class SummaryService:
                     period_field: generated_summary,
                 })
                 logger.info(
-                    f"요약 저장 완료: branch_id={branch_id}, period={period_key}"
+                    f"요약 저장 완료: branch_id={branch_id}, period={period_key}, mode={mode}"
                 )
             except Exception as e:
                 logger.error(f"요약 저장 실패 (branch_id={branch_id}): {e}")
@@ -431,7 +433,139 @@ class SummaryService:
             "start_date": start_date.strftime("%Y-%m-%d"),
             "end_date": end_date.strftime("%Y-%m-%d"),
             "review_count": review_count,
+            "mode": mode,
         }
+
+    async def _fetch_grouped_tags(
+        self, branch_id: int, period_key: str
+    ) -> list[dict]:
+        """
+        BranchTagRepository로 태그를 조회하고 카테고리별로 그룹핑
+
+        선택된 기간(period_key)으로 먼저 조회하고,
+        결과가 3개 미만이면 "all"로 fallback합니다.
+
+        Returns:
+            [{"category": "직원이 친절함", "tags": [{"name": "친절", "positive_ratio": 85, ...}]}]
+        """
+        try:
+            branch_tags = await self.branch_tag_repo.get_by_branch(
+                branch_id, period_type=period_key, limit=15
+            )
+
+            # 3개 미만이면 전체 기간으로 fallback
+            if len(branch_tags) < 3:
+                branch_tags = await self.branch_tag_repo.get_by_branch(
+                    branch_id, period_type="all", limit=15
+                )
+
+            return self._group_tags_by_category(branch_tags)
+        except Exception as e:
+            logger.warning(f"태그 조회 실패 (branch_id={branch_id}): {e}")
+            return []
+
+    @staticmethod
+    def _group_tags_by_category(branch_tags: list) -> list[dict]:
+        """BranchTag 리스트를 카테고리별로 그룹핑"""
+        from collections import defaultdict
+
+        category_groups: dict[str, list[dict]] = defaultdict(list)
+
+        for bt in branch_tags:
+            tag_info = bt.tags
+            if not tag_info:
+                continue
+
+            category_name = "기타"
+            if tag_info.categories and tag_info.categories.name:
+                category_name = tag_info.categories.name
+
+            total = bt.count or 0
+            positive = bt.positive_count or 0
+            negative = bt.negative_count or 0
+
+            pos_ratio = round(positive / total * 100) if total > 0 else 0
+            neg_ratio = round(negative / total * 100) if total > 0 else 0
+
+            category_groups[category_name].append({
+                "name": tag_info.name,
+                "positive_ratio": pos_ratio,
+                "negative_ratio": neg_ratio,
+                "total": total,
+            })
+
+        return [
+            {"category": cat, "tags": tags}
+            for cat, tags in category_groups.items()
+        ]
+
+    async def _fetch_representative_reviews(
+        self,
+        client,
+        branch_id: int,
+        start_date,
+        mode: str,
+    ) -> dict[str, list[str]]:
+        """
+        감정별로 분리된 대표 리뷰 샘플링 (등간격)
+
+        marketing: 긍정 4 + 부정 1 = 5개
+        operational: 긍정 3 + 부정 3 = 6개
+        """
+        if mode == "operational":
+            pos_limit, neg_limit = 3, 3
+        else:
+            pos_limit, neg_limit = 4, 1
+
+        result = {"positive": [], "negative": []}
+
+        try:
+            # 긍정 리뷰 조회
+            pos_result = await (
+                client.table("branch_reviews")
+                .select("content")
+                .eq("branch_id", branch_id)
+                .eq("sentiment", "positive")
+                .gte("review_date", start_date.isoformat())
+                .order("review_date", desc=True)
+                .limit(30)
+                .execute()
+            )
+            pos_reviews = [
+                r["content"][:200] for r in pos_result.data if r.get("content")
+            ]
+            result["positive"] = self._sample_evenly(pos_reviews, pos_limit)
+
+            # 부정 리뷰 조회
+            neg_result = await (
+                client.table("branch_reviews")
+                .select("content")
+                .eq("branch_id", branch_id)
+                .eq("sentiment", "negative")
+                .gte("review_date", start_date.isoformat())
+                .order("review_date", desc=True)
+                .limit(30)
+                .execute()
+            )
+            neg_reviews = [
+                r["content"][:200] for r in neg_result.data if r.get("content")
+            ]
+            result["negative"] = self._sample_evenly(neg_reviews, neg_limit)
+
+        except Exception as e:
+            logger.warning(f"리뷰 샘플링 실패 (branch_id={branch_id}): {e}")
+
+        return result
+
+    @staticmethod
+    def _sample_evenly(items: list, n: int) -> list:
+        """리스트에서 등간격으로 n개 샘플링"""
+        if not items or n <= 0:
+            return []
+        if len(items) <= n:
+            return items
+        step = len(items) / n
+        return [items[int(i * step)] for i in range(n)]
 
     async def generate_pending_summary(
         self,

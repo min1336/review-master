@@ -11,7 +11,7 @@ from core.config import BranchType
 
 from .base import LLMProvider, LLMResponse
 from .openai_provider import OpenAIProvider
-from .prompts import SummaryPromptBuilder
+from .prompts import OperationalSummaryPromptBuilder, SummaryPromptBuilder
 from .rate_limiter import RateLimiter
 from .validator import validate_and_log, validate_summary
 
@@ -20,6 +20,7 @@ __all__ = [
     "LLMResponse",
     "OpenAIProvider",
     "SummaryPromptBuilder",
+    "OperationalSummaryPromptBuilder",
     "BranchType",
     "RateLimiter",
     "validate_summary",

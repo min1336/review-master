@@ -14,8 +14,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from core.timezone import parse_date_str
 from fastapi import APIRouter, Depends, HTTPException, Query
-from schemas.dto import BranchCarModelsDTO
+from schemas.common import api_list_response, api_response
 from schemas.summary import RegenerateRequest, StatusUpdate, SummaryUpdate
 from services.summary_service import SummaryService
 
@@ -25,27 +26,11 @@ router = APIRouter(tags=["summaries"])
 
 
 def parse_date(date_str: str | None, end_of_day: bool = False) -> datetime | None:
-    """
-    날짜 문자열을 datetime으로 파싱
-
-    Args:
-        date_str: YYYY-MM-DD 형식의 날짜 문자열
-        end_of_day: True이면 23:59:59로 설정
-
-    Returns:
-        datetime 객체 또는 None
-
-    Raises:
-        HTTPException: 날짜 형식이 잘못된 경우 400 에러
-    """
+    """날짜 문자열을 UTC-aware datetime으로 파싱"""
     if not date_str:
         return None
-
     try:
-        dt = datetime.strptime(date_str, "%Y-%m-%d")
-        if end_of_day:
-            dt = dt.replace(hour=23, minute=59, second=59)
-        return dt
+        return parse_date_str(date_str, end_of_day=end_of_day)
     except ValueError as e:
         raise HTTPException(
             status_code=400,
@@ -72,7 +57,7 @@ async def api_summaries(
         None, description="종료일 (YYYY-MM-DD) - 이 기간에 리뷰가 있는 업체만 표시"
     ),
     service: SummaryService = Depends(get_summary_service),
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """
     통합 요약 목록 조회
 
@@ -83,7 +68,7 @@ async def api_summaries(
     parsed_date_from = parse_date(review_date_from)
     parsed_date_to = parse_date(review_date_to, end_of_day=True)
 
-    return await service.get_summaries(
+    summaries = await service.get_summaries(
         status=status,
         region=region,
         keyword=keyword,
@@ -97,6 +82,7 @@ async def api_summaries(
         review_date_from=parsed_date_from,
         review_date_to=parsed_date_to,
     )
+    return api_list_response(summaries)
 
 
 @router.get("/summaries/pending")
@@ -112,11 +98,7 @@ async def api_get_pending_summaries(
     """
     try:
         pending_list = await service.summary_repo.get_pending_summaries(limit)
-        return {
-            "success": True,
-            "count": len(pending_list),
-            "data": [s.model_dump() for s in pending_list],
-        }
+        return api_list_response([s.model_dump() for s in pending_list])
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -128,7 +110,7 @@ async def api_summary_detail(
     """특정 지점 요약 상세"""
     summary = await service.get_summary(branch_id)
     if summary:
-        return summary
+        return api_response(summary)
     raise HTTPException(status_code=404, detail="Not found")
 
 
@@ -141,7 +123,7 @@ async def api_update_summary(
     """요약 수정"""
     update_data = data.model_dump(exclude_unset=True)
     result = await service.update_summary(branch_id, update_data)
-    return {"success": True, "data": result}
+    return api_response(result)
 
 
 @router.put("/summaries/{branch_id}/status")
@@ -152,12 +134,13 @@ async def api_update_status(
 ) -> dict[str, Any]:
     """요약 상태 변경"""
     result = await service.update_status(branch_id, data.status)
-    return {"success": True, "data": result}
+    return api_response(result)
 
 
 @router.post("/summaries/{branch_id}/regenerate")
 async def api_regenerate_summary(
     branch_id: int,
+    mode: str = Query("marketing", pattern="^(marketing|operational)$"),
     service: SummaryService = Depends(get_summary_service),
 ) -> dict[str, Any]:
     """
@@ -169,11 +152,15 @@ async def api_regenerate_summary(
     - 6개월 리뷰 < 30개 → 1년으로 확장
     - 1년 리뷰 < 30개 → 리뷰 부족 메시지
 
+    모드:
+    - marketing: 마케팅 카피 스타일 (기본값)
+    - operational: 운영 분석 스타일 (강점+개선영역+인사이트)
+
     생성된 요약은 바로 DB에 저장됩니다 (자동 게시).
     """
     try:
-        result = await service.generate_summary_with_data(branch_id)
-        return result
+        result = await service.generate_summary_with_data(branch_id, mode=mode)
+        return api_response(result)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
@@ -191,7 +178,7 @@ async def api_apply_pending_summary(
 
     try:
         result = await service.apply_pending_summary(branch_id, period)
-        return {"success": True, **result.to_dict()}
+        return api_response(result.to_dict())
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
@@ -209,7 +196,7 @@ async def api_discard_pending_summary(
 
     try:
         result = await service.discard_pending_summary(branch_id, period)
-        return {"success": True, **result.to_dict()}
+        return api_response(result.to_dict())
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -227,7 +214,7 @@ async def api_get_summary_history(
     """
     try:
         history = await service.summary_repo.get_history(branch_id, limit)
-        return {"success": True, "data": history}
+        return api_response(history)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -246,7 +233,7 @@ async def api_approve_pending_summary(
     try:
         result = await service.summary_repo.approve_pending_summary(branch_id)
         if result:
-            return {"success": True, "data": result.model_dump()}
+            return api_response(result.model_dump())
         raise HTTPException(status_code=404, detail="승인할 pending 요약이 없습니다.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -265,7 +252,7 @@ async def api_reject_pending_summary(
     try:
         result = await service.summary_repo.reject_pending_summary(branch_id)
         if result:
-            return {"success": True, "data": result.model_dump()}
+            return api_response(result.model_dump())
         raise HTTPException(status_code=404, detail="거부할 pending 요약이 없습니다.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -277,16 +264,16 @@ async def api_stats(
 ) -> dict[str, Any]:
     """요약 통계"""
     result = await service.get_stats()
-    return result.to_dict()
+    return api_response(result.to_dict())
 
 
 @router.get("/stats/region")
 async def api_region_stats(
     service: SummaryService = Depends(get_summary_service),
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """지역별 통계"""
     result = await service.get_region_stats()
-    return [r.to_dict() for r in result]
+    return api_list_response([r.to_dict() for r in result])
 
 
 @router.get("/stats/rating")
@@ -295,7 +282,7 @@ async def api_rating_stats(
 ) -> dict[str, Any]:
     """평점 분포 통계"""
     result = await service.get_rating_stats()
-    return result.to_dict()
+    return api_response(result.to_dict())
 
 
 @router.get("/summaries/{branch_id}/reviews")
@@ -335,7 +322,7 @@ async def api_branch_reviews(
         limit=limit,
         offset=offset,
     )
-    return result.to_dict()
+    return api_response(result.to_dict())
 
 
 @router.get("/summaries/{branch_id}/detail")
@@ -358,7 +345,7 @@ async def api_branch_detail(
         max_reviews=max_reviews,
     )
     if result:
-        return result.to_dict()
+        return api_response(result.to_dict())
     raise HTTPException(status_code=404, detail="Not found")
 
 
@@ -367,30 +354,14 @@ async def api_car_model_tags(
     branch_id: int,
     car_model: str | None = Query(None, description="특정 차량 모델만 조회"),
     service: SummaryService = Depends(get_summary_service),
-) -> BranchCarModelsDTO:
+) -> dict[str, Any]:
     """
     지점별 차량 모델 태그 분석
 
     각 차량 모델별로 태그와 감정 통계를 반환합니다.
-
-    응답 예시:
-    ```json
-    {
-      "branch_id": 1234,
-      "car_models": [
-        {
-          "name": "아반떼",
-          "review_count": 50,
-          "tags": [
-            {"name": "차량이 청결함", "positive": 40, "negative": 5, "total": 45},
-            {"name": "가성비", "positive": 35, "negative": 3, "total": 38}
-          ]
-        }
-      ]
-    }
-    ```
     """
-    return await service.get_car_model_tags(
+    result = await service.get_car_model_tags(
         branch_id=branch_id,
         car_model=car_model,
     )
+    return api_response(result.to_dict())
