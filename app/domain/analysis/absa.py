@@ -13,8 +13,8 @@
     absa = RuleBasedABSA()
     results = absa.analyze("직원이 친절했지만 차량이 더러웠어요")
     # [
-    #   {'aspect': '고객응대', 'sentiment': 'positive', ...},
-    #   {'aspect': '차량청결', 'sentiment': 'negative', ...}
+    #   {'aspect': '직원이 친절함', 'sentiment': 'positive', ...},
+    #   {'aspect': '차량이 청결함', 'sentiment': 'negative', ...}
     # ]
 """
 
@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 class AspectOpinion:
     """Aspect-Opinion-Sentiment 결과"""
 
-    aspect: str  # 태그명 (고객응대, 차량청결 등)
+    aspect: str  # 태그명 (직원이 친절함, 차량이 청결함 등)
     opinion: str  # 원문에서 추출한 의견 표현
     sentiment: str  # positive, negative, neutral
     confidence: float  # 신뢰도 (0.0 ~ 1.0)
@@ -63,19 +63,19 @@ class RuleBasedABSA:
     # =========================================================================
 
     # 문맥 필요 키워드: 키워드 → (태그, 필요 문맥 키워드들)
-    # v3.0: 7개 태그로 재정의
+    # v4.0: 7개 문장형 태그로 재정의
     CONTEXT_REQUIRED_KEYWORDS = {
         "늦": (
-            "딜리버리",
+            "배달 서비스가 우수함",
             ["배차", "차량", "픽업", "도착", "출발", "시간", "대기", "기다"],
         ),
-        "빨리": ("딜리버리", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
-        "빠르": ("딜리버리", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
+        "빨리": ("배달 서비스가 우수함", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
+        "빠르": ("배달 서비스가 우수함", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
     }
 
-    # v3.0: 7개 태그 (친절도, 사고, 주유, 가격, 청결, 차량상태, 딜리버리)
+    # v4.0: 7개 문장형 태그
     ASPECT_KEYWORDS = {
-        "친절도": [
+        "직원이 친절함": [
             "직원",
             "사장",
             "사장님",
@@ -99,7 +99,7 @@ class RuleBasedABSA:
             "서비스",
             "고객",
         ],
-        "사고": [
+        "사고 처리를 잘해줌": [
             "보험",
             "보장",
             "면책",
@@ -126,7 +126,7 @@ class RuleBasedABSA:
             "사고접수",
             "사고처리",
         ],
-        "주유": [
+        "주유비 부담 없음": [
             "주유",
             "연료",
             "기름",
@@ -145,7 +145,7 @@ class RuleBasedABSA:
             "주유량",
             "연료비",
         ],
-        "가격": [
+        "가격이 저렴함": [
             "가격",
             "가성비",
             "비용",
@@ -177,7 +177,7 @@ class RuleBasedABSA:
             "정산",
             "결제",
         ],
-        "청결": [
+        "차량이 청결함": [
             "내부",
             "실내",
             "시트",
@@ -208,7 +208,7 @@ class RuleBasedABSA:
             "위생",
             "세차",
         ],
-        "차량상태": [
+        "차량외관이 좋음": [
             "외관",
             "외부",
             "외형",
@@ -252,7 +252,7 @@ class RuleBasedABSA:
             "주행거리",
             "성능",
         ],
-        "딜리버리": [
+        "배달 서비스가 우수함": [
             "배차",
             "차종",
             "차량변경",
@@ -325,7 +325,7 @@ class RuleBasedABSA:
             review: 리뷰 텍스트
 
         Returns:
-            [{'aspect': '고객응대', 'opinion': '직원이 친절했어요',
+            [{'aspect': '직원이 친절함', 'opinion': '직원이 친절했어요',
               'sentiment': 'positive', 'confidence': 0.9, 'keywords': ['직원', '친절']}]
         """
         if not review or len(review.strip()) < 3:
@@ -557,8 +557,8 @@ class RuleBasedABSA:
 
         Returns:
             {
-                '고객응대': {'positive': ['친절'], 'negative': [], 'neutral': []},
-                '차량청결': {'positive': [], 'negative': ['더러운'], 'neutral': []}
+                '직원이 친절함': {'positive': ['친절'], 'negative': [], 'neutral': []},
+                '차량이 청결함': {'positive': [], 'negative': ['더러운'], 'neutral': []}
             }
         """
         from collections import defaultdict
