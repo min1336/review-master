@@ -38,6 +38,7 @@ from .patterns import (
     POSITIVE_EXCEPTION_REGEX,
     POSITIVE_REGEX,
     RULE_BASED_TAG_MAPPING,
+    extract_stem,
 )
 from .tag_embeddings import TagEmbeddingManager
 
@@ -186,11 +187,18 @@ class HybridClassifier:
     # =========================================================================
 
     def _check_rule_based_mapping(self, keyword: str) -> tuple[str, float] | None:
-        """규칙 기반 태그 매핑 확인 (임베딩보다 우선)"""
+        """규칙 기반 태그 매핑 확인 (임베딩보다 우선)
+
+        매칭 전략:
+        1. 정확 일치 (keyword == rule_kw)
+        2. 부분 문자열 일치 (rule_kw in keyword)
+        3. 어간 일치 (extract_stem(keyword) == rule_kw)
+        """
         keyword_lower = keyword.lower().strip()
+        keyword_stem = extract_stem(keyword_lower)
         for tag, keywords in RULE_BASED_TAG_MAPPING.items():
             for rule_kw in keywords:
-                if keyword_lower == rule_kw or rule_kw in keyword_lower:
+                if keyword_lower == rule_kw or rule_kw in keyword_lower or keyword_stem == rule_kw:
                     return (tag, 1.0)
         return None
 
