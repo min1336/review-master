@@ -26,7 +26,8 @@ class SentimentStatsUpdater:
             bid = pr.branch_id
             if bid not in branch_counts:
                 branch_counts[bid] = {"positive": 0, "negative": 0, "neutral": 0}
-            branch_counts[bid][pr.sentiment] += 1
+            sentiment = pr.sentiment if pr.sentiment in ("positive", "negative", "neutral") else "neutral"
+            branch_counts[bid][sentiment] += 1
 
         # 2. 지점별 1회 DB 업데이트
         # NOTE: SELECT→증분→UPSERT 패턴은 동시 실행 시 카운트 누락 가능 (race condition).
