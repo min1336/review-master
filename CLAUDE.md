@@ -22,7 +22,6 @@ Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
 
 ```python
 OPENAI_RPM = 3500                # API Rate Limit
-MAX_REVIEWS_PER_BRANCH = 30      # recent_reviews 저장 개수
 EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
 SIMILARITY_THRESHOLD = 0.3       # 태그 분류 최소 유사도
 ```
@@ -103,7 +102,8 @@ app/
 │   └── stopwords.py               # 불용어 사전
 │
 ├── scripts/                       # 유틸리티 스크립트
-│   └── migrate_sentiments.py      # 마이그레이션
+│   ├── migrate_sentiments.py      # 마이그레이션
+│   └── run_auto_mapping.py        # 키워드 자동 매핑 (52개 태그)
 │
 └── templates/                     # HTML 템플릿
     ├── dashboard_v2.html          # 메인 대시보드
@@ -127,12 +127,14 @@ app/
 ### 태그 API (`/api/tags/`)
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/list` | 태그 목록 |
-| GET | `/groups` | 태그 그룹 |
-| GET | `/{id}` | 태그 상세 |
+| POST | `/analyze-tags` | 태그 분석 테스트 |
+| GET | `/categories` | 카테고리 목록 |
+| POST | `/categories` | 카테고리 생성 |
+| GET | `/list` | 태그 목록 (페이지네이션) |
+| POST | `/batch` | 지점별 태그 일괄 조회 |
 | POST | `/` | 태그 생성 |
-| GET | `/batch` | 일괄 조회 |
-| GET | `/branch/{id}` | 지점별 태그 |
+| PUT | `/{id}` | 태그 수정 |
+| DELETE | `/{id}` | 태그 삭제 |
 
 ### 감정 API (`/api/sentiment/`)
 | Method | Path | Description |
@@ -187,8 +189,15 @@ API_PREFIX=/api  # 로컬: /api, 서버: /review/api
 
 ## 태그 시스템
 
-### 기본 태그 7개
-친절도, 사고, 주유, 가격, 청결, 차량상태, 딜리버리
+### 카테고리 7개 (문장형)
+직원이 친절함, 사고 처리를 잘해줌, 주유비 부담 없음, 가격이 저렴함, 차량이 청결함, 차량외관이 좋음, 배달 서비스가 우수함
+
+### 세분화 태그 52개
+각 카테고리 하위에 세분화 태그 매핑 (`patterns.py` RULE_BASED_TAG_MAPPING)
+- 예: "직원이 친절함" → 친절, 안내, 설명, 서비스, 고객응대, 응대속도, 전화응대, 예약
+
+### API 응답 Envelope 패턴
+태그 API는 `{"success": true, "data": ..., "count": N}` 형식 사용
 
 ### 감정 판단 방식
 - 키워드별 규칙 패턴 매칭 + 문맥 분석
@@ -241,9 +250,10 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 |--------|------|
 | `branch_summaries` | 지점별 요약 데이터 |
 | `branch_reviews` | 원본 리뷰 데이터 |
-| `recent_reviews` | 최근 리뷰 캐시 |
 | `branch_tags` | 지점별 태그 매핑 |
-| `tags` | 태그 마스터 |
+| `tags` | 태그 마스터 (52개) |
+| `tag_categories` | 태그 카테고리 (7개) |
+| `keyword_mappings` | 키워드 → 태그 매핑 |
 | `sentiment_stats` | 감정 통계 |
 | `affiliates` | 업체 정보 |
 | `branch_reports` | AI 리포트 저장 |
@@ -283,10 +293,15 @@ GET  /job/{job_id}   → 2초 간격 폴링 (progress: 0-100%)
 - 즐겨찾기가 페이지 넘치면 다음 페이지로 이동
 - offset 계산: `prevNormalShown = Math.max(0, (currentPage * pageSize) - favCount)`
 
+## FastAPI 라우트 주의사항
+
+- **라우트 순서**: 고정 경로(`/list`, `/batch`) → path parameter 경로(`/{id}`) 순서 배치 (FastAPI가 위→아래 순서로 매칭)
+
 ## 개발 명령어
 
 - `python -m py_compile <file.py>` - Python 문법 검사
 - Supabase MCP로 마이그레이션: `mcp__supabase__apply_migration`
+- `python app/scripts/run_auto_mapping.py` - 키워드 자동 매핑 (52개 태그 기반)
 
 ## Claude Code 도구 레퍼런스
 
