@@ -60,3 +60,26 @@ class TagAnalysisRequest(BaseModel):
     """태그 분석 요청"""
 
     review: str = Field(..., min_length=1)
+
+
+# ── Envelope 응답 모델 ──────────────────────────────
+
+class TagResponse(BaseModel):
+    """단일 데이터 응답"""
+
+    success: bool = True
+    data: dict | None = None
+
+
+class TagListResponse(BaseModel):
+    """목록 응답"""
+
+    success: bool = True
+    data: list[dict] = []
+    count: int = 0
+
+
+class TagDeleteResponse(BaseModel):
+    """삭제 응답"""
+
+    success: bool = True

@@ -484,7 +484,8 @@
                     body: JSON.stringify({ review: reviewText })
                 });
 
-                const data = await response.json();
+                const result = await response.json();
+                const data = result.data || result;
 
                 if (data.error) {
                     alert('분석 오류: ' + data.error);

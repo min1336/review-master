@@ -31,10 +31,14 @@ class TagService:
         category_id: int | None = None,
         sentiment: str | None = None,
         group_name: str | None = None,
+        is_active: bool = True,
     ) -> list[dict]:
         """태그 목록"""
         tags = await self.tag_repo.get_all_with_filters(
-            category_id=category_id, sentiment=sentiment, group_name=group_name
+            category_id=category_id,
+            sentiment=sentiment,
+            group_name=group_name,
+            is_active=is_active,
         )
         return [t.model_dump() for t in tags]
 
@@ -73,11 +77,15 @@ class TagService:
         tags = await self.branch_tag_repo.get_by_branch(branch_id, period_type, limit)
         return [t.model_dump() for t in tags]
 
-    async def get_batch_tags(self, branch_ids: list[int]) -> dict:
+    async def get_batch_tags(
+        self, branch_ids: list[int], period_type: str = "all"
+    ) -> dict:
         """여러 지점 태그 일괄 조회"""
         if not branch_ids:
             return {}
-        return await self.branch_tag_repo.get_batch_top_tags(branch_ids)
+        return await self.branch_tag_repo.get_batch_top_tags(
+            branch_ids, period_type=period_type
+        )
 
     # ============================================================
     # 태그 분석
@@ -195,3 +203,66 @@ class TagService:
     async def bulk_create_mappings(self, mappings: list[dict]) -> int:
         """매핑 일괄 생성"""
         return await self._require_mapping_repo().bulk_create(mappings)
+
+    async def auto_map_keywords(self, limit: int = 500) -> dict:
+        """매핑되지 않은 키워드 자동 매핑 (HybridClassifier 사용)
+
+        분류기 출력이 태그명이면 직접 매핑, 카테고리명이면 대표 태그로 매핑.
+        """
+        import logging
+
+        from domain.analysis.patterns import CATEGORY_DEFAULT_TAG
+
+        logger = logging.getLogger(__name__)
+        repo = self._require_mapping_repo()
+
+        # 1. 미매핑 키워드 조회
+        unmapped = await repo.get_unmapped_keywords(limit=limit)
+        if not unmapped:
+            return {"mapped": 0, "skipped": 0, "errors": []}
+
+        # 2. DB 태그 목록 → 이름→id 룩업 테이블
+        all_tags = await self.tag_repo.get_all_with_filters(is_active=True)
+        tag_name_to_id: dict[str, int] = {t.name: t.id for t in all_tags}
+
+        # 3. HybridClassifier로 분류 (CPU-bound)
+        keywords = [item["keyword"] for item in unmapped]
+
+        def classify():
+            from domain.analysis import HybridClassifier
+
+            classifier = HybridClassifier(lazy_load=True)
+            return classifier.classify_keywords(keywords)
+
+        classifications = await asyncio.to_thread(classify)
+
+        # 4. 매핑 생성
+        result: dict = {"mapped": 0, "skipped": 0, "errors": []}
+        for item, (tag_group, _score, _sentiment) in zip(
+            unmapped, classifications, strict=False
+        ):
+            keyword = item["keyword"]
+            try:
+                if tag_group == "기타":
+                    result["skipped"] += 1
+                    continue
+
+                # 태그명 직접 매칭 시도
+                tag_id = tag_name_to_id.get(tag_group)
+
+                # 카테고리명이면 대표 태그로 fallback
+                if not tag_id:
+                    default_tag = CATEGORY_DEFAULT_TAG.get(tag_group)
+                    if default_tag:
+                        tag_id = tag_name_to_id.get(default_tag)
+
+                if tag_id:
+                    await repo.upsert_mapping(keyword, tag_id, is_auto=True)
+                    result["mapped"] += 1
+                else:
+                    result["skipped"] += 1
+            except Exception as e:
+                logger.warning("auto_map_keywords error for '%s': %s", keyword, e)
+                result["errors"].append(f"{keyword}: {str(e)}")
+
+        return result

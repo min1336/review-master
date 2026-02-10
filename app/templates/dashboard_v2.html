@@ -2280,10 +2280,11 @@
 
             async function fetchBranchTagsBatch(branchIds) {
                 if (!branchIds || branchIds.length === 0) return {};
-                return apiRequest(`${API_PREFIX}/tags/batch`, {
+                const result = await apiRequest(`${API_PREFIX}/tags/batch`, {
                     method: 'POST',
                     body: JSON.stringify({ branch_ids: branchIds })
                 });
+                return result.data || {};
             }
 
             async function fetchCarModelTags(branchId) {
