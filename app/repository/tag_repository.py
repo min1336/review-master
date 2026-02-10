@@ -141,13 +141,13 @@ class CategoryRepository(BaseRepository[Category]):
 
 
 class MappingRepository(BaseRepository[KeywordMapping]):
-    """keyword_tag_mappings 테이블 Repository"""
+    """keyword_mappings 테이블 Repository"""
 
     model = KeywordMapping
 
     @property
     def table_name(self) -> str:
-        return "keyword_tag_mappings"
+        return "keyword_mappings"
 
     async def get_mappings(
         self, tag_id: int | None = None, keyword: str | None = None
@@ -168,7 +168,7 @@ class MappingRepository(BaseRepository[KeywordMapping]):
     async def upsert_mapping(
         self, keyword: str, tag_id: int, is_auto: bool = True, confidence: float = 1.0
     ) -> KeywordMapping | None:
-        """매핑 생성/업데이트"""
+        """매핑 생성/업데이트 (keyword UNIQUE 기준)"""
         result = (
             await self._client.table(self.table_name)
             .upsert(
@@ -178,7 +178,7 @@ class MappingRepository(BaseRepository[KeywordMapping]):
                     "is_auto": is_auto,
                     "confidence": confidence,
                 },
-                on_conflict="keyword,tag_id",
+                on_conflict="keyword",
             )
             .execute()
         )
@@ -244,7 +244,7 @@ class MappingRepository(BaseRepository[KeywordMapping]):
                             "is_auto": mapping.get("is_auto", True),
                             "confidence": mapping.get("confidence", 1.0),
                         },
-                        on_conflict="keyword,tag_id",
+                        on_conflict="keyword",
                     )
                     .execute()
                 )
