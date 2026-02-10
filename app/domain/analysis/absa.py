@@ -423,7 +423,31 @@ class RuleBasedABSA:
             if re.search(pattern, text):
                 return sentiment, 0.9
 
-        # 4. 일반 패턴 매칭
+        # 4. SHORT REVIEW BOOST: 30자 미만 + 명확한 긍정어 → 높은 confidence
+        if len(text) < 30:
+            clear_positive_words = [
+                "최고",
+                "최곱",
+                "좋았",
+                "좋아요",
+                "좋네요",
+                "좋습니다",
+                "만족",
+                "완벽",
+                "훌륭",
+                "추천",
+                "감사",
+                "고마워",
+            ]
+            for word in clear_positive_words:
+                if word in text:
+                    return "positive", 0.85
+
+            # "잘 이용" 패턴 (짧은 리뷰에서 흔한 긍정 표현)
+            if "잘" in text and any(v in text for v in ["이용", "사용", "됐", "됐어"]):
+                return "positive", 0.8
+
+        # 5. 일반 패턴 매칭
         positive_matches = len(POSITIVE_REGEX.findall(text))
         negative_matches = len(NEGATIVE_REGEX.findall(text))
 
@@ -435,73 +459,102 @@ class RuleBasedABSA:
                     positive_matches += 1
                     negative_matches = max(0, negative_matches - 1)
 
-        # 5. 결과 판단
+        # 6. 결과 판단
         if positive_matches > negative_matches:
-            confidence = min(0.95, 0.6 + 0.1 * (positive_matches - negative_matches))
-            return "positive", confidence
+            base_confidence = 0.6 + 0.1 * (positive_matches - negative_matches)
+
+            # REPETITION DETECTION: Check for repeated positive words
+            positive_words = POSITIVE_REGEX.findall(text)
+            unique_words = set(positive_words)
+            repetition_ratio = len(positive_words) / max(len(unique_words), 1)
+
+            # Boost confidence for repetition (e.g., "최고최고최고")
+            if repetition_ratio >= 1.5:
+                base_confidence = min(0.95, base_confidence + 0.15)
+
+            return "positive", min(0.95, base_confidence)
         elif negative_matches > positive_matches:
             confidence = min(0.95, 0.6 + 0.1 * (negative_matches - positive_matches))
             return "negative", confidence
         elif positive_matches > 0:
-            return "positive", 0.5
+            # At least 1 positive pattern → confidence 0.65 (not 0.5)
+            return "positive", 0.65
         elif negative_matches > 0:
             return "negative", 0.5
         else:
             return self._infer_sentiment_from_context(text)
 
     def _infer_sentiment_from_context(self, text: str) -> tuple[str, float]:
-        """패턴 매칭 실패 시 맥락 기반 감정 추론"""
-        weak_positive = [
-            "요",
-            "네요",
-            "습니다",
-            "에요",
-            "세요",
-            "^^",
-            "~",
-            "!",
-            "ㅎㅎ",
-            "ㅋㅋ",
-            "잘",
-            "편",
-            "쉽",
-            "빠",
-            "넓",
-            "깔끔",
-            "감사",
-            "고마",
-            "덕분",
-            "좋",
-        ]
+        """패턴 매칭 실패 시 맥락 기반 감정 추론 (Enhanced)"""
 
-        weak_negative = [
-            "..",
-            ";;;",
-            "ㅜ",
-            "ㅠ",
-            ";;",
-            "좀",
-            "근데",
-            "다만",
-            "그런데",
-            "힘들",
-            "어렵",
-            "불",
-            "안",
-        ]
+        # 1. STRONG positives (각각 confidence 값 부여)
+        strong_positive = {
+            "최고": 0.85,
+            "최곱": 0.85,
+            "완벽": 0.85,
+            "훌륭": 0.85,
+            "만족": 0.75,
+            "추천": 0.75,
+            "강추": 0.85,
+            "감사": 0.7,
+            "고마": 0.7,
+        }
 
-        pos_score = sum(1 for p in weak_positive if p in text)
-        neg_score = sum(1 for p in weak_negative if p in text)
+        # 2. MEDIUM positives
+        medium_positive = {
+            "좋았": 0.7,
+            "좋아요": 0.7,
+            "좋습": 0.7,
+            "좋은": 0.65,
+            "좋": 0.6,
+            "잘": 0.6,
+            "편": 0.55,
+            "깔끔": 0.65,
+            "빠": 0.55,
+            "넓": 0.55,
+        }
 
-        if len(text) > 50:
-            pos_score += 1
+        # 3. WEAK positives (emoticons, particles)
+        weak_positive = ["요", "네요", "습니다", "^^", "~", "!", "ㅎㅎ", "ㅋㅋ"]
 
-        if pos_score > neg_score:
-            return "positive", 0.4
-        elif neg_score > pos_score:
-            return "negative", 0.4
+        # Calculate max confidence
+        max_confidence = 0.0
+        strong_count = 0
+
+        for word, conf in strong_positive.items():
+            if word in text:
+                count = text.count(word)
+                strong_count += count
+                # Repetition bonus: +0.05 per extra occurrence
+                max_confidence = max(max_confidence, conf + (count - 1) * 0.05)
+
+        medium_count = 0
+        if max_confidence == 0:  # No strong positives
+            for word, conf in medium_positive.items():
+                if word in text:
+                    medium_count += 1
+                    max_confidence = max(max_confidence, conf)
+
+        weak_count = sum(1 for w in weak_positive if w in text)
+
+        # Negative check
+        weak_negative = ["...", ";;;", "ㅜ", "ㅠ", "근데", "다만", "불", "안"]
+        neg_count = sum(1 for w in weak_negative if w in text)
+
+        # Decision
+        if strong_count > 0 and neg_count == 0:
+            # Strong positive found → HIGH confidence
+            return "positive", min(0.9, max_confidence)
+        elif medium_count > 0 and neg_count == 0:
+            # Medium positive found → MEDIUM confidence
+            return "positive", min(0.8, max_confidence + medium_count * 0.03)
+        elif (strong_count + medium_count + weak_count) > neg_count:
+            # Weak positives dominate → LOW-MEDIUM confidence
+            return "positive", min(0.7, 0.5 + 0.05 * (strong_count + medium_count))
+        elif neg_count > 0:
+            return "negative", 0.5
         else:
-            return "positive", 0.3
+            return "positive", 0.4  # Default lean positive
 
     def _merge_results(self, results: list[AspectOpinion]) -> list[AspectOpinion]:
         """중복 Aspect 병합"""
