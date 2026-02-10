@@ -1184,7 +1184,8 @@
         async function loadFilterOptions() {
             try {
                 const response = await fetch(`${API_PREFIX}/analysis/filters`);
-                const data = await response.json();
+                const result = await response.json();
+                const data = result.data || result;
 
                 allRegions = data.regions || [];
                 allBranches = data.branches || [];
@@ -1507,7 +1508,8 @@
                 });
 
                 const response = await fetch(`${API_PREFIX}/analysis/reviews?${params}`);
-                const data = await response.json();
+                const result = await response.json();
+                const data = result.data || result;
 
                 const count = data.total || 0;
                 countElement.textContent = `(${count})`;
@@ -1871,7 +1873,8 @@
                 }
 
                 const response = await fetch(`${API_PREFIX}/analysis/reviews?${params}`);
-                const data = await response.json();
+                const result = await response.json();
+                const data = result.data || result;
 
                 totalCount = data.total || 0;
                 totalPages = Math.ceil(totalCount / pageSize) || 1;

@@ -12,11 +12,13 @@ import logging
 from datetime import datetime
 from urllib.parse import quote
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from schemas.dto import AnalysisReviewListDTO, FilterOptionsDTO
+from schemas.common import api_response
 from services.analysis_service import AnalysisService
 
 from .deps import get_analysis_service
@@ -29,18 +31,19 @@ router = APIRouter(tags=["analysis"])
 @router.get("/filters")
 async def get_filter_options(
     service: AnalysisService = Depends(get_analysis_service),
-) -> FilterOptionsDTO:
+) -> dict[str, Any]:
     """
     필터 옵션 조회 (지역, 업체명, 지점 목록)
 
     Returns:
-        FilterOptionsDTO: 필터 옵션 데이터
+        필터 옵션 데이터
             - regions: 지역 목록
             - companies: 업체명 목록
             - branches: 지점 목록 [{branch_id, branch_name}, ...]
     """
     try:
-        return await service.get_filter_options()
+        result = await service.get_filter_options()
+        return api_response(result.to_dict())
 
     except Exception as e:
         logger.error(f"Failed to get filter options: {e}")
@@ -79,17 +82,17 @@ async def get_reviews(
     offset: int = Query(0, ge=0, description="페이징 오프셋"),
     is_new: bool | None = Query(None, description="신규 리뷰 필터 (true: 신규만, false: 읽은 것만)"),
     service: AnalysisService = Depends(get_analysis_service),
-) -> AnalysisReviewListDTO:
+) -> dict[str, Any]:
     """
     필터링된 리뷰 조회
 
     Returns:
-        AnalysisReviewListDTO: 리뷰 목록과 전체 개수
+        리뷰 목록과 전체 개수
             - reviews: 리뷰 목록
             - total: 전체 개수
     """
     try:
-        return await service.get_filtered_reviews(
+        result = await service.get_filtered_reviews(
             regions=regions,
             companies=companies,
             branch_ids=branch_ids,
@@ -101,6 +104,7 @@ async def get_reviews(
             offset=offset,
             is_new=is_new,
         )
+        return api_response(result.to_dict())
 
     except Exception as e:
         logger.error(f"Failed to get filtered reviews: {e}")

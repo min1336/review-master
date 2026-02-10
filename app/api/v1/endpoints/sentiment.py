@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
+from schemas.common import api_list_response, api_response
 from services.sentiment_service import SentimentService
 
 from .deps import get_sentiment_service
@@ -24,12 +25,13 @@ async def api_sentiment_stats(
 ) -> dict[str, Any]:
     """지점별 감정태그 통계"""
     result = await service.get_stats(branch_id)
-    return result.to_dict()
+    return api_response(result.to_dict())
 
 
 @router.get("/stats/all")
 async def api_all_sentiment_stats(
     service: SentimentService = Depends(get_sentiment_service),
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """전체 지점 감정통계 목록"""
-    return await service.get_all_stats()
+    stats = await service.get_all_stats()
+    return api_list_response(stats)

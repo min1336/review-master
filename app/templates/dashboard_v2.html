@@ -2181,11 +2181,13 @@
             }
 
             async function fetchStats() {
-                return apiRequest(`${API_PREFIX}/v2/stats`);
+                const result = await apiRequest(`${API_PREFIX}/v2/stats`);
+                return result.data;
             }
 
             async function fetchRegionStats() {
-                return apiRequest(`${API_PREFIX}/v2/stats/region`);
+                const result = await apiRequest(`${API_PREFIX}/v2/stats/region`);
+                return result.data;
             }
 
             function buildSummariesParams(filters = {}) {
@@ -2222,11 +2224,13 @@
 
             async function fetchSummaries(filters = {}) {
                 const params = buildSummariesParams(filters);
-                return apiRequest(`${API_PREFIX}/v2/summaries?${params}`);
+                const result = await apiRequest(`${API_PREFIX}/v2/summaries?${params}`);
+                return result.data;
             }
 
             async function fetchSummaryDetail(branchId) {
-                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}`);
+                const result = await apiRequest(`${API_PREFIX}/v2/summaries/${branchId}`);
+                return result.data;
             }
 
             async function apiUpdateSummary(branchId, data) {
@@ -2275,7 +2279,8 @@
                 if (state.dateFilter.from) params.set('review_date_from', state.dateFilter.from);
                 if (state.dateFilter.to) params.set('review_date_to', state.dateFilter.to);
 
-                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/reviews?${params}`);
+                const result = await apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/reviews?${params}`);
+                return result.data;
             }
 
             async function fetchBranchTagsBatch(branchIds) {
@@ -2288,7 +2293,8 @@
             }
 
             async function fetchCarModelTags(branchId) {
-                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/car-models`);
+                const result = await apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/car-models`);
+                return result.data;
             }
 
             async function apiSyncAffiliates() {
@@ -3362,7 +3368,7 @@
                         const pendingText = getElement(`pending-text-${period}`);
 
                         if (pendingSection && pendingText) {
-                            pendingText.innerHTML = result.summary;
+                            pendingText.innerHTML = result.data.summary;
                             pendingSection.style.display = 'block';
                         }
 
@@ -3392,8 +3398,8 @@
                         const editEl = getElement(`edit-summary-${period}`);
                         const pendingSection = getElement(`pending-section-${period}`);
 
-                        if (textEl) textEl.innerHTML = result.applied;
-                        if (editEl) editEl.value = result.applied;
+                        if (textEl) textEl.innerHTML = result.data.applied;
+                        if (editEl) editEl.value = result.data.applied;
                         if (pendingSection) pendingSection.style.display = 'none';
 
                         showToast(`✅ [${PERIOD_LABELS[period]}] 요약이 적용되었습니다`, 'success');
@@ -3921,11 +3927,11 @@
                     }
 
                     const submitResult = await submitResponse.json();
-                    if (!submitResult.success || !submitResult.job_id) {
+                    if (!submitResult.success || !submitResult.data?.job_id) {
                         throw new Error(submitResult.error || '작업 ID를 받지 못했습니다');
                     }
 
-                    const jobId = submitResult.job_id;
+                    const jobId = submitResult.data.job_id;
                     reportActiveJobId = jobId;
 
                     // 2단계: 폴링으로 진행 상태 확인 (최대 2분)
@@ -4207,11 +4213,11 @@
                     }
 
                     const submitResult = await submitResponse.json();
-                    if (!submitResult.success || !submitResult.job_id) {
+                    if (!submitResult.success || !submitResult.data?.job_id) {
                         throw new Error(submitResult.error || '작업 ID를 받지 못했습니다');
                     }
 
-                    const jobId = submitResult.job_id;
+                    const jobId = submitResult.data.job_id;
                     reportActiveJobId = jobId;
 
                     // 폴링으로 진행 상태 확인

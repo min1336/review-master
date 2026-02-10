@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from schemas.common import api_response
 
 from repository.summary_repository import SummaryRepository
 
@@ -35,7 +37,7 @@ async def get_public_summary(
     branch_id: int,
     _: None = Depends(require_public_api_key),
     summary_repo: SummaryRepository = Depends(get_summary_repo),
-) -> dict:
+) -> dict[str, Any]:
     """
     최신 요약 1개 조회 (Public)
 
@@ -46,8 +48,7 @@ async def get_public_summary(
         if not summary:
             raise HTTPException(status_code=404, detail="Summary not found")
 
-        base = {
-            "success": True,
+        data = {
             "branch_id": summary.branch_id,
             "branch_name": summary.branch_name,
             "region": summary.region,
@@ -61,11 +62,11 @@ async def get_public_summary(
             latest = _pick_latest_summary(summary)
             if not latest:
                 raise HTTPException(status_code=404, detail="Summary content not available")
-            base["summary"] = latest
+            data["summary"] = latest
         else:
-            base["summary"] = "요약이 대기중입니다."
+            data["summary"] = "요약이 대기중입니다."
 
-        return base
+        return api_response(data)
     except HTTPException:
         raise
     except Exception as e:

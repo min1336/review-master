@@ -4,7 +4,7 @@ Pydantic 스키마 모듈
 
 from __future__ import annotations
 
-from .common import CleanupRequest, ErrorResponse, SuccessResponse
+from .common import CleanupRequest, api_list_response, api_response
 from .dto import (
     BranchDetailDTO,
     BranchReviewsDTO,
@@ -55,8 +55,8 @@ from .tag import (
 __all__ = [
     # common
     "CleanupRequest",
-    "ErrorResponse",
-    "SuccessResponse",
+    "api_list_response",
+    "api_response",
     # dto
     "BranchDetailDTO",
     "BranchReviewsDTO",

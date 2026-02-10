@@ -1,4 +1,4 @@
-"""공통 응답 모델"""
+"""공통 API 응답 헬퍼 + 요청 모델"""
 
 from __future__ import annotations
 
@@ -7,19 +7,14 @@ from typing import Any
 from pydantic import BaseModel
 
 
-class SuccessResponse(BaseModel):
-    """공통 성공 응답"""
-
-    success: bool = True
-    message: str | None = None
-    data: Any | None = None
+def api_response(data: Any = None) -> dict[str, Any]:
+    """단건 응답 Envelope: {"success": true, "data": ...}"""
+    return {"success": True, "data": data}
 
 
-class ErrorResponse(BaseModel):
-    """공통 에러 응답"""
-
-    error: str
-    detail: str | None = None
+def api_list_response(data: list, count: int | None = None) -> dict[str, Any]:
+    """목록 응답 Envelope: {"success": true, "data": [...], "count": N}"""
+    return {"success": True, "data": data, "count": count if count is not None else len(data)}
 
 
 class CleanupRequest(BaseModel):

@@ -10,6 +10,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from schemas.common import api_response
 
 from .deps import get_report_service, require_public_api_key
 
@@ -84,8 +85,7 @@ async def get_public_report(
             for v in sorted_vehicles[:vehicle_top]
         ]
 
-        return {
-            "success": True,
+        return api_response({
             "branch_id": report.branch_id,
             "branch_name": report.branch_name,
             "region": region,
@@ -96,7 +96,7 @@ async def get_public_report(
             "vehicle_total_count": len(report.vehicle_analysis),
             "vehicle_top": vehicle_top,
             "generated_at": report.generated_at,
-        }
+        })
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except HTTPException:

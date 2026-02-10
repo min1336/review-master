@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import calendar
 from datetime import datetime
+
+from core.timezone import parse_date_str, utc_now
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
+from schemas.common import api_list_response, api_response
 from services.report_job_service import ReportJobService
 from services.report_service import ReportService
 
@@ -32,12 +35,9 @@ class ReportRequest(BaseModel):
 
 
 def parse_date(date_str: str, end_of_day: bool = False) -> datetime:
-    """날짜 문자열을 datetime으로 파싱"""
+    """날짜 문자열을 UTC-aware datetime으로 파싱"""
     try:
-        dt = datetime.strptime(date_str, "%Y-%m-%d")
-        if end_of_day:
-            dt = dt.replace(hour=23, minute=59, second=59)
-        return dt
+        return parse_date_str(date_str, end_of_day=end_of_day)
     except ValueError as e:
         raise HTTPException(
             status_code=400,
@@ -71,7 +71,7 @@ async def api_get_review_count(
         )
 
         # 표준 5개 기간 카운트
-        today = datetime.now()
+        today = utc_now()
         period_defs = [
             ("1m", 1), ("3m", 3), ("6m", 6), ("12m", 12),
         ]
@@ -101,15 +101,12 @@ async def api_get_review_count(
         if recommended_period is None and period_counts["all"] >= MINIMUM_REVIEW_THRESHOLD:
             recommended_period = "all"
 
-        return {
-            "success": True,
-            "data": {
-                "selected_count": selected_count,
-                "period_counts": period_counts,
-                "threshold": MINIMUM_REVIEW_THRESHOLD,
-                "recommended_period": recommended_period,
-            },
-        }
+        return api_response({
+            "selected_count": selected_count,
+            "period_counts": period_counts,
+            "threshold": MINIMUM_REVIEW_THRESHOLD,
+            "recommended_period": recommended_period,
+        })
     except Exception as e:
         import logging
         logging.exception("리뷰 수 확인 오류")
@@ -149,11 +146,9 @@ async def api_get_report(
             start_date=parsed_start,
             end_date=parsed_end,
         )
-        return {
-            "success": True,
-            "data": report.model_dump(),
-            "is_new": is_new,
-        }
+        report_data = report.model_dump()
+        report_data["is_new"] = is_new
+        return api_response(report_data)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
@@ -180,7 +175,7 @@ async def api_get_report_list(
     """
     try:
         reports = await service.get_report_list(branch_id, limit)
-        return {"success": True, "data": reports}
+        return api_response(reports)
     except Exception as e:
         import logging
         logging.exception("리포트 목록 조회 오류")
@@ -222,11 +217,10 @@ async def api_generate_report_async(
             start_date=start_date,
             end_date=end_date,
         )
-        return {
-            "success": True,
+        return api_response({
             "job_id": job_id,
             "poll_url": f"/api/v2/report/{branch_id}/job/{job_id}",
-        }
+        })
     except Exception as e:
         import logging
 
@@ -268,7 +262,9 @@ async def api_generate_report(
             start_date=start_date,
             end_date=end_date,
         )
-        return {"success": True, "data": report.model_dump(), "is_new": True}
+        report_data = report.model_dump()
+        report_data["is_new"] = True
+        return api_response(report_data)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
@@ -308,7 +304,9 @@ async def api_regenerate_report(
             start_date=start_date,
             end_date=end_date,
         )
-        return {"success": True, "data": report.model_dump(), "is_new": True}
+        report_data = report.model_dump()
+        report_data["is_new"] = True
+        return api_response(report_data)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
@@ -344,7 +342,7 @@ async def api_get_job_status(
     if not job_status:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
 
-    return {"success": True, "data": job_status}
+    return api_response(job_status)
 
 
 @router.delete("/{branch_id}/job/{job_id}")
@@ -365,7 +363,10 @@ async def api_cancel_job(
     """
     # branch_id 소유권 검증 포함
     cancelled = await job_service.cancel_job(str(job_id), branch_id=branch_id)
-    return {"success": cancelled, "message": "작업이 취소되었습니다." if cancelled else "취소할 수 없는 작업입니다."}
+    return api_response({
+        "cancelled": cancelled,
+        "message": "작업이 취소되었습니다." if cancelled else "취소할 수 없는 작업입니다.",
+    })
 
 
 @router.delete("/{branch_id}")
@@ -396,7 +397,7 @@ async def api_delete_report(
             end_date=parsed_end,
         )
         if deleted:
-            return {"success": True, "message": "리포트가 삭제되었습니다."}
+            return api_response({"message": "리포트가 삭제되었습니다."})
         else:
             raise HTTPException(status_code=404, detail="삭제할 리포트를 찾을 수 없습니다.")
     except ValueError as e:
@@ -425,7 +426,7 @@ async def api_mark_report_viewed(
     """
     try:
         success = await service.report_repo.mark_as_viewed(report_id)
-        return {"success": success}
+        return api_response({"viewed": success})
     except Exception as e:
         import logging
         logging.exception("리포트 조회 표시 오류")
@@ -462,7 +463,7 @@ async def api_get_report_history(
             period_end=parsed_end,
             limit=limit,
         )
-        return {"success": True, "data": history}
+        return api_response(history)
     except Exception as e:
         import logging
         logging.exception("리포트 히스토리 조회 오류")
@@ -485,7 +486,7 @@ async def api_get_unviewed_count(
     """
     try:
         count = await service.report_repo.get_unviewed_count(branch_id)
-        return {"success": True, "count": count}
+        return api_response({"count": count})
     except Exception as e:
         import logging
         logging.exception("미조회 리포트 개수 조회 오류")
