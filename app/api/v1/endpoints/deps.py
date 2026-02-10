@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from repository.review_repository import BranchReviewRepository
     from repository.sentiment_repository import SentimentRepository
     from repository.summary_repository import SummaryRepository
-    from repository.tag_repository import TagRepository
+    from repository.tag_repository import CategoryRepository, MappingRepository, TagRepository
     from services.analysis_service import AnalysisService
     from services.carmore_service import CarmoreService
     from services.report_job_service import ReportJobService
@@ -127,22 +127,39 @@ async def get_summary_service(
     return SummaryService(summary_repo, branch_tag_repo, review_repo, sentiment_repo)
 
 
+async def get_category_repo(
+    client: AsyncClient = Depends(get_db_client),
+) -> "CategoryRepository":
+    from repository.tag_repository import CategoryRepository
+
+    return CategoryRepository(client)
+
+
+async def get_mapping_repo(
+    client: AsyncClient = Depends(get_db_client),
+) -> "MappingRepository":
+    from repository.tag_repository import MappingRepository
+
+    return MappingRepository(client)
+
+
 async def get_tag_service(
     tag_repo: TagRepository = Depends(get_tag_repo),
     branch_tag_repo: BranchTagRepository = Depends(get_branch_tag_repo),
+    category_repo: "CategoryRepository" = Depends(get_category_repo),
+    mapping_repo: "MappingRepository" = Depends(get_mapping_repo),
 ) -> TagService:
     from services.tag_service import TagService
 
-    return TagService(tag_repo, branch_tag_repo)
+    return TagService(tag_repo, branch_tag_repo, category_repo, mapping_repo)
 
 
 async def get_sentiment_service(
     sentiment_repo: SentimentRepository = Depends(get_sentiment_repo),
-    review_repo: BranchReviewRepository = Depends(get_review_repo),
 ) -> SentimentService:
     from services.sentiment_service import SentimentService
 
-    return SentimentService(sentiment_repo, review_repo)
+    return SentimentService(sentiment_repo)
 
 
 async def get_carmore_service(

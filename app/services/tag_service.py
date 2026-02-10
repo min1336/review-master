@@ -16,9 +16,11 @@ from schemas.dto import (
 class TagService:
     """태그 비즈니스 로직"""
 
-    def __init__(self, tag_repo, branch_tag_repo):
+    def __init__(self, tag_repo, branch_tag_repo, category_repo=None, mapping_repo=None):
         self.tag_repo = tag_repo
         self.branch_tag_repo = branch_tag_repo
+        self.category_repo = category_repo
+        self.mapping_repo = mapping_repo
 
     # ============================================================
     # 태그
@@ -124,3 +126,72 @@ class TagService:
             )
 
         return await asyncio.to_thread(analyze)
+
+    # ============================================================
+    # 카테고리
+    # ============================================================
+
+    def _require_category_repo(self):
+        if self.category_repo is None:
+            raise RuntimeError("CategoryRepository가 주입되지 않았습니다")
+        return self.category_repo
+
+    def _require_mapping_repo(self):
+        if self.mapping_repo is None:
+            raise RuntimeError("MappingRepository가 주입되지 않았습니다")
+        return self.mapping_repo
+
+    async def get_categories(self, is_active: bool = True) -> list:
+        """카테고리 목록"""
+        categories = await self._require_category_repo().get_all_active(is_active)
+        return [c.model_dump() for c in categories]
+
+    async def get_category(self, category_id: int) -> dict | None:
+        """카테고리 상세"""
+        category = await self._require_category_repo().get(category_id)
+        return category.model_dump() if category else None
+
+    async def create_category(self, data: dict) -> dict | None:
+        """카테고리 생성"""
+        result = await self._require_category_repo().create_dict(data)
+        return result.model_dump() if result else None
+
+    async def update_category(self, category_id: int, data: dict) -> dict | None:
+        """카테고리 수정"""
+        result = await self._require_category_repo().update(category_id, data)
+        return result.model_dump() if result else None
+
+    async def delete_category(self, category_id: int) -> bool:
+        """카테고리 삭제"""
+        return await self._require_category_repo().delete_with_tags(category_id)
+
+    # ============================================================
+    # 키워드 매핑
+    # ============================================================
+
+    async def get_mappings(
+        self, tag_id: int | None = None, keyword: str | None = None
+    ) -> list:
+        """매핑 목록"""
+        repo = self._require_mapping_repo()
+        mappings = await repo.get_mappings(tag_id=tag_id, keyword=keyword)
+        return [m.model_dump() for m in mappings]
+
+    async def create_mapping(
+        self, keyword: str, tag_id: int, is_auto: bool = False
+    ) -> dict | None:
+        """매핑 생성"""
+        result = await self._require_mapping_repo().upsert_mapping(keyword, tag_id, is_auto)
+        return result.model_dump() if result else None
+
+    async def delete_mapping(self, mapping_id: int) -> bool:
+        """매핑 삭제"""
+        return await self._require_mapping_repo().delete(mapping_id)
+
+    async def get_unmapped_keywords(self, limit: int = 100) -> list[dict]:
+        """매핑되지 않은 키워드 목록"""
+        return await self._require_mapping_repo().get_unmapped_keywords(limit=limit)
+
+    async def bulk_create_mappings(self, mappings: list[dict]) -> int:
+        """매핑 일괄 생성"""
+        return await self._require_mapping_repo().bulk_create(mappings)
