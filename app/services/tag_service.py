@@ -92,41 +92,54 @@ class TagService:
     # ============================================================
 
     async def analyze_tags(self, review_text: str) -> TagAnalysisResultDTO:
-        """리뷰 텍스트 태그 분석"""
+        """리뷰 텍스트 태그 분석 (파이프라인 동일 로직: ABSA + 임베딩 + 규칙)"""
 
         def analyze():
-            from domain.analysis import KeywordExtractor
+            from domain.analysis import KeywordExtractor, HybridClassifier
 
             extractor = KeywordExtractor()
             keywords = extractor.extract(review_text)
 
-            from domain.analysis import HybridClassifier
-
             classifier = HybridClassifier()
 
-            keyword_results = []
-            tag_groups: dict[str, TagGroupDTO] = {}
-
-            # 배치 분류 (키워드 + 컨텍스트)
-            classifications = classifier.classify_keywords_with_context(
-                keywords, review_text
+            # 파이프라인과 동일: classify_review (ABSA + 임베딩 결합)
+            tag_sentiments = classifier.classify_review(
+                review=review_text, keywords=keywords
             )
 
-            for kw, (tag, score, sentiment) in zip(keywords, classifications):
-                keyword_results.append(
-                    KeywordSentimentDTO(keyword=kw, sentiment=sentiment)
+            # tag_sentiments → DTO 변환
+            keyword_results = []
+            tag_groups: dict[str, TagGroupDTO] = {}
+            seen_keywords: set[str] = set()
+
+            for tag_name, sentiments in tag_sentiments.items():
+                if tag_name == "기타":
+                    continue
+
+                group = TagGroupDTO(
+                    positive=sentiments.get("positive", []),
+                    negative=sentiments.get("negative", []),
+                    neutral=sentiments.get("neutral", []),
                 )
+                tag_groups[tag_name] = group
 
-                if tag not in tag_groups:
-                    tag_groups[tag] = TagGroupDTO()
+                for sent_type in ("positive", "negative", "neutral"):
+                    for kw in sentiments.get(sent_type, []):
+                        if kw not in seen_keywords:
+                            keyword_results.append(
+                                KeywordSentimentDTO(keyword=kw, sentiment=sent_type)
+                            )
+                            seen_keywords.add(kw)
 
-                group = tag_groups[tag]
-                if sentiment == "positive":
-                    group.positive.append(kw)
-                elif sentiment == "negative":
-                    group.negative.append(kw)
-                else:
-                    group.neutral.append(kw)
+            # 태그에 매핑되지 않은 키워드도 포함 (감정만 표시)
+            for kw in keywords:
+                if kw not in seen_keywords:
+                    sentiment = classifier._detect_sentiment_with_context(
+                        kw, review_text
+                    )
+                    keyword_results.append(
+                        KeywordSentimentDTO(keyword=kw, sentiment=sentiment)
+                    )
 
             return TagAnalysisResultDTO(
                 keywords=keyword_results,
