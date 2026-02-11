@@ -4481,6 +4481,28 @@
                     </div>
 
 
+                    <!-- Strengths & Improvements -->
+                    ${(data.strengths && data.strengths.length > 0) || (data.improvements && data.improvements.length > 0) ? `
+                    <div class="report-section">
+                        <div style="display: flex; gap: 16px;">
+                            <div style="flex: 1; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 14px;">
+                                <div style="font-weight: 600; color: #10b981; margin-bottom: 10px; font-size: 13px;">✅ 현상유지</div>
+                                ${(data.strengths || []).length > 0
+                                    ? (data.strengths || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
+                                    : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
+                                }
+                            </div>
+                            <div style="flex: 1; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 14px;">
+                                <div style="font-weight: 600; color: #ef4444; margin-bottom: 10px; font-size: 13px;">⚠️ 보완필요</div>
+                                ${(data.improvements || []).length > 0
+                                    ? (data.improvements || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
+                                    : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    ` : ''}
+
                     <!-- Vehicle Analysis -->
                     <div class="report-section">
                         <div class="report-section-title">🚗 차량별 평가 분석</div>

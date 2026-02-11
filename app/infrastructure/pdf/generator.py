@@ -121,6 +121,25 @@ class PDFGenerator:
         pdf.multi_cell(w, 6, report.period_summary or "요약 없음")
         pdf.ln(6)
 
+        # 현상유지 / 보완필요
+        if report.strengths or report.improvements:
+            half = (w - 6) / 2
+
+            pdf.set_font(font, "B", 10)
+            pdf.cell(half, 6, "현상유지", new_x="RIGHT")
+            pdf.set_x(pdf.get_x() + 6)
+            pdf.cell(half, 6, "보완필요", new_x="LMARGIN", new_y="NEXT")
+
+            pdf.set_font(font, "", 9)
+            max_rows = max(len(report.strengths), len(report.improvements))
+            for i in range(max_rows):
+                s_text = f"  {report.strengths[i]}" if i < len(report.strengths) else ""
+                i_text = f"  {report.improvements[i]}" if i < len(report.improvements) else ""
+                pdf.cell(half, 5, s_text, new_x="RIGHT")
+                pdf.set_x(pdf.get_x() + 6)
+                pdf.cell(half, 5, i_text, new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(6)
+
         # 차량별 평가 분석 (하이라이트 + 전체 축소 테이블)
         if report.vehicle_analysis:
             pdf.set_font(font, "B", 12)

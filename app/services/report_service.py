@@ -38,6 +38,8 @@ class ReportData(BaseModel):
     total_reviews: int = 0
     top_tags: list[str] = []
     period_summary: str = ""
+    strengths: list[str] = []       # 현상유지 (잘하고 있는 카테고리)
+    improvements: list[str] = []    # 보완필요 (개선이 필요한 카테고리)
     vehicle_analysis: list[VehicleAnalysis] = []
     generated_at: str = ""
 
@@ -257,6 +259,9 @@ class ReportService:
         total_pos = 0
         total_neg = 0
 
+        # 카테고리별 집계 (현상유지/보완필요 산출용)
+        category_stats: dict[str, dict] = {}
+
         for bt in all_tags:
             try:
                 tag_info = bt.model_dump().get("tags") or {}
@@ -281,6 +286,16 @@ class ReportService:
             total_pos += pos
             total_neg += neg
 
+            # 카테고리별 합산
+            cat_info = tag_info.get("categories") or {}
+            cat_name = cat_info.get("name", "")
+            if cat_name and total > 0:
+                if cat_name not in category_stats:
+                    category_stats[cat_name] = {"positive": 0, "negative": 0, "total": 0}
+                category_stats[cat_name]["positive"] += pos
+                category_stats[cat_name]["negative"] += neg
+                category_stats[cat_name]["total"] += total
+
         if not tag_sentiments:
             return {}
 
@@ -292,9 +307,43 @@ class ReportService:
             "total": total_all,
         }
 
+        # 현상유지: 긍정 비율이 높은 카테고리 (긍정률 60% 이상, 상위 3개)
+        strengths: list[str] = []
+        sorted_positive = sorted(
+            category_stats.items(),
+            key=lambda x: x[1]["positive"] / x[1]["total"] if x[1]["total"] > 0 else 0,
+            reverse=True,
+        )
+        for cat_name, stats in sorted_positive:
+            if stats["total"] == 0:
+                continue
+            pos_ratio = round(stats["positive"] / stats["total"] * 100)
+            if pos_ratio >= 60:
+                strengths.append(f"{cat_name}({pos_ratio}%)")
+            if len(strengths) >= 3:
+                break
+
+        # 보완필요: 부정 비율이 높은 카테고리 (부정률 20% 이상, 상위 3개)
+        improvements: list[str] = []
+        sorted_negative = sorted(
+            category_stats.items(),
+            key=lambda x: x[1]["negative"] / x[1]["total"] if x[1]["total"] > 0 else 0,
+            reverse=True,
+        )
+        for cat_name, stats in sorted_negative:
+            if stats["total"] == 0:
+                continue
+            neg_ratio = round(stats["negative"] / stats["total"] * 100)
+            if neg_ratio >= 20:
+                improvements.append(f"{cat_name}({neg_ratio}%)")
+            if len(improvements) >= 3:
+                break
+
         return {
             "tag_sentiments": tag_sentiments,
             "sentiment_stats": sentiment_stats,
+            "strengths": strengths,
+            "improvements": improvements,
         }
 
     async def _step_ai(self, data: dict) -> dict:
@@ -391,6 +440,8 @@ class ReportService:
             total_reviews=collected["total_reviews"],
             top_tags=collected["tags"],
             period_summary=ai["period_summary"],
+            strengths=tags.get("strengths", []),
+            improvements=tags.get("improvements", []),
             vehicle_analysis=[VehicleAnalysis(**v) for v in collected.get("vehicle_analysis", [])],
             generated_at=to_kst(utc_now()).strftime("%Y-%m-%d %H:%M"),
         )

@@ -1,17 +1,5 @@
-"""
-태그/카테고리 API (FastAPI)
-
-Router: /api/tags
-담당: HTTP 요청/응답 처리만
-
-라우트 순서 원칙:
-  고정 경로 → path parameter 경로 (FastAPI가 위→아래 순서로 매칭)
-"""
-
 from __future__ import annotations
-
 from typing import Any
-
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from schemas.common import api_list_response, api_response
 from schemas.tag import (
@@ -21,16 +9,9 @@ from schemas.tag import (
     TagUpdate,
 )
 from services.tag_service import TagService
-
 from .deps import get_tag_service
 
 router = APIRouter(tags=["tags"])
-
-
-# ================================================================
-# 1. 분석
-# ================================================================
-
 
 @router.post("/analyze-tags")
 async def api_analyze_tags(
@@ -42,12 +23,6 @@ async def api_analyze_tags(
         return api_response(result.to_dict())
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-# ================================================================
-# 2. 카테고리 (목록 + 생성)
-# ================================================================
-
 
 @router.get("/categories")
 async def api_categories(
@@ -68,12 +43,6 @@ async def api_create_category(
         return api_response(result)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-
-
-# ================================================================
-# 3. 태그 목록 (고정 경로)
-# ================================================================
-
 
 @router.get("/list")
 async def api_tags(
@@ -96,12 +65,6 @@ async def api_tags(
     paginated = tags[offset : offset + limit]
     return api_list_response(paginated, total=total, limit=limit, offset=offset)
 
-
-# ================================================================
-# 4. 지점별 태그 일괄 조회 (고정 경로)
-# ================================================================
-
-
 @router.post("/batch")
 async def api_tags_batch(
     branch_ids: list[int] = Body(..., embed=True),
@@ -114,12 +77,6 @@ async def api_tags_batch(
 
     tags = await service.get_batch_tags(branch_ids, period_type=period)
     return api_response(tags)
-
-
-# ================================================================
-# 5. 태그 CRUD (path parameter — 맨 마지막)
-# ================================================================
-
 
 @router.post("/", status_code=201)
 async def api_create_tag(
