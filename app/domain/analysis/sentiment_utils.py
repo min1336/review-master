@@ -186,39 +186,8 @@ class UnifiedSentimentAnalyzer:
         )
 
     def _analyze_rule_based(self, text: str) -> tuple[SentimentType, float]:
-        """ABSA 규칙 기반 분석"""
-        from .patterns import (
-            DOUBLE_NEGATION_REGEX,
-            NEGATIVE_REGEX,
-            POSITIVE_EXCEPTION_REGEX,
-            POSITIVE_REGEX,
-        )
-
-        # 1. 이중부정 → 강한 긍정
-        if DOUBLE_NEGATION_REGEX.search(text):
-            return "positive", 0.95
-
-        # 2. 긍정 예외 체크
-        if POSITIVE_EXCEPTION_REGEX.search(text):
-            return "positive", 0.8
-
-        # 3. 패턴 카운팅
-        positive_count = len(POSITIVE_REGEX.findall(text))
-        negative_count = len(NEGATIVE_REGEX.findall(text))
-
-        # 4. 결과 판단
-        if positive_count > negative_count:
-            confidence = min(0.9, 0.5 + 0.1 * (positive_count - negative_count))
-            return "positive", confidence
-        elif negative_count > positive_count:
-            confidence = min(0.9, 0.5 + 0.1 * (negative_count - positive_count))
-            return "negative", confidence
-        elif positive_count > 0:
-            return "positive", 0.5
-        elif negative_count > 0:
-            return "negative", 0.5
-        else:
-            return "neutral", 0.5
+        """Rule-based 감정 분석 — ABSA에 위임"""
+        return self._absa.determine_text_sentiment(text)
 
     def _analyze_hybrid(
         self, text: str, keywords: list[str] | None

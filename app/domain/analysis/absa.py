@@ -73,7 +73,8 @@ class RuleBasedABSA:
         "빠르": ("배달 서비스가 우수함", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
     }
 
-    # v4.0: 7개 문장형 태그
+    # 7개 카테고리별 키워드 — 절(clause) 단위 aspect 탐지용
+    # 52개 세분화 태그 매핑은 patterns.py:RULE_BASED_TAG_MAPPING 참조
     ASPECT_KEYWORDS = {
         "직원이 친절함": [
             "직원",
@@ -407,16 +408,46 @@ class RuleBasedABSA:
 
         return found
 
+    # 부정어+긍정어 패턴: 긍정 표현이 부정되는 경우
+    NEGATED_POSITIVE_PATTERNS = [
+        re.compile(r"친절.{0,3}(?:지\s*않|지\s*못|하지\s*않)"),
+        re.compile(r"깨끗.{0,3}(?:지\s*않|하지\s*않)"),
+        re.compile(r"좋.{0,3}(?:지\s*않|지\s*못)"),
+        re.compile(r"편.{0,3}(?:지\s*않|하지\s*않)"),
+    ]
+
     def _determine_sentiment(self, text: str) -> tuple[str, float]:
         """감정 판단 (patterns.py 사용)"""
 
-        # 1. 긍정 예외 체크 (오탐 방지)
-        if POSITIVE_EXCEPTION_REGEX.search(text):
-            return "positive", 0.8
-
-        # 2. 이중부정 체크 (최우선)
+        # 0. 이중부정 최우선 체크 (불편하지 않다 → 긍정)
         if DOUBLE_NEGATION_REGEX.search(text):
             return "positive", 0.95
+
+        # 1. 부정어+긍정어 패턴 체크 (친절하지 않, 깨끗하지 않 등)
+        for pattern in self.NEGATED_POSITIVE_PATTERNS:
+            if pattern.search(text):
+                return "negative", 0.85
+
+        # 2. 명확한 부정 패턴 선체크 (불친절, 비싸 등 접두사형 부정)
+        strong_negative_patterns = [
+            "불친절", "불편하", "불쾌", "불량", "불만족",
+            "비싸", "비싼", "비쌌", "비싸요", "비쌉",
+            "최악", "실망", "후회",
+            "무례", "무시", "무성의", "무책임",
+        ]
+        strong_neg_count = sum(1 for p in strong_negative_patterns if p in text)
+
+        # 명확한 부정이 있는 경우 → 부정 우선
+        if strong_neg_count > 0:
+            positive_matches = len(POSITIVE_REGEX.findall(text))
+            if strong_neg_count >= positive_matches:
+                confidence = min(0.95, 0.7 + 0.05 * strong_neg_count)
+                return "negative", confidence
+
+        # 3. 긍정 예외 체크 (오탐 방지 — "틀림없", "거침없" 등)
+        if POSITIVE_EXCEPTION_REGEX.search(text):
+            if strong_neg_count == 0:
+                return "positive", 0.8
 
         # 3. 긍정+부정 체크 (친절+없다 = 부정)
         for pattern, sentiment in self.POSITIVE_NEGATION_PATTERNS:
@@ -425,6 +456,10 @@ class RuleBasedABSA:
 
         # 4. SHORT REVIEW BOOST: 30자 미만 + 명확한 긍정어 → 높은 confidence
         if len(text) < 30:
+            # 짧은 리뷰에서 부정 패턴 먼저 체크
+            if NEGATIVE_REGEX.search(text):
+                return "negative", 0.7
+
             clear_positive_words = [
                 "최고",
                 "최곱",
@@ -483,6 +518,12 @@ class RuleBasedABSA:
             return "negative", 0.5
         else:
             return self._infer_sentiment_from_context(text)
+
+    def determine_text_sentiment(self, text: str) -> tuple[str, float]:
+        """텍스트 전체의 감정 분석 (public API)"""
+        if not text or not text.strip():
+            return "neutral", 0.0
+        return self._determine_sentiment(text)
 
     def _infer_sentiment_from_context(self, text: str) -> tuple[str, float]:
         """패턴 매칭 실패 시 맥락 기반 감정 추론 (Enhanced)"""
@@ -548,13 +589,13 @@ class RuleBasedABSA:
         elif medium_count > 0 and neg_count == 0:
             # Medium positive found → MEDIUM confidence
             return "positive", min(0.8, max_confidence + medium_count * 0.03)
-        elif (strong_count + medium_count + weak_count) > neg_count:
-            # Weak positives dominate → LOW-MEDIUM confidence
+        elif (strong_count + medium_count) > 0 and (strong_count + medium_count + weak_count) > neg_count:
+            # At least one meaningful positive (strong or medium) needed
             return "positive", min(0.7, 0.5 + 0.05 * (strong_count + medium_count))
         elif neg_count > 0:
             return "negative", 0.5
         else:
-            return "positive", 0.4  # Default lean positive
+            return "neutral", 0.4  # Default neutral (no clear signal)
 
     def _merge_results(self, results: list[AspectOpinion]) -> list[AspectOpinion]:
         """중복 Aspect 병합"""
