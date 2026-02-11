@@ -3,5 +3,19 @@
     "oh-my-claudecode@omc": true,
     "superpowers@claude-plugins-official": true,
     "supabase@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/check-py-syntax.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
   }
 }

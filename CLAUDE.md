@@ -6,6 +6,16 @@
 - Type hints required for all functions
 - Avoid nested conditionals in business logic
 
+## Working Style
+
+- 변경 요청을 받으면 즉시 코딩을 시작할 것. 광범위한 확인 질문을 하지 말고 합리적인 가정을 하여 진행할 것
+- 정말 모호한 경우에만 최대 1개의 핵심 질문만 할 것
+
+## Code Changes
+
+- 명시적으로 요청된 변경만 수행할 것. 추가 개선, 리팩터링, 스타일 변경을 임의로 하지 말 것
+- UI 조정 시 언급된 특정 속성만 변경할 것
+
 # Review Summary AI
 
 Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
@@ -17,6 +27,8 @@ Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
 - **LLM**: OpenAI GPT-4o-mini
 - **Database**: Supabase (PostgreSQL)
 - **Data**: pandas, openpyxl
+
+> **SQL 마이그레이션 규칙**: SQL 마이그레이션 생성 시 유효한 SQL만 출력할 것. 마크다운 주석, 'Step N' 어노테이션, 비-SQL 텍스트를 포함하지 말 것
 
 ## Key Constants
 
@@ -232,6 +244,16 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 5. **순환 참조 방지**: 함수 내부 import 사용
 6. **에러 처리**: HTTPException으로 적절한 에러 응답
 7. **로깅**: logging 모듈로 에러 상황 기록
+
+## Testing
+
+- 버그 수정 시 (특히 감정/분류 로직) 대상 수정과 인접 카테고리 모두에 대해 기존 테스트 케이스를 실행하여 회귀를 확인한 후 완료 선언할 것
+- 수정 → 전체 테스트 → 통과 확인 순서를 반드시 지킬 것
+
+## Architecture Decisions
+
+- 데이터 정합성 문제는 애플리케이션 레벨 오버라이드보다 DB 레벨 솔루션(트리거, 제약조건, 계산 컬럼)을 우선할 것
+- 명시적으로 요청받지 않은 한 API 측 데이터 수정을 시도하지 말 것
 
 ## Git Rules
 
