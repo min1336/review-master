@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -119,21 +119,29 @@ app = FastAPI(
 # ============================================================
 # Global Exception Handlers
 # ============================================================
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> TZAwareJSONResponse:
+    """HTTPException을 통일된 Envelope 형식으로 변환"""
+    return TZAwareJSONResponse(
+        status_code=exc.status_code,
+        content={"success": False, "error": exc.detail, "detail": exc.detail},
+    )
+
+
 @app.exception_handler(ValueError)
-async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
+async def value_error_handler(request: Request, exc: ValueError) -> TZAwareJSONResponse:
     """ValueError를 400 Bad Request로 변환"""
-    return JSONResponse(
+    return TZAwareJSONResponse(
         status_code=400,
         content={"success": False, "error": "Bad Request", "detail": str(exc)},
     )
 
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+async def global_exception_handler(request: Request, exc: Exception) -> TZAwareJSONResponse:
     """처리되지 않은 예외를 500 Internal Server Error로 변환"""
-    # 개발 모드에서는 상세 에러 메시지 표시
     detail = str(exc) if settings.debug else "Internal server error"
-    return JSONResponse(
+    return TZAwareJSONResponse(
         status_code=500,
         content={"success": False, "error": "Internal Server Error", "detail": detail},
     )
