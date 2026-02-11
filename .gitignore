@@ -139,3 +139,4 @@ data/*.npz
 /docs/plans
 .omc
 /tests
+/.claude
