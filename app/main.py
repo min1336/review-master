@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
     print("\n로컬 접속:    http://localhost:8000")
     print("API 문서:     http://localhost:8000/docs")
     print("\nAPI 엔드포인트:")
-    print("  GET  /api/v2/summaries      - 요약 목록")
+    print("  GET  /api/summaries          - 요약 목록")
     print("  GET  /api/tags              - 태그 목록")
     print("  GET  /api/analysis/reviews  - 리뷰 목록 (is_new=true 지원)")
     print("=" * 60 + "\n")

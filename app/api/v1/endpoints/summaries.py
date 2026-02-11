@@ -1,7 +1,7 @@
 """
 통합 요약 API (FastAPI)
 
-Router: /api/v2
+Router: /api/summaries
 담당: HTTP 요청/응답 처리만 (비즈니스 로직은 Service에서)
 
 주요 엔드포인트:
@@ -23,7 +23,7 @@ from .deps import get_summary_service
 router = APIRouter(tags=["summaries"])
 
 
-@router.get("/summaries")
+@router.get("")
 async def api_summaries(
     status: str | None = Query(None, description="상태 필터"),
     region: str | None = Query(None, description="지역 필터"),
@@ -70,7 +70,7 @@ async def api_summaries(
     return api_list_response(summaries)
 
 
-@router.get("/summaries/pending")
+@router.get("/pending")
 async def api_get_pending_summaries(
     limit: int = Query(50, ge=1, le=200),
     service: SummaryService = Depends(get_summary_service),
@@ -84,159 +84,6 @@ async def api_get_pending_summaries(
     try:
         pending_list = await service.get_pending_summaries(limit)
         return api_list_response([s.model_dump() for s in pending_list])
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.get("/summaries/{branch_id}")
-async def api_summary_detail(
-    branch_id: int, service: SummaryService = Depends(get_summary_service)
-) -> dict[str, Any]:
-    """특정 지점 요약 상세"""
-    summary = await service.get_summary(branch_id)
-    if summary:
-        return api_response(summary)
-    raise HTTPException(status_code=404, detail="Not found")
-
-
-@router.put("/summaries/{branch_id}")
-async def api_update_summary(
-    branch_id: int,
-    data: SummaryUpdate,
-    service: SummaryService = Depends(get_summary_service),
-) -> dict[str, Any]:
-    """요약 수정"""
-    update_data = data.model_dump(exclude_unset=True)
-    result = await service.update_summary(branch_id, update_data)
-    return api_response(result)
-
-
-@router.put("/summaries/{branch_id}/status")
-async def api_update_status(
-    branch_id: int,
-    data: StatusUpdate,
-    service: SummaryService = Depends(get_summary_service),
-) -> dict[str, Any]:
-    """요약 상태 변경"""
-    result = await service.update_status(branch_id, data.status)
-    return api_response(result)
-
-
-@router.post("/summaries/{branch_id}/regenerate")
-async def api_regenerate_summary(
-    branch_id: int,
-    mode: str = Query("marketing", pattern="^(marketing|operational)$"),
-    service: SummaryService = Depends(get_summary_service),
-) -> dict[str, Any]:
-    """
-    AI 요약 재생성 (태그+감정+리뷰 데이터 활용)
-
-    기간 자동 선택:
-    - 1개월 리뷰 >= 30개 → 1개월 요약
-    - 1개월 리뷰 < 30개 → 3개월로 확장
-    - 3개월 리뷰 < 30개 → 6개월로 확장
-    - 6개월 리뷰 < 30개 → 1년으로 확장
-    - 1년 리뷰 < 30개 → 리뷰 부족 메시지
-
-    생성된 요약은 pending_summaries에 저장됩니다 (승인 대기 상태).
-    운영자가 '변경' 버튼으로 승인해야 실제 요약에 반영됩니다.
-    """
-    try:
-        result = await service.generate_pending_summary(branch_id)
-        return api_response(result)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.post("/summaries/{branch_id}/apply-pending")
-async def api_apply_pending_summary(
-    branch_id: int,
-    data: RegenerateRequest = None,
-    service: SummaryService = Depends(get_summary_service),
-) -> dict[str, Any]:
-    """대기 중인 요약 적용 (pending → main)"""
-    period = data.period if data else "all"
-
-    try:
-        result = await service.apply_pending_summary(branch_id, period)
-        return api_response(result.to_dict())
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.post("/summaries/{branch_id}/discard-pending")
-async def api_discard_pending_summary(
-    branch_id: int,
-    data: RegenerateRequest = None,
-    service: SummaryService = Depends(get_summary_service),
-) -> dict[str, Any]:
-    """대기 중인 요약 취소 (삭제)"""
-    period = data.period if data else "all"
-
-    try:
-        result = await service.discard_pending_summary(branch_id, period)
-        return api_response(result.to_dict())
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-
-
-@router.get("/summaries/{branch_id}/history")
-async def api_get_summary_history(
-    branch_id: int,
-    limit: int = Query(10, ge=1, le=50),
-    service: SummaryService = Depends(get_summary_service),
-) -> dict[str, Any]:
-    """
-    요약 변경 히스토리 조회
-
-    시간에 따른 요약 변화를 추적합니다.
-    """
-    try:
-        history = await service.get_history(branch_id, limit)
-        return api_response(history)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.post("/summaries/{branch_id}/approve-pending")
-async def api_approve_pending_summary(
-    branch_id: int,
-    service: SummaryService = Depends(get_summary_service),
-) -> dict[str, Any]:
-    """
-    대기 중인 요약 승인
-
-    pending_summaries의 내용을 실제 요약 필드로 이동하고,
-    기존 요약은 히스토리에 저장됩니다.
-    """
-    try:
-        result = await service.approve_pending_summary(branch_id)
-        if result:
-            return api_response(result.model_dump())
-        raise HTTPException(status_code=404, detail="승인할 pending 요약이 없습니다.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.post("/summaries/{branch_id}/reject-pending")
-async def api_reject_pending_summary(
-    branch_id: int,
-    service: SummaryService = Depends(get_summary_service),
-) -> dict[str, Any]:
-    """
-    대기 중인 요약 거부
-
-    pending_summaries를 초기화합니다 (기존 요약 유지).
-    """
-    try:
-        result = await service.reject_pending_summary(branch_id)
-        if result:
-            return api_response(result.model_dump())
-        raise HTTPException(status_code=404, detail="거부할 pending 요약이 없습니다.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -268,7 +115,165 @@ async def api_rating_stats(
     return api_response(result.to_dict())
 
 
-@router.get("/summaries/{branch_id}/reviews")
+# ================================================================
+# Path parameter 경로 (/{branch_id}/*)
+# ================================================================
+
+
+@router.get("/{branch_id}")
+async def api_summary_detail(
+    branch_id: int, service: SummaryService = Depends(get_summary_service)
+) -> dict[str, Any]:
+    """특정 지점 요약 상세"""
+    summary = await service.get_summary(branch_id)
+    if summary:
+        return api_response(summary)
+    raise HTTPException(status_code=404, detail="Not found")
+
+
+@router.put("/{branch_id}")
+async def api_update_summary(
+    branch_id: int,
+    data: SummaryUpdate,
+    service: SummaryService = Depends(get_summary_service),
+) -> dict[str, Any]:
+    """요약 수정"""
+    update_data = data.model_dump(exclude_unset=True)
+    result = await service.update_summary(branch_id, update_data)
+    return api_response(result)
+
+
+@router.put("/{branch_id}/status")
+async def api_update_status(
+    branch_id: int,
+    data: StatusUpdate,
+    service: SummaryService = Depends(get_summary_service),
+) -> dict[str, Any]:
+    """요약 상태 변경"""
+    result = await service.update_status(branch_id, data.status)
+    return api_response(result)
+
+
+@router.post("/{branch_id}/regenerate")
+async def api_regenerate_summary(
+    branch_id: int,
+    mode: str = Query("marketing", pattern="^(marketing|operational)$"),
+    service: SummaryService = Depends(get_summary_service),
+) -> dict[str, Any]:
+    """
+    AI 요약 재생성 (태그+감정+리뷰 데이터 활용)
+
+    기간 자동 선택:
+    - 1개월 리뷰 >= 30개 → 1개월 요약
+    - 1개월 리뷰 < 30개 → 3개월로 확장
+    - 3개월 리뷰 < 30개 → 6개월로 확장
+    - 6개월 리뷰 < 30개 → 1년으로 확장
+    - 1년 리뷰 < 30개 → 리뷰 부족 메시지
+
+    생성된 요약은 pending_summaries에 저장됩니다 (승인 대기 상태).
+    운영자가 '변경' 버튼으로 승인해야 실제 요약에 반영됩니다.
+    """
+    try:
+        result = await service.generate_pending_summary(branch_id)
+        return api_response(result)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/{branch_id}/apply-pending")
+async def api_apply_pending_summary(
+    branch_id: int,
+    data: RegenerateRequest = None,
+    service: SummaryService = Depends(get_summary_service),
+) -> dict[str, Any]:
+    """대기 중인 요약 적용 (pending → main)"""
+    period = data.period if data else "all"
+
+    try:
+        result = await service.apply_pending_summary(branch_id, period)
+        return api_response(result.to_dict())
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/{branch_id}/discard-pending")
+async def api_discard_pending_summary(
+    branch_id: int,
+    data: RegenerateRequest = None,
+    service: SummaryService = Depends(get_summary_service),
+) -> dict[str, Any]:
+    """대기 중인 요약 취소 (삭제)"""
+    period = data.period if data else "all"
+
+    try:
+        result = await service.discard_pending_summary(branch_id, period)
+        return api_response(result.to_dict())
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@router.get("/{branch_id}/history")
+async def api_get_summary_history(
+    branch_id: int,
+    limit: int = Query(10, ge=1, le=50),
+    service: SummaryService = Depends(get_summary_service),
+) -> dict[str, Any]:
+    """
+    요약 변경 히스토리 조회
+
+    시간에 따른 요약 변화를 추적합니다.
+    """
+    try:
+        history = await service.get_history(branch_id, limit)
+        return api_response(history)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/{branch_id}/approve-pending")
+async def api_approve_pending_summary(
+    branch_id: int,
+    service: SummaryService = Depends(get_summary_service),
+) -> dict[str, Any]:
+    """
+    대기 중인 요약 승인
+
+    pending_summaries의 내용을 실제 요약 필드로 이동하고,
+    기존 요약은 히스토리에 저장됩니다.
+    """
+    try:
+        result = await service.approve_pending_summary(branch_id)
+        if result:
+            return api_response(result.model_dump())
+        raise HTTPException(status_code=404, detail="승인할 pending 요약이 없습니다.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/{branch_id}/reject-pending")
+async def api_reject_pending_summary(
+    branch_id: int,
+    service: SummaryService = Depends(get_summary_service),
+) -> dict[str, Any]:
+    """
+    대기 중인 요약 거부
+
+    pending_summaries를 초기화합니다 (기존 요약 유지).
+    """
+    try:
+        result = await service.reject_pending_summary(branch_id)
+        if result:
+            return api_response(result.model_dump())
+        raise HTTPException(status_code=404, detail="거부할 pending 요약이 없습니다.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/{branch_id}/reviews")
 async def api_branch_reviews(
     branch_id: int,
     car_model: str | None = Query(None, description="차량 모델 필터"),
@@ -308,7 +313,7 @@ async def api_branch_reviews(
     return api_response(result.to_dict())
 
 
-@router.get("/summaries/{branch_id}/detail")
+@router.get("/{branch_id}/detail")
 async def api_branch_detail(
     branch_id: int,
     include_summaries: bool = Query(True, description="기간별 요약 포함 여부"),
@@ -332,7 +337,7 @@ async def api_branch_detail(
     raise HTTPException(status_code=404, detail="Not found")
 
 
-@router.get("/summaries/{branch_id}/car-models")
+@router.get("/{branch_id}/car-models")
 async def api_car_model_tags(
     branch_id: int,
     car_model: str | None = Query(None, description="특정 차량 모델만 조회"),

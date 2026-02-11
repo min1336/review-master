@@ -2298,12 +2298,12 @@
             }
 
             async function fetchStats() {
-                const result = await apiRequest(`${API_PREFIX}/v2/stats`);
+                const result = await apiRequest(`${API_PREFIX}/summaries/stats`);
                 return result.data;
             }
 
             async function fetchRegionStats() {
-                const result = await apiRequest(`${API_PREFIX}/v2/stats/region`);
+                const result = await apiRequest(`${API_PREFIX}/summaries/stats/region`);
                 return result.data;
             }
 
@@ -2341,44 +2341,44 @@
 
             async function fetchSummaries(filters = {}) {
                 const params = buildSummariesParams(filters);
-                const result = await apiRequest(`${API_PREFIX}/v2/summaries?${params}`);
+                const result = await apiRequest(`${API_PREFIX}/summaries?${params}`);
                 return result.data;
             }
 
             async function fetchSummaryDetail(branchId) {
-                const result = await apiRequest(`${API_PREFIX}/v2/summaries/${branchId}`);
+                const result = await apiRequest(`${API_PREFIX}/summaries/${branchId}`);
                 return result.data;
             }
 
             async function apiUpdateSummary(branchId, data) {
-                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}`, {
+                return apiRequest(`${API_PREFIX}/summaries/${branchId}`, {
                     method: 'PUT',
                     body: JSON.stringify(data)
                 });
             }
 
             async function apiUpdateStatus(branchId, status) {
-                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/status`, {
+                return apiRequest(`${API_PREFIX}/summaries/${branchId}/status`, {
                     method: 'PUT',
                     body: JSON.stringify({ status })
                 });
             }
 
             async function apiRegenerateSummary(branchId) {
-                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/regenerate`, {
+                return apiRequest(`${API_PREFIX}/summaries/${branchId}/regenerate`, {
                     method: 'POST'
                 });
             }
 
             async function apiApplyPendingSummary(branchId, period) {
-                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/apply-pending`, {
+                return apiRequest(`${API_PREFIX}/summaries/${branchId}/apply-pending`, {
                     method: 'POST',
                     body: JSON.stringify({ period })
                 });
             }
 
             async function apiDiscardPendingSummary(branchId, period) {
-                return apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/discard-pending`, {
+                return apiRequest(`${API_PREFIX}/summaries/${branchId}/discard-pending`, {
                     method: 'POST',
                     body: JSON.stringify({ period })
                 });
@@ -2395,7 +2395,7 @@
                 if (state.dateFilter.from) params.set('review_date_from', state.dateFilter.from);
                 if (state.dateFilter.to) params.set('review_date_to', state.dateFilter.to);
 
-                const result = await apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/reviews?${params}`);
+                const result = await apiRequest(`${API_PREFIX}/summaries/${branchId}/reviews?${params}`);
                 return result.data;
             }
 
@@ -2409,7 +2409,7 @@
             }
 
             async function fetchCarModelTags(branchId) {
-                const result = await apiRequest(`${API_PREFIX}/v2/summaries/${branchId}/car-models`);
+                const result = await apiRequest(`${API_PREFIX}/summaries/${branchId}/car-models`);
                 return result.data;
             }
 
@@ -3672,7 +3672,7 @@
                 }
 
                 try {
-                    const response = await fetch(`${API_PREFIX}/v2/report/${branchId}/list?limit=5`);
+                    const response = await fetch(`${API_PREFIX}/reports/${branchId}/list?limit=5`);
                     const result = await response.json();
 
                     if (result.success && result.data && result.data.length > 0) {
@@ -3755,7 +3755,7 @@
                 `;
 
                 try {
-                    const response = await fetch(`${API_PREFIX}/v2/report/${reportState.branchId}?start_date=${startDate}&end_date=${endDate}`);
+                    const response = await fetch(`${API_PREFIX}/reports/${reportState.branchId}?start_date=${startDate}&end_date=${endDate}`);
                     const result = await response.json();
 
                     if (result.success) {
@@ -3783,7 +3783,7 @@
 
                 try {
                     const response = await fetch(
-                        `${API_PREFIX}/v2/report/${reportState.branchId}?start_date=${startDate}&end_date=${endDate}`,
+                        `${API_PREFIX}/reports/${reportState.branchId}?start_date=${startDate}&end_date=${endDate}`,
                         { method: 'DELETE' }
                     );
                     const result = await response.json();
@@ -3791,7 +3791,7 @@
                     if (result.success) {
                         alert('리포트가 삭제되었습니다.');
                         // 목록 새로고침
-                        const listResponse = await fetch(`${API_PREFIX}/v2/report/${reportState.branchId}/list?limit=5`);
+                        const listResponse = await fetch(`${API_PREFIX}/reports/${reportState.branchId}/list?limit=5`);
                         const listResult = await listResponse.json();
                         if (listResult.success && listResult.data && listResult.data.length > 0) {
                             renderReportList(listResult.data);
@@ -3827,7 +3827,7 @@
 
                 // 진행 중인 백엔드 작업 취소
                 if (reportActiveJobId && reportState.branchId) {
-                    fetch(`${API_PREFIX}/v2/report/${reportState.branchId}/job/${reportActiveJobId}`, {
+                    fetch(`${API_PREFIX}/reports/${reportState.branchId}/job/${reportActiveJobId}`, {
                         method: 'DELETE'
                     }).catch(function() {});
                     reportActiveJobId = null;
@@ -3990,7 +3990,7 @@
                 const infoBar = document.getElementById('review-count-info');
                 try {
                     const resp = await fetch(
-                        `${API_PREFIX}/v2/report/${reportState.branchId}/review-count?start_date=${reportState.startDate}&end_date=${reportState.endDate}`
+                        `${API_PREFIX}/reports/${reportState.branchId}/review-count?start_date=${reportState.startDate}&end_date=${reportState.endDate}`
                     );
                     if (!resp.ok) {
                         if (infoBar) infoBar.style.display = 'none';
@@ -4107,7 +4107,7 @@
 
                 try {
                     // 1단계: 비동기 작업 제출 (즉시 반환)
-                    const submitResponse = await fetch(`${API_PREFIX}/v2/report/${reportState.branchId}/generate/async`, {
+                    const submitResponse = await fetch(`${API_PREFIX}/reports/${reportState.branchId}/generate/async`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -4321,7 +4321,7 @@
                         return;
                     }
 
-                    const statusResponse = await fetch(`${API_PREFIX}/v2/report/${reportState.branchId}/job/${jobId}`, {
+                    const statusResponse = await fetch(`${API_PREFIX}/reports/${reportState.branchId}/job/${jobId}`, {
                         signal: reportPollingController ? reportPollingController.signal : undefined
                     });
 
@@ -4365,7 +4365,7 @@
             async function fetchReportData() {
                 // 생성된 리포트 데이터 가져오기
                 const response = await fetch(
-                    `${API_PREFIX}/v2/report/${reportState.branchId}?start_date=${reportState.startDate}&end_date=${reportState.endDate}`,
+                    `${API_PREFIX}/reports/${reportState.branchId}?start_date=${reportState.startDate}&end_date=${reportState.endDate}`,
                     { signal: reportPollingController ? reportPollingController.signal : undefined }
                 );
 
@@ -4393,7 +4393,7 @@
 
                 try {
                     // 비동기 작업 제출 (/generate/async는 regenerate와 동일한 로직 사용)
-                    const submitResponse = await fetch(`${API_PREFIX}/v2/report/${reportState.branchId}/generate/async`, {
+                    const submitResponse = await fetch(`${API_PREFIX}/reports/${reportState.branchId}/generate/async`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -4509,7 +4509,7 @@
                     return;
                 }
 
-                const url = `${API_PREFIX}/v2/report/${reportState.branchId}/pdf?start_date=${reportState.startDate}&end_date=${reportState.endDate}`;
+                const url = `${API_PREFIX}/reports/${reportState.branchId}/pdf?start_date=${reportState.startDate}&end_date=${reportState.endDate}`;
                 window.open(url, '_blank');
             }
 
