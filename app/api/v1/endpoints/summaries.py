@@ -11,31 +11,16 @@ Router: /api/v2
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
-from core.timezone import parse_date_str
 from fastapi import APIRouter, Depends, HTTPException, Query
-from schemas.common import api_list_response, api_response
+from schemas.common import api_list_response, api_response, parse_date
 from schemas.summary import RegenerateRequest, StatusUpdate, SummaryUpdate
 from services.summary_service import SummaryService
 
 from .deps import get_summary_service
 
 router = APIRouter(tags=["summaries"])
-
-
-def parse_date(date_str: str | None, end_of_day: bool = False) -> datetime | None:
-    """날짜 문자열을 UTC-aware datetime으로 파싱"""
-    if not date_str:
-        return None
-    try:
-        return parse_date_str(date_str, end_of_day=end_of_day)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid date format: '{date_str}'. Expected YYYY-MM-DD format.",
-        ) from e
 
 
 @router.get("/summaries")
@@ -97,7 +82,7 @@ async def api_get_pending_summaries(
     신규 요약이 생성되면 여기에 표시됩니다.
     """
     try:
-        pending_list = await service.summary_repo.get_pending_summaries(limit)
+        pending_list = await service.get_pending_summaries(limit)
         return api_list_response([s.model_dump() for s in pending_list])
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -211,7 +196,7 @@ async def api_get_summary_history(
     시간에 따른 요약 변화를 추적합니다.
     """
     try:
-        history = await service.summary_repo.get_history(branch_id, limit)
+        history = await service.get_history(branch_id, limit)
         return api_response(history)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -229,7 +214,7 @@ async def api_approve_pending_summary(
     기존 요약은 히스토리에 저장됩니다.
     """
     try:
-        result = await service.summary_repo.approve_pending_summary(branch_id)
+        result = await service.approve_pending_summary(branch_id)
         if result:
             return api_response(result.model_dump())
         raise HTTPException(status_code=404, detail="승인할 pending 요약이 없습니다.")
@@ -248,7 +233,7 @@ async def api_reject_pending_summary(
     pending_summaries를 초기화합니다 (기존 요약 유지).
     """
     try:
-        result = await service.summary_repo.reject_pending_summary(branch_id)
+        result = await service.reject_pending_summary(branch_id)
         if result:
             return api_response(result.model_dump())
         raise HTTPException(status_code=404, detail="거부할 pending 요약이 없습니다.")

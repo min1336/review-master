@@ -44,6 +44,34 @@ class SummaryService:
         self.review_repo = review_repo
         self.sentiment_repo = sentiment_repo
 
+    # ================================================================
+    # Repository 래핑 메서드 (레이어드 아키텍처 준수)
+    # ================================================================
+
+    async def get_pending_summaries(self, limit: int = 50) -> list[dict]:
+        """승인 대기 중인 요약 목록 조회"""
+        return await self.summary_repo.get_pending_summaries(limit)
+
+    async def get_history(self, branch_id: int, limit: int = 10) -> list[dict]:
+        """요약 변경 히스토리 조회"""
+        return await self.summary_repo.get_history(branch_id, limit)
+
+    async def approve_pending_summary(self, branch_id: int) -> dict | None:
+        """대기 중인 요약 승인"""
+        return await self.summary_repo.approve_pending_summary(branch_id)
+
+    async def reject_pending_summary(self, branch_id: int) -> dict | None:
+        """대기 중인 요약 거부"""
+        return await self.summary_repo.reject_pending_summary(branch_id)
+
+    async def get_summary_by_branch_id(self, branch_id: int) -> dict | None:
+        """지점 ID로 요약 조회 (Public API용)"""
+        return await self.summary_repo.get_by_branch_id(branch_id)
+
+    # ================================================================
+    # 비즈니스 로직
+    # ================================================================
+
     async def get_summaries(
         self,
         status: str | None = None,

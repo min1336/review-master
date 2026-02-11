@@ -39,8 +39,10 @@ if TYPE_CHECKING:
     from services.report_service import ReportService
     from services.sentiment_service import SentimentService
     from services.summary_service import SummaryService
+    from services.scheduler_settings_service import SchedulerSettingsService
     from services.sync_service import SyncService
     from services.tag_service import TagService
+    from repository.scheduler_settings_repository import SchedulerSettingsRepository
 
 # ============================================================
 # Database Client
@@ -49,12 +51,6 @@ if TYPE_CHECKING:
 
 async def get_db_client() -> AsyncClient:
     """Supabase AsyncClient 의존성"""
-    return await get_client()
-
-
-# Alias for direct client access
-async def get_supabase_client() -> AsyncClient:
-    """Supabase AsyncClient 의존성 (alias)"""
     return await get_client()
 
 
@@ -170,25 +166,27 @@ async def get_carmore_service(
     return CarmoreService(affiliate_repo)
 
 
-async def get_analysis_service(
-    review_repo: BranchReviewRepository = Depends(get_review_repo),
-    summary_repo: SummaryRepository = Depends(get_summary_repo),
-) -> AnalysisService:
-    from services.analysis_service import AnalysisService
-
-    # Athena 클라이언트 초기화 (설정이 있는 경우에만)
-    athena_client = None
+def _get_athena_client():
+    """Athena 클라이언트 초기화 (설정이 있는 경우에만)"""
     try:
         from core.config import get_settings
         from infrastructure.athena import AthenaClient
 
         settings = get_settings()
         if settings.aws_access_key_id and settings.athena_output_bucket:
-            athena_client = AthenaClient()
+            return AthenaClient()
     except Exception as e:
         logger.debug(f"Athena 클라이언트 초기화 스킵: {e}")
+    return None
 
-    return AnalysisService(review_repo, summary_repo, athena_client)
+
+async def get_analysis_service(
+    review_repo: BranchReviewRepository = Depends(get_review_repo),
+    summary_repo: SummaryRepository = Depends(get_summary_repo),
+) -> AnalysisService:
+    from services.analysis_service import AnalysisService
+
+    return AnalysisService(review_repo, summary_repo, _get_athena_client())
 
 
 async def get_sync_service(
@@ -196,19 +194,7 @@ async def get_sync_service(
 ) -> SyncService:
     from services.sync_service import SyncService
 
-    # Athena 클라이언트 초기화 (설정이 있는 경우에만)
-    athena_client = None
-    try:
-        from core.config import get_settings
-        from infrastructure.athena import AthenaClient
-
-        settings = get_settings()
-        if settings.aws_access_key_id and settings.athena_output_bucket:
-            athena_client = AthenaClient()
-    except Exception as e:
-        logger.debug(f"Athena 클라이언트 초기화 스킵: {e}")
-
-    return SyncService(review_repo, athena_client)
+    return SyncService(review_repo, _get_athena_client())
 
 
 async def get_report_repo(
@@ -275,15 +261,15 @@ async def require_public_api_key(
 
 async def get_scheduler_settings_repo(
     client: AsyncClient = Depends(get_db_client),
-):
+) -> "SchedulerSettingsRepository":
     from repository.scheduler_settings_repository import SchedulerSettingsRepository
 
     return SchedulerSettingsRepository(client)
 
 
 async def get_scheduler_settings_service(
-    settings_repo=Depends(get_scheduler_settings_repo),
-):
+    settings_repo: "SchedulerSettingsRepository" = Depends(get_scheduler_settings_repo),
+) -> "SchedulerSettingsService":
     from services.scheduler_settings_service import SchedulerSettingsService
 
     return SchedulerSettingsService(settings_repo)

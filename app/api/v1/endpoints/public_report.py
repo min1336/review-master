@@ -10,7 +10,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from schemas.common import api_response
+from schemas.common import api_response, parse_date, validate_date_range
 
 from .deps import get_report_service, require_public_api_key
 
@@ -42,21 +42,9 @@ async def get_public_report(
     - 저장된 리포트 우선, 없으면 신규 생성
     - vehicle_top: 차량별 평가를 호평률 상위 N개로 제한 (기본 5)
     """
-    from datetime import datetime
-
-    try:
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(
-            hour=23, minute=59, second=59,
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid date format. Expected YYYY-MM-DD: {e}",
-        ) from e
-
-    if start_dt > end_dt:
-        raise HTTPException(status_code=400, detail="시작일이 종료일보다 늦을 수 없습니다.")
+    start_dt = parse_date(start_date)
+    end_dt = parse_date(end_date, end_of_day=True)
+    validate_date_range(start_dt, end_dt)
 
     try:
         report, _is_new = await service.get_or_generate_report(
@@ -66,8 +54,7 @@ async def get_public_report(
         )
 
         # 지역 정보 조회 (Summary 응답과 동일 필드 제공)
-        summary = await service.summary_repo.get_by_branch_id(branch_id)
-        region = summary.region if summary else ""
+        region = await service.get_branch_region(branch_id)
 
         # 차량별 평가: 건수(count) 내림차순 상위 N개
         sorted_vehicles = sorted(

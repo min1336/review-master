@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from schemas.common import api_list_response, api_response
 from schemas.tag import (
     CategoryCreate,
     TagAnalysisRequest,
@@ -38,7 +39,7 @@ async def api_analyze_tags(
     """리뷰 텍스트의 태그 분석 테스트"""
     try:
         result = await service.analyze_tags(data.review)
-        return {"success": True, "data": result.to_dict()}
+        return api_response(result.to_dict())
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -54,7 +55,7 @@ async def api_categories(
 ) -> dict[str, Any]:
     """카테고리 목록"""
     categories = await service.get_categories(is_active=is_active)
-    return {"success": True, "data": categories, "count": len(categories)}
+    return api_list_response(categories)
 
 
 @router.post("/categories", status_code=201)
@@ -64,7 +65,7 @@ async def api_create_category(
     """카테고리 생성"""
     try:
         result = await service.create_category(data.model_dump())
-        return {"success": True, "data": result}
+        return api_response(result)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -93,7 +94,7 @@ async def api_tags(
     )
     total = len(tags)
     paginated = tags[offset : offset + limit]
-    return {"success": True, "data": paginated, "count": total}
+    return api_list_response(paginated, total=total, limit=limit, offset=offset)
 
 
 # ================================================================
@@ -109,10 +110,10 @@ async def api_tags_batch(
 ) -> dict[str, Any]:
     """여러 지점의 top3 태그 일괄 조회"""
     if not branch_ids:
-        return {"success": True, "data": {}}
+        return api_response({})
 
     tags = await service.get_batch_tags(branch_ids, period_type=period)
-    return {"success": True, "data": tags}
+    return api_response(tags)
 
 
 # ================================================================
@@ -127,7 +128,7 @@ async def api_create_tag(
     """태그 생성"""
     try:
         result = await service.create_tag(data.model_dump())
-        return {"success": True, "data": result}
+        return api_response(result)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -139,7 +140,7 @@ async def api_update_tag(
     """태그 수정"""
     update_data = data.model_dump(exclude_unset=True)
     result = await service.update_tag(tag_id, update_data)
-    return {"success": True, "data": result}
+    return api_response(result)
 
 
 @router.delete("/{tag_id}")
@@ -148,4 +149,4 @@ async def api_delete_tag(
 ) -> dict[str, Any]:
     """태그 삭제"""
     await service.delete_tag(tag_id)
-    return {"success": True}
+    return api_response()

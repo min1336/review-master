@@ -7,10 +7,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from schemas.common import api_response
+from services.summary_service import SummaryService
 
-from repository.summary_repository import SummaryRepository
-
-from .deps import get_summary_repo, require_public_api_key
+from .deps import get_summary_service, require_public_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +35,7 @@ def _pick_latest_summary(summary) -> str | None:
 async def get_public_summary(
     branch_id: int,
     _: None = Depends(require_public_api_key),
-    summary_repo: SummaryRepository = Depends(get_summary_repo),
+    service: SummaryService = Depends(get_summary_service),
 ) -> dict[str, Any]:
     """
     최신 요약 1개 조회 (Public)
@@ -44,7 +43,7 @@ async def get_public_summary(
     - X-API-Key 헤더 필요
     """
     try:
-        summary = await summary_repo.get_by_branch_id(branch_id)
+        summary = await service.get_summary_by_branch_id(branch_id)
         if not summary:
             raise HTTPException(status_code=404, detail="Summary not found")
 

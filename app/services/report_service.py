@@ -60,6 +60,42 @@ class ReportService:
         self.report_repo = report_repo
         self.sentiment_repo = sentiment_repo
 
+    # ================================================================
+    # Repository 래핑 메서드 (레이어드 아키텍처 준수)
+    # ================================================================
+
+    async def mark_as_viewed(self, report_id: int) -> bool:
+        """리포트 조회 표시 (NEW 뱃지 제거)"""
+        return await self.report_repo.mark_as_viewed(report_id)
+
+    async def get_report_history(
+        self,
+        branch_id: int,
+        period_start: datetime,
+        period_end: datetime,
+        limit: int = 10,
+    ) -> list[dict]:
+        """특정 기간의 리포트 버전 히스토리 조회"""
+        return await self.report_repo.get_report_history(
+            branch_id=branch_id,
+            period_start=period_start,
+            period_end=period_end,
+            limit=limit,
+        )
+
+    async def get_unviewed_count(self, branch_id: int | None = None) -> int:
+        """미조회 리포트 개수 조회"""
+        return await self.report_repo.get_unviewed_count(branch_id)
+
+    async def get_branch_region(self, branch_id: int) -> str:
+        """지점의 지역 정보 조회"""
+        summary = await self.summary_repo.get_by_branch_id(branch_id)
+        return summary.region if summary else ""
+
+    # ================================================================
+    # 비즈니스 로직
+    # ================================================================
+
     async def get_saved_report(
         self,
         branch_id: int,
