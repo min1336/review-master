@@ -17,6 +17,45 @@ from typing import Awaitable, Callable
 from pydantic import BaseModel, model_validator
 
 
+class EvaluationAxis(BaseModel):
+    """평가 축 (친절도, 가성비 등)"""
+    name: str
+    positive_ratio: int = 0      # 0-100
+    total_count: int = 0
+
+
+class TagRankItem(BaseModel):
+    """태그 순위 항목"""
+    tag_name: str
+    category_name: str
+    count: int = 0               # 긍정 or 부정 건수
+    ratio: int = 0               # 해당 감정 비율 %
+
+
+class VehicleRankItem(BaseModel):
+    """차량 순위 항목"""
+    model: str
+    count: int = 0               # 총 리뷰 건수
+    ratio: int = 0               # 호평 or 불만 비율
+    tags: list[str] = []         # ["냄새(85%)", "청결(72%)"] 최대 3개
+
+
+class AffiliateEvaluation(BaseModel):
+    """업체 평가 섹션"""
+    axes: list[EvaluationAxis] = []
+    top_positive: list[TagRankItem] = []   # Top 5 긍정 태그
+    top_negative: list[TagRankItem] = []   # Top 5 부정 태그
+    ai_text: str = ""                       # AI 평가 텍스트 (150-250자)
+
+
+class VehicleEvaluation(BaseModel):
+    """차량 평가 섹션"""
+    axes: list[EvaluationAxis] = []
+    top_liked: list[VehicleRankItem] = []   # 호평 Top 5 차량
+    top_disliked: list[VehicleRankItem] = [] # 불만 Top 5 차량
+    ai_text: str = ""                        # AI 평가 텍스트 (150-250자)
+
+
 class VehicleAnalysis(BaseModel):
     """차량별 분석"""
     model: str
@@ -41,6 +80,8 @@ class ReportData(BaseModel):
     strengths: list[str] = []       # 현상유지 (잘하고 있는 카테고리)
     improvements: list[str] = []    # 보완필요 (개선이 필요한 카테고리)
     vehicle_analysis: list[VehicleAnalysis] = []
+    affiliate_evaluation: AffiliateEvaluation | None = None
+    vehicle_evaluation: VehicleEvaluation | None = None
     generated_at: str = ""
 
     @model_validator(mode="before")
@@ -50,6 +91,22 @@ class ReportData(BaseModel):
         if isinstance(data, dict) and "top_keywords" in data and "top_tags" not in data:
             data["top_tags"] = data.pop("top_keywords")
         return data
+
+
+# 축 매핑 상수: 7개 카테고리 → 5개 평가 축
+AFFILIATE_AXES = {
+    "친절도": ["직원이 친절함", "사고 처리를 잘해줌"],
+    "가성비": ["주유비 부담 없음", "가격이 저렴함"],
+    "배차": ["배달 서비스가 우수함"],
+}
+VEHICLE_AXES = {
+    "청결도": ["차량이 청결함"],
+    "외관/옵션": ["차량외관이 좋음"],
+}
+AFFILIATE_CATEGORIES = {c for cats in AFFILIATE_AXES.values() for c in cats}
+VEHICLE_CATEGORIES = {c for cats in VEHICLE_AXES.values() for c in cats}
+
+REVIEW_CHANGE_THRESHOLD = 30  # 캐싱 무효화 임계값 (CLT 기반)
 
 
 class ReportService:
@@ -157,7 +214,8 @@ class ReportService:
         end_date: datetime,
     ) -> tuple[ReportData, bool]:
         """
-        저장된 리포트가 있으면 반환, 없으면 생성
+        저장된 리포트가 있으면 반환, 없으면 생성.
+        30건 이상 새 리뷰가 쌓이면 캐시를 무효화하고 재생성합니다 (CLT 기반).
 
         Args:
             branch_id: 지점 ID
@@ -167,9 +225,25 @@ class ReportService:
         Returns:
             (리포트 데이터, 신규 생성 여부)
         """
-        # 기존 리포트 확인
         saved_report = await self.get_saved_report(branch_id, start_date, end_date)
-        if saved_report:
+        if saved_report and self.review_repo:
+            try:
+                current_count = await self.review_repo.count_by_branch(
+                    branch_id=branch_id,
+                    review_date_from=start_date,
+                    review_date_to=end_date,
+                )
+                new_reviews = current_count - saved_report.total_reviews
+                if new_reviews < REVIEW_CHANGE_THRESHOLD:
+                    return saved_report, False
+                logging.info(
+                    f"캐시 무효화: branch_id={branch_id}, 새 리뷰 {new_reviews}건 "
+                    f"(임계값 {REVIEW_CHANGE_THRESHOLD}건)"
+                )
+            except Exception as e:
+                logging.warning(f"캐시 무효화 체크 실패, 캐시 서빙: {e}")
+                return saved_report, False
+        elif saved_report:
             return saved_report, False
 
         # 신규 생성
@@ -216,6 +290,9 @@ class ReportService:
         # 차량별 분석 데이터 수집
         vehicle_analysis = await self._get_vehicle_analysis(branch_id, start_date, end_date)
 
+        # 차량별 태그 raw 데이터 (VehicleRankItem 생성용)
+        vehicle_tags_raw = await self._get_vehicle_tags_raw(branch_id)
+
         return {
             "branch_id": branch_id,
             "branch_name": summary_data.get("branch_name", f"지점 {branch_id}"),
@@ -223,8 +300,8 @@ class ReportService:
             "total_reviews": summary_data.get("review_count", 0),
             "tags": [],
             "vehicle_analysis": [v.model_dump() for v in vehicle_analysis],
+            "vehicle_tags_raw": vehicle_tags_raw,
         }
-        # summary, summary_data 메모리 해제
 
     async def _step_tags(self, branch_id: int) -> dict:
         """
@@ -232,20 +309,19 @@ class ReportService:
 
         branch_tags 테이블에서 전체 태그를 한 번에 조회하고,
         positive_count/negative_count 컬럼을 직접 사용하여 감정 비율을 계산합니다.
-
-        Note: branch_tags는 기간 필터를 지원하지 않아 전체 기간 집계입니다.
-              기간별 태그 분석이 필요하면 별도 집계 테이블 도입이 필요합니다.
+        축별 집계(업체 3축/차량 2축)와 Top 5 긍정/부정 태그도 산출합니다.
 
         Args:
             branch_id: 지점 ID
 
         Returns:
-            dict: tag_sentiments 리스트와 sentiment_stats
+            dict: tag_sentiments, sentiment_stats, strengths, improvements,
+                  affiliate_axes, vehicle_axes, top_positive_tags, top_negative_tags,
+                  tag_by_category
         """
         try:
-            # 1회 조회 (period_type="all")
             all_tags = await self.branch_tag_repo.get_by_branch(
-                branch_id, period_type="all", limit=20
+                branch_id, period_type="all", limit=100
             )
         except Exception as e:
             logging.warning(f"태그 조회 실패 (branch_id={branch_id}): {e}")
@@ -254,13 +330,13 @@ class ReportService:
         if not all_tags:
             return {}
 
-        # 태그별 긍정/부정 카운트 직접 사용
         tag_sentiments = []
         total_pos = 0
         total_neg = 0
 
-        # 카테고리별 집계 (현상유지/보완필요 산출용)
         category_stats: dict[str, dict] = {}
+        # 태그별 상세 정보 (카테고리 포함)
+        tag_details: list[dict] = []
 
         for bt in all_tags:
             try:
@@ -271,7 +347,6 @@ class ReportService:
             if not name:
                 continue
 
-            # 직접 컬럼 사용
             pos = bt.positive_count or 0
             neg = bt.negative_count or 0
             total = pos + neg
@@ -286,9 +361,18 @@ class ReportService:
             total_pos += pos
             total_neg += neg
 
-            # 카테고리별 합산
             cat_info = tag_info.get("categories") or {}
             cat_name = cat_info.get("name", "")
+
+            # 태그 상세 정보 저장 (축 집계 + Top 5 추출용)
+            tag_details.append({
+                "tag_name": name,
+                "category_name": cat_name,
+                "positive": pos,
+                "negative": neg,
+                "total": total,
+            })
+
             if cat_name and total > 0:
                 if cat_name not in category_stats:
                     category_stats[cat_name] = {"positive": 0, "negative": 0, "total": 0}
@@ -307,7 +391,7 @@ class ReportService:
             "total": total_all,
         }
 
-        # 현상유지: 긍정 비율이 높은 카테고리 (긍정률 60% 이상, 상위 3개)
+        # 현상유지 / 보완필요 (기존 로직 유지)
         strengths: list[str] = []
         sorted_positive = sorted(
             category_stats.items(),
@@ -323,7 +407,6 @@ class ReportService:
             if len(strengths) >= 3:
                 break
 
-        # 보완필요: 부정 비율이 높은 카테고리 (부정률 20% 이상, 상위 3개)
         improvements: list[str] = []
         sorted_negative = sorted(
             category_stats.items(),
@@ -339,23 +422,70 @@ class ReportService:
             if len(improvements) >= 3:
                 break
 
+        # --- 신규: 축별 감정 집계 ---
+        def _build_axes(axes_map: dict[str, list[str]]) -> list[EvaluationAxis]:
+            result = []
+            for axis_name, categories in axes_map.items():
+                ax_pos = sum(category_stats.get(c, {}).get("positive", 0) for c in categories)
+                ax_total = sum(category_stats.get(c, {}).get("total", 0) for c in categories)
+                ratio = round(ax_pos / ax_total * 100) if ax_total > 0 else 0
+                result.append(EvaluationAxis(name=axis_name, positive_ratio=ratio, total_count=ax_total))
+            return result
+
+        affiliate_axes = _build_axes(AFFILIATE_AXES)
+        vehicle_axes = _build_axes(VEHICLE_AXES)
+
+        # --- 신규: Top 5 긍정/부정 태그 (업체 카테고리 소속) ---
+        affiliate_tags = [t for t in tag_details if t["category_name"] in AFFILIATE_CATEGORIES and t["total"] > 0]
+
+        top_positive_tags = sorted(affiliate_tags, key=lambda t: t["positive"], reverse=True)[:5]
+        top_negative_tags = sorted(affiliate_tags, key=lambda t: t["negative"], reverse=True)[:5]
+        # 부정 건수가 0인 항목 제거
+        top_negative_tags = [t for t in top_negative_tags if t["negative"] > 0]
+
+        top_positive = [
+            TagRankItem(
+                tag_name=t["tag_name"],
+                category_name=t["category_name"],
+                count=t["positive"],
+                ratio=round(t["positive"] / t["total"] * 100) if t["total"] > 0 else 0,
+            )
+            for t in top_positive_tags
+        ]
+        top_negative = [
+            TagRankItem(
+                tag_name=t["tag_name"],
+                category_name=t["category_name"],
+                count=t["negative"],
+                ratio=round(t["negative"] / t["total"] * 100) if t["total"] > 0 else 0,
+            )
+            for t in top_negative_tags
+        ]
+
         return {
             "tag_sentiments": tag_sentiments,
             "sentiment_stats": sentiment_stats,
             "strengths": strengths,
             "improvements": improvements,
+            "affiliate_axes": affiliate_axes,
+            "vehicle_axes": vehicle_axes,
+            "top_positive_tags": top_positive,
+            "top_negative_tags": top_negative,
+            "tag_by_category": category_stats,
         }
 
     async def _step_ai(self, data: dict) -> dict:
         """
-        Step 3: AI 분석 (LLM 호출)
+        Step 3: AI 분석 (LLM 호출 2개 병렬)
 
         Args:
             data: 이전 단계에서 수집된 데이터
 
         Returns:
-            dict: AI 분석 결과 (직렬화된 형태)
+            dict: AI 분석 결과 (period_summary, affiliate_ai_text, vehicle_ai_text)
         """
+        import asyncio
+
         # 대표 리뷰 수집 (리포트 모드일 때만, 기간 필터 적용)
         sample_reviews: list[str] = []
         if data.get("tag_sentiments") and self.review_repo:
@@ -392,8 +522,8 @@ class ReportService:
                 lines.append(line)
             vehicle_summary = ", ".join(lines)
 
-        # 기간 요약 생성 (DB 저장 요약 우선 사용으로 토큰 절약)
-        period_summary = await self._generate_period_summary(
+        # 기존: 기간 요약 생성
+        summary_coro = self._generate_period_summary(
             branch_name=data["branch_name"],
             total_reviews=data["total_reviews"],
             top_tags=data["tags"],
@@ -406,9 +536,102 @@ class ReportService:
             vehicle_summary=vehicle_summary,
         )
 
+        # 신규: 업체+차량 평가 텍스트 생성
+        eval_coro = self._generate_evaluation_texts(
+            branch_name=data["branch_name"],
+            affiliate_axes=data.get("affiliate_axes", []),
+            top_positive_tags=data.get("top_positive_tags", []),
+            top_negative_tags=data.get("top_negative_tags", []),
+            vehicle_axes=data.get("vehicle_axes", []),
+            top_liked_vehicles=data.get("top_liked_vehicles", []),
+            top_disliked_vehicles=data.get("top_disliked_vehicles", []),
+            sample_reviews=sample_reviews,
+        )
+
+        period_summary, eval_result = await asyncio.gather(
+            summary_coro, eval_coro
+        )
+
         return {
             "period_summary": period_summary,
+            "affiliate_ai_text": eval_result.get("affiliate", ""),
+            "vehicle_ai_text": eval_result.get("vehicle", ""),
         }
+
+    async def _generate_evaluation_texts(
+        self,
+        branch_name: str,
+        affiliate_axes: list,
+        top_positive_tags: list,
+        top_negative_tags: list,
+        vehicle_axes: list,
+        top_liked_vehicles: list,
+        top_disliked_vehicles: list,
+        sample_reviews: list[str] | None = None,
+    ) -> dict[str, str]:
+        """
+        업체+차량 평가 AI 텍스트 생성 (1회 LLM 호출)
+
+        Returns:
+            dict: {"affiliate": str, "vehicle": str}
+        """
+        # 데이터가 충분하지 않으면 빈 텍스트 반환
+        if not affiliate_axes and not vehicle_axes:
+            return {"affiliate": "", "vehicle": ""}
+
+        try:
+            from infrastructure.llm import get_provider
+            from infrastructure.llm.prompts import RichSummaryPromptBuilder
+            from infrastructure.llm.validator import strip_markdown_formatting
+
+            # Pydantic 모델을 dict로 변환
+            def _to_dicts(items: list) -> list[dict]:
+                return [
+                    it.model_dump() if hasattr(it, "model_dump") else it
+                    for it in items
+                ]
+
+            system_prompt, user_prompt = RichSummaryPromptBuilder.create_evaluation_prompt(
+                branch_name=branch_name,
+                affiliate_axes=_to_dicts(affiliate_axes),
+                top_positive_tags=_to_dicts(top_positive_tags),
+                top_negative_tags=_to_dicts(top_negative_tags),
+                vehicle_axes=_to_dicts(vehicle_axes),
+                top_liked_vehicles=_to_dicts(top_liked_vehicles),
+                top_disliked_vehicles=_to_dicts(top_disliked_vehicles),
+                sample_reviews=sample_reviews,
+            )
+
+            llm_provider = get_provider()
+            response = await llm_provider.async_generate(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                max_tokens=600,
+                temperature=0.7,
+            )
+
+            content = response.content if hasattr(response, "content") else str(response)
+            content = strip_markdown_formatting(content)
+
+            # ===AFFILIATE=== / ===VEHICLE=== 구분자로 파싱
+            affiliate_text = ""
+            vehicle_text = ""
+
+            if "===AFFILIATE===" in content and "===VEHICLE===" in content:
+                parts = content.split("===VEHICLE===")
+                affiliate_part = parts[0].split("===AFFILIATE===")[-1].strip()
+                vehicle_part = parts[1].strip() if len(parts) > 1 else ""
+                affiliate_text = affiliate_part
+                vehicle_text = vehicle_part
+            else:
+                # 구분자 없으면 fallback
+                affiliate_text = content.strip()
+
+            return {"affiliate": affiliate_text, "vehicle": vehicle_text}
+
+        except Exception as e:
+            logging.error(f"평가 텍스트 생성 실패: {e}")
+            return {"affiliate": "", "vehicle": ""}
 
     async def _step_build(
         self,
@@ -423,7 +646,7 @@ class ReportService:
 
         Args:
             collected: Step 1에서 수집된 기본 정보
-            tags: Step 2에서 조회된 태그 데이터 (현재 미사용)
+            tags: Step 2에서 조회된 태그 데이터
             ai: Step 3에서 생성된 AI 분석 결과
             start_date: 시작일
             end_date: 종료일
@@ -431,6 +654,13 @@ class ReportService:
         Returns:
             ReportData: 최종 리포트
         """
+        # 차량 순위 생성
+        vehicle_tags_raw = collected.get("vehicle_tags_raw", {})
+        vehicle_analysis_list = collected.get("vehicle_analysis", [])
+        top_liked, top_disliked = self._build_vehicle_rankings(
+            vehicle_tags_raw, vehicle_analysis_list
+        )
+
         report = ReportData(
             branch_id=collected["branch_id"],
             branch_name=collected["branch_name"],
@@ -442,7 +672,19 @@ class ReportService:
             period_summary=ai["period_summary"],
             strengths=tags.get("strengths", []),
             improvements=tags.get("improvements", []),
-            vehicle_analysis=[VehicleAnalysis(**v) for v in collected.get("vehicle_analysis", [])],
+            vehicle_analysis=[VehicleAnalysis(**v) for v in vehicle_analysis_list],
+            affiliate_evaluation=AffiliateEvaluation(
+                axes=tags.get("affiliate_axes", []),
+                top_positive=tags.get("top_positive_tags", []),
+                top_negative=tags.get("top_negative_tags", []),
+                ai_text=ai.get("affiliate_ai_text", ""),
+            ),
+            vehicle_evaluation=VehicleEvaluation(
+                axes=tags.get("vehicle_axes", []),
+                top_liked=top_liked,
+                top_disliked=top_disliked,
+                ai_text=ai.get("vehicle_ai_text", ""),
+            ),
             generated_at=to_kst(utc_now()).strftime("%Y-%m-%d %H:%M"),
         )
 
@@ -520,10 +762,10 @@ class ReportService:
             except Exception as e:
                 logging.warning(f"기간별 리뷰 수 조회 실패: {e}")
 
-        # Step 2: 태그 분석 (30-50%)
-        await update_progress(30)
+        # Step 2: 태그 분석 (20-40%)
+        await update_progress(20)
         tags = await self._step_tags(branch_id)
-        await update_progress(50)
+        await update_progress(40)
 
         # 태그 데이터가 있으면 태그명으로 tags 대체 (과거 NLP 키워드 대신 최신 태그 사용)
         if tags.get("tag_sentiments"):
@@ -531,19 +773,27 @@ class ReportService:
                 t["name"] for t in tags["tag_sentiments"] if t.get("name")
             ]
 
-        # Step 3: AI 분석 (70-90%)
-        await update_progress(70)
+        # 차량 순위 데이터 생성 (ai_data에 전달)
+        vehicle_tags_raw = collected.get("vehicle_tags_raw", {})
+        top_liked, top_disliked = self._build_vehicle_rankings(
+            vehicle_tags_raw, collected.get("vehicle_analysis", [])
+        )
+
+        # Step 3: AI 분석 ×2 병렬 (40-85%)
+        await update_progress(40)
         ai_data = {
             **collected,
             **tags,
             "start_date": start_date,
             "end_date": end_date,
+            "top_liked_vehicles": [v.model_dump() for v in top_liked],
+            "top_disliked_vehicles": [v.model_dump() for v in top_disliked],
         }
         ai = await self._step_ai(ai_data)
-        await update_progress(90)
+        await update_progress(85)
 
-        # Step 4: 리포트 조립 및 저장 (95-100%)
-        await update_progress(95)
+        # Step 4: 리포트 조립 및 저장 (85-100%)
+        await update_progress(85)
         report = await self._step_build(collected, tags, ai, start_date, end_date)
         await update_progress(100)
 
@@ -882,6 +1132,118 @@ class ReportService:
             }
 
         return result_map
+
+    async def _get_vehicle_tags_raw(self, branch_id: int) -> dict[str, dict]:
+        """
+        car_model_tags에서 차량별 전체 태그 데이터 조회 (VehicleRankItem용)
+
+        Returns:
+            dict: {car_model: {"total_positive": N, "total_negative": N, "total_count": N,
+                   "tags": {tag_name: {"positive": N, "negative": N, "total": N}}}}
+        """
+        from repository.session import get_client
+
+        client = await get_client()
+        try:
+            result = await (
+                client.table("car_model_tags")
+                .select("car_model, positive_count, negative_count, total_count, tags(name)")
+                .eq("branch_id", branch_id)
+                .execute()
+            )
+        except Exception as e:
+            logging.warning(f"차량 태그 raw 조회 실패 (branch_id={branch_id}): {e}")
+            return {}
+
+        if not result.data:
+            return {}
+
+        car_data: dict[str, dict] = {}
+        for row in result.data:
+            car_model = row.get("car_model", "기타")
+            tag_info = row.get("tags") or {}
+            tag_name = tag_info.get("name", "기타")
+            positive = row.get("positive_count", 0)
+            negative = row.get("negative_count", 0)
+            total = row.get("total_count", 0)
+
+            if car_model not in car_data:
+                car_data[car_model] = {
+                    "total_positive": 0, "total_negative": 0, "total_count": 0, "tags": {},
+                }
+            car_data[car_model]["total_positive"] += positive
+            car_data[car_model]["total_negative"] += negative
+            car_data[car_model]["total_count"] += total
+            car_data[car_model]["tags"][tag_name] = {
+                "positive": positive, "negative": negative, "total": total,
+            }
+
+        return car_data
+
+    def _build_vehicle_rankings(
+        self,
+        vehicle_tags_raw: dict[str, dict],
+        vehicle_analysis: list[dict],
+    ) -> tuple[list[VehicleRankItem], list[VehicleRankItem]]:
+        """
+        차량별 호평/불만 Top 5 + 태그 리스트 생성
+
+        vehicle_analysis (기간 필터링 된 데이터)의 count/like_ratio를 기본으로,
+        vehicle_tags_raw (all-time car_model_tags)의 태그를 보강하여 VehicleRankItem 생성.
+
+        Returns:
+            (top_liked, top_disliked)
+        """
+        # 기간별 차량 데이터를 dict으로 변환
+        va_map = {v.get("model", ""): v for v in vehicle_analysis}
+
+        items: list[dict] = []
+        for car_model, raw in vehicle_tags_raw.items():
+            va = va_map.get(car_model, {})
+            count = va.get("count", 0) or raw.get("total_count", 0)
+            like_ratio = va.get("like_ratio", 0)
+            dislike_ratio = va.get("dislike_ratio", 0)
+
+            # 기간별 데이터가 없으면 raw에서 계산
+            if not va and raw["total_count"] > 0:
+                like_ratio = round(raw["total_positive"] / raw["total_count"] * 100)
+                dislike_ratio = round(raw["total_negative"] / raw["total_count"] * 100)
+
+            # 상위 3개 태그 (긍정/부정 비율 포함)
+            tag_entries = sorted(raw.get("tags", {}).items(), key=lambda x: x[1]["total"], reverse=True)
+            tag_labels: list[str] = []
+            for tag_name, ts in tag_entries[:3]:
+                if ts["total"] > 0:
+                    pos_r = round(ts["positive"] / ts["total"] * 100)
+                    tag_labels.append(f"{tag_name}({pos_r}%)")
+
+            items.append({
+                "model": car_model,
+                "count": count,
+                "like_ratio": like_ratio,
+                "dislike_ratio": dislike_ratio,
+                "tags": tag_labels,
+            })
+
+        # 호평 Top 5 (like_ratio 내림차순)
+        sorted_liked = sorted(items, key=lambda x: (x["like_ratio"], x["count"]), reverse=True)
+        top_liked = [
+            VehicleRankItem(model=it["model"], count=it["count"], ratio=it["like_ratio"], tags=it["tags"])
+            for it in sorted_liked[:5]
+        ]
+
+        # 불만 Top 5 (dislike_ratio 내림차순, 0% 제외)
+        sorted_disliked = sorted(
+            [it for it in items if it["dislike_ratio"] > 0],
+            key=lambda x: (x["dislike_ratio"], x["count"]),
+            reverse=True,
+        )
+        top_disliked = [
+            VehicleRankItem(model=it["model"], count=it["count"], ratio=it["dislike_ratio"], tags=it["tags"])
+            for it in sorted_disliked[:5]
+        ]
+
+        return top_liked, top_disliked
 
     async def _generate_period_summary(
         self,

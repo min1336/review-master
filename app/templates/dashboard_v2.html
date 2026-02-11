@@ -692,6 +692,13 @@
             border-bottom: none;
         }
 
+        /* Axis progress bar */
+        .axis-bar-group { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+        .axis-bar-item { flex: 1; min-width: 120px; }
+        .axis-bar-label { font-size: 12px; color: var(--grey-4); margin-bottom: 4px; display: flex; justify-content: space-between; }
+        .axis-bar { height: 6px; border-radius: 3px; background: var(--grey-8); overflow: hidden; }
+        .axis-bar-fill { height: 100%; background: #10b981; border-radius: 3px; transition: width 0.4s ease; }
+
         /* Strengths & Weaknesses */
         .sw-grid {
             display: grid;
@@ -4436,6 +4443,116 @@
                 const body = getElement('report-modal-body');
                 if (!body) return;
 
+                const hasNewFormat = data.affiliate_evaluation != null;
+                if (!hasNewFormat) {
+                    renderLegacyReportContent(data, isNew);
+                    return;
+                }
+
+                // 헤더 버튼들 표시
+                const headerBackBtn = document.getElementById('header-back-btn');
+                const headerRegenBtn = document.getElementById('header-regen-btn');
+                const headerPdfBtn = document.getElementById('header-pdf-btn');
+                if (headerBackBtn) {
+                    headerBackBtn.style.display = 'block';
+                    headerBackBtn.onclick = () => window.dashboardHandlers.openReportModal(data.branch_id, data.branch_name || '', data.affiliate_name || '');
+                }
+                if (headerRegenBtn) headerRegenBtn.style.display = 'block';
+                if (headerPdfBtn) headerPdfBtn.style.display = 'block';
+
+                // 축별 게이지 바 생성 헬퍼
+                function buildAxisBars(axes) {
+                    if (!axes || axes.length === 0) return '';
+                    return '<div class="axis-bar-group">' + axes.map(a =>
+                        `<div class="axis-bar-item">
+                            <div class="axis-bar-label"><span>${escapeHtml(a.name)}</span><span style="font-weight:600;">${a.positive_ratio}%</span></div>
+                            <div class="axis-bar"><div class="axis-bar-fill" style="width:${a.positive_ratio}%"></div></div>
+                        </div>`
+                    ).join('') + '</div>';
+                }
+
+                // 태그 리스트 생성 헬퍼
+                function buildTagList(tags, mode) {
+                    if (!tags || tags.length === 0) return '<div style="color:var(--grey-5);font-size:13px;">데이터 부족</div>';
+                    return tags.map((t, i) => {
+                        if (mode === 'negative') {
+                            return `<div style="color:var(--grey-3);font-size:13px;padding:3px 0;">${i+1}. ${escapeHtml(t.tag_name)} <span style="color:#ef4444;">(부정 ${t.ratio}%, ${t.count}건)</span></div>`;
+                        }
+                        return `<div style="color:var(--grey-3);font-size:13px;padding:3px 0;">${i+1}. ${escapeHtml(t.tag_name)} <span style="color:#10b981;">(${t.ratio}%, ${t.count}건)</span></div>`;
+                    }).join('');
+                }
+
+                // 차량 리스트 생성 헬퍼
+                function buildVehicleList(vehicles, mode) {
+                    if (!vehicles || vehicles.length === 0) return '<div style="color:var(--grey-5);font-size:13px;">데이터 부족</div>';
+                    return vehicles.map((v, i) => {
+                        const tagsStr = (v.tags || []).slice(0, 2).map(t => escapeHtml(t)).join(', ');
+                        const ratioColor = mode === 'disliked' ? '#ef4444' : '#10b981';
+                        const ratioLabel = mode === 'disliked' ? '불만' : '호평';
+                        return `<div style="color:var(--grey-3);font-size:13px;padding:3px 0;">${i+1}. ${escapeHtml(v.model)} <span style="color:${ratioColor};">(${ratioLabel} ${v.ratio}%)</span>${tagsStr ? ' ' + tagsStr : ''}</div>`;
+                    }).join('');
+                }
+
+                const aff = data.affiliate_evaluation || {};
+                const veh = data.vehicle_evaluation || {};
+
+                body.innerHTML = `
+                    <div style="margin-bottom: 16px;">
+                        <span style="font-size: 13px; color: var(--grey-5);">분석 기간: ${escapeHtml(data.period_start)} ~ ${escapeHtml(data.period_end)}</span>
+                    </div>
+
+                    <!-- 섹션 1: 요약 -->
+                    <div class="report-section">
+                        <div class="report-section-title">요약</div>
+                        <div class="report-summary-box">
+                            ${escapeHtml(data.period_summary || '요약 정보가 없습니다.')}
+                        </div>
+                    </div>
+
+                    <!-- 섹션 2: 업체 평가 -->
+                    <div class="report-section">
+                        <div class="report-section-title">업체 평가</div>
+                        ${buildAxisBars(aff.axes)}
+                        <div style="display: flex; gap: 16px;">
+                            <div style="flex:1; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:8px; padding:12px;">
+                                <div style="font-weight:600; color:#10b981; margin-bottom:8px; font-size:13px;">잘한점</div>
+                                ${buildTagList(aff.top_positive, 'positive')}
+                            </div>
+                            <div style="flex:1; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.2); border-radius:8px; padding:12px;">
+                                <div style="font-weight:600; color:#ef4444; margin-bottom:8px; font-size:13px;">개선점</div>
+                                ${buildTagList(aff.top_negative, 'negative')}
+                            </div>
+                        </div>
+                        ${aff.ai_text ? `<div class="report-summary-box" style="margin-top:12px; border-left-color:#6366f1;">${escapeHtml(aff.ai_text)}</div>` : ''}
+                    </div>
+
+                    <!-- 섹션 3: 차량 평가 -->
+                    <div class="report-section">
+                        <div class="report-section-title">차량 평가</div>
+                        ${buildAxisBars(veh.axes)}
+                        <div style="display: flex; gap: 16px;">
+                            <div style="flex:1; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:8px; padding:12px;">
+                                <div style="font-weight:600; color:#10b981; margin-bottom:8px; font-size:13px;">호평 차량</div>
+                                ${buildVehicleList(veh.top_liked, 'liked')}
+                            </div>
+                            <div style="flex:1; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.2); border-radius:8px; padding:12px;">
+                                <div style="font-weight:600; color:#ef4444; margin-bottom:8px; font-size:13px;">불만 차량</div>
+                                ${buildVehicleList(veh.top_disliked, 'disliked')}
+                            </div>
+                        </div>
+                        ${veh.ai_text ? `<div class="report-summary-box" style="margin-top:12px; border-left-color:#6366f1;">${escapeHtml(veh.ai_text)}</div>` : ''}
+                    </div>
+
+                    <div style="text-align: center; padding: 8px 0; color: var(--grey-5); font-size: 12px; margin-top: 16px; border-top: 1px solid var(--grey-7); padding-top: 16px;">
+                        Generated by Carmore AI · ${escapeHtml(data.generated_at || new Date().toLocaleString('ko-KR'))}
+                    </div>
+                `;
+            }
+
+            function renderLegacyReportContent(data, isNew = true) {
+                const body = getElement('report-modal-body');
+                if (!body) return;
+
                 // 차량별 분석 테이블
                 let vehicleRowsHtml = '';
                 if (data.vehicle_analysis && data.vehicle_analysis.length > 0) {
@@ -4452,9 +4569,6 @@
                 } else {
                     vehicleRowsHtml = '<tr><td colspan="4" style="text-align: center; color: var(--grey-5);">차량별 데이터가 없습니다.</td></tr>';
                 }
-
-                // 태그
-                const tagsHtml = (data.top_tags || []).map(t => `<span class="report-keyword">${escapeHtml(t)}</span>`).join('');
 
                 // 헤더 버튼들 표시
                 const headerBackBtn = document.getElementById('header-back-btn');
@@ -4474,26 +4588,25 @@
 
                     <!-- Period Summary -->
                     <div class="report-section">
-                        <div class="report-section-title">📊 기간별 요약 분석</div>
+                        <div class="report-section-title">기간별 요약 분석</div>
                         <div class="report-summary-box">
                             ${escapeHtml(data.period_summary || '요약 정보가 없습니다.')}
                         </div>
                     </div>
-
 
                     <!-- Strengths & Improvements -->
                     ${(data.strengths && data.strengths.length > 0) || (data.improvements && data.improvements.length > 0) ? `
                     <div class="report-section">
                         <div style="display: flex; gap: 16px;">
                             <div style="flex: 1; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 14px;">
-                                <div style="font-weight: 600; color: #10b981; margin-bottom: 10px; font-size: 13px;">✅ 현상유지</div>
+                                <div style="font-weight: 600; color: #10b981; margin-bottom: 10px; font-size: 13px;">현상유지</div>
                                 ${(data.strengths || []).length > 0
                                     ? (data.strengths || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
                                     : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
                                 }
                             </div>
                             <div style="flex: 1; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 14px;">
-                                <div style="font-weight: 600; color: #ef4444; margin-bottom: 10px; font-size: 13px;">⚠️ 보완필요</div>
+                                <div style="font-weight: 600; color: #ef4444; margin-bottom: 10px; font-size: 13px;">보완필요</div>
                                 ${(data.improvements || []).length > 0
                                     ? (data.improvements || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
                                     : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
@@ -4505,7 +4618,7 @@
 
                     <!-- Vehicle Analysis -->
                     <div class="report-section">
-                        <div class="report-section-title">🚗 차량별 평가 분석</div>
+                        <div class="report-section-title">차량별 평가 분석</div>
                         <table class="report-table">
                             <thead>
                                 <tr>
