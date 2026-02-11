@@ -1,68 +1,62 @@
-"""리뷰 동기화 API 엔드포인트"""
-
 from __future__ import annotations
-
 import logging
-
 from fastapi import APIRouter, Depends, HTTPException
-
+from fastapi.responses import JSONResponse
 from core.config import get_settings
 from infrastructure.scheduler.sync_scheduler import get_scheduler
 from schemas.sync import (
     MarkReadRequest,
     MarkReadResponse,
     SchedulerStatusResponse,
-    SyncResultResponse,
-    SyncStatusResponse,
+    SyncJobStatusResponse,
     UpdateScheduleTimeRequest,
 )
-
 from .deps import get_sync_service
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(tags=["sync"])
 
+@router.post("/reviews", response_model=SyncJobStatusResponse, status_code=202)
+async def sync_reviews() -> JSONResponse:
+    from services.sync_job_service import SyncJobService
 
-@router.get("/status", response_model=SyncStatusResponse)
-async def get_sync_status(
-    sync_service=Depends(get_sync_service),
-) -> SyncStatusResponse:
-    """
-    동기화 상태 조회
+    service = SyncJobService.get_instance()
+    result = await service.submit_job()
 
-    - 마지막 동기화 시간
-    - 전체 리뷰 수
-    - 신규 리뷰 수
-    """
-    return await sync_service.get_athena_sync_status()
+    return JSONResponse(
+        status_code=202,
+        content=result.model_dump(mode="json"),
+    )
 
+@router.get("/jobs/{job_id}", response_model=SyncJobStatusResponse)
+async def get_sync_job_status(job_id: str) -> SyncJobStatusResponse:
+    from services.sync_job_service import SyncJobService
 
-@router.post("/reviews", response_model=SyncResultResponse)
-async def sync_reviews(
-    sync_service=Depends(get_sync_service),
-) -> SyncResultResponse:
-    """
-    Athena에서 신규 리뷰 동기화
+    service = SyncJobService.get_instance()
+    result = service.get_job_status(job_id)
 
-    1. 마지막 동기화 시간 이후의 리뷰를 Athena에서 조회
-    2. branch_reviews 테이블에 저장 (is_new=true)
-    3. 동기화 시간 업데이트
-    """
-    return await sync_service.sync_reviews()
+    if not result:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
 
+    return result
+
+@router.delete("/jobs/{job_id}")
+async def cancel_sync_job(job_id: str) -> dict:
+    from services.sync_job_service import SyncJobService
+
+    service = SyncJobService.get_instance()
+    cancelled = await service.cancel_job(job_id)
+
+    if not cancelled:
+        raise HTTPException(status_code=404, detail="취소할 수 있는 작업이 없습니다")
+
+    return {"success": True, "message": "작업이 취소되었습니다"}
 
 @router.post("/reviews/read", response_model=MarkReadResponse)
 async def mark_reviews_as_read(
     request: MarkReadRequest,
     sync_service=Depends(get_sync_service),
 ) -> MarkReadResponse:
-    """
-    리뷰 읽음 처리
-
-    - review_ids가 있으면 해당 리뷰만 읽음 처리
-    - review_ids가 없으면 모든 신규 리뷰 읽음 처리
-    """
     marked_count = await sync_service.mark_reviews_as_read(request.review_ids)
 
     return MarkReadResponse(
@@ -70,19 +64,8 @@ async def mark_reviews_as_read(
         marked_count=marked_count,
     )
 
-
-# ============================================================
-# 스케줄러 API
-# ============================================================
 @router.get("/scheduler/status", response_model=SchedulerStatusResponse)
 async def get_scheduler_status() -> SchedulerStatusResponse:
-    """
-    스케줄러 상태 조회
-
-    - 실행 중 여부
-    - 다음 실행 시간
-    - 동기화 예정 시간 (시:분)
-    """
     scheduler = get_scheduler()
     hour, minute = scheduler.get_schedule_time()
 
@@ -92,58 +75,11 @@ async def get_scheduler_status() -> SchedulerStatusResponse:
         sync_hour=hour,
         sync_minute=minute,
     )
-
-
-@router.post("/scheduler/start", response_model=SchedulerStatusResponse)
-async def start_scheduler() -> SchedulerStatusResponse:
-    """스케줄러 시작"""
-    scheduler = get_scheduler()
-    hour, minute = scheduler.get_schedule_time()
-
-    if scheduler.is_running:
-        return SchedulerStatusResponse(
-            is_running=True,
-            next_run_time=scheduler.get_next_run_time(),
-            sync_hour=hour,
-            sync_minute=minute,
-        )
-
-    await scheduler.start()
-
-    return SchedulerStatusResponse(
-        is_running=scheduler.is_running,
-        next_run_time=scheduler.get_next_run_time(),
-        sync_hour=hour,
-        sync_minute=minute,
-    )
-
-
-@router.post("/scheduler/stop", response_model=SchedulerStatusResponse)
-async def stop_scheduler() -> SchedulerStatusResponse:
-    """스케줄러 종료"""
-    scheduler = get_scheduler()
-    hour, minute = scheduler.get_schedule_time()
-
-    await scheduler.stop()
-
-    return SchedulerStatusResponse(
-        is_running=scheduler.is_running,
-        next_run_time=None,
-        sync_hour=hour,
-        sync_minute=minute,
-    )
-
 
 @router.post("/scheduler/time", response_model=SchedulerStatusResponse)
 async def update_scheduler_time(
     request: UpdateScheduleTimeRequest,
 ) -> SchedulerStatusResponse:
-    """
-    스케줄러 실행 시간 변경
-
-    - hour: 0~23시
-    - minute: 0~59분 (기본값 0)
-    """
     scheduler = get_scheduler()
 
     success = await scheduler.update_schedule_time(request.hour, request.minute)

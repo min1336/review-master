@@ -22,7 +22,7 @@ class BranchReviewRepository(BaseRepository[Review]):
     def table_name(self) -> str:
         return "branch_reviews"
 
-    async def upsert_batch(self, reviews: list[dict], batch_size: int = 1000) -> int:
+    async def upsert_batch(self, reviews: list[dict], batch_size: int = 100) -> int:
         """원본 리뷰 일괄 저장"""
         success_count = 0
         total = len(reviews)

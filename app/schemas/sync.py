@@ -7,14 +7,6 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
-class SyncStatusResponse(BaseModel):
-    """동기화 상태 응답"""
-
-    last_sync_at: datetime | None = None
-    total_reviews: int = 0
-    new_reviews: int = 0
-
-
 class SyncResultResponse(BaseModel):
     """동기화 결과 응답"""
 
@@ -78,3 +70,15 @@ class MonthlyJobResultResponse(BaseModel):
 
     success: bool
     message: str
+
+
+class SyncJobStatusResponse(BaseModel):
+    """비동기 동기화 작업 상태 응답"""
+
+    job_id: str
+    status: str  # pending | processing | completed | failed
+    progress: int  # 0-100
+    message: str = ""
+    error: str | None = None
+    result: SyncResultResponse | None = None
+    created_at: datetime | None = None

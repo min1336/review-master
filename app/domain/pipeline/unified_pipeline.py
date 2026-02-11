@@ -1,5 +1,6 @@
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 
 from core.timezone import utc_now
@@ -28,12 +29,17 @@ class UnifiedPipeline:
         self.car_model_tags = CarModelTagAggregator()
         self.keyword_manager = KeywordManager()
 
-    async def run(self, reviews: list[dict]) -> PipelineResultDTO:
+    async def run(
+        self,
+        reviews: list[dict],
+        progress_callback: Callable[[int, str], Awaitable[None]] | None = None,
+    ) -> PipelineResultDTO:
         """
         통합 파이프라인 실행
 
         Args:
             reviews: Athena에서 가져온 리뷰 dict 리스트
+            progress_callback: 진행률 콜백 (progress%, message)
 
         Returns:
             PipelineResultDTO: 파이프라인 실행 결과
@@ -64,6 +70,8 @@ class UnifiedPipeline:
                 duration_seconds=round(time.monotonic() - t0, 3),
             ))
             logger.info(f"Step 1 완료: {len(processed)}/{len(reviews)}개 처리")
+            if progress_callback:
+                await progress_callback(50, "전처리 완료")
         except Exception as e:
             logger.error(f"Step 1(preprocessor) 실패: {e}")
             result.add_step(PipelineStepResultDTO(
@@ -93,6 +101,8 @@ class UnifiedPipeline:
                 duration_seconds=round(time.monotonic() - t0, 3),
             ))
             logger.info(f"Step 2 완료: {s2}개 sentiment 업데이트")
+            if progress_callback:
+                await progress_callback(60, "감정 업데이트 완료")
         except Exception as e:
             logger.error(f"Step 2(review_updater) 실패: {e}")
             result.add_step(PipelineStepResultDTO(
@@ -112,6 +122,8 @@ class UnifiedPipeline:
                 duration_seconds=round(time.monotonic() - t0, 3),
             ))
             logger.info(f"Step 3 완료: {s3}개 지점 감정 통계 갱신")
+            if progress_callback:
+                await progress_callback(70, "감정 통계 완료")
         except Exception as e:
             logger.error(f"Step 3(sentiment_stats) 실패: {e}")
             result.add_step(PipelineStepResultDTO(
@@ -131,6 +143,8 @@ class UnifiedPipeline:
                 duration_seconds=round(time.monotonic() - t0, 3),
             ))
             logger.info(f"Step 4 완료: {s4}")
+            if progress_callback:
+                await progress_callback(80, "태그 집계 완료")
         except Exception as e:
             logger.error(f"Step 4(tag_aggregator) 실패: {e}")
             result.add_step(PipelineStepResultDTO(
@@ -150,6 +164,8 @@ class UnifiedPipeline:
                 duration_seconds=round(time.monotonic() - t0, 3),
             ))
             logger.info(f"Step 5 완료: {s5}")
+            if progress_callback:
+                await progress_callback(85, "차량 모델 태그 완료")
         except Exception as e:
             logger.error(f"Step 5(car_model_tags) 실패: {e}")
             result.add_step(PipelineStepResultDTO(
@@ -169,6 +185,8 @@ class UnifiedPipeline:
                 duration_seconds=round(time.monotonic() - t0, 3),
             ))
             logger.info(f"Step 6 완료: {s6}개 지점 키워드 갱신")
+            if progress_callback:
+                await progress_callback(90, "키워드 갱신 완료")
         except Exception as e:
             logger.error(f"Step 6(keyword_manager) 실패: {e}")
             result.add_step(PipelineStepResultDTO(

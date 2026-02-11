@@ -1,15 +1,17 @@
 """
 AI 리포트 API
 
-Router: /api/report
+Router: /api/reports
 담당: AI 리포트 생성 및 PDF 다운로드
 """
 
 from __future__ import annotations
 
-import calendar
+import asyncio
 import logging
 from datetime import datetime
+
+from dateutil.relativedelta import relativedelta
 
 from core.timezone import utc_now
 from typing import Any
@@ -36,26 +38,6 @@ class ReportRequest(BaseModel):
     start_date: str  # YYYY-MM-DD
     end_date: str  # YYYY-MM-DD
 
-
-# ================================================================
-# 고정 경로 (/{branch_id}보다 위에 배치)
-# ================================================================
-
-
-@router.get("/unviewed/count")
-async def api_get_unviewed_count(
-    branch_id: int | None = Query(default=None, description="지점 ID (없으면 전체)"),
-    service: ReportService = Depends(get_report_service),
-) -> dict[str, Any]:
-    """미조회 리포트 개수 조회"""
-    try:
-        count = await service.get_unviewed_count(branch_id)
-        return api_response({"count": count})
-    except Exception as e:
-        logger.exception("미조회 리포트 개수 조회 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
 # ================================================================
 # Path parameter 경로 (/{branch_id}/*)
 # ================================================================
@@ -79,32 +61,33 @@ async def api_get_review_count(
     validate_date_range(parsed_start, parsed_end)
 
     try:
-        # 선택된 기간의 리뷰 수
-        selected_count = await review_repo.count_by_branch(
-            branch_id, review_date_from=parsed_start, review_date_to=parsed_end,
-        )
-
-        # 표준 5개 기간 카운트
         today = utc_now()
+        today_date = datetime(today.year, today.month, today.day)
         period_defs = [
             ("1m", 1), ("3m", 3), ("6m", 6), ("12m", 12),
         ]
-        period_counts: dict[str, int] = {}
-        for label, months in period_defs:
-            from_date = datetime(today.year, today.month, today.day)
-            # month 연산: 년도 넘김 처리
-            m = from_date.month - months
-            y = from_date.year
-            while m <= 0:
-                m += 12
-                y -= 1
-            last_day = calendar.monthrange(y, m)[1]
-            from_date = from_date.replace(year=y, month=m, day=min(from_date.day, last_day))
-            period_counts[label] = await review_repo.count_by_branch(
-                branch_id, review_date_from=from_date, review_date_to=today,
+
+        # 모든 쿼리를 병렬로 실행 (selected + 4개 기간 + all)
+        selected_coro = review_repo.count_by_branch(
+            branch_id, review_date_from=parsed_start, review_date_to=parsed_end,
+        )
+        period_coros = [
+            review_repo.count_by_branch(
+                branch_id,
+                review_date_from=today_date - relativedelta(months=months),
+                review_date_to=today,
             )
-        # 전체 기간
-        period_counts["all"] = await review_repo.count_by_branch(branch_id)
+            for _label, months in period_defs
+        ]
+        all_coro = review_repo.count_by_branch(branch_id)
+
+        results = await asyncio.gather(selected_coro, *period_coros, all_coro)
+
+        selected_count = results[0]
+        period_counts: dict[str, int] = {
+            label: results[i + 1] for i, (label, _) in enumerate(period_defs)
+        }
+        period_counts["all"] = results[-1]
 
         # 추천 기간: threshold 이상인 최단 기간
         recommended_period = None
@@ -193,7 +176,7 @@ async def api_generate_report_async(
         )
         return api_response({
             "job_id": job_id,
-            "poll_url": f"/api/v2/report/{branch_id}/job/{job_id}",
+            "poll_url": f"/api/reports/{branch_id}/job/{job_id}",
         })
     except Exception as e:
         logger.exception("비동기 리포트 생성 요청 실패")
