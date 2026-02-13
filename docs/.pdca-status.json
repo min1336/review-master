@@ -1,8 +1,13 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-02-13T06:00:28.511Z",
+  "lastUpdated": "2026-02-13T07:35:31.253Z",
   "activeFeatures": [
-    "pdf"
+    "pdf",
+    "schemas",
+    "endpoints",
+    "core",
+    "report_service.py",
+    "summary_service.py"
   ],
   "primaryFeature": "pdf",
   "features": {
@@ -15,18 +20,85 @@
       "archivedTo": "docs/archive/2026-02/.claude/"
     },
     "pdf": {
-      "phase": "act",
-      "phaseNumber": 5,
-      "matchRate": 91,
-      "iterationCount": 2,
+      "phase": "check",
+      "phaseNumber": 4,
+      "matchRate": 89,
+      "iterationCount": 3,
       "requirements": [],
       "documents": {
-        "analysis": "docs/03-analysis/pdf.analysis.md"
+        "analysis": "docs/03-analysis/pdf.analysis.md",
+        "analysis-iter3": "docs/03-analysis/pdf.analysis.iteration3.md"
       },
       "timestamps": {
         "started": "2026-02-13T04:34:56.335Z",
-        "lastUpdated": "2026-02-13T06:05:00.000Z"
-      }
+        "lastUpdated": "2026-02-13T07:50:00.000Z"
+      },
+      "lastFile": "/home/teamo2/Downloads/Review_Summary_AI/docs/03-analysis/pdf.analysis.iteration3.md"
+    },
+    "schemas": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-13T07:15:49.294Z",
+        "lastUpdated": "2026-02-13T07:25:30.514Z"
+      },
+      "lastFile": "/home/teamo2/Downloads/Review_Summary_AI/app/schemas/analysis.py"
+    },
+    "endpoints": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-13T07:16:04.309Z",
+        "lastUpdated": "2026-02-13T07:29:39.988Z"
+      },
+      "lastFile": "/home/teamo2/Downloads/Review_Summary_AI/app/api/v1/endpoints/tags.py"
+    },
+    "core": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-13T07:25:05.681Z",
+        "lastUpdated": "2026-02-13T07:25:05.681Z"
+      },
+      "lastFile": "/home/teamo2/Downloads/Review_Summary_AI/app/core/timezone.py"
+    },
+    "report_service.py": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-13T07:26:01.921Z",
+        "lastUpdated": "2026-02-13T07:26:01.921Z"
+      },
+      "lastFile": "/home/teamo2/Downloads/Review_Summary_AI/app/services/report_service.py"
+    },
+    "summary_service.py": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-13T07:26:09.426Z",
+        "lastUpdated": "2026-02-13T07:26:09.426Z"
+      },
+      "lastFile": "/home/teamo2/Downloads/Review_Summary_AI/app/services/summary_service.py"
     }
   },
   "pipeline": {
@@ -37,7 +109,7 @@
   "session": {
     "startedAt": "2026-02-13T02:08:12.417Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-02-13T06:00:28.511Z"
+    "lastActivity": "2026-02-13T07:35:31.253Z"
   },
   "history": [
     {
@@ -141,6 +213,186 @@
     },
     {
       "timestamp": "2026-02-13T06:00:28.511Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:15:49.294Z",
+      "feature": "schemas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:16:04.309Z",
+      "feature": "endpoints",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:22:29.880Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:22:57.502Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:23:07.012Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:23:12.135Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:23:18.854Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:25:05.681Z",
+      "feature": "core",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:25:10.626Z",
+      "feature": "schemas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:25:17.469Z",
+      "feature": "schemas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:25:23.843Z",
+      "feature": "schemas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:25:25.573Z",
+      "feature": "schemas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:25:30.514Z",
+      "feature": "schemas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:25:39.735Z",
+      "feature": "endpoints",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:25:45.752Z",
+      "feature": "endpoints",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:25:56.391Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:26:01.921Z",
+      "feature": "report_service.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:26:09.426Z",
+      "feature": "summary_service.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:27:01.632Z",
+      "feature": "endpoints",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:27:22.131Z",
+      "feature": "endpoints",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:27:30.751Z",
+      "feature": "endpoints",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:28:25.565Z",
+      "feature": "endpoints",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:28:41.452Z",
+      "feature": "endpoints",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:28:58.807Z",
+      "feature": "endpoints",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:29:09.685Z",
+      "feature": "endpoints",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:29:22.929Z",
+      "feature": "endpoints",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:29:39.988Z",
+      "feature": "endpoints",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:35:04.736Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:35:11.807Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T07:35:31.253Z",
       "feature": "pdf",
       "phase": "do",
       "action": "updated"
