@@ -7,36 +7,25 @@ Router: /api/reports
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from datetime import datetime
+from datetime import date
 
-from dateutil.relativedelta import relativedelta
-
-from core.timezone import utc_now
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import Response
-from pydantic import BaseModel
-from schemas.common import api_response, parse_date, validate_date_range
+from core.timezone import date_to_utc
+from schemas.common import api_response, validate_date_range_d
+from schemas.report import ReportRequest
 from services.report_job_service import ReportJobService
 from services.report_service import ReportService
 
-from .deps import get_report_job_service, get_report_service, get_review_repo
+from .deps import get_report_job_service, get_report_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["report"])
-
-MINIMUM_REVIEW_THRESHOLD = 30
-
-
-class ReportRequest(BaseModel):
-    """리포트 생성 요청"""
-    start_date: str  # YYYY-MM-DD
-    end_date: str  # YYYY-MM-DD
 
 # ================================================================
 # Path parameter 경로 (/{branch_id}/*)
@@ -46,9 +35,9 @@ class ReportRequest(BaseModel):
 @router.get("/{branch_id}/review-count")
 async def api_get_review_count(
     branch_id: int,
-    start_date: str = Query(..., description="시작일 (YYYY-MM-DD)"),
-    end_date: str = Query(..., description="종료일 (YYYY-MM-DD)"),
-    review_repo: "BranchReviewRepository" = Depends(get_review_repo),
+    start_date: date = Query(..., description="시작일 (YYYY-MM-DD)"),
+    end_date: date = Query(..., description="종료일 (YYYY-MM-DD)"),
+    service: ReportService = Depends(get_report_service),
 ) -> dict[str, Any]:
     """
     리포트 생성 전 리뷰 수 사전 확인
@@ -56,54 +45,15 @@ async def api_get_review_count(
     선택된 기간과 표준 5개 기간(1m/3m/6m/12m/all)의 리뷰 수를 한번에 반환합니다.
     threshold(30건) 이상인 최단 기간을 recommended_period로 제시합니다.
     """
-    parsed_start = parse_date(start_date)
-    parsed_end = parse_date(end_date, end_of_day=True)
-    validate_date_range(parsed_start, parsed_end)
+    validate_date_range_d(start_date, end_date)
 
     try:
-        today = utc_now()
-        today_date = datetime(today.year, today.month, today.day)
-        period_defs = [
-            ("1m", 1), ("3m", 3), ("6m", 6), ("12m", 12),
-        ]
-
-        # 모든 쿼리를 병렬로 실행 (selected + 4개 기간 + all)
-        selected_coro = review_repo.count_by_branch(
-            branch_id, review_date_from=parsed_start, review_date_to=parsed_end,
+        result = await service.get_review_count_summary(
+            branch_id,
+            date_to_utc(start_date),
+            date_to_utc(end_date, end_of_day=True),
         )
-        period_coros = [
-            review_repo.count_by_branch(
-                branch_id,
-                review_date_from=today_date - relativedelta(months=months),
-                review_date_to=today,
-            )
-            for _label, months in period_defs
-        ]
-        all_coro = review_repo.count_by_branch(branch_id)
-
-        results = await asyncio.gather(selected_coro, *period_coros, all_coro)
-
-        selected_count = results[0]
-        period_counts: dict[str, int] = {
-            label: results[i + 1] for i, (label, _) in enumerate(period_defs)
-        }
-        period_counts["all"] = results[-1]
-
-        # 추천 기간: threshold 이상인 최단 기간
-        recommended_period = None
-        for label, _months in period_defs:
-            if period_counts[label] >= MINIMUM_REVIEW_THRESHOLD:
-                recommended_period = label
-                break
-        if recommended_period is None:
-            recommended_period = "all"
-
-        return api_response({
-            "selected_count": selected_count,
-            "period_counts": period_counts,
-            "threshold": MINIMUM_REVIEW_THRESHOLD,
-            "recommended_period": recommended_period,
-        })
+        return api_response(result)
     except Exception as e:
         logger.exception("리뷰 수 확인 오류")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -112,20 +62,18 @@ async def api_get_review_count(
 @router.get("/{branch_id}")
 async def api_get_report(
     branch_id: int,
-    start_date: str = Query(..., description="시작일 (YYYY-MM-DD)"),
-    end_date: str = Query(..., description="종료일 (YYYY-MM-DD)"),
+    start_date: date = Query(..., description="시작일 (YYYY-MM-DD)"),
+    end_date: date = Query(..., description="종료일 (YYYY-MM-DD)"),
     service: ReportService = Depends(get_report_service),
 ) -> dict[str, Any]:
     """저장된 리포트 조회 (없으면 신규 생성)"""
-    parsed_start = parse_date(start_date)
-    parsed_end = parse_date(end_date, end_of_day=True)
-    validate_date_range(parsed_start, parsed_end)
+    validate_date_range_d(start_date, end_date)
 
     try:
         report, is_new = await service.get_or_generate_report(
             branch_id=branch_id,
-            start_date=parsed_start,
-            end_date=parsed_end,
+            start_date=date_to_utc(start_date),
+            end_date=date_to_utc(end_date, end_of_day=True),
         )
         report_data = report.model_dump()
         report_data["is_new"] = is_new
@@ -164,15 +112,13 @@ async def api_generate_report_async(
     502 타임아웃 방지를 위한 백그라운드 작업 방식.
     즉시 job_id를 반환하고, 클라이언트는 /job/{job_id}로 상태를 폴링합니다.
     """
-    start_date = parse_date(data.start_date)
-    end_date = parse_date(data.end_date, end_of_day=True)
-    validate_date_range(start_date, end_date)
+    validate_date_range_d(data.start_date, data.end_date)
 
     try:
         job_id = await job_service.submit_job(
             branch_id=branch_id,
-            start_date=start_date,
-            end_date=end_date,
+            start_date=date_to_utc(data.start_date),
+            end_date=date_to_utc(data.end_date, end_of_day=True),
         )
         return api_response({
             "job_id": job_id,
@@ -194,15 +140,13 @@ async def api_generate_report(
 
     주의: 긴 처리 시간으로 502 타임아웃 가능. /generate/async 권장.
     """
-    start_date = parse_date(data.start_date)
-    end_date = parse_date(data.end_date, end_of_day=True)
-    validate_date_range(start_date, end_date)
+    validate_date_range_d(data.start_date, data.end_date)
 
     try:
         report = await service.generate_report(
             branch_id=branch_id,
-            start_date=start_date,
-            end_date=end_date,
+            start_date=date_to_utc(data.start_date),
+            end_date=date_to_utc(data.end_date, end_of_day=True),
         )
         report_data = report.model_dump()
         report_data["is_new"] = True
@@ -221,15 +165,13 @@ async def api_regenerate_report(
     service: ReportService = Depends(get_report_service),
 ) -> dict[str, Any]:
     """AI 리포트 재생성 (기존 리포트 덮어쓰기)"""
-    start_date = parse_date(data.start_date)
-    end_date = parse_date(data.end_date, end_of_day=True)
-    validate_date_range(start_date, end_date)
+    validate_date_range_d(data.start_date, data.end_date)
 
     try:
         report = await service.regenerate_report(
             branch_id=branch_id,
-            start_date=start_date,
-            end_date=end_date,
+            start_date=date_to_utc(data.start_date),
+            end_date=date_to_utc(data.end_date, end_of_day=True),
         )
         report_data = report.model_dump()
         report_data["is_new"] = True
@@ -273,20 +215,18 @@ async def api_cancel_job(
 @router.delete("/{branch_id}")
 async def api_delete_report(
     branch_id: int,
-    start_date: str = Query(..., description="시작일 (YYYY-MM-DD)"),
-    end_date: str = Query(..., description="종료일 (YYYY-MM-DD)"),
+    start_date: date = Query(..., description="시작일 (YYYY-MM-DD)"),
+    end_date: date = Query(..., description="종료일 (YYYY-MM-DD)"),
     service: ReportService = Depends(get_report_service),
 ) -> dict[str, Any]:
     """AI 리포트 삭제"""
-    parsed_start = parse_date(start_date)
-    parsed_end = parse_date(end_date, end_of_day=True)
-    validate_date_range(parsed_start, parsed_end)
+    validate_date_range_d(start_date, end_date)
 
     try:
         deleted = await service.delete_report(
             branch_id=branch_id,
-            start_date=parsed_start,
-            end_date=parsed_end,
+            start_date=date_to_utc(start_date),
+            end_date=date_to_utc(end_date, end_of_day=True),
         )
         if deleted:
             return api_response({"message": "리포트가 삭제되었습니다."})
@@ -317,21 +257,19 @@ async def api_mark_report_viewed(
 @router.get("/{branch_id}/history")
 async def api_get_report_history(
     branch_id: int,
-    start_date: str = Query(..., description="시작일 (YYYY-MM-DD)"),
-    end_date: str = Query(..., description="종료일 (YYYY-MM-DD)"),
+    start_date: date = Query(..., description="시작일 (YYYY-MM-DD)"),
+    end_date: date = Query(..., description="종료일 (YYYY-MM-DD)"),
     limit: int = Query(default=10, le=50),
     service: ReportService = Depends(get_report_service),
 ) -> dict[str, Any]:
     """특정 기간의 리포트 버전 히스토리 조회"""
-    parsed_start = parse_date(start_date)
-    parsed_end = parse_date(end_date, end_of_day=True)
-    validate_date_range(parsed_start, parsed_end)
+    validate_date_range_d(start_date, end_date)
 
     try:
         history = await service.get_report_history(
             branch_id=branch_id,
-            period_start=parsed_start,
-            period_end=parsed_end,
+            period_start=date_to_utc(start_date),
+            period_end=date_to_utc(end_date, end_of_day=True),
             limit=limit,
         )
         return api_response(history)
@@ -343,16 +281,33 @@ async def api_get_report_history(
 @router.get("/{branch_id}/pdf")
 async def api_download_report_pdf(
     branch_id: int,
-    start_date: str = Query(..., description="시작일 (YYYY-MM-DD)"),
-    end_date: str = Query(..., description="종료일 (YYYY-MM-DD)"),
+    period: str | None = Query(None, pattern=r"^(all|1y|12m|6m|3m|1m)$", description="기간 프리셋 (1m/3m/6m/12m/1y/all)"),
+    start_date: date | None = Query(None, description="시작일 (YYYY-MM-DD)"),
+    end_date: date | None = Query(None, description="종료일 (YYYY-MM-DD)"),
     service: ReportService = Depends(get_report_service),
 ) -> Response:
-    """AI 리포트 PDF 다운로드"""
+    """AI 리포트 PDF 다운로드
+
+    period 또는 start_date+end_date 중 하나를 반드시 지정해야 합니다.
+    둘 다 지정하면 period가 우선합니다.
+    """
     import urllib.parse
 
-    parsed_start = parse_date(start_date)
-    parsed_end = parse_date(end_date, end_of_day=True)
-    validate_date_range(parsed_start, parsed_end)
+    from app.schemas.common import resolve_period
+
+    if period:
+        parsed_start, parsed_end = resolve_period(period)
+        date_label = period
+    elif start_date and end_date:
+        validate_date_range_d(start_date, end_date)
+        parsed_start = date_to_utc(start_date)
+        parsed_end = date_to_utc(end_date, end_of_day=True)
+        date_label = f"{start_date}_{end_date}"
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail="period 또는 start_date+end_date를 지정해야 합니다.",
+        )
 
     try:
         report, _is_new = await service.get_or_generate_report(
@@ -363,7 +318,7 @@ async def api_download_report_pdf(
 
         pdf_bytes = await service.generate_pdf(report)
 
-        filename = f"AI_Report_{report.branch_name}_{start_date}_{end_date}.pdf"
+        filename = f"AI_Report_{report.branch_name}_{date_label}.pdf"
         encoded_filename = urllib.parse.quote(filename)
 
         return Response(

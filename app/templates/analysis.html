@@ -2172,7 +2172,7 @@
                     throw new Error(err.detail || '동기화 시작 실패');
                 }
 
-                const submitData = await submitRes.json();
+                const submitData = (await submitRes.json()).data;
                 currentJobId = submitData.job_id;
                 updateSyncProgress(submitData.progress, submitData.message || '작업 시작됨');
 
@@ -2192,7 +2192,7 @@
                         throw new Error('상태 조회 실패');
                     }
 
-                    const status = await pollRes.json();
+                    const status = (await pollRes.json()).data;
                     updateSyncProgress(status.progress, status.message);
 
                     if (status.status === 'completed') {
@@ -2218,7 +2218,7 @@
 
                     if (status.status === 'failed') {
                         removeSyncOverlay();
-                        alert(status.error || '동기화에 실패했습니다.');
+                        alert(status.error || status.message || '동기화에 실패했습니다.');
                         return;
                     }
                 }
@@ -2253,7 +2253,7 @@
         async function checkDailyScheduler() {
             try {
                 const response = await fetch(`${API_PREFIX}/sync/scheduler/status`);
-                const data = await response.json();
+                const data = (await response.json()).data;
 
                 const indicator = document.getElementById('daily-indicator');
                 const nextRun = document.getElementById('daily-next');
