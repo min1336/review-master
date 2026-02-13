@@ -7,10 +7,13 @@ X-API-Key 인증으로 AI 리포트를 외부에 제공합니다.
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from schemas.common import api_response, parse_date, validate_date_range
+from core.timezone import date_to_utc
+from schemas.common import api_response, validate_date_range_d
+from services.report_service import ReportService
 
 from .deps import get_report_service, require_public_api_key
 
@@ -22,10 +25,10 @@ DEFAULT_VEHICLE_TOP_N = 5
 
 
 @router.get("/{branch_id}")
-async def get_public_report(
+async def api_get_public_report(
     branch_id: int,
-    start_date: str = Query(..., description="시작일 (YYYY-MM-DD)"),
-    end_date: str = Query(..., description="종료일 (YYYY-MM-DD)"),
+    start_date: date = Query(..., description="시작일 (YYYY-MM-DD)"),
+    end_date: date = Query(..., description="종료일 (YYYY-MM-DD)"),
     vehicle_top: int = Query(
         default=DEFAULT_VEHICLE_TOP_N,
         ge=1,
@@ -33,7 +36,7 @@ async def get_public_report(
         description="차량별 평가 상위 N개 (기본 5, 긍정 호평률 순)",
     ),
     _: None = Depends(require_public_api_key),
-    service: "ReportService" = Depends(get_report_service),
+    service: ReportService = Depends(get_report_service),
 ) -> dict[str, Any]:
     """
     AI 리포트 조회 (Public)
@@ -42,35 +45,22 @@ async def get_public_report(
     - 저장된 리포트 우선, 없으면 신규 생성
     - vehicle_top: 차량별 평가를 호평률 상위 N개로 제한 (기본 5)
     """
-    start_dt = parse_date(start_date)
-    end_dt = parse_date(end_date, end_of_day=True)
-    validate_date_range(start_dt, end_dt)
+    validate_date_range_d(start_date, end_date)
 
     try:
         report, _is_new = await service.get_or_generate_report(
             branch_id=branch_id,
-            start_date=start_dt,
-            end_date=end_dt,
+            start_date=date_to_utc(start_date),
+            end_date=date_to_utc(end_date, end_of_day=True),
         )
 
         # 지역 정보 조회 (Summary 응답과 동일 필드 제공)
         region = await service.get_branch_region(branch_id)
 
         # 차량별 평가: 건수(count) 내림차순 상위 N개
-        sorted_vehicles = sorted(
-            report.vehicle_analysis, key=lambda v: v.count, reverse=True,
+        top_vehicles = ReportService.get_top_vehicles(
+            report.vehicle_analysis, top_n=vehicle_top,
         )
-        top_vehicles = [
-            {
-                "model": v.model,
-                "count": v.count,
-                "like_ratio": v.like_ratio,
-                "dislike_ratio": v.dislike_ratio,
-                "top_praise": v.top_praise,
-                "top_issue": v.top_issue,
-            }
-            for v in sorted_vehicles[:vehicle_top]
-        ]
 
         return api_response({
             "branch_id": report.branch_id,

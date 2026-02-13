@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from schemas.analysis import ReviewFilterParams
 from schemas.common import api_response
 from services.analysis_service import AnalysisService
 
@@ -25,7 +26,7 @@ router = APIRouter(tags=["analysis"])
 
 
 @router.get("/filters")
-async def get_filter_options(
+async def api_get_filter_options(
     service: AnalysisService = Depends(get_analysis_service),
 ) -> dict[str, Any]:
     """필터 옵션 조회 (지역, 업체명, 지점 목록)"""
@@ -42,30 +43,8 @@ async def get_filter_options(
 
 
 @router.get("/reviews")
-async def get_reviews(
-    regions: list[str] | None = Query(None, description="지역 필터 목록"),
-    companies: list[str] | None = Query(None, description="업체명 필터 목록"),
-    branch_ids: list[int] | None = Query(None, description="지점 ID 필터 목록"),
-    sentiment: str | None = Query(
-        None,
-        pattern="^(positive|negative|neutral)$",
-        description="감정 필터 (positive, negative, neutral)",
-    ),
-    date_from: str | None = Query(
-        None,
-        pattern=r"^\d{4}-\d{2}-\d{2}$",
-        description="시작일 (YYYY-MM-DD)",
-    ),
-    date_to: str | None = Query(
-        None,
-        pattern=r"^\d{4}-\d{2}-\d{2}$",
-        description="종료일 (YYYY-MM-DD)",
-    ),
-    sort_by: str = Query(
-        "latest",
-        pattern="^(latest|rating_low)$",
-        description="정렬 기준 (latest, rating_low)",
-    ),
+async def api_get_reviews(
+    filters: ReviewFilterParams = Depends(),
     limit: int = Query(20, ge=1, le=100, description="조회 개수 (기본 20, 최대 100)"),
     offset: int = Query(0, ge=0, description="페이징 오프셋"),
     is_new: bool | None = Query(None, description="신규 리뷰 필터 (true: 신규만, false: 읽은 것만)"),
@@ -74,13 +53,13 @@ async def get_reviews(
     """필터링된 리뷰 조회"""
     try:
         result = await service.get_filtered_reviews(
-            regions=regions,
-            companies=companies,
-            branch_ids=branch_ids,
-            sentiment=sentiment,
-            date_from=date_from,
-            date_to=date_to,
-            sort_by=sort_by,
+            regions=filters.regions,
+            companies=filters.companies,
+            branch_ids=filters.branch_ids,
+            sentiment=filters.sentiment,
+            date_from=filters.date_from,
+            date_to=filters.date_to,
+            sort_by=filters.sort_by,
             limit=limit,
             offset=offset,
             is_new=is_new,
@@ -96,42 +75,20 @@ async def get_reviews(
 
 
 @router.get("/reviews/export")
-async def export_reviews_to_excel(
-    regions: list[str] | None = Query(None, description="지역 필터 목록"),
-    companies: list[str] | None = Query(None, description="업체명 필터 목록"),
-    branch_ids: list[int] | None = Query(None, description="지점 ID 필터 목록"),
-    sentiment: str | None = Query(
-        None,
-        pattern="^(positive|negative|neutral)$",
-        description="감정 필터 (positive, negative, neutral)",
-    ),
-    date_from: str | None = Query(
-        None,
-        pattern=r"^\d{4}-\d{2}-\d{2}$",
-        description="시작일 (YYYY-MM-DD)",
-    ),
-    date_to: str | None = Query(
-        None,
-        pattern=r"^\d{4}-\d{2}-\d{2}$",
-        description="종료일 (YYYY-MM-DD)",
-    ),
-    sort_by: str = Query(
-        "latest",
-        pattern="^(latest|rating_low)$",
-        description="정렬 기준 (latest, rating_low)",
-    ),
+async def api_export_reviews_to_excel(
+    filters: ReviewFilterParams = Depends(),
     service: AnalysisService = Depends(get_analysis_service),
 ) -> StreamingResponse:
     """필터링된 리뷰를 엑셀 파일로 내보내기"""
     try:
         output, filename = await service.export_to_excel(
-            regions=regions,
-            companies=companies,
-            branch_ids=branch_ids,
-            sentiment=sentiment,
-            date_from=date_from,
-            date_to=date_to,
-            sort_by=sort_by,
+            regions=filters.regions,
+            companies=filters.companies,
+            branch_ids=filters.branch_ids,
+            sentiment=filters.sentiment,
+            date_from=filters.date_from,
+            date_to=filters.date_to,
+            sort_by=filters.sort_by,
         )
 
         encoded_filename = quote(filename)

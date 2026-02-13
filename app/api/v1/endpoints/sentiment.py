@@ -7,13 +7,16 @@ Router: /api/sentiment
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from schemas.common import api_list_response, api_response
 from services.sentiment_service import SentimentService
 
 from .deps import get_sentiment_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["sentiment"])
 
@@ -24,8 +27,12 @@ async def api_sentiment_stats(
     service: SentimentService = Depends(get_sentiment_service),
 ) -> dict[str, Any]:
     """지점별 감정태그 통계"""
-    result = await service.get_stats(branch_id)
-    return api_response(result.to_dict())
+    try:
+        result = await service.get_stats(branch_id)
+        return api_response(result.to_dict())
+    except Exception as e:
+        logger.exception("감정태그 통계 조회 오류")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/stats/all")
@@ -33,5 +40,9 @@ async def api_all_sentiment_stats(
     service: SentimentService = Depends(get_sentiment_service),
 ) -> dict[str, Any]:
     """전체 지점 감정통계 목록"""
-    stats = await service.get_all_stats()
-    return api_list_response(stats)
+    try:
+        stats = await service.get_all_stats()
+        return api_list_response(stats)
+    except Exception as e:
+        logger.exception("전체 감정통계 조회 오류")
+        raise HTTPException(status_code=500, detail=str(e)) from e

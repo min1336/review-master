@@ -1,5 +1,8 @@
 from __future__ import annotations
+
+import logging
 from typing import Any
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from schemas.common import api_list_response, api_response
 from schemas.tag import (
@@ -10,6 +13,8 @@ from schemas.tag import (
 )
 from services.tag_service import TagService
 from .deps import get_tag_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["tags"])
 
@@ -29,8 +34,12 @@ async def api_categories(
     is_active: bool = Query(True), service: TagService = Depends(get_tag_service)
 ) -> dict[str, Any]:
     """카테고리 목록"""
-    categories = await service.get_categories(is_active=is_active)
-    return api_list_response(categories)
+    try:
+        categories = await service.get_categories(is_active=is_active)
+        return api_list_response(categories)
+    except Exception as e:
+        logger.exception("카테고리 목록 조회 오류")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/categories", status_code=201)
@@ -55,15 +64,19 @@ async def api_tags(
     service: TagService = Depends(get_tag_service),
 ) -> dict[str, Any]:
     """태그 목록"""
-    tags = await service.get_tags(
-        category_id=category_id,
-        sentiment=sentiment,
-        group_name=group_name,
-        is_active=is_active,
-    )
-    total = len(tags)
-    paginated = tags[offset : offset + limit]
-    return api_list_response(paginated, total=total, limit=limit, offset=offset)
+    try:
+        tags = await service.get_tags(
+            category_id=category_id,
+            sentiment=sentiment,
+            group_name=group_name,
+            is_active=is_active,
+        )
+        total = len(tags)
+        paginated = tags[offset : offset + limit]
+        return api_list_response(paginated, total=total, limit=limit, offset=offset)
+    except Exception as e:
+        logger.exception("태그 목록 조회 오류")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.post("/batch")
 async def api_tags_batch(
@@ -95,9 +108,13 @@ async def api_update_tag(
     tag_id: int, data: TagUpdate, service: TagService = Depends(get_tag_service)
 ) -> dict[str, Any]:
     """태그 수정"""
-    update_data = data.model_dump(exclude_unset=True)
-    result = await service.update_tag(tag_id, update_data)
-    return api_response(result)
+    try:
+        update_data = data.model_dump(exclude_unset=True)
+        result = await service.update_tag(tag_id, update_data)
+        return api_response(result)
+    except Exception as e:
+        logger.exception("태그 수정 오류")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/{tag_id}")
@@ -105,5 +122,9 @@ async def api_delete_tag(
     tag_id: int, service: TagService = Depends(get_tag_service)
 ) -> dict[str, Any]:
     """태그 삭제"""
-    await service.delete_tag(tag_id)
-    return api_response()
+    try:
+        await service.delete_tag(tag_id)
+        return api_response()
+    except Exception as e:
+        logger.exception("태그 삭제 오류")
+        raise HTTPException(status_code=500, detail=str(e)) from e

@@ -16,23 +16,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["public-summary"])
 
 
-def _pick_latest_summary(summary) -> str | None:
-    """요약 문자열 선택 (가장 최신/짧은 기간 우선)"""
-    candidates = [
-        summary.summary_1m,
-        summary.summary_3m,
-        summary.summary_6m,
-        summary.summary_1y,
-        summary.summary_all,
-    ]
-    for value in candidates:
-        if value and str(value).strip():
-            return value
-    return None
-
-
 @router.get("/{branch_id}")
-async def get_public_summary(
+async def api_get_public_summary(
     branch_id: int,
     _: None = Depends(require_public_api_key),
     service: SummaryService = Depends(get_summary_service),
@@ -58,7 +43,7 @@ async def get_public_summary(
         }
 
         if summary.status == "published":
-            latest = _pick_latest_summary(summary)
+            latest = SummaryService.pick_latest_summary(summary)
             if not latest:
                 raise HTTPException(status_code=404, detail="Summary content not available")
             data["summary"] = latest
