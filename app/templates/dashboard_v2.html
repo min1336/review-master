@@ -870,7 +870,7 @@
             width: 0%;
             background: linear-gradient(90deg, #10b981, #059669);
             border-radius: 3px;
-            transition: width 0.4s ease;
+            transition: width 2s ease-out;
         }
 
         .report-progress-info {
@@ -3817,8 +3817,7 @@
             // 폴링 취소용 AbortController (전역 스코프)
             let reportPollingController = null;
             // 시뮬레이션 프로그레스 타이머
-            let reportProgressTimer = null;
-            let reportSimulatedProgress = 0;
+            let reportCurrentProgress = 0;
             // 현재 진행 중인 작업 ID (백엔드 취소용)
             let reportActiveJobId = null;
 
@@ -3830,7 +3829,7 @@
                 reportState.reportData = null;
 
                 // 시뮬레이션 타이머 정리
-                stopSimulatedProgress();
+                setReportProgress(0);
 
                 // 진행 중인 백엔드 작업 취소
                 if (reportActiveJobId && reportState.branchId) {
@@ -4110,7 +4109,7 @@
 
                 // 로딩 표시 + 시뮬레이션 프로그레스 시작
                 showReportLoadingUI(body, '지점 데이터를 수집하고 있습니다...');
-                startSimulatedProgress();
+                startReportProgress();
 
                 try {
                     // 1단계: 비동기 작업 제출 (즉시 반환)
@@ -4142,7 +4141,7 @@
                     reportActiveJobId = null;
 
                 } catch (error) {
-                    stopSimulatedProgress();
+                    setReportProgress(0);
                     reportActiveJobId = null;
                     if (error.name === 'AbortError') {
                         console.log('Report generation aborted');
@@ -4234,59 +4233,14 @@
                 if (msg) msg.textContent = loadingText;
             }
 
-            function startSimulatedProgress() {
-                stopSimulatedProgress();
-                reportSimulatedProgress = 0;
+            function startReportProgress() {
+                reportCurrentProgress = 0;
                 updateReportProgressUI(0);
-
-                // 200ms마다 조금씩 증가, 90%에서 느려지며 멈춤
-                reportProgressTimer = setInterval(function() {
-                    if (reportSimulatedProgress >= 92) {
-                        // 90% 이후는 실제 완료 신호 올 때까지 대기
-                        return;
-                    }
-                    // 진행 구간별 속도 차등
-                    let increment;
-                    if (reportSimulatedProgress < 20) {
-                        increment = 1.2;   // 데이터 수집: 빠르게
-                    } else if (reportSimulatedProgress < 50) {
-                        increment = 0.8;   // 태그 분석: 보통
-                    } else if (reportSimulatedProgress < 80) {
-                        increment = 0.4;   // AI 분석: 느리게
-                    } else {
-                        increment = 0.15;  // 90% 근처: 아주 느리게
-                    }
-                    reportSimulatedProgress = Math.min(92, reportSimulatedProgress + increment);
-                    updateReportProgressUI(reportSimulatedProgress);
-                }, 200);
             }
 
-            function stopSimulatedProgress() {
-                if (reportProgressTimer) {
-                    clearInterval(reportProgressTimer);
-                    reportProgressTimer = null;
-                }
-            }
-
-            function syncReportProgress(serverProgress) {
-                // 서버 값이 시뮬레이션보다 크면 동기화
-                if (serverProgress > reportSimulatedProgress) {
-                    reportSimulatedProgress = serverProgress;
-                    updateReportProgressUI(serverProgress);
-                }
-            }
-
-            async function completeReportProgress() {
-                stopSimulatedProgress();
-                // 현재 값에서 100%까지 부드럽게 채움
-                const start = reportSimulatedProgress;
-                const steps = 10;
-                const stepSize = (100 - start) / steps;
-                for (let i = 1; i <= steps; i++) {
-                    reportSimulatedProgress = start + (stepSize * i);
-                    updateReportProgressUI(reportSimulatedProgress);
-                    await new Promise(function(r) { setTimeout(r, 40); });
-                }
+            function setReportProgress(progress) {
+                reportCurrentProgress = progress;
+                updateReportProgressUI(progress);
             }
 
             function showReportErrorUI(container, title, message, retryHandler) {
@@ -4339,16 +4293,14 @@
                     const statusResult = await statusResponse.json();
                     const jobData = statusResult.data;
 
-                    // 서버 진행률과 시뮬레이션 동기화
+                    // 서버 진행률 직접 반영 (CSS transition이 부드럽게 처리)
                     if (typeof jobData.progress === 'number' && jobData.progress > 0) {
-                        syncReportProgress(jobData.progress);
+                        setReportProgress(jobData.progress);
                     }
 
                     if (jobData.status === 'completed') {
-                        // 완료된 작업은 취소 대상에서 제외
                         reportActiveJobId = null;
-                        // 100%까지 부드럽게 채운 뒤 리포트 표시
-                        await completeReportProgress();
+                        setReportProgress(100);
                         const reportData = await fetchReportData();
                         if (reportData) {
                             reportState.reportData = reportData;
@@ -4396,7 +4348,7 @@
 
                 // 로딩 표시 + 시뮬레이션 프로그레스 시작
                 showReportLoadingUI(body, '지점 데이터를 수집하고 있습니다...');
-                startSimulatedProgress();
+                startReportProgress();
 
                 try {
                     // 비동기 작업 제출 (/generate/async는 regenerate와 동일한 로직 사용)
@@ -4428,7 +4380,7 @@
                     reportActiveJobId = null;
 
                 } catch (error) {
-                    stopSimulatedProgress();
+                    setReportProgress(0);
                     reportActiveJobId = null;
                     if (error.name === 'AbortError') {
                         console.log('Report regeneration aborted');

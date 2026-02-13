@@ -101,7 +101,7 @@ class ReviewPreprocessor:
                 for token in tokens:
                     tag = token.tag
                     word = token.form
-                    is_target_pos = tag in ("NNG", "NNP", "VA", "VV")
+                    is_target_pos = tag in ("NNG", "NNP", "VA", "VV", "XR")
                     is_valid = len(word) >= 2 and word not in LexiconConfig.STOP_WORDS
                     if is_target_pos and is_valid:
                         keywords.append(word)

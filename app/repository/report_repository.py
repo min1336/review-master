@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime
 
@@ -163,7 +162,7 @@ class ReportRepository(BaseRepository):
                 "period_start": period_start.strftime("%Y-%m-%d"),
                 "period_end": period_end.strftime("%Y-%m-%d"),
                 "total_reviews": total_reviews,
-                "report_data": json.dumps(report_data, ensure_ascii=False),
+                "report_data": report_data,
                 "version": next_version,
                 "is_viewed": False,  # 신규 리포트는 미조회 상태
                 "updated_at": utc_now().isoformat(),

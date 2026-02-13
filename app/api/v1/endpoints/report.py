@@ -348,7 +348,7 @@ async def api_download_report_pdf(
     service: ReportService = Depends(get_report_service),
 ) -> Response:
     """AI 리포트 PDF 다운로드"""
-    from infrastructure.pdf.generator import PDFGenerator
+    import urllib.parse
 
     parsed_start = parse_date(start_date)
     parsed_end = parse_date(end_date, end_of_day=True)
@@ -361,10 +361,8 @@ async def api_download_report_pdf(
             end_date=parsed_end,
         )
 
-        pdf_generator = PDFGenerator()
-        pdf_bytes = pdf_generator.generate_simple(report)
+        pdf_bytes = await service.generate_pdf(report)
 
-        import urllib.parse
         filename = f"AI_Report_{report.branch_name}_{start_date}_{end_date}.pdf"
         encoded_filename = urllib.parse.quote(filename)
 

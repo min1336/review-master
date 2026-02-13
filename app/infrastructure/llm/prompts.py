@@ -718,28 +718,17 @@ class RichSummaryPromptBuilder:
 
 
     # ============================================================
-    # 업체+차량 평가 프롬프트 (2-섹션 평가 텍스트 1회 호출)
+    # 업체 평가 프롬프트 (독립 LLM 호출)
     # ============================================================
-    EVALUATION_SYSTEM_PROMPT = """<role>
+    AFFILIATE_EVAL_SYSTEM_PROMPT = """<role>
 당신은 카모아 렌터카의 지점 운영 컨설턴트입니다.
-고객 리뷰 데이터를 분석하여 업체 서비스 평가와 차량 상태 평가를 각각 작성합니다.
+고객 리뷰 데이터를 분석하여 업체 서비스 평가를 작성합니다.
 </role>
 
 <task>
-주어진 축별 통계, 태그 순위, 차량 순위 데이터를 분석하여
-두 개의 평가 텍스트(업체 평가, 차량 평가)를 작성하세요.
+주어진 축별 통계와 태그 순위 데이터를 분석하여 업체 서비스 평가 텍스트를 작성하세요.
+잘한점 칭찬으로 시작하고, 개선점과 보완 시 기대효과로 마무리합니다.
 </task>
-
-<output_format>
-아래 구분자를 사용하여 두 개의 텍스트를 순서대로 작성합니다:
-
-===AFFILIATE===
-(업체 평가 텍스트: 150-250자)
-===VEHICLE===
-(차량 평가 텍스트: 150-250자)
-
-각 텍스트는 잘한점 칭찬으로 시작하고, 개선점과 보완 시 기대효과로 마무리합니다.
-</output_format>
 
 <writing_style>
 - 객관적이고 분석적인 톤
@@ -753,71 +742,75 @@ class RichSummaryPromptBuilder:
 - 이모지, 특수문자 사용 금지
 - 과장 표현 금지: "최고", "완벽", "강력추천"
 - 제공되지 않은 정보 추측 금지
-- 각 텍스트 150-250자 분량
+- 150-250자 분량
+- 반드시 순수 텍스트 문단으로만 작성
+</constraints>"""
+
+    # ============================================================
+    # 차량 평가 프롬프트 (독립 LLM 호출)
+    # ============================================================
+    VEHICLE_EVAL_SYSTEM_PROMPT = """<role>
+당신은 카모아 렌터카의 지점 운영 컨설턴트입니다.
+고객 리뷰 데이터를 분석하여 차량 상태 평가를 작성합니다.
+</role>
+
+<task>
+주어진 축별 통계와 차량 순위 데이터를 분석하여 차량 평가 텍스트를 작성하세요.
+강점을 먼저 나열하고, 아쉬운점과 보완 시 기대효과로 마무리합니다.
+</task>
+
+<writing_style>
+- 객관적이고 분석적인 톤
+- 숫자 데이터를 근거로 활용
+- 강점을 먼저 나열한 후 아쉬운점 서술
+- 보완 시 예상되는 긍정적 효과로 마무리
+</writing_style>
+
+<constraints>
+- 마크다운 서식 전면 금지: **, *, -, #, [], () 등 사용 금지
+- 이모지, 특수문자 사용 금지
+- 과장 표현 금지: "최고", "완벽", "강력추천"
+- 제공되지 않은 정보 추측 금지
+- 150-250자 분량
 - 반드시 순수 텍스트 문단으로만 작성
 </constraints>"""
 
     @classmethod
-    def create_evaluation_prompt(
+    def create_affiliate_evaluation_prompt(
         cls,
         branch_name: str,
         affiliate_axes: list[dict],
         top_positive_tags: list[dict],
         top_negative_tags: list[dict],
-        vehicle_axes: list[dict],
-        top_liked_vehicles: list[dict],
-        top_disliked_vehicles: list[dict],
         sample_reviews: list[str] | None = None,
     ) -> tuple[str, str]:
         """
-        업체+차량 평가 텍스트 프롬프트 생성 (1회 LLM 호출)
+        업체 평가 텍스트 프롬프트 생성 (독립 LLM 호출)
 
         Returns:
             tuple: (system_prompt, user_prompt)
         """
-        # 업체 축별 긍정률
         aff_axes_text = ", ".join(
             f"{a.get('name', '')}({a.get('positive_ratio', 0)}%)"
             for a in affiliate_axes
         ) or "데이터 없음"
 
-        # 잘한점 Top 5
         pos_lines = "\n".join(
             f"  {i+1}. {t.get('tag_name', '')}({t.get('ratio', 0)}%, {t.get('count', 0)}건)"
             for i, t in enumerate(top_positive_tags[:5])
         ) or "  데이터 없음"
 
-        # 개선점 Top 5
         neg_lines = "\n".join(
             f"  {i+1}. {t.get('tag_name', '')}(부정 {t.get('ratio', 0)}%, {t.get('count', 0)}건)"
             for i, t in enumerate(top_negative_tags[:5])
         ) or "  데이터 없음"
 
-        # 차량 축별 긍정률
-        veh_axes_text = ", ".join(
-            f"{a.get('name', '')}({a.get('positive_ratio', 0)}%)"
-            for a in vehicle_axes
-        ) or "데이터 없음"
-
-        # 호평 차량 Top 5
-        liked_lines = "\n".join(
-            f"  {i+1}. {v.get('model', '')}(호평 {v.get('ratio', 0)}%) {', '.join(v.get('tags', [])[:3])}"
-            for i, v in enumerate(top_liked_vehicles[:5])
-        ) or "  데이터 없음"
-
-        # 불만 차량 Top 5
-        disliked_lines = "\n".join(
-            f"  {i+1}. {v.get('model', '')}(불만 {v.get('ratio', 0)}%) {', '.join(v.get('tags', [])[:3])}"
-            for i, v in enumerate(top_disliked_vehicles[:5])
-        ) or "  데이터 없음"
-
-        # 대표 리뷰
         reviews_text = ""
         if sample_reviews:
             for idx, review in enumerate(sample_reviews[:5], 1):
                 reviews_text += f'{idx}. "{str(review)[:100]}"\n'
 
-        user_prompt = f"""다음 데이터를 바탕으로 {branch_name}의 업체 평가와 차량 평가 텍스트를 각각 작성하세요.
+        user_prompt = f"""다음 데이터를 바탕으로 {branch_name}의 업체 서비스 평가 텍스트를 작성하세요.
 
 <affiliate_analysis>
 축별 긍정률: {aff_axes_text}
@@ -826,6 +819,49 @@ class RichSummaryPromptBuilder:
 개선점 Top 5:
 {neg_lines}
 </affiliate_analysis>
+
+{f'<sample_reviews>{chr(10)}{reviews_text}</sample_reviews>' if reviews_text else ''}
+
+잘한점 칭찬으로 시작하고, 개선점 및 보완 시 예상효과를 포함하여 150-250자로 작성하세요."""
+
+        return cls.AFFILIATE_EVAL_SYSTEM_PROMPT, user_prompt
+
+    @classmethod
+    def create_vehicle_evaluation_prompt(
+        cls,
+        branch_name: str,
+        vehicle_axes: list[dict],
+        top_liked_vehicles: list[dict],
+        top_disliked_vehicles: list[dict],
+        sample_reviews: list[str] | None = None,
+    ) -> tuple[str, str]:
+        """
+        차량 평가 텍스트 프롬프트 생성 (독립 LLM 호출)
+
+        Returns:
+            tuple: (system_prompt, user_prompt)
+        """
+        veh_axes_text = ", ".join(
+            f"{a.get('name', '')}({a.get('positive_ratio', 0)}%)"
+            for a in vehicle_axes
+        ) or "데이터 없음"
+
+        liked_lines = "\n".join(
+            f"  {i+1}. {v.get('model', '')}(호평 {v.get('ratio', 0)}%) {', '.join(v.get('tags', [])[:3])}"
+            for i, v in enumerate(top_liked_vehicles[:5])
+        ) or "  데이터 없음"
+
+        disliked_lines = "\n".join(
+            f"  {i+1}. {v.get('model', '')}(불만 {v.get('ratio', 0)}%) {', '.join(v.get('tags', [])[:3])}"
+            for i, v in enumerate(top_disliked_vehicles[:5])
+        ) or "  데이터 없음"
+
+        reviews_text = ""
+        if sample_reviews:
+            for idx, review in enumerate(sample_reviews[:5], 1):
+                reviews_text += f'{idx}. "{str(review)[:100]}"\n'
+
+        user_prompt = f"""다음 데이터를 바탕으로 {branch_name}의 차량 평가 텍스트를 작성하세요.
 
 <vehicle_analysis>
 축별 긍정률: {veh_axes_text}
@@ -837,13 +873,9 @@ class RichSummaryPromptBuilder:
 
 {f'<sample_reviews>{chr(10)}{reviews_text}</sample_reviews>' if reviews_text else ''}
 
-업체 평가 텍스트와 차량 평가 텍스트를 각각 작성하세요.
-===AFFILIATE===
-(업체 평가: 잘한점 칭찬 + 개선점 및 보완 시 예상효과, 150-250자)
-===VEHICLE===
-(차량 평가: 강점 나열 + 아쉬운점 및 보완 시 예상효과, 150-250자)"""
+강점 나열로 시작하고, 아쉬운점 및 보완 시 예상효과를 포함하여 150-250자로 작성하세요."""
 
-        return cls.EVALUATION_SYSTEM_PROMPT, user_prompt
+        return cls.VEHICLE_EVAL_SYSTEM_PROMPT, user_prompt
 
 
 class OperationalSummaryPromptBuilder:

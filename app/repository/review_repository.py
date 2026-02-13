@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from collections import Counter
 from datetime import datetime, timedelta
@@ -23,7 +24,7 @@ class BranchReviewRepository(BaseRepository[Review]):
         return "branch_reviews"
 
     async def upsert_batch(self, reviews: list[dict], batch_size: int = 100) -> int:
-        """원본 리뷰 일괄 저장"""
+        """원본 리뷰 일괄 저장 (DB 함수 upsert_reviews 사용)"""
         success_count = 0
         total = len(reviews)
 
@@ -51,19 +52,17 @@ class BranchReviewRepository(BaseRepository[Review]):
                         "review_date": r.get("review_date") or r.get("등록일시"),
                         "car_model": r.get("car_model") or r.get("차량모델"),
                         "rent_type": r.get("rent_type") or r.get("렌트타입"),
-                        "sentiment": r.get("sentiment"),
+                        "is_new": r.get("is_new", False),
                     }
-                    # is_new 필드가 명시적으로 있으면 포함
-                    if "is_new" in r:
-                        data["is_new"] = r["is_new"]
                     insert_data.append(data)
 
-                await (
-                    self._client.table(self.table_name)
-                    .upsert(insert_data, on_conflict="review_id")
-                    .execute()
-                )
-                success_count += len(batch)
+                result = await self._client.rpc(
+                    "upsert_reviews",
+                    {"p_reviews": json.dumps(insert_data, default=str)},
+                ).execute()
+
+                count = result.data if isinstance(result.data, int) else len(batch)
+                success_count += count
             except Exception as e:
                 logger.warning(f"Failed to upsert branch reviews batch: {e}")
 

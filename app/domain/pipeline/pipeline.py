@@ -99,7 +99,7 @@ class BasePipeline(ABC):
                     tag = token.tag
                     word = token.form
                     # 명사(NNG, NNP) + 형용사(VA) + 동사(VV)
-                    is_target_pos = tag in ("NNG", "NNP", "VA", "VV")
+                    is_target_pos = tag in ("NNG", "NNP", "VA", "VV", "XR")
                     is_valid = len(word) >= 2 and word not in LexiconConfig.STOP_WORDS
                     if is_target_pos and is_valid:
                         keywords.append(word)
