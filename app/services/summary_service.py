@@ -68,6 +68,21 @@ class SummaryService:
         """지점 ID로 요약 조회 (Public API용)"""
         return await self.summary_repo.get_by_branch_id(branch_id)
 
+    @staticmethod
+    def pick_latest_summary(summary) -> str | None:
+        """요약 문자열 선택 (가장 최신/짧은 기간 우선)"""
+        candidates = [
+            summary.summary_1m,
+            summary.summary_3m,
+            summary.summary_6m,
+            summary.summary_1y,
+            summary.summary_all,
+        ]
+        for value in candidates:
+            if value and str(value).strip():
+                return value
+        return None
+
     # ================================================================
     # 비즈니스 로직
     # ================================================================

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from fastapi import HTTPException
@@ -65,6 +65,39 @@ def validate_date_range(start: datetime | None, end: datetime | None) -> None:
             status_code=400,
             detail="시작일이 종료일보다 늦을 수 없습니다.",
         )
+
+
+def validate_date_range_d(start: date | None, end: date | None) -> None:
+    """date 타입 시작일/종료일 순서 검증"""
+    if start and end and start > end:
+        raise HTTPException(
+            status_code=400,
+            detail="시작일이 종료일보다 늦을 수 없습니다.",
+        )
+
+
+def resolve_period(period: str) -> tuple[datetime, datetime]:
+    """period 프리셋을 (start, end) datetime 튜플로 변환
+
+    Args:
+        period: "1m", "3m", "6m", "12m", "1y", "all" 중 하나
+
+    Returns:
+        (start_datetime, end_datetime) UTC-aware 튜플
+    """
+    from dateutil.relativedelta import relativedelta
+    from core.timezone import utc_now
+
+    now = utc_now()
+    end = datetime(now.year, now.month, now.day, 23, 59, 59, tzinfo=now.tzinfo)
+    months_map = {"1m": 1, "3m": 3, "6m": 6, "12m": 12, "1y": 12}
+
+    if period == "all":
+        start = datetime(2020, 1, 1, tzinfo=now.tzinfo)
+    else:
+        start = end - relativedelta(months=months_map[period])
+
+    return start, end
 
 
 class CleanupRequest(BaseModel):

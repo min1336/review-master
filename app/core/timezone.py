@@ -60,6 +60,16 @@ def parse_date_str(date_str: str, end_of_day: bool = False) -> datetime:
     return dt
 
 
+def date_to_utc(d: "date", end_of_day: bool = False) -> datetime:
+    """date → UTC-aware datetime 변환. end_of_day=True면 23:59:59."""
+    from datetime import date as _date  # noqa: F811
+
+    dt = datetime(d.year, d.month, d.day, tzinfo=UTC)
+    if end_of_day:
+        dt = dt.replace(hour=23, minute=59, second=59)
+    return dt
+
+
 def ensure_aware(dt: datetime | None) -> datetime | None:
     """None-safe naive→UTC 변환. None이면 None 반환."""
     if dt is None:

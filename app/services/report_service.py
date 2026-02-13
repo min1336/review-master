@@ -176,6 +176,87 @@ class ReportService:
         """미조회 리포트 개수 조회"""
         return await self.report_repo.get_unviewed_count(branch_id)
 
+    async def get_review_count_summary(
+        self,
+        branch_id: int,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> dict:
+        """
+        리포트 생성 전 리뷰 수 사전 확인
+
+        선택된 기간과 표준 4개 기간(1m/3m/6m/12m) + all의 리뷰 수를 한번에 반환합니다.
+        """
+        import asyncio
+
+        from dateutil.relativedelta import relativedelta
+        from core.timezone import utc_now
+
+        today = utc_now()
+        today_date = datetime(today.year, today.month, today.day)
+        period_defs = [
+            ("1m", 1), ("3m", 3), ("6m", 6), ("12m", 12),
+        ]
+
+        # 모든 쿼리를 병렬로 실행
+        selected_coro = self.review_repo.count_by_branch(
+            branch_id, review_date_from=start_date, review_date_to=end_date,
+        )
+        period_coros = [
+            self.review_repo.count_by_branch(
+                branch_id,
+                review_date_from=today_date - relativedelta(months=months),
+                review_date_to=today,
+            )
+            for _label, months in period_defs
+        ]
+        all_coro = self.review_repo.count_by_branch(branch_id)
+
+        results = await asyncio.gather(selected_coro, *period_coros, all_coro)
+
+        selected_count = results[0]
+        period_counts: dict[str, int] = {
+            label: results[i + 1] for i, (label, _) in enumerate(period_defs)
+        }
+        period_counts["all"] = results[-1]
+
+        # 추천 기간: threshold 이상인 최단 기간
+        recommended_period = None
+        for label, _months in period_defs:
+            if period_counts[label] >= REVIEW_CHANGE_THRESHOLD:
+                recommended_period = label
+                break
+        if recommended_period is None:
+            recommended_period = "all"
+
+        return {
+            "selected_count": selected_count,
+            "period_counts": period_counts,
+            "threshold": REVIEW_CHANGE_THRESHOLD,
+            "recommended_period": recommended_period,
+        }
+
+    @staticmethod
+    def get_top_vehicles(
+        vehicle_analysis: list,
+        top_n: int = 5,
+    ) -> list[dict]:
+        """차량 분석 목록에서 건수 내림차순 상위 N개 추출"""
+        sorted_vehicles = sorted(
+            vehicle_analysis, key=lambda v: v.count, reverse=True,
+        )
+        return [
+            {
+                "model": v.model,
+                "count": v.count,
+                "like_ratio": v.like_ratio,
+                "dislike_ratio": v.dislike_ratio,
+                "top_praise": v.top_praise,
+                "top_issue": v.top_issue,
+            }
+            for v in sorted_vehicles[:top_n]
+        ]
+
     async def get_branch_region(self, branch_id: int) -> str:
         """지점의 지역 정보 조회"""
         summary = await self.summary_repo.get_by_branch_id(branch_id)

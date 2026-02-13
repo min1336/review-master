@@ -11,6 +11,7 @@ from supabase import AsyncClient
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from domain.pipeline import RealtimePipeline
     from repository.affiliate_repository import AffiliateRepository
     from repository.branch_tag_repository import BranchTagRepository
     from repository.report_job_repository import ReportJobRepository
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
     from services.report_service import ReportService
     from services.sentiment_service import SentimentService
     from services.summary_service import SummaryService
+    from services.sync_job_service import SyncJobService
     from services.sync_service import SyncService
     from services.tag_service import TagService
 
@@ -207,6 +209,30 @@ async def get_report_job_service(
     from services.report_job_service import ReportJobService
 
     return ReportJobService(job_repo, report_service)
+
+
+async def get_sync_job_service() -> "SyncJobService":
+    from services.sync_job_service import SyncJobService
+
+    return SyncJobService.get_instance()
+
+
+async def get_realtime_pipeline() -> "RealtimePipeline":
+    from domain.pipeline import RealtimePipeline
+
+    return RealtimePipeline()
+
+
+async def get_monthly_scheduler_dep():
+    from infrastructure.scheduler.monthly_scheduler import get_monthly_scheduler
+
+    return get_monthly_scheduler()
+
+
+async def get_sync_scheduler_dep():
+    from infrastructure.scheduler.sync_scheduler import get_scheduler
+
+    return get_scheduler()
 
 
 async def require_public_api_key(
