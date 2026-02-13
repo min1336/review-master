@@ -83,35 +83,20 @@ jobs:
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ env.image_name }}:buildcache,mode=min
 
       - name: Debug SSH Configuration
+        if: failure()
         run: |
-          echo "🔍 SSH 디버깅 정보:"
+          echo "🔍 SSH 디버깅 정보 (배포 실패 시에만 출력):"
           echo "================================"
-          echo "Bastion Host: ${{ secrets.AWS_TM2_BASTION_HOST }}"
-          echo "Bastion Username: ${{ secrets.AWS_TM2_BASTION_USERNAME }}"
-          echo "Bastion Port: ${{ secrets.AWS_TM2_BASTION_PORT }}"
-          echo "Production Host: ${{ secrets.PROD_SERVER_HOST }}"
-          echo "Production Username: ${{ secrets.PROD_SERVER_USER }}"
-          echo "Production Port: ${{ secrets.PROD_SERVER_PORT }}"
+          echo "Bastion Host: [CONFIGURED]"
+          echo "Bastion Username: [CONFIGURED]"
+          echo "Production Host: [CONFIGURED]"
+          echo "Production Username: [CONFIGURED]"
           echo "================================"
-          
-          # SSH 키 형식 확인
-          echo ""
-          echo "🔑 SSH 키 형식 확인:"
-          echo "Bastion Key 첫 줄:"
-          echo "${{ secrets.AWS_TM2_BASTION_KEY }}" | head -n 1
-          echo "Bastion Key 마지막 줄:"
-          echo "${{ secrets.AWS_TM2_BASTION_KEY }}" | tail -n 1
-          echo "Bastion Key 줄 수:"
-          echo "${{ secrets.AWS_TM2_BASTION_KEY }}" | wc -l
-          
-          echo ""
-          echo "Production Key 첫 줄:"
-          echo "${{ secrets.PROD_SERVER_KEY }}" | head -n 1
-          echo "Production Key 마지막 줄:"
-          echo "${{ secrets.PROD_SERVER_KEY }}" | tail -n 1
-          echo "Production Key 줄 수:"
-          echo "${{ secrets.PROD_SERVER_KEY }}" | wc -l
-          echo "================================"
+          echo "Bastion Key lines: $(echo "$BASTION_KEY" | wc -l)"
+          echo "Production Key lines: $(echo "$PROD_KEY" | wc -l)"
+        env:
+          BASTION_KEY: ${{ secrets.AWS_TM2_BASTION_KEY }}
+          PROD_KEY: ${{ secrets.PROD_SERVER_KEY }}
       - name: Test Bastion Host Connection
         run: |
           echo "🔌 Bastion Host 연결 테스트..."

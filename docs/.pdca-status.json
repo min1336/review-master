@@ -1,0 +1,149 @@
+{
+  "version": "2.0",
+  "lastUpdated": "2026-02-13T06:00:28.511Z",
+  "activeFeatures": [
+    "pdf"
+  ],
+  "primaryFeature": "pdf",
+  "features": {
+    ".claude": {
+      "phase": "archived",
+      "matchRate": 91,
+      "iterationCount": 1,
+      "startedAt": "2026-02-13T02:51:18.827Z",
+      "archivedAt": "2026-02-13T04:40:00.000Z",
+      "archivedTo": "docs/archive/2026-02/.claude/"
+    },
+    "pdf": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": 91,
+      "iterationCount": 2,
+      "requirements": [],
+      "documents": {
+        "analysis": "docs/03-analysis/pdf.analysis.md"
+      },
+      "timestamps": {
+        "started": "2026-02-13T04:34:56.335Z",
+        "lastUpdated": "2026-02-13T06:05:00.000Z"
+      }
+    }
+  },
+  "pipeline": {
+    "currentPhase": 1,
+    "level": "Dynamic",
+    "phaseHistory": []
+  },
+  "session": {
+    "startedAt": "2026-02-13T02:08:12.417Z",
+    "onboardingCompleted": false,
+    "lastActivity": "2026-02-13T06:00:28.511Z"
+  },
+  "history": [
+    {
+      "timestamp": "2026-02-13T02:51:18.827Z",
+      "feature": ".claude",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T03:15:00.000Z",
+      "feature": ".claude",
+      "phase": "check",
+      "action": "gap-analysis",
+      "matchRate": 82
+    },
+    {
+      "timestamp": "2026-02-13T03:22:00.000Z",
+      "feature": ".claude",
+      "phase": "act",
+      "action": "iterate-1",
+      "matchRate": 91
+    },
+    {
+      "timestamp": "2026-02-13T04:40:00.000Z",
+      "feature": ".claude",
+      "phase": "archived",
+      "action": "archived",
+      "archivedTo": "docs/archive/2026-02/.claude/"
+    },
+    {
+      "timestamp": "2026-02-13T04:34:56.335Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T05:04:09.171Z",
+      "feature": "pdf 피처 Gap 분석",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T05:54:29.984Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T05:54:35.791Z",
+      "feature": "report_service.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T05:54:42.640Z",
+      "feature": "report_service.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T05:54:50.436Z",
+      "feature": "endpoints",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T05:55:01.186Z",
+      "feature": "endpoints",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T05:59:25.085Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T05:59:33.125Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T05:59:36.891Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T05:59:40.673Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T05:59:46.228Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T06:00:28.511Z",
+      "feature": "pdf",
+      "phase": "do",
+      "action": "updated"
+    }
+  ]
+}
