@@ -11,8 +11,18 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
+
 from core.timezone import to_kst, utc_now
-from typing import Awaitable, Callable
+from typing import TYPE_CHECKING, Awaitable, Callable
+
+if TYPE_CHECKING:
+    from repository.branch_tag_repository import BranchTagRepository
+    from repository.report_repository import ReportRepository
+    from repository.review_repository import BranchReviewRepository
+    from repository.sentiment_repository import SentimentRepository
+    from repository.summary_repository import SummaryRepository
+    from infrastructure.pdf.generator import PDFGenerator
 
 from pydantic import BaseModel, model_validator
 
@@ -121,13 +131,26 @@ VEHICLE_AXES = {
 AFFILIATE_CATEGORIES = {c for cats in AFFILIATE_AXES.values() for c in cats}
 VEHICLE_CATEGORIES = {c for cats in VEHICLE_AXES.values() for c in cats}
 
-REVIEW_CHANGE_THRESHOLD = 30  # 캐싱 무효화 임계값 (CLT 기반)
+REVIEW_CHANGE_THRESHOLD = 30  # 캐싱 무효화 임계값 (CLT 기반) — get_review_count_summary() 전용
+
+# 태그 분포 기반 캐시 무효화
+CACHE_MIN_NEW_REVIEWS = 5             # 패스트 패스 최소 기준 (노이즈 방지)
+CACHE_TAG_COUNT_RATIO = 0.15          # 태그 언급 수 15% 이상 변화 시 무효화
+CACHE_SENTIMENT_DRIFT = 8.0           # 긍정률 8%p 이상 변화 시 무효화
 
 
 class ReportService:
     """AI 리포트 비즈니스 로직"""
 
-    def __init__(self, summary_repo, review_repo, branch_tag_repo, report_repo=None, sentiment_repo=None, pdf_generator=None):
+    def __init__(
+        self,
+        summary_repo: SummaryRepository,
+        review_repo: BranchReviewRepository,
+        branch_tag_repo: BranchTagRepository,
+        report_repo: ReportRepository | None = None,
+        sentiment_repo: SentimentRepository | None = None,
+        pdf_generator: PDFGenerator | None = None,
+    ) -> None:
         self.summary_repo = summary_repo
         self.review_repo = review_repo
         self.branch_tag_repo = branch_tag_repo
@@ -318,6 +341,96 @@ class ReportService:
 
         return await self.report_repo.get_all_by_branch(branch_id, limit)
 
+    @staticmethod
+    def _extract_saved_tag_stats(saved_report: ReportData) -> tuple[int, float] | None:
+        """
+        저장된 리포트에서 (총 태그 언급 수, 긍정률%) 추출.
+        top_tags_detail이 없으면 None 반환 → fallback으로 volume 체크만 수행.
+        """
+        tags = saved_report.top_tags_detail
+        if not tags:
+            return None
+
+        total = sum(t.count for t in tags)
+        if total == 0:
+            return None
+
+        weighted_pos = sum(t.positive_ratio * t.count for t in tags)
+        pos_ratio = weighted_pos / total  # 0~100 스케일
+
+        return total, pos_ratio
+
+    async def _check_cache_invalidation(
+        self,
+        branch_id: int,
+        start_date: datetime,
+        end_date: datetime,
+        saved_report: ReportData,
+    ) -> bool:
+        """
+        True → 캐시 무효화 (재생성), False → 캐시 유효
+
+        Step 1 (fast path): 리뷰 수 변화 없으면 즉시 False 반환
+        Step 2: 태그 분포 비교
+          - 신호 A: 태그 총 언급 수 변화 >= 15%
+          - 신호 B: 긍정률 변화 >= 8%p
+          → OR 조합
+        """
+        # Step 1: Fast path — 리뷰 변화가 아예 없으면 태그 조회 생략
+        current_review_count = await self.review_repo.count_by_branch(
+            branch_id=branch_id,
+            review_date_from=start_date,
+            review_date_to=end_date,
+        )
+        new_reviews = current_review_count - saved_report.total_reviews
+
+        if new_reviews < CACHE_MIN_NEW_REVIEWS:
+            return False  # 리뷰 변화 없음 → 캐시 유효
+
+        # Step 2: 저장된 태그 기준값 추출
+        saved_stats = self._extract_saved_tag_stats(saved_report)
+        if saved_stats is None:
+            # top_tags_detail 없는 레거시 리포트 → 기존 volume 방식 fallback
+            return new_reviews >= REVIEW_CHANGE_THRESHOLD
+
+        saved_total, saved_pos_ratio = saved_stats
+
+        # Step 3: 현재 태그 분포 조회 (_step_tags와 동일한 소스)
+        current_tags = await self.branch_tag_repo.get_by_branch(
+            branch_id, period_type="all", limit=100
+        )
+        if not current_tags:
+            return False  # 태그 데이터 없음 → 캐시 유효 (안전 방향)
+
+        # 현재 태그 집계 계산
+        current_total_pos = sum(bt.positive_count or 0 for bt in current_tags)
+        current_total_neg = sum(bt.negative_count or 0 for bt in current_tags)
+        current_total = current_total_pos + current_total_neg
+
+        if current_total == 0:
+            return False
+
+        current_pos_ratio = (current_total_pos / current_total) * 100.0
+
+        # 신호 A: 태그 총 언급 수 변화 비율
+        tag_count_ratio = abs(current_total - saved_total) / max(saved_total, 1)
+        signal_a = tag_count_ratio >= CACHE_TAG_COUNT_RATIO
+
+        # 신호 B: 긍정률 변화
+        signal_b = abs(current_pos_ratio - saved_pos_ratio) >= CACHE_SENTIMENT_DRIFT
+
+        should_invalidate = signal_a or signal_b
+
+        if should_invalidate:
+            logger.info(
+                "캐시 무효화: branch_id=%s, 태그수 변화=%.1f%% (신호A=%s), "
+                "긍정률 %.1f%%→%.1f%% (신호B=%s)",
+                branch_id, tag_count_ratio * 100, signal_a,
+                saved_pos_ratio, current_pos_ratio, signal_b,
+            )
+
+        return should_invalidate
+
     async def get_or_generate_report(
         self,
         branch_id: int,
@@ -339,20 +452,13 @@ class ReportService:
         saved_report = await self.get_saved_report(branch_id, start_date, end_date)
         if saved_report and self.review_repo:
             try:
-                current_count = await self.review_repo.count_by_branch(
-                    branch_id=branch_id,
-                    review_date_from=start_date,
-                    review_date_to=end_date,
+                should_invalidate = await self._check_cache_invalidation(
+                    branch_id, start_date, end_date, saved_report
                 )
-                new_reviews = current_count - saved_report.total_reviews
-                if new_reviews < REVIEW_CHANGE_THRESHOLD:
+                if not should_invalidate:
                     return saved_report, False
-                logging.info(
-                    f"캐시 무효화: branch_id={branch_id}, 새 리뷰 {new_reviews}건 "
-                    f"(임계값 {REVIEW_CHANGE_THRESHOLD}건)"
-                )
             except Exception as e:
-                logging.warning(f"캐시 무효화 체크 실패, 캐시 서빙: {e}")
+                logger.warning("캐시 무효화 체크 실패, 캐시 서빙: %s", e)
                 return saved_report, False
         elif saved_report:
             return saved_report, False
