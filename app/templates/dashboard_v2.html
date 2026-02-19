@@ -692,13 +692,6 @@
             border-bottom: none;
         }
 
-        /* Axis progress bar */
-        .axis-bar-group { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
-        .axis-bar-item { flex: 1; min-width: 120px; }
-        .axis-bar-label { font-size: 12px; color: var(--grey-4); margin-bottom: 4px; display: flex; justify-content: space-between; }
-        .axis-bar { height: 6px; border-radius: 3px; background: var(--grey-8); overflow: hidden; }
-        .axis-bar-fill { height: 100%; background: #10b981; border-radius: 3px; transition: width 0.4s ease; }
-
         /* Strengths & Weaknesses */
         .sw-grid {
             display: grid;
@@ -4412,36 +4405,22 @@
                 if (headerRegenBtn) headerRegenBtn.style.display = 'block';
                 if (headerPdfBtn) headerPdfBtn.style.display = 'block';
 
-                // 축별 게이지 바 생성 헬퍼
-                function buildAxisBars(axes) {
-                    if (!axes || axes.length === 0) return '';
-                    return '<div class="axis-bar-group">' + axes.map(a =>
-                        `<div class="axis-bar-item">
-                            <div class="axis-bar-label"><span>${escapeHtml(a.name)}</span><span style="font-weight:600;">${a.positive_ratio}%</span></div>
-                            <div class="axis-bar"><div class="axis-bar-fill" style="width:${a.positive_ratio}%"></div></div>
-                        </div>`
-                    ).join('') + '</div>';
-                }
-
                 // 태그 리스트 생성 헬퍼
                 function buildTagList(tags, mode) {
                     if (!tags || tags.length === 0) return '<div style="color:var(--grey-5);font-size:13px;">데이터 부족</div>';
-                    return tags.map((t, i) => {
-                        if (mode === 'negative') {
-                            return `<div style="color:var(--grey-3);font-size:13px;padding:3px 0;">${i+1}. ${escapeHtml(t.tag_name)} <span style="color:#ef4444;">(부정 ${t.ratio}%, ${t.count}건)</span></div>`;
-                        }
-                        return `<div style="color:var(--grey-3);font-size:13px;padding:3px 0;">${i+1}. ${escapeHtml(t.tag_name)} <span style="color:#10b981;">(${t.ratio}%, ${t.count}건)</span></div>`;
-                    }).join('');
+                    const color = mode === 'negative' ? '#ef4444' : '#10b981';
+                    return tags.map((t, i) =>
+                        `<div style="color:var(--grey-3);font-size:13px;padding:3px 0;">${i+1}. ${escapeHtml(t.tag_name)} <span style="color:${color};">${t.count}건</span></div>`
+                    ).join('');
                 }
 
                 // 차량 리스트 생성 헬퍼
                 function buildVehicleList(vehicles, mode) {
                     if (!vehicles || vehicles.length === 0) return '<div style="color:var(--grey-5);font-size:13px;">데이터 부족</div>';
+                    const tagColor = mode === 'disliked' ? '#ef4444' : '#10b981';
                     return vehicles.map((v, i) => {
-                        const tagsStr = (v.tags || []).slice(0, 2).map(t => escapeHtml(t)).join(', ');
-                        const ratioColor = mode === 'disliked' ? '#ef4444' : '#10b981';
-                        const ratioLabel = mode === 'disliked' ? '불만' : '호평';
-                        return `<div style="color:var(--grey-3);font-size:13px;padding:3px 0;">${i+1}. ${escapeHtml(v.model)} <span style="color:${ratioColor};">(${ratioLabel} ${v.ratio}%)</span>${tagsStr ? ' ' + tagsStr : ''}</div>`;
+                        const tagsStr = (v.tags || []).slice(0, 3).map(t => `<span style="color:${tagColor};">${escapeHtml(t)}</span>`).join(', ');
+                        return `<div style="color:var(--grey-3);font-size:13px;padding:3px 0;">${i+1}. ${escapeHtml(v.model)}${tagsStr ? ' ' + tagsStr : ''}</div>`;
                     }).join('');
                 }
 
@@ -4464,7 +4443,6 @@
                     <!-- 섹션 2: 업체 평가 -->
                     <div class="report-section">
                         <div class="report-section-title">업체 평가</div>
-                        ${buildAxisBars(aff.axes)}
                         <div style="display: flex; gap: 16px;">
                             <div style="flex:1; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:8px; padding:12px;">
                                 <div style="font-weight:600; color:#10b981; margin-bottom:8px; font-size:13px;">잘한점</div>
@@ -4481,7 +4459,6 @@
                     <!-- 섹션 3: 차량 평가 -->
                     <div class="report-section">
                         <div class="report-section-title">차량 평가</div>
-                        ${buildAxisBars(veh.axes)}
                         <div style="display: flex; gap: 16px;">
                             <div style="flex:1; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:8px; padding:12px;">
                                 <div style="font-weight:600; color:#10b981; margin-bottom:8px; font-size:13px;">호평 차량</div>

@@ -125,25 +125,22 @@ class PDFGenerator:
         if aff:
             self._section(pdf, font, "2. 업체 평가")
 
-            # 평가축 (한 줄 텍스트)
-            if aff.axes:
-                pdf.set_font(font, "", 9)
-                axes_text = "  |  ".join(f"{ax.name} {ax.positive_ratio}%" for ax in aff.axes)
-                pdf.cell(w, row, axes_text, new_x="LMARGIN", new_y="NEXT")
-                pdf.ln(gap)
-
-            # 잘한점 / 개선점
-            self._sub(pdf, font, "잘한점")
-            for tag in (aff.top_positive or [])[:5]:
+            # 잘한점 / 개선점 (1줄 요약)
+            pos_tags = (aff.top_positive or [])[:5]
+            if pos_tags:
+                self._sub(pdf, font, "잘한점")
                 pdf.set_font(font, "", 8)
-                pdf.cell(w, 4.5, f"  + {tag.tag_name} ({tag.ratio}%, {tag.count}건)",
+                pos_line = ", ".join(f"{t.tag_name}({t.count}건)" for t in pos_tags)
+                pdf.cell(w, 4.5, f"  {pos_line}",
                          new_x="LMARGIN", new_y="NEXT")
             pdf.ln(gap)
 
-            self._sub(pdf, font, "개선점")
-            for tag in (aff.top_negative or [])[:5]:
+            neg_tags = (aff.top_negative or [])[:5]
+            if neg_tags:
+                self._sub(pdf, font, "개선점")
                 pdf.set_font(font, "", 8)
-                pdf.cell(w, 4.5, f"  - {tag.tag_name} (부정 {tag.ratio}%, {tag.count}건)",
+                neg_line = ", ".join(f"{t.tag_name}({t.count}건)" for t in neg_tags)
+                pdf.cell(w, 4.5, f"  {neg_line}",
                          new_x="LMARGIN", new_y="NEXT")
             pdf.ln(gap)
 
@@ -159,12 +156,6 @@ class PDFGenerator:
         veh = report.vehicle_evaluation
         if veh:
             self._section(pdf, font, "3. 차량 평가")
-
-            if veh.axes:
-                pdf.set_font(font, "", 9)
-                axes_text = "  |  ".join(f"{ax.name} {ax.positive_ratio}%" for ax in veh.axes)
-                pdf.cell(w, row, axes_text, new_x="LMARGIN", new_y="NEXT")
-                pdf.ln(gap)
 
             # 호평 차량
             self._vehicle_list(pdf, font, w, "호평 차량", veh.top_liked or [], "호평률")
@@ -242,11 +233,11 @@ class PDFGenerator:
         for i, v in enumerate(vehicles[:5], 1):
             model = self._clean_model(v.model)
             tags_text = ", ".join(v.tags[:3]) if v.tags else ""
-            tag_part = f"  ({tags_text})" if tags_text else ""
+            tag_part = f"  {tags_text}" if tags_text else ""
 
             pdf.set_font(font, "", 8)
             pdf.cell(w, h,
-                     f"  {i}. {model}{tag_part}  —  {ratio_label} {v.ratio}%",
+                     f"  {i}. {model}{tag_part}",
                      new_x="LMARGIN", new_y="NEXT")
 
         pdf.ln(2)

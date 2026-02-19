@@ -36,13 +36,6 @@ if TYPE_CHECKING:
 from pydantic import BaseModel, model_validator
 
 
-class EvaluationAxis(BaseModel):
-    """평가 축 (친절도, 가성비 등)"""
-    name: str
-    positive_ratio: int = 0      # 0-100
-    total_count: int = 0
-
-
 class TagRankItem(BaseModel):
     """태그 순위 항목"""
     tag_name: str
@@ -61,7 +54,6 @@ class VehicleRankItem(BaseModel):
 
 class AffiliateEvaluation(BaseModel):
     """업체 평가 섹션"""
-    axes: list[EvaluationAxis] = []
     top_positive: list[TagRankItem] = []   # Top 5 긍정 태그
     top_negative: list[TagRankItem] = []   # Top 5 부정 태그
     ai_text: str = ""                       # AI 평가 텍스트 (150-250자)
@@ -69,7 +61,6 @@ class AffiliateEvaluation(BaseModel):
 
 class VehicleEvaluation(BaseModel):
     """차량 평가 섹션"""
-    axes: list[EvaluationAxis] = []
     top_liked: list[VehicleRankItem] = []   # 호평 Top 5 차량
     top_disliked: list[VehicleRankItem] = [] # 불만 Top 5 차량
     ai_text: str = ""                        # AI 평가 텍스트 (150-250자)
@@ -127,16 +118,6 @@ class ReportData(BaseModel):
         return data
 
 
-# 축 매핑 상수: 7개 카테고리 → 5개 평가 축
-AFFILIATE_AXES = {
-    "친절도": ["직원이 친절함", "사고 처리를 잘해줌"],
-    "가성비": ["주유비 부담 없음", "가격이 저렴함"],
-    "배차": ["배달 서비스가 우수함"],
-}
-VEHICLE_AXES = {
-    "청결도": ["차량이 청결함"],
-    "외관/옵션": ["차량외관이 좋음"],
-}
 
 
 class ReportService:
@@ -550,11 +531,7 @@ class ReportService:
             self._compute_strengths_improvements(category_stats)
         )
 
-        # Step 2-3: 축별 감정 집계
-        affiliate_axes = self._build_axes(AFFILIATE_AXES, category_stats)
-        vehicle_axes = self._build_axes(VEHICLE_AXES, category_stats)
-
-        # Step 2-4: Top 5 긍정/부정 태그
+        # Step 2-3: Top 5 긍정/부정 태그
         top_positive, top_negative, top_tags_detail = (
             self._compute_top_tags(tag_details)
         )
@@ -566,8 +543,7 @@ class ReportService:
             "improvements": improvements,
             "strengths_detail": strengths_detail,
             "improvements_detail": improvements_detail,
-            "affiliate_axes": affiliate_axes,
-            "vehicle_axes": vehicle_axes,
+            "tag_details": tag_details,
             "top_positive_tags": top_positive,
             "top_negative_tags": top_negative,
             "top_tags_detail": top_tags_detail,
@@ -682,20 +658,6 @@ class ReportService:
         return strengths, improvements, strengths_detail, improvements_detail
 
     @staticmethod
-    def _build_axes(
-        axes_map: dict[str, list[str]],
-        category_stats: dict[str, dict],
-    ) -> list[EvaluationAxis]:
-        """축별 감정 집계 (재사용 가능)"""
-        result = []
-        for axis_name, categories in axes_map.items():
-            ax_pos = sum(category_stats.get(c, {}).get("positive", 0) for c in categories)
-            ax_total = sum(category_stats.get(c, {}).get("total", 0) for c in categories)
-            ratio = round(ax_pos / ax_total * 100) if ax_total > 0 else 0
-            result.append(EvaluationAxis(name=axis_name, positive_ratio=ratio, total_count=ax_total))
-        return result
-
-    @staticmethod
     def _compute_top_tags(
         tag_details: list[dict],
     ) -> tuple[list[TagRankItem], list[TagRankItem], list[dict]]:
@@ -805,7 +767,7 @@ class ReportService:
         # 2. 업체 평가 텍스트 (독립 LLM 호출)
         affiliate_coro = self._generate_affiliate_text(
             branch_name=data["branch_name"],
-            affiliate_axes=data.get("affiliate_axes", []),
+            tag_details=data.get("tag_details", []),
             top_positive_tags=data.get("top_positive_tags", []),
             top_negative_tags=data.get("top_negative_tags", []),
             sample_reviews=sample_reviews,
@@ -814,7 +776,7 @@ class ReportService:
         # 3. 차량 평가 텍스트 (독립 LLM 호출)
         vehicle_coro = self._generate_vehicle_text(
             branch_name=data["branch_name"],
-            vehicle_axes=data.get("vehicle_axes", []),
+            tag_details=data.get("tag_details", []),
             top_liked_vehicles=data.get("top_liked_vehicles", []),
             top_disliked_vehicles=data.get("top_disliked_vehicles", []),
             sample_reviews=sample_reviews,
@@ -842,13 +804,17 @@ class ReportService:
     async def _generate_affiliate_text(
         self,
         branch_name: str,
-        affiliate_axes: list,
+        tag_details: list[dict],
         top_positive_tags: list,
         top_negative_tags: list,
         sample_reviews: list[str] | None = None,
     ) -> str:
         """업체 평가 AI 텍스트 생성 (독립 LLM 호출)"""
-        if not affiliate_axes:
+        affiliate_tags = [
+            t for t in tag_details
+            if t.get("category_name") in AFFILIATE_CATEGORIES
+        ]
+        if not affiliate_tags:
             return ""
 
         try:
@@ -858,7 +824,7 @@ class ReportService:
 
             system_prompt, user_prompt = RichSummaryPromptBuilder.create_affiliate_evaluation_prompt(
                 branch_name=branch_name,
-                affiliate_axes=self._to_dicts(affiliate_axes),
+                tag_details=affiliate_tags,
                 top_positive_tags=self._to_dicts(top_positive_tags),
                 top_negative_tags=self._to_dicts(top_negative_tags),
                 sample_reviews=sample_reviews,
@@ -882,13 +848,17 @@ class ReportService:
     async def _generate_vehicle_text(
         self,
         branch_name: str,
-        vehicle_axes: list,
+        tag_details: list[dict],
         top_liked_vehicles: list,
         top_disliked_vehicles: list,
         sample_reviews: list[str] | None = None,
     ) -> str:
         """차량 평가 AI 텍스트 생성 (독립 LLM 호출)"""
-        if not vehicle_axes:
+        vehicle_tags = [
+            t for t in tag_details
+            if t.get("category_name") in VEHICLE_CATEGORIES
+        ]
+        if not vehicle_tags:
             return ""
 
         try:
@@ -898,7 +868,7 @@ class ReportService:
 
             system_prompt, user_prompt = RichSummaryPromptBuilder.create_vehicle_evaluation_prompt(
                 branch_name=branch_name,
-                vehicle_axes=self._to_dicts(vehicle_axes),
+                tag_details=vehicle_tags,
                 top_liked_vehicles=self._to_dicts(top_liked_vehicles),
                 top_disliked_vehicles=self._to_dicts(top_disliked_vehicles),
                 sample_reviews=sample_reviews,
@@ -969,13 +939,11 @@ class ReportService:
             ],
             vehicle_analysis=[VehicleAnalysis(**v) for v in vehicle_analysis_list],
             affiliate_evaluation=AffiliateEvaluation(
-                axes=tags.get("affiliate_axes", []),
                 top_positive=tags.get("top_positive_tags", []),
                 top_negative=tags.get("top_negative_tags", []),
                 ai_text=ai.get("affiliate_ai_text", ""),
             ),
             vehicle_evaluation=VehicleEvaluation(
-                axes=tags.get("vehicle_axes", []),
                 top_liked=top_liked,
                 top_disliked=top_disliked,
                 ai_text=ai.get("vehicle_ai_text", ""),
@@ -1511,41 +1479,48 @@ class ReportService:
                 like_ratio = round(raw["total_positive"] / raw["total_count"] * 100)
                 dislike_ratio = round(raw["total_negative"] / raw["total_count"] * 100)
 
-            # 상위 3개 태그 (차량 카테고리만, 긍정/부정 비율 포함)
-            tag_entries = sorted(
-                [(name, ts) for name, ts in raw.get("tags", {}).items()
-                 if ts.get("category_name", "") in VEHICLE_CATEGORIES],
-                key=lambda x: x[1]["total"], reverse=True,
-            )
-            tag_labels: list[str] = []
-            for tag_name, ts in tag_entries[:3]:
-                if ts["total"] > 0:
-                    pos_r = round(ts["positive"] / ts["total"] * 100)
-                    tag_labels.append(f"{tag_name}({pos_r}%)")
+            # 차량 카테고리 태그만 필터
+            veh_tags = [
+                (name, ts) for name, ts in raw.get("tags", {}).items()
+                if ts.get("category_name", "") in VEHICLE_CATEGORIES and ts.get("total", 0) > 0
+            ]
+
+            # 호평용: 긍정 건수 내림차순
+            pos_sorted = sorted(veh_tags, key=lambda x: x[1]["positive"], reverse=True)
+            pos_tags = [f"{n}({ts['positive']}건)" for n, ts in pos_sorted[:3] if ts["positive"] > 0]
+
+            # 불만용: 부정 건수 내림차순 (0건 제외)
+            neg_sorted = sorted(veh_tags, key=lambda x: x[1]["negative"], reverse=True)
+            neg_tags = [f"{n}({ts['negative']}건)" for n, ts in neg_sorted[:3] if ts["negative"] > 0]
+
+            # 차량별 긍정/부정 태그 총 건수 집계
+            total_pos_tags = sum(ts["positive"] for _, ts in veh_tags)
+            total_neg_tags = sum(ts["negative"] for _, ts in veh_tags)
 
             items.append({
                 "model": car_model,
                 "count": count,
-                "like_ratio": like_ratio,
-                "dislike_ratio": dislike_ratio,
-                "tags": tag_labels,
+                "total_pos_tags": total_pos_tags,
+                "total_neg_tags": total_neg_tags,
+                "pos_tags": pos_tags,
+                "neg_tags": neg_tags,
             })
 
-        # 호평 Top 5 (like_ratio 내림차순)
-        sorted_liked = sorted(items, key=lambda x: (x["like_ratio"], x["count"]), reverse=True)
+        # 호평 Top 5 (긍정 태그 건수 내림차순)
+        sorted_liked = sorted(items, key=lambda x: (x["total_pos_tags"], x["count"]), reverse=True)
         top_liked = [
-            VehicleRankItem(model=it["model"], count=it["count"], ratio=it["like_ratio"], tags=it["tags"])
+            VehicleRankItem(model=it["model"], count=it["count"], ratio=it["total_pos_tags"], tags=it["pos_tags"])
             for it in sorted_liked[:5]
         ]
 
-        # 불만 Top 5 (dislike_ratio 내림차순, 0% 제외)
+        # 불만 Top 5 (부정 태그 건수 내림차순, 0건 제외)
         sorted_disliked = sorted(
-            [it for it in items if it["dislike_ratio"] > 0],
-            key=lambda x: (x["dislike_ratio"], x["count"]),
+            [it for it in items if it["total_neg_tags"] > 0],
+            key=lambda x: (x["total_neg_tags"], x["count"]),
             reverse=True,
         )
         top_disliked = [
-            VehicleRankItem(model=it["model"], count=it["count"], ratio=it["dislike_ratio"], tags=it["tags"])
+            VehicleRankItem(model=it["model"], count=it["count"], ratio=it["total_neg_tags"], tags=it["neg_tags"])
             for it in sorted_disliked[:5]
         ]
 

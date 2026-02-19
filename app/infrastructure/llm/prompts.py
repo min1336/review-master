@@ -727,7 +727,7 @@ class RichSummaryPromptBuilder:
 </role>
 
 <task>
-주어진 축별 통계와 태그 순위 데이터를 분석하여 업체 서비스 평가 텍스트를 작성하세요.
+주어진 태그별 감정 통계와 태그 순위 데이터를 분석하여 업체 서비스 평가 텍스트를 작성하세요.
 잘한점 칭찬으로 시작하고, 개선점과 보완 시 기대효과로 마무리합니다.
 </task>
 
@@ -756,7 +756,7 @@ class RichSummaryPromptBuilder:
 </role>
 
 <task>
-주어진 축별 통계와 차량 순위 데이터를 분석하여 차량 평가 텍스트를 작성하세요.
+주어진 태그별 감정 통계와 차량 순위 데이터를 분석하여 차량 평가 텍스트를 작성하세요.
 강점을 먼저 나열하고, 아쉬운점과 보완 시 기대효과로 마무리합니다.
 </task>
 
@@ -780,7 +780,7 @@ class RichSummaryPromptBuilder:
     def create_affiliate_evaluation_prompt(
         cls,
         branch_name: str,
-        affiliate_axes: list[dict],
+        tag_details: list[dict],
         top_positive_tags: list[dict],
         top_negative_tags: list[dict],
         sample_reviews: list[str] | None = None,
@@ -788,13 +788,28 @@ class RichSummaryPromptBuilder:
         """
         업체 평가 텍스트 프롬프트 생성 (독립 LLM 호출)
 
+        Args:
+            tag_details: 업체 카테고리 태그 통계
+                [{"tag_name": str, "category_name": str, "positive": int, "negative": int, "total": int}]
+
         Returns:
             tuple: (system_prompt, user_prompt)
         """
-        aff_axes_text = ", ".join(
-            f"{a.get('name', '')}({a.get('positive_ratio', 0)}%)"
-            for a in affiliate_axes
-        ) or "데이터 없음"
+        tag_stats_lines = []
+        for t in tag_details:
+            name = t.get("tag_name", "")
+            pos = t.get("positive", 0)
+            neg = t.get("negative", 0)
+            total = t.get("total", 0)
+            if total == 0:
+                continue
+            pos_ratio = round(pos / total * 100)
+            neg_ratio = round(neg / total * 100)
+            if neg_ratio > pos_ratio:
+                tag_stats_lines.append(f"  {name}(부정 {neg_ratio}%, {total}건)")
+            else:
+                tag_stats_lines.append(f"  {name}(긍정 {pos_ratio}%, {total}건)")
+        tag_stats_text = "\n".join(tag_stats_lines) if tag_stats_lines else "  데이터 없음"
 
         pos_lines = "\n".join(
             f"  {i+1}. {t.get('tag_name', '')}({t.get('ratio', 0)}%, {t.get('count', 0)}건)"
@@ -814,7 +829,8 @@ class RichSummaryPromptBuilder:
         user_prompt = f"""다음 데이터를 바탕으로 {branch_name}의 업체 서비스 평가 텍스트를 작성하세요.
 
 <affiliate_analysis>
-축별 긍정률: {aff_axes_text}
+태그별 분석:
+{tag_stats_text}
 잘한점 Top 5:
 {pos_lines}
 개선점 Top 5:
@@ -831,7 +847,7 @@ class RichSummaryPromptBuilder:
     def create_vehicle_evaluation_prompt(
         cls,
         branch_name: str,
-        vehicle_axes: list[dict],
+        tag_details: list[dict],
         top_liked_vehicles: list[dict],
         top_disliked_vehicles: list[dict],
         sample_reviews: list[str] | None = None,
@@ -839,13 +855,28 @@ class RichSummaryPromptBuilder:
         """
         차량 평가 텍스트 프롬프트 생성 (독립 LLM 호출)
 
+        Args:
+            tag_details: 차량 카테고리 태그 통계
+                [{"tag_name": str, "category_name": str, "positive": int, "negative": int, "total": int}]
+
         Returns:
             tuple: (system_prompt, user_prompt)
         """
-        veh_axes_text = ", ".join(
-            f"{a.get('name', '')}({a.get('positive_ratio', 0)}%)"
-            for a in vehicle_axes
-        ) or "데이터 없음"
+        tag_stats_lines = []
+        for t in tag_details:
+            name = t.get("tag_name", "")
+            pos = t.get("positive", 0)
+            neg = t.get("negative", 0)
+            total = t.get("total", 0)
+            if total == 0:
+                continue
+            pos_ratio = round(pos / total * 100)
+            neg_ratio = round(neg / total * 100)
+            if neg_ratio > pos_ratio:
+                tag_stats_lines.append(f"  {name}(부정 {neg_ratio}%, {total}건)")
+            else:
+                tag_stats_lines.append(f"  {name}(긍정 {pos_ratio}%, {total}건)")
+        tag_stats_text = "\n".join(tag_stats_lines) if tag_stats_lines else "  데이터 없음"
 
         liked_lines = "\n".join(
             f"  {i+1}. {v.get('model', '')}(호평 {v.get('ratio', 0)}%) {', '.join(v.get('tags', [])[:3])}"
@@ -865,7 +896,8 @@ class RichSummaryPromptBuilder:
         user_prompt = f"""다음 데이터를 바탕으로 {branch_name}의 차량 평가 텍스트를 작성하세요.
 
 <vehicle_analysis>
-축별 긍정률: {veh_axes_text}
+태그별 분석:
+{tag_stats_text}
 호평 차량 Top 5:
 {liked_lines}
 불만 차량 Top 5:
