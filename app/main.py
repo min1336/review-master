@@ -166,8 +166,8 @@ app.include_router(public_summary_router, prefix="/public")   # 신규 깔끔한
 # 페이지 라우터 (/)
 app.include_router(pages_router)
 
-# Static 파일 서빙 (/static/*) - CSS/JS가 HTML에 인라인되어 더 이상 필요 없음
-# app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
+# Static 파일 서빙 (/static/*) - 리뷰 상세 테스트 페이지 이미지 등
+app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 
 
 # Favicon (404 방지)

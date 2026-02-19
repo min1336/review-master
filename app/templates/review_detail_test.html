@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>리뷰 요약 테스트 - Carmore</title>
+    <link rel="stylesheet" as="style" crossorigin
+        href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <style>
+        :root {
+            --primary: #0d6ffc;
+            --primary-hover: #0b5ed7;
+            --primary-light: #e3f0ff;
+            --success: #10b981;
+            --success-light: #d1fae5;
+            --warning: #f59e0b;
+            --warning-light: #fef3c7;
+            --error: #ef4444;
+            --error-light: #fee2e2;
+            --grey-1: #1e1e1e;
+            --grey-2: #333333;
+            --grey-3: #555555;
+            --grey-5: #999999;
+            --grey-7: #dddddd;
+            --grey-8: #eeeeee;
+            --grey-9: #f8f8f8;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: #f5f5f5;
+            color: var(--grey-1);
+            line-height: 1.5;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+        }
+
+        .mobile-container {
+            width: 100%;
+            max-width: 480px;
+            min-height: 100vh;
+            background: #ffffff;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        /* ─── Control Bar (Sticky) ─── */
+        .control-bar {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: #fff;
+            border-bottom: 1px solid var(--grey-8);
+            padding: 10px 16px;
+        }
+        .control-bar-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .btn-back {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 2px 6px;
+            color: var(--grey-2);
+        }
+        .control-bar-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--grey-3);
+        }
+        .control-row {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .ctrl-select {
+            flex: 1;
+            padding: 7px 8px;
+            border: 1px solid var(--grey-7);
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: inherit;
+            background: #fff;
+            color: var(--grey-1);
+            min-width: 0;
+        }
+        .ctrl-input {
+            width: 110px;
+            padding: 7px 6px;
+            border: 1px solid var(--grey-7);
+            border-radius: 6px;
+            font-size: 11px;
+            font-family: inherit;
+            background: #fff;
+            color: var(--grey-1);
+        }
+        .ctrl-sep { color: var(--grey-5); font-size: 12px; flex-shrink: 0; }
+        .btn-go {
+            padding: 7px 14px;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .btn-go:hover { background: var(--primary-hover); }
+        .btn-go:disabled { background: var(--grey-7); cursor: not-allowed; }
+        .preset-row {
+            display: flex;
+            gap: 4px;
+            margin-top: 6px;
+        }
+        .preset-btn {
+            padding: 4px 10px;
+            border: 1px solid var(--grey-7);
+            border-radius: 14px;
+            background: #fff;
+            font-size: 11px;
+            font-family: inherit;
+            cursor: pointer;
+            color: var(--grey-5);
+        }
+        .preset-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .preset-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+        /* ─── App Image Sections ─── */
+        .app-image {
+            width: 100%;
+            display: block;
+        }
+
+        /* ─── Loading ─── */
+        .loading-area {
+            display: none;
+            text-align: center;
+            padding: 30px 16px;
+        }
+        .spinner {
+            width: 28px; height: 28px;
+            border: 3px solid var(--grey-8);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { font-size: 12px; color: var(--grey-5); }
+
+        /* ─── AI Section (between images) ─── */
+        .ai-section { display: none; }
+
+        /* Branch Header Row - mimics Carmore app style */
+        .branch-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--grey-8);
+        }
+        .branch-name-link {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--grey-1);
+        }
+        .branch-name-link::after {
+            content: ' >';
+            color: var(--grey-5);
+            font-size: 13px;
+        }
+        .branch-rating {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+        .branch-rating-star { color: #fbbf24; }
+        .branch-rating-badge {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--grey-5);
+        }
+
+        /* AI Summary Box - matches Carmore gradient border style */
+        .ai-summary-card {
+            margin: 12px 20px 16px;
+            padding: 16px;
+            border-radius: 14px;
+            background: #fff;
+            border: 1.5px solid transparent;
+            background-image: linear-gradient(#fff, #fff), linear-gradient(135deg, #a5b4fc 0%, #c4b5fd 50%, #f0abfc 100%);
+            background-origin: border-box;
+            background-clip: padding-box, border-box;
+        }
+        .ai-summary-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--grey-1);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .ai-summary-text {
+            font-size: 13px;
+            line-height: 1.75;
+            color: var(--grey-2);
+            white-space: pre-wrap;
+        }
+
+        /* Evaluation section inside the AI area */
+        .eval-section {
+            padding: 16px 20px;
+        }
+        .eval-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--grey-1);
+        }
+
+        /* Tags */
+        .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+        .tag-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 5px 10px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .tag-chip.neutral { background: var(--grey-8); color: var(--grey-2); }
+
+        /* Error */
+        .error-msg {
+            text-align: center;
+            padding: 24px 16px;
+            color: var(--error);
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="mobile-container">
+        <!-- Sticky Control Bar -->
+        <div class="control-bar">
+            <div class="control-bar-header">
+                <button class="btn-back" id="btn-back">&larr;</button>
+                <span class="control-bar-title">리뷰 요약 테스트</span>
+            </div>
+            <div class="control-row">
+                <select class="ctrl-select" id="branch-select">
+                    <option value="">불러오는 중...</option>
+                </select>
+                <button class="btn-go" id="btn-load">조회</button>
+            </div>
+            <div class="preset-row" id="preset-btns">
+                <button class="preset-btn" data-period="1m">1개월</button>
+                <button class="preset-btn active" data-period="3m">3개월</button>
+                <button class="preset-btn" data-period="6m">6개월</button>
+                <button class="preset-btn" data-period="1y">12개월</button>
+                <button class="preset-btn" data-period="all">전체</button>
+            </div>
+        </div>
+
+        <!-- Top App Image -->
+        <img src="/static/images/detail_top.jpg" alt="상세 상단" class="app-image" />
+
+        <!-- Loading Spinner -->
+        <div class="loading-area" id="loading-area">
+            <div class="spinner"></div>
+            <div class="loading-text">리뷰 요약을 불러오는 중...</div>
+        </div>
+
+        <!-- AI Summary Section (inserted between images) -->
+        <div class="ai-section" id="ai-section">
+            <!-- Branch header row -->
+            <div class="branch-row" id="branch-row"></div>
+
+            <!-- AI Summary Card (Carmore style) -->
+            <div class="ai-summary-card" id="ai-summary-card"></div>
+
+            <!-- Keywords as tags -->
+            <div class="eval-section" id="section-tags"></div>
+        </div>
+
+        <!-- Bottom App Image -->
+        <img src="/static/images/detail_bottom.jpg" alt="예약정보 하단" class="app-image" />
+    </div>
+
+    <script>
+        const API_PREFIX = '{{ api_prefix }}';
+
+        // 기간 프리셋 → summary 필드 매핑
+        const PERIOD_FIELD = { '1m': 'summary_1m', '3m': 'summary_3m', '6m': 'summary_6m', '1y': 'summary_1y', 'all': 'summary_all' };
+        const PERIOD_LABEL = { '1m': '최근 1개월', '3m': '최근 3개월', '6m': '최근 6개월', '1y': '최근 12개월', 'all': '전체 기간' };
+        let currentPeriod = '3m';
+        let cachedData = null;
+
+        // ─── Utils ───────────────────────────────────
+        function el(tag, attrs, children) {
+            const node = document.createElement(tag);
+            if (attrs) {
+                for (const [k, v] of Object.entries(attrs)) {
+                    if (k === 'textContent') { node.textContent = v; }
+                    else if (k === 'className') { node.className = v; }
+                    else { node.setAttribute(k, v); }
+                }
+            }
+            if (children) {
+                if (!Array.isArray(children)) children = [children];
+                for (const c of children) {
+                    if (typeof c === 'string') node.appendChild(document.createTextNode(c));
+                    else if (c) node.appendChild(c);
+                }
+            }
+            return node;
+        }
+
+        function clearEl(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+        // ─── Load Branches ───────────────────────────
+        async function loadBranches() {
+            const select = document.getElementById('branch-select');
+            try {
+                const res = await fetch(`${API_PREFIX}/summaries?limit=1000&sort_by=branch_id&order=asc`);
+                const json = await res.json();
+                const items = json.data || [];
+                clearEl(select);
+                if (items.length === 0) {
+                    select.appendChild(el('option', { value: '', textContent: '지점 없음' }));
+                    return;
+                }
+                select.appendChild(el('option', { value: '', textContent: '지점을 선택하세요' }));
+                for (const item of items) {
+                    const text = `[${item.branch_id}] ${item.branch_name || ''}`;
+                    select.appendChild(el('option', { value: String(item.branch_id), textContent: text }));
+                }
+            } catch (e) {
+                clearEl(select);
+                select.appendChild(el('option', { value: '', textContent: '목록 로드 실패' }));
+            }
+        }
+
+        // ─── Fetch Summary ───────────────────────────
+        async function loadSummary() {
+            const branchId = document.getElementById('branch-select').value;
+            if (!branchId) { alert('지점을 선택하세요.'); return; }
+
+            const btnLoad = document.getElementById('btn-load');
+            document.getElementById('ai-section').style.display = 'none';
+            document.getElementById('loading-area').style.display = 'block';
+            btnLoad.disabled = true;
+
+            try {
+                const [res] = await Promise.all([
+                    fetch(`${API_PREFIX}/summaries/${branchId}`),
+                    new Promise(r => setTimeout(r, 350))
+                ]);
+                const json = await res.json();
+
+                if (!res.ok || !json.success) {
+                    throw new Error(json.detail || json.message || '요약 조회 실패');
+                }
+
+                cachedData = json.data;
+                renderSummary(cachedData);
+                document.getElementById('loading-area').style.display = 'none';
+                document.getElementById('ai-section').style.display = '';
+            } catch (e) {
+                document.getElementById('loading-area').style.display = 'none';
+                document.getElementById('ai-section').style.display = '';
+                clearEl(document.getElementById('branch-row'));
+                clearEl(document.getElementById('ai-summary-card'));
+                document.getElementById('ai-summary-card').appendChild(
+                    el('div', { className: 'error-msg' }, e.message)
+                );
+            } finally {
+                btnLoad.disabled = false;
+            }
+        }
+
+        // ─── Render ──────────────────────────────────
+
+        function renderSummary(data) {
+            renderBranchRow(data);
+            renderAISummaryCard(data);
+            renderKeywords(data);
+        }
+
+        function renderBranchRow(data) {
+            const row = document.getElementById('branch-row');
+            clearEl(row);
+
+            row.appendChild(el('span', { className: 'branch-name-link' }, data.branch_name || '-'));
+
+            if (data.avg_rating) {
+                const ratingDiv = el('div', { className: 'branch-rating' });
+                ratingDiv.appendChild(el('span', { className: 'branch-rating-star' }, '\u2605'));
+                ratingDiv.appendChild(document.createTextNode(` ${Number(data.avg_rating).toFixed(1)}`));
+                if (data.review_count) {
+                    ratingDiv.appendChild(el('span', { className: 'branch-rating-badge' },
+                        ` 리뷰 ${data.review_count}건`));
+                }
+                row.appendChild(ratingDiv);
+            }
+        }
+
+        function renderAISummaryCard(data) {
+            const card = document.getElementById('ai-summary-card');
+            clearEl(card);
+
+            const header = el('div', { className: 'ai-summary-header' });
+            header.appendChild(document.createTextNode('\u2728 최근 후기를 AI가 간단히 요약했어요'));
+            card.appendChild(header);
+
+            // 선택된 기간의 요약 텍스트 가져오기
+            const field = PERIOD_FIELD[currentPeriod] || 'summary_3m';
+            let summaryText = data[field] || '';
+            let usedPeriod = currentPeriod;
+
+            // 선택 기간에 데이터 없으면 fallback 시도
+            if (!summaryText) {
+                const FIELD_TO_PERIOD = { 'summary_3m': '3m', 'summary_6m': '6m', 'summary_1y': '1y', 'summary_all': 'all', 'summary_1m': '1m' };
+                const fallbackOrder = ['summary_3m', 'summary_6m', 'summary_1y', 'summary_all', 'summary_1m'];
+                for (const fb of fallbackOrder) {
+                    if (data[fb]) { summaryText = data[fb]; usedPeriod = FIELD_TO_PERIOD[fb]; break; }
+                }
+            }
+
+            if (summaryText) {
+                card.appendChild(el('div', { className: 'ai-summary-text' }, summaryText));
+            } else {
+                card.appendChild(el('div', { className: 'ai-summary-text' },
+                    '이 지점의 요약 데이터가 아직 없습니다.'));
+            }
+
+            // Period label (fallback 시 실제 사용된 기간 표시)
+            const meta = el('div', {});
+            meta.style.marginTop = '10px';
+            meta.style.fontSize = '11px';
+            meta.style.color = 'var(--grey-5)';
+            var labelText = PERIOD_LABEL[usedPeriod] || '';
+            if (usedPeriod !== currentPeriod) {
+                labelText += ' (선택 기간 데이터 없음)';
+            }
+            meta.appendChild(document.createTextNode(labelText));
+            card.appendChild(meta);
+        }
+
+        function renderKeywords(data) {
+            const section = document.getElementById('section-tags');
+            clearEl(section);
+
+            // keywords 배열 또는 keyword_1/2/3 개별 필드에서 수집
+            let kws = [];
+            if (data.keywords && data.keywords.length > 0) {
+                kws = data.keywords;
+            } else {
+                if (data.keyword_1) kws.push(data.keyword_1);
+                if (data.keyword_2) kws.push(data.keyword_2);
+                if (data.keyword_3) kws.push(data.keyword_3);
+            }
+
+            if (kws.length === 0) { section.style.display = 'none'; return; }
+            section.style.display = '';
+
+            section.appendChild(el('div', { className: 'eval-title' }, '키워드'));
+            const list = el('div', { className: 'tag-list' });
+            for (const kw of kws) {
+                const chip = el('div', { className: 'tag-chip neutral' }, kw);
+                list.appendChild(chip);
+            }
+            section.appendChild(list);
+        }
+
+        // ─── Event Bindings ──────────────────────────
+        document.addEventListener('DOMContentLoaded', function () {
+            loadBranches();
+
+            document.getElementById('btn-back').addEventListener('click', function () {
+                window.history.back();
+            });
+
+            // 기간 프리셋 - 선택 시 즉시 요약 텍스트 교체
+            document.getElementById('preset-btns').addEventListener('click', function (e) {
+                const btn = e.target.closest('.preset-btn');
+                if (!btn) return;
+                var allBtns = document.querySelectorAll('.preset-btn');
+                for (var i = 0; i < allBtns.length; i++) allBtns[i].classList.remove('active');
+                btn.classList.add('active');
+                currentPeriod = btn.getAttribute('data-period');
+
+                // 이미 데이터가 있으면 API 재호출 없이 렌더링만 변경
+                if (cachedData) {
+                    renderAISummaryCard(cachedData);
+                }
+            });
+
+            document.getElementById('btn-load').addEventListener('click', loadSummary);
+        });
+    </script>
+</body>
+
+</html>

@@ -1679,6 +1679,8 @@
     <header class="header">
         <h1>Review Summary AI - 운영팀 대시보드</h1>
         <div class="header-actions">
+            <button class="btn btn-outline" id="btn-review-detail"
+                style="border-color: #10b981; color: #10b981;">리뷰 상세 테스트</button>
             <button class="btn btn-outline" id="btn-api-tester">API 테스트</button>
             <button class="btn btn-primary" id="btn-analysis">분석</button>
             <button class="btn btn-secondary" id="btn-tag-tester">태그 분석 테스트</button>
@@ -2930,6 +2932,12 @@
                 if (btnTagTester) {
                     btnTagTester.addEventListener('click', () => {
                         window.location.href = `${BASE_PATH}/tag-tester`;
+                    });
+                }
+                const btnReviewDetail = document.getElementById('btn-review-detail');
+                if (btnReviewDetail) {
+                    btnReviewDetail.addEventListener('click', () => {
+                        window.location.href = `${BASE_PATH}/review-detail-test`;
                     });
                 }
 
