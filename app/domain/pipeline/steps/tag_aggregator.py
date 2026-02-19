@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from core.decay import compute_decay
+from core.timezone import utc_now
 from schemas.dto import ProcessedReviewDTO
 
 if TYPE_CHECKING:
@@ -23,11 +25,14 @@ class TagAggregator:
         # 1. 지점별 태그+감정 메모리 집계
         branch_tag_data: dict[int, dict[str, dict]] = {}
         all_keywords_with_tags: dict[str, str] = {}
+        today = utc_now()
 
         for pr in processed:
             bid = pr.branch_id
             if bid not in branch_tag_data:
                 branch_tag_data[bid] = {}
+
+            decay = compute_decay(pr.review.created_at, today)
 
             for tag_name, sentiments in pr.tag_sentiments.items():
                 if tag_name == "기타":
@@ -37,6 +42,7 @@ class TagAggregator:
                         "positive_count": 0,
                         "negative_count": 0,
                         "neutral_count": 0,
+                        "weighted_delta": 0.0,
                     }
 
                 counts = branch_tag_data[bid][tag_name]
@@ -47,6 +53,9 @@ class TagAggregator:
                 counts["positive_count"] += len(pos_keywords)
                 counts["negative_count"] += len(neg_keywords)
                 counts["neutral_count"] += len(neu_keywords)
+                counts["weighted_delta"] += (
+                    len(pos_keywords) + len(neg_keywords) + len(neu_keywords)
+                ) * decay
 
                 for kw in pos_keywords + neg_keywords + neu_keywords:
                     if kw not in all_keywords_with_tags:
@@ -117,10 +126,10 @@ class TagAggregator:
                 continue
 
             try:
-                # 지점의 기존 branch_tags를 한 번에 조회
+                # 지점의 기존 branch_tags를 한 번에 조회 (weighted_score 포함)
                 existing_result = await (
                     client.table("branch_tags")
-                    .select("tag_id, positive_count, negative_count, count")
+                    .select("tag_id, positive_count, negative_count, count, weighted_score")
                     .eq("branch_id", branch_id)
                     .eq("period_type", "all")
                     .in_("tag_id", tag_ids_for_branch)
@@ -157,6 +166,14 @@ class TagAggregator:
                         + counts["neutral_count"]
                     )
 
+                    existing_weighted = (existing.get("weighted_score") or 0.0) if existing else 0.0
+                    incremental = (
+                        counts["positive_count"]
+                        + counts["negative_count"]
+                        + counts["neutral_count"]
+                    )
+                    weighted_delta = counts.get("weighted_delta") or float(incremental)
+
                     upsert_rows.append({
                         "branch_id": branch_id,
                         "tag_id": tag_id,
@@ -164,7 +181,7 @@ class TagAggregator:
                         "positive_count": new_pos,
                         "negative_count": new_neg,
                         "count": new_total,
-                        "weighted_score": float(new_total),
+                        "weighted_score": existing_weighted + weighted_delta,
                     })
 
                 if upsert_rows:

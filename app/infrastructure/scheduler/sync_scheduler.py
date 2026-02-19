@@ -12,6 +12,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from core.config import get_settings
+from domain.pipeline.steps.decay_job import DecayJob
 from infrastructure.athena import AthenaClient
 from repository.review_repository import BranchReviewRepository
 from repository.session import get_client
@@ -93,6 +94,15 @@ class SyncScheduler:
             else:
                 logger.error(f"스케줄러: 파이프라인 실패 - {result.error}")
                 print(f"[DailyScheduler] 실패: {result.error}")
+
+            # 일별 태그 시간 감쇠 적용
+            try:
+                decay_client = await get_client()
+                decay_count = await DecayJob().run(decay_client)
+                logger.info(f"스케줄러: DecayJob 완료 - {decay_count}행 처리")
+                print(f"[DailyScheduler] DecayJob: {decay_count}행 감쇠 적용")
+            except Exception as decay_err:
+                logger.warning(f"스케줄러: DecayJob 실패 (무시): {decay_err}")
 
         except Exception as e:
             logger.error(f"스케줄러: 파이프라인 작업 중 오류 발생 - {e}")

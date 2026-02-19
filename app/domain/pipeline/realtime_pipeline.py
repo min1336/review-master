@@ -369,6 +369,7 @@ class RealtimePipeline(BasePipeline):
             positive = row.get("positive_count", 0) or 0
             negative = row.get("negative_count", 0) or 0
             count = row.get("count", 0) or 0
+            weighted = row.get("weighted_score") or 0.0
 
             if sentiment == "positive":
                 positive += 1
@@ -381,6 +382,7 @@ class RealtimePipeline(BasePipeline):
                     "positive_count": positive,
                     "negative_count": negative,
                     "count": count + 1,
+                    "weighted_score": weighted + 1.0,
                 })
                 .eq("branch_id", branch_id)
                 .eq("tag_id", tag_id)
