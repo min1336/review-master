@@ -1,9 +1,10 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-02-19T23:06:09.752Z",
+  "lastUpdated": "2026-02-19T23:06:49.249Z",
   "activeFeatures": [
     "report_service.py",
-    "analysis"
+    "analysis",
+    "core"
   ],
   "primaryFeature": "report_service.py",
   "features": {
@@ -32,6 +33,19 @@
         "lastUpdated": "2026-02-19T23:06:09.752Z"
       },
       "lastFile": "/home/teamo2/Downloads/Review_Summary_AI/app/domain/analysis/patterns.py"
+    },
+    "core": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-19T23:06:49.249Z",
+        "lastUpdated": "2026-02-19T23:06:49.249Z"
+      },
+      "lastFile": "/home/teamo2/Downloads/Review_Summary_AI/app/core/decay.py"
     }
   },
   "pipeline": {
@@ -42,7 +56,7 @@
   "session": {
     "startedAt": "2026-02-19T00:35:03.308Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-02-19T23:06:09.752Z"
+    "lastActivity": "2026-02-19T23:06:49.249Z"
   },
   "history": [
     {
@@ -60,6 +74,12 @@
     {
       "timestamp": "2026-02-19T23:06:09.752Z",
       "feature": "analysis",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-19T23:06:49.249Z",
+      "feature": "core",
       "phase": "do",
       "action": "updated"
     }
