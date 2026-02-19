@@ -56,9 +56,12 @@ class BranchReviewRepository(BaseRepository[Review]):
                     }
                     insert_data.append(data)
 
+                # json.dumps→loads로 datetime 직렬화 후 list로 전달
+                # 이중 직렬화 방지: 문자열 대신 list 전달 시 JSONB 배열로 올바르게 전송
+                safe_data = json.loads(json.dumps(insert_data, default=str))
                 result = await self._client.rpc(
                     "upsert_reviews",
-                    {"p_reviews": json.dumps(insert_data, default=str)},
+                    {"p_reviews": safe_data},
                 ).execute()
 
                 count = result.data if isinstance(result.data, int) else len(batch)
