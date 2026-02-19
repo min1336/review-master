@@ -56,7 +56,7 @@ async def api_get_review_count(
         return api_response(result)
     except Exception as e:
         logger.exception("리뷰 수 확인 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
 @router.get("/{branch_id}")
@@ -82,7 +82,7 @@ async def api_get_report(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.exception("리포트 조회 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
 @router.get("/{branch_id}/list")
@@ -97,7 +97,7 @@ async def api_get_report_list(
         return api_response(reports)
     except Exception as e:
         logger.exception("리포트 목록 조회 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
 @router.post("/{branch_id}/generate/async", status_code=202)
@@ -126,7 +126,7 @@ async def api_generate_report_async(
         })
     except Exception as e:
         logger.exception("비동기 리포트 생성 요청 실패")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
 @router.post("/{branch_id}/generate", status_code=201)
@@ -155,7 +155,7 @@ async def api_generate_report(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.exception("리포트 생성 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
 @router.post("/{branch_id}/regenerate")
@@ -180,7 +180,7 @@ async def api_regenerate_report(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.exception("리포트 재생성 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
 @router.get("/{branch_id}/job/{job_id}")
@@ -236,7 +236,7 @@ async def api_delete_report(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception("리포트 삭제 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
 @router.post("/{branch_id}/viewed/{report_id}")
@@ -251,7 +251,7 @@ async def api_mark_report_viewed(
         return api_response({"viewed": success})
     except Exception as e:
         logger.exception("리포트 조회 표시 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
 @router.get("/{branch_id}/history")
@@ -275,7 +275,7 @@ async def api_get_report_history(
         return api_response(history)
     except Exception as e:
         logger.exception("리포트 히스토리 조회 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
 @router.get("/{branch_id}/pdf")
@@ -293,7 +293,7 @@ async def api_download_report_pdf(
     """
     import urllib.parse
 
-    from app.schemas.common import resolve_period
+    from schemas.common import resolve_period
 
     if period:
         parsed_start, parsed_end = resolve_period(period)
@@ -334,4 +334,4 @@ async def api_download_report_pdf(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.exception("PDF 생성 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e

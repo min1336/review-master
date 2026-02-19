@@ -82,5 +82,5 @@ async def api_get_public_report(
         logger.exception("Public report fetch failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="서버 오류가 발생했습니다.",
         ) from e
