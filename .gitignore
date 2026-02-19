@@ -136,9 +136,12 @@ data/*.npz
 /migrations
 # Git worktrees
 .worktrees/
-/docs/plans
 .omc
 /tests
 /.claude
-docs/
 .bkit/
+.playwright-mcp/
+.vscode/
+/docs
+data/
+static/
