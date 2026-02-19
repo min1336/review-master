@@ -140,3 +140,5 @@ data/*.npz
 .omc
 /tests
 /.claude
+docs/
+.bkit/
