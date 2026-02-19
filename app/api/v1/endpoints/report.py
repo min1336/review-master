@@ -62,18 +62,35 @@ async def api_get_review_count(
 @router.get("/{branch_id}")
 async def api_get_report(
     branch_id: int,
-    start_date: date = Query(..., description="시작일 (YYYY-MM-DD)"),
-    end_date: date = Query(..., description="종료일 (YYYY-MM-DD)"),
+    period: str | None = Query(None, pattern=r"^(all|1y|12m|6m|3m|1m)$", description="기간 프리셋 (1m/3m/6m/12m/1y/all)"),
+    start_date: date | None = Query(None, description="시작일 (YYYY-MM-DD)"),
+    end_date: date | None = Query(None, description="종료일 (YYYY-MM-DD)"),
     service: ReportService = Depends(get_report_service),
 ) -> dict[str, Any]:
-    """저장된 리포트 조회 (없으면 신규 생성)"""
-    validate_date_range_d(start_date, end_date)
+    """저장된 리포트 조회 (없으면 신규 생성)
+
+    period 또는 start_date+end_date 중 하나를 반드시 지정해야 합니다.
+    둘 다 지정하면 period가 우선합니다.
+    """
+    from schemas.common import resolve_period
+
+    if period:
+        parsed_start, parsed_end = resolve_period(period)
+    elif start_date and end_date:
+        validate_date_range_d(start_date, end_date)
+        parsed_start = date_to_utc(start_date)
+        parsed_end = date_to_utc(end_date, end_of_day=True)
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="period 또는 start_date+end_date를 지정해야 합니다.",
+        )
 
     try:
         report, is_new = await service.get_or_generate_report(
             branch_id=branch_id,
-            start_date=date_to_utc(start_date),
-            end_date=date_to_utc(end_date, end_of_day=True),
+            start_date=parsed_start,
+            end_date=parsed_end,
         )
         report_data = report.model_dump()
         report_data["is_new"] = is_new
