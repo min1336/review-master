@@ -132,9 +132,13 @@ class TagService:
                             seen_keywords.add(kw)
 
             # 태그에 매핑되지 않은 키워드도 포함 (감정만 표시)
+            from domain.analysis.sentiment_core import (
+                detect_keyword_sentiment_with_context,
+            )
+
             for kw in keywords:
                 if kw not in seen_keywords:
-                    sentiment = classifier._detect_sentiment_with_context(
+                    sentiment = detect_keyword_sentiment_with_context(
                         kw, review_text
                     )
                     keyword_results.append(

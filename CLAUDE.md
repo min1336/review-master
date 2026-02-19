@@ -34,7 +34,7 @@ Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
 
 ```python
 OPENAI_RPM = 3500                # API Rate Limit
-EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
+EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
 SIMILARITY_THRESHOLD = 0.3       # 태그 분류 최소 유사도
 ```
 

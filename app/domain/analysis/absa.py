@@ -26,12 +26,13 @@ from dataclasses import dataclass
 
 from .chunker import ClauseChunker
 from .patterns import (
-    DOUBLE_NEGATION_REGEX,
+    ASPECT_KEYWORDS,
     GENERAL_POSITIVE_KEYWORDS,
     NEGATIVE_REGEX,
     POSITIVE_EXCEPTION_REGEX,
     POSITIVE_REGEX,
 )
+from .sentiment_core import check_double_negation, count_sentiment_matches
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ class RuleBasedABSA:
     """
 
     # =========================================================================
-    # Aspect 키워드 사전 (태그별)
+    # Aspect 키워드: patterns.py TAG_REGISTRY에서 파생 (ASPECT_KEYWORDS)
     # =========================================================================
 
     # 문맥 필요 키워드: 키워드 → (태그, 필요 문맥 키워드들)
@@ -71,228 +72,6 @@ class RuleBasedABSA:
         ),
         "빨리": ("배달 서비스가 우수함", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
         "빠르": ("배달 서비스가 우수함", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
-    }
-
-    # 7개 카테고리별 키워드 — 절(clause) 단위 aspect 탐지용
-    # 52개 세분화 태그 매핑은 patterns.py:RULE_BASED_TAG_MAPPING 참조
-    ASPECT_KEYWORDS = {
-        "직원이 친절함": [
-            "직원",
-            "사장",
-            "사장님",
-            "알바",
-            "스태프",
-            "응대",
-            "안내",
-            "설명",
-            "인사",
-            "배웅",
-            "친절",
-            "불친절",
-            "태도",
-            "상담",
-            "도움",
-            "배려",
-            "미소",
-            "표정",
-            "무례",
-            "무뚝뚝",
-            "서비스",
-            "고객",
-        ],
-        "사고 처리를 잘해줌": [
-            "보험",
-            "보장",
-            "면책",
-            "자기부담",
-            "자차",
-            "대인",
-            "대물",
-            "완전자차",
-            "슈퍼",
-            "풀커버",
-            "안심",
-            "사고",
-            "접수",
-            "처리",
-            "보상",
-            "배상",
-            "손해",
-            "긁",
-            "부딪",
-            "충돌",
-            "파손",
-            "수리",
-            "수리비",
-            "사고접수",
-            "사고처리",
-        ],
-        "주유비 부담 없음": [
-            "주유",
-            "연료",
-            "기름",
-            "휘발유",
-            "경유",
-            "가솔린",
-            "디젤",
-            "충전",
-            "전기차",
-            "충전소",
-            "주유소",
-            "연비",
-            "기름값",
-            "만땅",
-            "반납시주유",
-            "주유량",
-            "연료비",
-        ],
-        "가격이 저렴함": [
-            "가격",
-            "가성비",
-            "비용",
-            "요금",
-            "돈",
-            "금액",
-            "원",
-            "저렴",
-            "싼",
-            "싸",
-            "비싸",
-            "비싼",
-            "적정",
-            "합리",
-            "할인",
-            "쿠폰",
-            "이벤트",
-            "혜택",
-            "프로모션",
-            "호구",
-            "호갱",
-            "바가지",
-            "폭리",
-            "추가비용",
-            "추가금",
-            "부담금",
-            "렌트비",
-            "수수료",
-            "정산",
-            "결제",
-        ],
-        "차량이 청결함": [
-            "내부",
-            "실내",
-            "시트",
-            "좌석",
-            "바닥",
-            "매트",
-            "트렁크",
-            "청결",
-            "청소",
-            "깨끗",
-            "지저분",
-            "더러",
-            "더럽",
-            "드러",
-            "냄새",
-            "담배",
-            "악취",
-            "퀴퀴",
-            "쩔어",
-            "냄새나",
-            "공기",
-            "먼지",
-            "얼룩",
-            "이물질",
-            "쓰레기",
-            "머리카락",
-            "에어컨냄새",
-            "위생",
-            "세차",
-        ],
-        "차량외관이 좋음": [
-            "외관",
-            "외부",
-            "외형",
-            "겉",
-            "바디",
-            "스크래치",
-            "흠집",
-            "긁힘",
-            "찍힘",
-            "찌그러짐",
-            "깨진",
-            "범퍼",
-            "휠",
-            "바퀴",
-            "타이어",
-            "유리",
-            "창문",
-            "미러",
-            "사이드미러",
-            "도색",
-            "페인트",
-            "광택",
-            "브레이크",
-            "제동",
-            "핸들",
-            "엔진",
-            "시동",
-            "오래된",
-            "낡은",
-            "연식",
-            "노후",
-            "빵꾸",
-            "펑크",
-            "에어컨",
-            "히터",
-            "네비게이션",
-            "블랙박스",
-            "후방카메라",
-            "신차",
-            "구형",
-            "주행거리",
-            "성능",
-        ],
-        "배달 서비스가 우수함": [
-            "배차",
-            "차종",
-            "차량변경",
-            "대차",
-            "차종변경",
-            "배정",
-            "배달",
-            "딜리버리",
-            "탁송",
-            "대기",
-            "기다",
-            "지연",
-            "약속",
-            "예약시간",
-            "도착시간",
-            "재촉",
-            "독촉",
-            "급하",
-            "서두르",
-            "노쇼",
-            "반납",
-            "픽업",
-            "인수",
-            "수령",
-            "전달",
-            "인계",
-            "반환",
-            "출차",
-            "입차",
-            "절차",
-            "간편",
-            "간단",
-            "복잡",
-            "위치",
-            "공항",
-            "역",
-            "터미널",
-            "접근성",
-        ],
     }
 
     # 긍정 키워드 + 없다 → 부정
@@ -312,9 +91,9 @@ class RuleBasedABSA:
         """
         self._chunker = chunker or ClauseChunker()
 
-        # Aspect 키워드 → 태그 역매핑
+        # Aspect 키워드 → 태그 역매핑 (patterns.py TAG_REGISTRY에서 파생)
         self._keyword_to_aspect = {}
-        for aspect, keywords in self.ASPECT_KEYWORDS.items():
+        for aspect, keywords in ASPECT_KEYWORDS.items():
             for kw in keywords:
                 self._keyword_to_aspect[kw] = aspect
 
@@ -420,7 +199,7 @@ class RuleBasedABSA:
         """감정 판단 (patterns.py 사용)"""
 
         # 0. 이중부정 최우선 체크 (불편하지 않다 → 긍정)
-        if DOUBLE_NEGATION_REGEX.search(text):
+        if check_double_negation(text):
             return "positive", 0.95
 
         # 1. 부정어+긍정어 패턴 체크 (친절하지 않, 깨끗하지 않 등)
@@ -483,8 +262,7 @@ class RuleBasedABSA:
                 return "positive", 0.8
 
         # 5. 일반 패턴 매칭
-        positive_matches = len(POSITIVE_REGEX.findall(text))
-        negative_matches = len(NEGATIVE_REGEX.findall(text))
+        positive_matches, negative_matches = count_sentiment_matches(text)
 
         # "없" 특수 처리 - 앞 단어에 따라 판단
         if "없" in text:

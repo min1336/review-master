@@ -25,20 +25,24 @@ ABSA + FastEmbed 임베딩을 결합하여 정확도 향상:
 from __future__ import annotations
 
 import logging
-import re
 from collections import defaultdict
 
 import numpy as np
 
 from .absa import RuleBasedABSA
+from core.constants import (
+    EMBEDDING_MODEL,
+    SIMILARITY_THRESHOLD,
+)
+
 from .patterns import (
-    DOUBLE_NEGATION_REGEX,
     GENERAL_POSITIVE_KEYWORDS,
-    NEGATIVE_REGEX,
-    POSITIVE_EXCEPTION_REGEX,
-    POSITIVE_REGEX,
     RULE_BASED_TAG_MAPPING,
     extract_stem,
+)
+from .sentiment_core import (
+    detect_keyword_sentiment,
+    detect_keyword_sentiment_with_context,
 )
 from .tag_embeddings import TagEmbeddingManager
 
@@ -52,8 +56,8 @@ class HybridClassifier:
     ABSA + FastEmbed 임베딩 + 규칙 기반 매핑을 결합
     """
 
-    DEFAULT_MODEL = "intfloat/multilingual-e5-large"
-    DEFAULT_THRESHOLD = 0.3
+    DEFAULT_MODEL = EMBEDDING_MODEL
+    DEFAULT_THRESHOLD = SIMILARITY_THRESHOLD
 
     def __init__(
         self,
@@ -117,70 +121,20 @@ class HybridClassifier:
             raise RuntimeError("HybridClassifier 초기화 실패")
 
     # =========================================================================
-    # 감정 분석
+    # 감정 분석 — sentiment_core 모듈 위임
     # =========================================================================
 
-    def _detect_sentiment(self, keyword: str) -> str:
+    @staticmethod
+    def _detect_sentiment(keyword: str) -> str:
         """키워드의 감정 판단 (규칙 기반)"""
-        if not keyword:
-            return "neutral"
+        return detect_keyword_sentiment(keyword)
 
-        if POSITIVE_EXCEPTION_REGEX.search(keyword):
-            return "positive"
-
-        if NEGATIVE_REGEX.search(keyword):
-            return "negative"
-
-        if POSITIVE_REGEX.search(keyword):
-            return "positive"
-
-        return "neutral"
-
+    @staticmethod
     def _detect_sentiment_with_context(
-        self, keyword: str, context: str, window_size: int = 20
+        keyword: str, context: str, window_size: int = 20
     ) -> str:
         """문맥을 고려한 키워드 감정 판단"""
-        base_sentiment = self._detect_sentiment(keyword)
-
-        if not context or keyword not in context:
-            return base_sentiment
-
-        pos = context.find(keyword)
-        if pos == -1:
-            return base_sentiment
-
-        start = max(0, pos - window_size)
-        end = min(len(context), pos + len(keyword) + window_size)
-        window = context[start:end]
-
-        # 이중부정 → 긍정
-        if DOUBLE_NEGATION_REGEX.search(window):
-            return "positive"
-
-        # 긍정 예외
-        has_positive_exception = POSITIVE_EXCEPTION_REGEX.search(window)
-        if has_positive_exception and base_sentiment in ["positive", "neutral"]:
-            return "positive"
-
-        # 부정 표현 패턴
-        negation_pattern = re.compile(
-            r"지\s*않|지\s*못|못\s*하|(?<![가-힣])안\s*하|안\s*좋|너무\s*안"
-        )
-
-        has_negation = negation_pattern.search(window)
-        if base_sentiment == "positive" and has_negation and not has_positive_exception:
-            return "negative"
-
-        if base_sentiment != "neutral":
-            return base_sentiment
-
-        if NEGATIVE_REGEX.search(window):
-            return "negative"
-
-        if POSITIVE_REGEX.search(window):
-            return "positive"
-
-        return "neutral"
+        return detect_keyword_sentiment_with_context(keyword, context, window_size)
 
     # =========================================================================
     # 태그 분류 (임베딩 + 규칙)
@@ -222,14 +176,20 @@ class HybridClassifier:
 
         keyword_lower = keyword.lower().strip()
 
-        # 일반 긍정어는 '기타'로 처리
+        # 일반 긍정어 처리: 규칙 매칭 시도 후, 1자는 기타, 2자+ 임베딩 위임
         if keyword_lower in GENERAL_POSITIVE_KEYWORDS:
-            return ("기타", 0.0)
+            rule_result = self._check_rule_based_mapping(keyword)
+            if rule_result:
+                return rule_result
+            if len(keyword_lower) <= 1:
+                return ("기타", 0.0)
+            # 2자 이상은 아래 임베딩 분류로 fall-through
 
-        # 규칙 기반 매핑 우선
-        rule_result = self._check_rule_based_mapping(keyword)
-        if rule_result:
-            return rule_result
+        else:
+            # 규칙 기반 매핑 우선
+            rule_result = self._check_rule_based_mapping(keyword)
+            if rule_result:
+                return rule_result
 
         # 임베딩 기반 분류
         keyword_embedding = np.array(list(self._model.embed([keyword])))[0]
@@ -265,7 +225,15 @@ class HybridClassifier:
             kw_lower = kw.lower().strip()
 
             if kw_lower in GENERAL_POSITIVE_KEYWORDS:
-                results[i] = ("기타", 0.0)
+                rule_result = self._check_rule_based_mapping(kw)
+                if rule_result:
+                    results[i] = rule_result
+                elif len(kw_lower) <= 1:
+                    results[i] = ("기타", 0.0)
+                else:
+                    # 2자 이상 일반 긍정어: 임베딩 분류로 위임
+                    embedding_indices.append(i)
+                    embedding_keywords.append(kw)
                 continue
 
             rule_result = self._check_rule_based_mapping(kw)

@@ -129,7 +129,7 @@ class TagAggregator:
                 # 지점의 기존 branch_tags를 한 번에 조회 (weighted_score 포함)
                 existing_result = await (
                     client.table("branch_tags")
-                    .select("tag_id, positive_count, negative_count, count, weighted_score")
+                    .select("tag_id, positive_count, negative_count, neutral_count, count, weighted_score")
                     .eq("branch_id", branch_id)
                     .eq("period_type", "all")
                     .in_("tag_id", tag_ids_for_branch)
@@ -151,12 +151,15 @@ class TagAggregator:
                     if existing:
                         old_pos = existing.get("positive_count", 0) or 0
                         old_neg = existing.get("negative_count", 0) or 0
+                        old_neu = existing.get("neutral_count", 0) or 0
                         old_count = existing.get("count", 0) or 0
                         new_pos = old_pos + counts["positive_count"]
                         new_neg = old_neg + counts["negative_count"]
+                        new_neu = old_neu + counts["neutral_count"]
                     else:
                         new_pos = counts["positive_count"]
                         new_neg = counts["negative_count"]
+                        new_neu = counts["neutral_count"]
                         old_count = 0
 
                     new_total = (
@@ -180,6 +183,7 @@ class TagAggregator:
                         "period_type": "all",
                         "positive_count": new_pos,
                         "negative_count": new_neg,
+                        "neutral_count": new_neu,
                         "count": new_total,
                         "weighted_score": existing_weighted + weighted_delta,
                     })

@@ -13,10 +13,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from math import exp
-from datetime import datetime
 
-DECAY_LAMBDA: float = 0.01  # 반감기 ~69일
+from core.constants import DECAY_LAMBDA
 
 
 def compute_decay(review_date: datetime | None, reference_date: datetime) -> float:
@@ -32,5 +32,10 @@ def compute_decay(review_date: datetime | None, reference_date: datetime) -> flo
     """
     if review_date is None:
         return 1.0
+    # timezone-naive datetime은 UTC로 간주 (CSV 등 외부 소스 호환)
+    if review_date.tzinfo is None:
+        review_date = review_date.replace(tzinfo=timezone.utc)
+    if reference_date.tzinfo is None:
+        reference_date = reference_date.replace(tzinfo=timezone.utc)
     days_ago = max(0, (reference_date - review_date).days)
     return exp(-DECAY_LAMBDA * days_ago)

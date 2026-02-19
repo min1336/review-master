@@ -13,7 +13,16 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+from core.constants import (
+    CACHE_MIN_NEW_REVIEWS,
+    CACHE_SENTIMENT_DRIFT,
+    CACHE_TAG_COUNT_RATIO,
+    IMPROVEMENT_NEGATIVE_RATIO,
+    REVIEW_CHANGE_THRESHOLD,
+    STRENGTH_POSITIVE_RATIO,
+)
 from core.timezone import to_kst, utc_now
+from domain.analysis.patterns import AFFILIATE_CATEGORIES, VEHICLE_CATEGORIES
 from typing import TYPE_CHECKING, Awaitable, Callable
 
 if TYPE_CHECKING:
@@ -128,15 +137,6 @@ VEHICLE_AXES = {
     "청결도": ["차량이 청결함"],
     "외관/옵션": ["차량외관이 좋음"],
 }
-AFFILIATE_CATEGORIES = {c for cats in AFFILIATE_AXES.values() for c in cats}
-VEHICLE_CATEGORIES = {c for cats in VEHICLE_AXES.values() for c in cats}
-
-REVIEW_CHANGE_THRESHOLD = 30  # 캐싱 무효화 임계값 (CLT 기반) — get_review_count_summary() 전용
-
-# 태그 분포 기반 캐시 무효화
-CACHE_MIN_NEW_REVIEWS = 5             # 패스트 패스 최소 기준 (노이즈 방지)
-CACHE_TAG_COUNT_RATIO = 0.15          # 태그 언급 수 15% 이상 변화 시 무효화
-CACHE_SENTIMENT_DRIFT = 8.0           # 긍정률 8%p 이상 변화 시 무효화
 
 
 class ReportService:
@@ -596,13 +596,14 @@ class ReportService:
 
             pos = bt.positive_count or 0
             neg = bt.negative_count or 0
-            total = pos + neg
+            neu = bt.neutral_count or 0
+            total = pos + neg + neu
 
             tag_sentiments.append({
                 "name": name,
                 "positive": pos,
                 "negative": neg,
-                "neutral": 0,
+                "neutral": neu,
                 "total": total,
             })
             total_pos += pos
@@ -626,11 +627,14 @@ class ReportService:
                 category_stats[cat_name]["negative"] += neg
                 category_stats[cat_name]["total"] += total
 
-        total_all = total_pos + total_neg
+        total_neu = sum(
+            ts.get("neutral", 0) for ts in tag_sentiments
+        )
+        total_all = total_pos + total_neg + total_neu
         sentiment_stats = {
             "positive": total_pos,
             "negative": total_neg,
-            "neutral": 0,
+            "neutral": total_neu,
             "total": total_all,
         }
 
@@ -652,7 +656,7 @@ class ReportService:
             if stats["total"] == 0:
                 continue
             pos_ratio = round(stats["positive"] / stats["total"] * 100)
-            if pos_ratio >= 60:
+            if pos_ratio >= STRENGTH_POSITIVE_RATIO:
                 strengths.append(f"{cat_name}({pos_ratio}%)")
                 strengths_detail.append({"category_name": cat_name, "ratio": pos_ratio})
             if len(strengths) >= 3:
@@ -669,7 +673,7 @@ class ReportService:
             if stats["total"] == 0:
                 continue
             neg_ratio = round(stats["negative"] / stats["total"] * 100)
-            if neg_ratio >= 20:
+            if neg_ratio >= IMPROVEMENT_NEGATIVE_RATIO:
                 improvements.append(f"{cat_name}({neg_ratio}%)")
                 improvements_detail.append({"category_name": cat_name, "ratio": neg_ratio})
             if len(improvements) >= 3:

@@ -16,6 +16,7 @@ from .chunker import ClauseChunker
 from .extractor import KeywordExtractor
 from .hybrid_classifier import HybridClassifier
 from .patterns import (
+    ASPECT_KEYWORDS,
     DOUBLE_NEGATION_PATTERNS,
     DOUBLE_NEGATION_REGEX,
     GENERAL_POSITIVE_KEYWORDS,
@@ -26,12 +27,21 @@ from .patterns import (
     POSITIVE_PATTERNS,
     POSITIVE_REGEX,
     RULE_BASED_TAG_MAPPING,
+    TAG_COLORS,
+    TAG_DESCRIPTIONS,
+    TAG_REGISTRY,
     extract_stem,
     get_tag_for_keyword,
     is_negative_keyword,
 )
+from .sentiment_core import (
+    check_double_negation,
+    count_sentiment_matches,
+    detect_keyword_sentiment,
+    detect_keyword_sentiment_with_context,
+)
 from .sentiment_utils import SentimentResult, UnifiedSentimentAnalyzer
-from .tag_embeddings import TAG_COLORS, TAG_DESCRIPTIONS, TagEmbeddingManager
+from .tag_embeddings import TagEmbeddingManager
 
 __all__ = [
     # Keywords
@@ -49,6 +59,9 @@ __all__ = [
     # Unified Sentiment
     "UnifiedSentimentAnalyzer",
     "SentimentResult",
+    # Registry
+    "TAG_REGISTRY",
+    "ASPECT_KEYWORDS",
     # Patterns
     "NEGATIVE_PATTERNS",
     "POSITIVE_PATTERNS",
@@ -60,6 +73,11 @@ __all__ = [
     "POSITIVE_REGEX",
     "POSITIVE_EXCEPTION_REGEX",
     "DOUBLE_NEGATION_REGEX",
+    # Sentiment Core
+    "detect_keyword_sentiment",
+    "detect_keyword_sentiment_with_context",
+    "check_double_negation",
+    "count_sentiment_matches",
     # Utils
     "extract_stem",
     "is_negative_keyword",

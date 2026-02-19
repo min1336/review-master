@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from core.config import REGION_CONFIG, BranchType
+from core.constants import IMPROVEMENT_NEGATIVE_RATIO, STRENGTH_POSITIVE_RATIO
 
 
 class SummaryPromptBuilder:
@@ -522,9 +523,9 @@ class RichSummaryPromptBuilder:
             pos_ratio = round(pos / total * 100) if total > 0 else 0
             neg_ratio = round(neg / total * 100) if total > 0 else 0
 
-            if pos_ratio >= 60:
+            if pos_ratio >= STRENGTH_POSITIVE_RATIO:
                 positive_tags.append(f"{name}(긍정 {pos_ratio}%)")
-            if neg_ratio >= 30:
+            if neg_ratio >= IMPROVEMENT_NEGATIVE_RATIO:
                 negative_tags.append(f"{name}(부정 {neg_ratio}%)")
 
         # 전체 감정 비율
@@ -651,9 +652,9 @@ class RichSummaryPromptBuilder:
             pos_ratio = round(pos / total * 100) if total > 0 else 0
             neg_ratio = round(neg / total * 100) if total > 0 else 0
 
-            if pos_ratio >= 60:
+            if pos_ratio >= STRENGTH_POSITIVE_RATIO:
                 positive_tags.append(f"{name}(긍정 {pos_ratio}%, {pos}/{total}건)")
-            if neg_ratio >= 20:
+            if neg_ratio >= IMPROVEMENT_NEGATIVE_RATIO:
                 negative_tags.append(f"{name}(부정 {neg_ratio}%, {neg}/{total}건)")
 
         # 전체 감정 비율

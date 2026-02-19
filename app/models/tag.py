@@ -66,6 +66,7 @@ class BranchTag(BaseModel):
     count: int = 0
     positive_count: int = 0
     negative_count: int = 0
+    neutral_count: int = 0
     weighted_score: float | None = 0
     rank: int | None = None
     created_at: datetime | None = None
