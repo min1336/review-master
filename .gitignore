@@ -137,7 +137,7 @@ data/*.npz
 # Git worktrees
 .worktrees/
 .omc
-/tests
+/tests/__pycache__
 /.claude
 .bkit/
 .playwright-mcp/
