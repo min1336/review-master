@@ -50,6 +50,8 @@ SIMILARITY_THRESHOLD = 0.3       # 태그 분류 최소 유사도
 - `app/models/` — Pydantic DB 모델
 - `app/schemas/` — API 요청/응답 DTO
 - `app/templates/` — HTML 대시보드 (dashboard_v2, analysis, tag_tester)
+- `app/static/js/shared-utils.js` — 공통 JS (escapeHtml, escapeAttr, showToast, apiRequest 등)
+- `app/static/css/shared-theme.css` — 공통 CSS 변수, 리셋, toast 애니메이션
 
 ## Architecture
 
@@ -73,10 +75,6 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 
 `.env` 필수: `OPENAI_API_KEY`, `LLM_PROVIDER`, `SUPABASE_URL`, `SUPABASE_KEY`, `API_PREFIX`
 - 로컬: `API_PREFIX=/api` / 서버: `API_PREFIX=/review/api`
-
-## Status Workflow
-
-draft(보류) → approved(승인) → published(게시)
 
 ## 태그 시스템
 
@@ -109,7 +107,11 @@ draft(보류) → approved(승인) → published(게시)
 ## 프론트엔드 주의사항
 
 - innerHTML 대신 DOM API 사용 (보안 훅이 XSS 경고 발생)
-- `escapeHtml` 사용 필수 (정의: `dashboard_v2.html:1669`)
+- `escapeHtml` 사용 필수 (정의: `app/static/js/shared-utils.js`)
+- HTML 속성(onclick, data-*, value)에는 `escapeAttr()` 사용 (같은 파일)
+- 동적 텍스트 업데이트는 `innerHTML` 대신 `.textContent` 사용
+- 모든 템플릿은 `shared-theme.css` + `shared-utils.js`를 `{{ base_path }}`로 참조
+- CSS 변수: `shared-theme.css`에 superset 정의, 각 페이지는 로컬 오버라이드만 유지
 - let 변수: 사용 함수보다 위에 선언
 - `regenerate_report()`는 내부적으로 `generate_report()` 호출 (동일 로직)
 

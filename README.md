@@ -243,12 +243,6 @@ EMBEDDING_MODEL = "intfloat/multilingual-e5-small"  # 임베딩 모델
 SIMILARITY_THRESHOLD = 0.3                 # 태그 분류 최소 유사도
 ```
 
-## Status Workflow
-
-```
-draft(보류) → approved(승인) → published(게시)
-```
-
 ## Docker
 
 ```bash
