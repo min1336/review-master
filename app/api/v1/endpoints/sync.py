@@ -71,9 +71,10 @@ async def api_get_scheduler_status(
 ) -> dict[str, Any]:
     """일일 동기화 스케줄러 상태 조회"""
     hour, minute = scheduler.get_schedule_time()
+    next_run = scheduler.get_next_run_time()
     return api_response({
         "is_running": scheduler.is_running,
-        "next_run_time": scheduler.get_next_run_time(),
+        "next_run_time": next_run.isoformat() if next_run is not None else None,
         "sync_hour": hour,
         "sync_minute": minute,
     })
@@ -94,9 +95,10 @@ async def api_update_scheduler_time(
         )
 
     hour, minute = scheduler.get_schedule_time()
+    next_run = scheduler.get_next_run_time()
     return api_response({
         "is_running": scheduler.is_running,
-        "next_run_time": scheduler.get_next_run_time(),
+        "next_run_time": next_run.isoformat() if next_run is not None else None,
         "sync_hour": hour,
         "sync_minute": minute,
     })

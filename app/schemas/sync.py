@@ -36,7 +36,7 @@ class SchedulerStatusResponse(BaseModel):
 
     is_running: bool
     next_run_time: datetime | None = None
-    sync_hour: int = 7  # 실행 시간 (시)
+    sync_hour: int = 6  # 실행 시간 (시)
     sync_minute: int = 0  # 실행 시간 (분)
 
 

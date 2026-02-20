@@ -48,7 +48,7 @@ class SyncScheduler:
         # 동기화 작업 등록 - 매일 특정 시간에 실행
         self._scheduler.add_job(
             self._sync_reviews_job,
-            trigger=CronTrigger(hour=self._sync_hour, minute=self._sync_minute),
+            trigger=CronTrigger(hour=self._sync_hour, minute=self._sync_minute, timezone="Asia/Seoul"),
             id="sync_reviews",
             name="Athena 리뷰 동기화 (매일)",
             replace_existing=True,
@@ -152,7 +152,7 @@ class SyncScheduler:
         if self._is_running:
             self._scheduler.reschedule_job(
                 "sync_reviews",
-                trigger=CronTrigger(hour=hour, minute=minute),
+                trigger=CronTrigger(hour=hour, minute=minute, timezone="Asia/Seoul"),
             )
             logger.info(f"스케줄러 작업 재등록됨: 매일 {hour:02d}:{minute:02d}")
 
