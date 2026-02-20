@@ -5,12 +5,42 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 
 from schemas.dto import (
     KeywordSentimentDTO,
     TagAnalysisResultDTO,
     TagGroupDTO,
 )
+
+# ============================================================
+# ML 모델 싱글턴 (FastEmbed 모델을 한 번만 로드하여 재사용)
+# Docker 환경(512MB RAM)에서 매 요청마다 ~1.1GB 모델을
+# 새로 로드하면 OOM → ERR_EMPTY_RESPONSE 발생
+# ============================================================
+_extractor_instance = None
+_classifier_instance = None
+_init_lock = threading.Lock()
+
+
+def _get_extractor():
+    global _extractor_instance
+    if _extractor_instance is None:
+        with _init_lock:
+            if _extractor_instance is None:
+                from domain.analysis import KeywordExtractor
+                _extractor_instance = KeywordExtractor()
+    return _extractor_instance
+
+
+def _get_classifier():
+    global _classifier_instance
+    if _classifier_instance is None:
+        with _init_lock:
+            if _classifier_instance is None:
+                from domain.analysis import HybridClassifier
+                _classifier_instance = HybridClassifier()
+    return _classifier_instance
 
 
 class TagService:
@@ -95,12 +125,10 @@ class TagService:
         """리뷰 텍스트 태그 분석 (파이프라인 동일 로직: ABSA + 임베딩 + 규칙)"""
 
         def analyze():
-            from domain.analysis import KeywordExtractor, HybridClassifier
-
-            extractor = KeywordExtractor()
+            extractor = _get_extractor()
             keywords = extractor.extract(review_text)
 
-            classifier = HybridClassifier()
+            classifier = _get_classifier()
 
             # 파이프라인과 동일: classify_review (ABSA + 임베딩 결합)
             tag_sentiments = classifier.classify_review(
@@ -246,9 +274,7 @@ class TagService:
         keywords = [item["keyword"] for item in unmapped]
 
         def classify():
-            from domain.analysis import HybridClassifier
-
-            classifier = HybridClassifier(lazy_load=True)
+            classifier = _get_classifier()
             return classifier.classify_keywords(keywords)
 
         classifications = await asyncio.to_thread(classify)
