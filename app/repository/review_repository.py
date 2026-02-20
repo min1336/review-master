@@ -343,18 +343,41 @@ class BranchReviewRepository(BaseRepository[Review]):
         Returns:
             수정된 리뷰 수
         """
-        query = self._client.table(self.table_name).update({"is_new": False})
-
         if review_ids:
-            query = query.in_("review_id", review_ids)
-        else:
-            # 전체 읽음의 경우 현재 is_new=true인 것만 대상
-            query = query.eq("is_new", True)
+            return await self._batch_mark_read(review_ids)
 
-        # update() 후 execute()하면 수정된 행이 반환됨
-        result = await query.execute()
+        # 전체 읽음: ID 조회 후 배치 업데이트 (statement timeout 방지)
+        total = 0
+        while True:
+            id_query = (
+                self._client.table(self.table_name)
+                .select("review_id")
+                .eq("is_new", True)
+                .limit(1000)
+            )
+            id_result = await execute_with_retry(id_query)
 
-        return len(result.data) if result.data else 0
+            if not id_result.data:
+                break
+
+            ids = [row["review_id"] for row in id_result.data]
+            total += await self._batch_mark_read(ids)
+
+        return total
+
+    async def _batch_mark_read(self, review_ids: list[int], batch_size: int = 500) -> int:
+        """review_id 목록을 배치 단위로 is_new=false 처리"""
+        total = 0
+        for i in range(0, len(review_ids), batch_size):
+            batch = review_ids[i : i + batch_size]
+            query = (
+                self._client.table(self.table_name)
+                .update({"is_new": False})
+                .in_("review_id", batch)
+            )
+            result = await execute_with_retry(query)
+            total += len(result.data) if result.data else 0
+        return total
 
     async def delete_by_review_ids(self, review_ids: list[int], batch_size: int = 100) -> int:
         """
