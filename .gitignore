@@ -144,6 +144,5 @@ data/*.npz
 .vscode/
 /docs
 data/
-static/
 *.png
 *.jpg
