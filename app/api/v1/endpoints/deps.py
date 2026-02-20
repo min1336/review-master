@@ -197,9 +197,10 @@ async def get_report_service(
     sentiment_repo: SentimentRepository = Depends(get_sentiment_repo),
 ) -> ReportService:
     from services.report_service import ReportService
+    from services.vehicle_analyzer import VehicleAnalyzer
     from infrastructure.pdf.generator import PDFGenerator
 
-    return ReportService(summary_repo, review_repo, branch_tag_repo, report_repo, sentiment_repo, PDFGenerator())
+    return ReportService(summary_repo, review_repo, branch_tag_repo, report_repo, sentiment_repo, PDFGenerator(), VehicleAnalyzer())
 
 
 async def get_report_job_service(

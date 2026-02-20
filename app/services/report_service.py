@@ -8,8 +8,13 @@ AI 리포트 서비스
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+import re
 from datetime import datetime
+
+from dateutil.relativedelta import relativedelta
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +37,7 @@ if TYPE_CHECKING:
     from repository.sentiment_repository import SentimentRepository
     from repository.summary_repository import SummaryRepository
     from infrastructure.pdf.generator import PDFGenerator
+    from services.vehicle_analyzer import VehicleAnalyzer
 
 from pydantic import BaseModel, model_validator
 
@@ -131,6 +137,7 @@ class ReportService:
         report_repo: ReportRepository | None = None,
         sentiment_repo: SentimentRepository | None = None,
         pdf_generator: PDFGenerator | None = None,
+        vehicle_analyzer: VehicleAnalyzer | None = None,
     ) -> None:
         self.summary_repo = summary_repo
         self.review_repo = review_repo
@@ -138,6 +145,10 @@ class ReportService:
         self.report_repo = report_repo
         self.sentiment_repo = sentiment_repo
         self._pdf_generator = pdf_generator
+        if vehicle_analyzer is None:
+            from services.vehicle_analyzer import VehicleAnalyzer as _VA
+            vehicle_analyzer = _VA()
+        self.vehicle_analyzer = vehicle_analyzer
 
     # ================================================================
     # PDF 생성 (Infrastructure 위임)
@@ -145,8 +156,6 @@ class ReportService:
 
     async def generate_pdf(self, report: ReportData) -> bytes:
         """PDF 바이트 생성 (H-1: Service 레이어에서 Infrastructure 호출, H-2: 이벤트 루프 블로킹 방지)"""
-        import asyncio
-
         if self._pdf_generator is None:
             from infrastructure.pdf.generator import PDFGenerator
             self._pdf_generator = PDFGenerator()
@@ -191,9 +200,6 @@ class ReportService:
 
         선택된 기간과 표준 4개 기간(1m/3m/6m/12m) + all의 리뷰 수를 한번에 반환합니다.
         """
-        import asyncio
-
-        from dateutil.relativedelta import relativedelta
         from core.timezone import utc_now
 
         today = utc_now()
@@ -290,8 +296,6 @@ class ReportService:
         if not self.report_repo:
             return None
 
-        import json
-
         saved = await self.report_repo.get_by_branch_and_period(
             branch_id, start_date, end_date
         )
@@ -348,42 +352,43 @@ class ReportService:
         end_date: datetime,
         saved_report: ReportData,
     ) -> bool:
-        """
-        True → 캐시 무효화 (재생성), False → 캐시 유효
-
-        Step 1 (fast path): 리뷰 수 변화 없으면 즉시 False 반환
-        Step 2: 태그 분포 비교
-          - 신호 A: 태그 총 언급 수 변화 >= 15%
-          - 신호 B: 긍정률 변화 >= 8%p
-          → OR 조합
-        """
-        # Step 1: Fast path — 리뷰 변화가 아예 없으면 태그 조회 생략
-        current_review_count = await self.review_repo.count_by_branch(
-            branch_id=branch_id,
-            review_date_from=start_date,
-            review_date_to=end_date,
-        )
-        new_reviews = current_review_count - saved_report.total_reviews
-
+        """캐시 무효화 여부 결정"""
+        new_reviews = await self._count_new_reviews(branch_id, start_date, end_date, saved_report)
         if new_reviews < CACHE_MIN_NEW_REVIEWS:
-            return False  # 리뷰 변화 없음 → 캐시 유효
+            return False
 
-        # Step 2: 저장된 태그 기준값 추출
+        return await self._has_significant_sentiment_drift(branch_id, new_reviews, saved_report)
+
+    async def _count_new_reviews(
+        self,
+        branch_id: int,
+        start_date: datetime,
+        end_date: datetime,
+        saved_report: ReportData,
+    ) -> int:
+        """현재 리뷰 수와 저장 시점 차이 계산"""
+        current_count = await self.review_repo.count_by_branch(
+            branch_id=branch_id, review_date_from=start_date, review_date_to=end_date
+        )
+        return current_count - saved_report.total_reviews
+
+    async def _has_significant_sentiment_drift(
+        self,
+        branch_id: int,
+        new_reviews: int,
+        saved_report: ReportData,
+    ) -> bool:
+        """태그 분포 변화가 유의미한지 검사 (Signal A | Signal B)"""
         saved_stats = self._extract_saved_tag_stats(saved_report)
         if saved_stats is None:
-            # top_tags_detail 없는 레거시 리포트 → 기존 volume 방식 fallback
             return new_reviews >= REVIEW_CHANGE_THRESHOLD
 
         saved_total, saved_pos_ratio = saved_stats
 
-        # Step 3: 현재 태그 분포 조회 (_step_tags와 동일한 소스)
-        current_tags = await self.branch_tag_repo.get_by_branch(
-            branch_id, period_type="all", limit=100
-        )
+        current_tags = await self.branch_tag_repo.get_by_branch(branch_id, period_type="all", limit=100)
         if not current_tags:
-            return False  # 태그 데이터 없음 → 캐시 유효 (안전 방향)
+            return False
 
-        # 현재 태그 집계 계산
         current_total_pos = sum(bt.positive_count or 0 for bt in current_tags)
         current_total_neg = sum(bt.negative_count or 0 for bt in current_tags)
         current_total = current_total_pos + current_total_neg
@@ -393,15 +398,14 @@ class ReportService:
 
         current_pos_ratio = (current_total_pos / current_total) * 100.0
 
-        # 신호 A: 태그 총 언급 수 변화 비율
+        # Signal A: 태그 수 변화 >= 15%
         tag_count_ratio = abs(current_total - saved_total) / max(saved_total, 1)
         signal_a = tag_count_ratio >= CACHE_TAG_COUNT_RATIO
 
-        # 신호 B: 긍정률 변화
+        # Signal B: 긍정률 변화 >= 8%p
         signal_b = abs(current_pos_ratio - saved_pos_ratio) >= CACHE_SENTIMENT_DRIFT
 
         should_invalidate = signal_a or signal_b
-
         if should_invalidate:
             logger.info(
                 "캐시 무효화: branch_id=%s, 태그수 변화=%.1f%% (신호A=%s), "
@@ -409,7 +413,6 @@ class ReportService:
                 branch_id, tag_count_ratio * 100, signal_a,
                 saved_pos_ratio, current_pos_ratio, signal_b,
             )
-
         return should_invalidate
 
     async def get_or_generate_report(
@@ -486,10 +489,10 @@ class ReportService:
         summary_data = summary.model_dump()
 
         # 차량별 분석 데이터 수집
-        vehicle_analysis = await self._get_vehicle_analysis(branch_id, start_date, end_date)
+        vehicle_analysis = await self.vehicle_analyzer.get_vehicle_analysis(branch_id, start_date, end_date)
 
         # 차량별 태그 raw 데이터 (VehicleRankItem 생성용, 기간 필터 적용)
-        vehicle_tags_raw = await self._get_vehicle_tags_raw(branch_id)
+        vehicle_tags_raw = await self.vehicle_analyzer.get_vehicle_tags_raw(branch_id)
 
         return {
             "branch_id": branch_id,
@@ -513,7 +516,7 @@ class ReportService:
                 branch_id, period_type="all", limit=100
             )
         except Exception as e:
-            logging.warning(f"태그 조회 실패 (branch_id={branch_id}): {e}")
+            logger.warning(f"태그 조회 실패 (branch_id={branch_id}): {e}")
             return {}
 
         if not all_tags:
@@ -712,8 +715,6 @@ class ReportService:
         Returns:
             dict: AI 분석 결과 (period_summary, affiliate_ai_text, vehicle_ai_text)
         """
-        import asyncio
-
         # 대표 리뷰 수집 (리포트 모드일 때만, 기간 필터 적용)
         sample_reviews: list[str] = []
         if data.get("tag_sentiments") and self.review_repo:
@@ -728,7 +729,7 @@ class ReportService:
                     r.get("content", "") for r in result.reviews if r.get("content")
                 ]
             except Exception as e:
-                logging.warning(f"대표 리뷰 조회 실패: {e}")
+                logger.warning(f"대표 리뷰 조회 실패: {e}")
 
         # 차량 분석 요약 텍스트 생성
         vehicle_summary = None
@@ -843,7 +844,7 @@ class ReportService:
             return strip_markdown_formatting(content).strip()
 
         except Exception as e:
-            logging.error(f"업체 평가 텍스트 생성 실패: {e}")
+            logger.error(f"업체 평가 텍스트 생성 실패: {e}")
             return ""
 
     async def _generate_vehicle_text(
@@ -887,7 +888,7 @@ class ReportService:
             return strip_markdown_formatting(content).strip()
 
         except Exception as e:
-            logging.error(f"차량 평가 텍스트 생성 실패: {e}")
+            logger.error(f"차량 평가 텍스트 생성 실패: {e}")
             return ""
 
     async def _step_build(
@@ -914,7 +915,7 @@ class ReportService:
         # 차량 순위 생성
         vehicle_tags_raw = collected.get("vehicle_tags_raw", {})
         vehicle_analysis_list = collected.get("vehicle_analysis", [])
-        top_liked, top_disliked = self._build_vehicle_rankings(
+        top_liked, top_disliked = self.vehicle_analyzer.build_vehicle_rankings(
             vehicle_tags_raw, vehicle_analysis_list
         )
 
@@ -965,7 +966,7 @@ class ReportService:
                     report_data=report.model_dump(),
                 )
             except Exception as e:
-                logging.warning(f"리포트 저장 실패 (생성은 성공): {e}")
+                logger.warning(f"리포트 저장 실패 (생성은 성공): {e}")
 
         return report
 
@@ -1024,7 +1025,7 @@ class ReportService:
                 )
                 collected["total_reviews"] = period_count
             except Exception as e:
-                logging.warning(f"기간별 리뷰 수 조회 실패: {e}")
+                logger.warning(f"기간별 리뷰 수 조회 실패: {e}")
 
         # Step 2: 태그 분석 (20-40%)
         await update_progress(20)
@@ -1039,7 +1040,7 @@ class ReportService:
 
         # 차량 순위 데이터 생성 (ai_data에 전달)
         vehicle_tags_raw = collected.get("vehicle_tags_raw", {})
-        top_liked, top_disliked = self._build_vehicle_rankings(
+        top_liked, top_disliked = self.vehicle_analyzer.build_vehicle_rankings(
             vehicle_tags_raw, collected.get("vehicle_analysis", [])
         )
 
@@ -1088,436 +1089,39 @@ class ReportService:
             progress_callback=None,
         )
 
-    async def _get_vehicle_analysis(
-        self,
-        branch_id: int,
-        start_date: datetime | None = None,
-        end_date: datetime | None = None,
-    ) -> list[VehicleAnalysis]:
-        """
-        차량별 평가 분석 (car_model_tags 테이블 활용 또는 기간 필터링)
-
-        Args:
-            branch_id: 지점 ID
-            start_date: 시작일 (기간 필터용, None이면 전체 기간)
-            end_date: 종료일 (기간 필터용, None이면 전체 기간)
-
-        Returns:
-            list[VehicleAnalysis]: 차량별 분석 리스트
-        """
-        from repository.session import get_client
-
-        client = await get_client()
-
-        # 기간 필터가 있으면 branch_reviews에서 직접 집계
-        if start_date and end_date:
-            return await self._get_vehicle_analysis_from_reviews(
-                client, branch_id, start_date, end_date
-            )
-
-        try:
-            # car_model_tags 테이블에서 차량별 태그 데이터 조회 (tags 테이블 JOIN)
-            result = await (
-                client.table("car_model_tags")
-                .select("car_model, tag_id, positive_count, negative_count, neutral_count, total_count, tags(name)")
-                .eq("branch_id", branch_id)
-                .execute()
-            )
-        except Exception as e:
-            # car_model_tags 테이블이 없으면 빈 리스트 반환
-            logging.warning(f"차량별 분석 조회 실패 (branch_id={branch_id}): {e}")
-            return []
-
-        if not result.data:
-            return []
-
-        # 차량별로 그룹화
-        car_data: dict[str, dict] = {}
-
-        for row in result.data:
-            car_model = row.get("car_model", "기타")
-            tag_info = row.get("tags") or {}
-            tag_name = tag_info.get("name", "기타")
-
-            positive = row.get("positive_count", 0)
-            negative = row.get("negative_count", 0)
-            neutral = row.get("neutral_count", 0)
-            total = row.get("total_count", 0)
-
-            if car_model not in car_data:
-                car_data[car_model] = {
-                    "total_count": 0,
-                    "total_positive": 0,
-                    "total_negative": 0,
-                    "tags": {}
-                }
-
-            # 차량별 전체 카운트 누적
-            car_data[car_model]["total_count"] += total
-            car_data[car_model]["total_positive"] += positive
-            car_data[car_model]["total_negative"] += negative
-
-            # 태그별 데이터 저장
-            car_data[car_model]["tags"][tag_name] = {
-                "positive": positive,
-                "negative": negative,
-                "neutral": neutral,
-                "total": total
-            }
-
-        # VehicleAnalysis 객체 리스트 생성
-        vehicle_list: list[VehicleAnalysis] = []
-
-        for car_model, data in sorted(car_data.items(), key=lambda x: x[1]["total_count"], reverse=True):
-            total = data["total_count"]
-            if total == 0:
-                continue
-
-            total_positive = data["total_positive"]
-            total_negative = data["total_negative"]
-
-            # avg_sentiment: 0.0 ~ 1.0 범위로 정규화
-            # 공식: (positive_ratio - negative_ratio + 1) / 2
-            # 0.0 (모두 부정) ~ 0.5 (중립) ~ 1.0 (모두 긍정)
-            if total > 0:
-                positive_ratio = total_positive / total
-                negative_ratio = total_negative / total
-                avg_sentiment = (positive_ratio - negative_ratio + 1) / 2
-            else:
-                avg_sentiment = 0.5  # 중립
-
-            # top_praise: positive_count가 가장 높은 태그 (건수 표기)
-            top_praise_tag = ""
-            max_positive = 0
-            for tag_name, tag_stats in data["tags"].items():
-                if tag_stats["positive"] > max_positive:
-                    max_positive = tag_stats["positive"]
-                    top_praise_tag = f"{tag_name}({max_positive}건)"
-
-            # top_issue: negative_count가 가장 높은 태그 (건수 표기)
-            top_issue_tag = ""
-            max_negative = 0
-            for tag_name, tag_stats in data["tags"].items():
-                if tag_stats["negative"] > max_negative:
-                    max_negative = tag_stats["negative"]
-                    top_issue_tag = f"{tag_name}({max_negative}건)"
-
-            # 호불호 비율 계산 (퍼센트)
-            like_ratio = int(round((total_positive / total) * 100)) if total > 0 else 0
-            dislike_ratio = int(round((total_negative / total) * 100)) if total > 0 else 0
-
-            vehicle_list.append(VehicleAnalysis(
-                model=car_model,
-                count=total,
-                avg_sentiment=round(avg_sentiment, 2),
-                top_praise=top_praise_tag,
-                top_issue=top_issue_tag,
-                like_ratio=like_ratio,
-                dislike_ratio=dislike_ratio
-            ))
-
-        return vehicle_list
-
-    async def _get_vehicle_analysis_from_reviews(
-        self,
-        client,
-        branch_id: int,
-        start_date: datetime,
-        end_date: datetime,
-    ) -> list[VehicleAnalysis]:
-        """
-        branch_reviews에서 기간 필터링된 차량별 분석 (car_model_tags 대체)
-
-        Args:
-            client: Supabase 클라이언트
-            branch_id: 지점 ID
-            start_date: 시작일
-            end_date: 종료일
-
-        Returns:
-            list[VehicleAnalysis]: 차량별 분석 리스트
-        """
-        from datetime import timedelta
-
-        try:
-            next_day = end_date + timedelta(days=1)
-
-            # Supabase 기본 행 제한(1000건) 대응: 페이지네이션
-            all_rows: list[dict] = []
-            batch_size = 1000
-            offset = 0
-
-            while True:
-                result = await (
-                    client.table("branch_reviews")
-                    .select("car_model, sentiment")
-                    .eq("branch_id", branch_id)
-                    .gte("review_date", start_date.isoformat())
-                    .lt("review_date", next_day.isoformat())
-                    .range(offset, offset + batch_size - 1)
-                    .execute()
-                )
-                if not result.data:
-                    break
-                all_rows.extend(result.data)
-                if len(result.data) < batch_size:
-                    break
-                offset += batch_size
-
-        except Exception as e:
-            logging.warning(f"기간별 차량 분석 조회 실패 (branch_id={branch_id}): {e}")
-            return []
-
-        if not all_rows:
-            return []
-
-        # 차량별 그룹화
-        car_data: dict[str, dict] = {}
-        for row in all_rows:
-            car_model = row.get("car_model") or "기타"
-            sentiment = row.get("sentiment", "neutral")
-
-            if car_model not in car_data:
-                car_data[car_model] = {"total": 0, "positive": 0, "negative": 0}
-
-            car_data[car_model]["total"] += 1
-            if sentiment == "positive":
-                car_data[car_model]["positive"] += 1
-            elif sentiment == "negative":
-                car_data[car_model]["negative"] += 1
-
-        # car_model_tags에서 태그 정보 가져오기 (top_praise, top_issue용)
-        tag_info = await self._get_vehicle_tag_info(client, branch_id)
-
-        # VehicleAnalysis 생성
-        vehicle_list: list[VehicleAnalysis] = []
-        for car_model, data in sorted(car_data.items(), key=lambda x: x[1]["total"], reverse=True):
-            total = data["total"]
-            if total == 0:
-                continue
-
-            positive = data["positive"]
-            negative = data["negative"]
-
-            like_ratio = int(round((positive / total) * 100)) if total > 0 else 0
-            dislike_ratio = int(round((negative / total) * 100)) if total > 0 else 0
-
-            positive_ratio = positive / total
-            negative_ratio = negative / total
-            avg_sentiment = round((positive_ratio - negative_ratio + 1) / 2, 2)
-
-            # 태그 정보 (all-time 기준, 기간별 태그 데이터 없음)
-            tags = tag_info.get(car_model, {})
-            top_praise = tags.get("top_praise", "")
-            top_issue = tags.get("top_issue", "")
-
-            vehicle_list.append(VehicleAnalysis(
-                model=car_model,
-                count=total,
-                avg_sentiment=avg_sentiment,
-                top_praise=top_praise,
-                top_issue=top_issue,
-                like_ratio=like_ratio,
-                dislike_ratio=dislike_ratio,
-            ))
-
-        return vehicle_list
-
-    async def _get_vehicle_tag_info(self, client, branch_id: int) -> dict[str, dict]:
-        """
-        car_model_tags에서 차량별 대표 태그 정보 조회 (기간 무관)
-
-        top_praise, top_issue 필드에 사용할 태그명+비율을 반환합니다.
-        car_model_tags는 전체 기간 집계만 있으므로 기간 필터는 적용하지 않습니다.
-
-        Args:
-            client: Supabase 클라이언트
-            branch_id: 지점 ID
-
-        Returns:
-            dict: {car_model: {"top_praise": "태그명(비율%)", "top_issue": "태그명(비율%)"}}
-        """
-        try:
-            result = await (
-                client.table("car_model_tags")
-                .select("car_model, positive_count, negative_count, total_count, tags(name)")
-                .eq("branch_id", branch_id)
-                .execute()
-            )
-        except Exception:
-            return {}
-
-        if not result.data:
-            return {}
-
-        # 차량별 태그 데이터 그룹화
-        car_tags: dict[str, dict[str, dict]] = {}
-        for row in result.data:
-            car_model = row.get("car_model", "기타")
-            tag_info = row.get("tags") or {}
-            tag_name = tag_info.get("name", "기타")
-
-            if car_model not in car_tags:
-                car_tags[car_model] = {}
-
-            car_tags[car_model][tag_name] = {
-                "positive": row.get("positive_count", 0),
-                "negative": row.get("negative_count", 0),
-                "total": row.get("total_count", 0),
-            }
-
-        # 차량별 top_praise, top_issue 추출
-        result_map: dict[str, dict] = {}
-        for car_model, tags in car_tags.items():
-            top_praise = ""
-            max_positive = 0
-            top_issue = ""
-            max_negative = 0
-
-            for tag_name, stats in tags.items():
-                if stats["positive"] > max_positive:
-                    max_positive = stats["positive"]
-                    top_praise = f"{tag_name}({max_positive}건)"
-                if stats["negative"] > max_negative:
-                    max_negative = stats["negative"]
-                    top_issue = f"{tag_name}({max_negative}건)"
-
-            result_map[car_model] = {
-                "top_praise": top_praise,
-                "top_issue": top_issue,
-            }
-
-        return result_map
-
-    async def _get_vehicle_tags_raw(
-        self,
-        branch_id: int,
-    ) -> dict[str, dict]:
-        """
-        car_model_tags에서 차량별 태그 데이터 조회 (VehicleRankItem용)
-        카테고리 정보를 포함하여 차량 카테고리 태그만 필터링합니다.
-
-        Returns:
-            dict: {car_model: {"total_positive": N, "total_negative": N, "total_count": N,
-                   "tags": {tag_name: {"positive": N, "negative": N, "total": N, "category_name": str}}}}
-        """
-        from repository.session import get_client
-
-        client = await get_client()
-        try:
-            query = (
-                client.table("car_model_tags")
-                .select("car_model, positive_count, negative_count, total_count, tags(name, categories(name))")
-                .eq("branch_id", branch_id)
-            )
-            result = await query.execute()
-        except Exception as e:
-            logging.warning(f"차량 태그 raw 조회 실패 (branch_id={branch_id}): {e}")
-            return {}
-
-        if not result.data:
-            return {}
-
-        car_data: dict[str, dict] = {}
-        for row in result.data:
-            car_model = row.get("car_model", "기타")
-            tag_info = row.get("tags") or {}
-            tag_name = tag_info.get("name", "기타")
-            cat_info = tag_info.get("categories") or {}
-            cat_name = cat_info.get("name", "")
-            positive = row.get("positive_count", 0)
-            negative = row.get("negative_count", 0)
-            total = row.get("total_count", 0)
-
-            if car_model not in car_data:
-                car_data[car_model] = {
-                    "total_positive": 0, "total_negative": 0, "total_count": 0, "tags": {},
-                }
-            car_data[car_model]["total_positive"] += positive
-            car_data[car_model]["total_negative"] += negative
-            car_data[car_model]["total_count"] += total
-            car_data[car_model]["tags"][tag_name] = {
-                "positive": positive, "negative": negative, "total": total,
-                "category_name": cat_name,
-            }
-
-        return car_data
-
-    def _build_vehicle_rankings(
-        self,
-        vehicle_tags_raw: dict[str, dict],
-        vehicle_analysis: list[dict],
-    ) -> tuple[list[VehicleRankItem], list[VehicleRankItem]]:
-        """
-        차량별 호평/불만 Top 5 + 태그 리스트 생성
-
-        vehicle_analysis (기간 필터링 된 데이터)의 count/like_ratio를 기본으로,
-        vehicle_tags_raw (all-time car_model_tags)의 태그를 보강하여 VehicleRankItem 생성.
-
-        Returns:
-            (top_liked, top_disliked)
-        """
-        # 기간별 차량 데이터를 dict으로 변환
-        va_map = {v.get("model", ""): v for v in vehicle_analysis}
-
-        items: list[dict] = []
-        for car_model, raw in vehicle_tags_raw.items():
-            va = va_map.get(car_model, {})
-            count = va.get("count", 0) or raw.get("total_count", 0)
-            like_ratio = va.get("like_ratio", 0)
-            dislike_ratio = va.get("dislike_ratio", 0)
-
-            # 기간별 데이터가 없으면 raw에서 계산
-            if not va and raw["total_count"] > 0:
-                like_ratio = round(raw["total_positive"] / raw["total_count"] * 100)
-                dislike_ratio = round(raw["total_negative"] / raw["total_count"] * 100)
-
-            # 차량 카테고리 태그만 필터
-            veh_tags = [
-                (name, ts) for name, ts in raw.get("tags", {}).items()
-                if ts.get("category_name", "") in VEHICLE_CATEGORIES and ts.get("total", 0) > 0
-            ]
-
-            # 호평용: 긍정 건수 내림차순
-            pos_sorted = sorted(veh_tags, key=lambda x: x[1]["positive"], reverse=True)
-            pos_tags = [f"{n}({ts['positive']}건)" for n, ts in pos_sorted[:3] if ts["positive"] > 0]
-
-            # 불만용: 부정 건수 내림차순 (0건 제외)
-            neg_sorted = sorted(veh_tags, key=lambda x: x[1]["negative"], reverse=True)
-            neg_tags = [f"{n}({ts['negative']}건)" for n, ts in neg_sorted[:3] if ts["negative"] > 0]
-
-            # 차량별 긍정/부정 태그 총 건수 집계
-            total_pos_tags = sum(ts["positive"] for _, ts in veh_tags)
-            total_neg_tags = sum(ts["negative"] for _, ts in veh_tags)
-
-            items.append({
-                "model": car_model,
-                "count": count,
-                "total_pos_tags": total_pos_tags,
-                "total_neg_tags": total_neg_tags,
-                "pos_tags": pos_tags,
-                "neg_tags": neg_tags,
-            })
-
-        # 호평 Top 5 (긍정 태그 건수 내림차순)
-        sorted_liked = sorted(items, key=lambda x: (x["total_pos_tags"], x["count"]), reverse=True)
-        top_liked = [
-            VehicleRankItem(model=it["model"], count=it["count"], ratio=it["total_pos_tags"], tags=it["pos_tags"])
-            for it in sorted_liked[:5]
-        ]
-
-        # 불만 Top 5 (부정 태그 건수 내림차순, 0건 제외)
-        sorted_disliked = sorted(
-            [it for it in items if it["total_neg_tags"] > 0],
-            key=lambda x: (x["total_neg_tags"], x["count"]),
-            reverse=True,
+    def _clean_llm_response(self, content: str, validation_mode: str = "summary") -> str:
+        """LLM 응답 정제 (마크다운 제거, 금지어 제거, 이모지 제거) + 재검증"""
+        from infrastructure.llm.validator import (
+            validate_summary, FORBIDDEN_WORDS, strip_markdown_formatting,
         )
-        top_disliked = [
-            VehicleRankItem(model=it["model"], count=it["count"], ratio=it["total_neg_tags"], tags=it["neg_tags"])
-            for it in sorted_disliked[:5]
-        ]
 
-        return top_liked, top_disliked
+        content = strip_markdown_formatting(content)
+
+        is_valid, errors = validate_summary(content, mode=validation_mode)
+        if is_valid:
+            return content
+
+        logger.warning("LLM 응답 검증 실패: %s", errors)
+
+        # 금지어 제거
+        for word in FORBIDDEN_WORDS:
+            content = content.replace(word, "")
+        # 이모지 제거
+        content = re.sub(
+            "["
+            "\U0001f600-\U0001f64f\U0001f300-\U0001f5ff"
+            "\U0001f680-\U0001f6ff\U0001f900-\U0001f9ff"
+            "\U00002600-\U000026ff\U00002700-\U000027bf"
+            "]+", "", content
+        )
+        content = content.strip()
+
+        # 정제 후 재검증
+        is_valid_after, errors_after = validate_summary(content, mode=validation_mode)
+        if not is_valid_after:
+            logger.warning("정제 후에도 검증 실패: %s", errors_after)
+
+        return content
 
     async def _generate_period_summary(
         self,
@@ -1564,12 +1168,12 @@ class ReportService:
                     for field in ["summary_1m", "summary_3m", "summary_6m", "summary_1y", "summary_all"]:
                         saved_summary = summary_data.get(field)
                         if saved_summary:
-                            logging.info(
+                            logger.info(
                                 f"DB 저장 요약 사용: branch_id={branch_id}, field={field}"
                             )
                             return saved_summary
             except Exception as e:
-                logging.warning(f"DB 요약 조회 실패 (branch_id={branch_id}): {e}")
+                logger.warning(f"DB 요약 조회 실패 (branch_id={branch_id}): {e}")
 
         # 2. DB에 없으면 LLM 호출
         from infrastructure.llm import get_provider
@@ -1637,29 +1241,9 @@ class ReportService:
             content = response.content if hasattr(response, "content") else str(response)
 
             # LLM 응답 품질 검증 및 자동 정제
-            from infrastructure.llm.validator import validate_summary, FORBIDDEN_WORDS, strip_markdown_formatting, validate_report_content
+            from infrastructure.llm.validator import validate_report_content
             validation_mode = "report" if tag_sentiments else "summary"
-            # 마크다운 서식 항상 제거 (검증 전에 먼저 정제)
-            content = strip_markdown_formatting(content)
-
-            is_valid, errors = validate_summary(content, mode=validation_mode)
-            if not is_valid:
-                logging.warning(
-                    f"LLM 응답 검증 실패 (branch_id={branch_id}): {errors}"
-                )
-                # 금지어 자동 제거
-                for word in FORBIDDEN_WORDS:
-                    content = content.replace(word, "")
-                # 이모지 자동 제거
-                import re
-                content = re.sub(
-                    "["
-                    "\U0001f600-\U0001f64f\U0001f300-\U0001f5ff"
-                    "\U0001f680-\U0001f6ff\U0001f900-\U0001f9ff"
-                    "\U00002600-\U000026ff\U00002700-\U000027bf"
-                    "]+", "", content
-                )
-                content = content.strip()
+            content = self._clean_llm_response(content, validation_mode)
 
             # 리포트 모드 내용 품질 검증
             if tag_sentiments and sentiment_stats:
@@ -1672,13 +1256,13 @@ class ReportService:
                     content, negative_ratio=neg_ratio
                 )
                 if not is_content_valid:
-                    logging.warning(
+                    logger.warning(
                         f"리포트 내용 검증 경고 (branch_id={branch_id}): {content_warnings}"
                     )
 
             return content
         except Exception as e:
-            logging.error(f"기간 요약 생성 실패: {e}")
+            logger.error(f"기간 요약 생성 실패: {e}")
 
         # 기본 요약
         start_str = start_date.strftime('%Y년 %m월')
