@@ -37,44 +37,28 @@
 
         /* Header */
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--primary);
             border-bottom: none;
             padding: 32px 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+            box-shadow: 0 2px 12px rgba(13, 111, 252, 0.15);
             position: relative;
             overflow: hidden;
             animation: fadeIn 0.6s ease-out;
-        }
-
-        .header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%);
-            pointer-events: none;
         }
 
         .header h1 {
             font-size: 28px;
             font-weight: 700;
             color: white;
-            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             letter-spacing: -0.5px;
-            position: relative;
-            z-index: 1;
         }
 
         .header-actions {
             display: flex;
             gap: 12px;
-            position: relative;
-            z-index: 1;
         }
 
         @keyframes fadeIn {
@@ -185,7 +169,7 @@
 
         .stat-card:hover {
             box-shadow: var(--shadow);
-            border-color: var(--card-color, #667eea);
+            border-color: var(--card-color, #0d6ffc);
         }
 
         .stat-icon {
@@ -196,7 +180,7 @@
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
-            background: linear-gradient(135deg, var(--card-color, #667eea) 0%, var(--card-color-end, #764ba2) 100%);
+            background: var(--card-color, #0d6ffc);
         }
 
         .stat-icon svg {
@@ -295,7 +279,7 @@
 
         /* AI Summary Button */
         .btn-ai-summary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--primary);
             color: white;
             border: none;
             padding: 8px 16px;
@@ -304,13 +288,13 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
-            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 2px 8px rgba(13, 111, 252, 0.3);
             white-space: nowrap;
         }
 
         .btn-ai-summary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 12px rgba(13, 111, 252, 0.4);
         }
 
         .btn-ai-summary:active {
@@ -1628,7 +1612,7 @@
     <div class="container">
         <!-- Stats Overview - Compact -->
         <div style="display: flex; gap: 12px; flex-wrap: wrap;" id="stats-grid">
-            <div class="stat-card" style="--card-color: #667eea; --card-color-end: #764ba2;">
+            <div class="stat-card" style="--card-color: #0d6ffc;">
                 <div class="stat-icon">
                     <svg viewBox="0 0 24 24">
                         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>

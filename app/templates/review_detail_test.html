@@ -165,7 +165,7 @@
         }
         .car-badge.blue { background: var(--primary-light); color: var(--primary); }
         .car-badge.grey { background: var(--grey-8); color: var(--grey-4); }
-        .car-badge.purple { background: #f3e8ff; color: #7c3aed; }
+        .car-badge.purple { background: var(--primary-light); color: var(--primary); }
         .car-name {
             font-size: 18px; font-weight: 700;
             color: var(--grey-1); margin: 4px 0 8px;
@@ -286,14 +286,12 @@
         /* ─── AI Section ─── */
         .ai-section { display: none; }
 
-        /* ─── AI Summary Card (gradient border) ─── */
+        /* ─── AI Summary Card ─── */
         .ai-summary-card {
             margin: 12px 16px 16px; padding: 16px;
             border-radius: 14px; background: #fff;
-            border: 1.5px solid transparent;
-            background-image: linear-gradient(#fff, #fff), linear-gradient(135deg, #a5b4fc 0%, #c4b5fd 50%, #f0abfc 100%);
-            background-origin: border-box;
-            background-clip: padding-box, border-box;
+            border: 1.5px solid var(--primary-light);
+            box-shadow: 0 2px 8px rgba(13, 111, 252, 0.08);
         }
         .ai-summary-header {
             font-size: 14px; font-weight: 600; color: var(--grey-1);
