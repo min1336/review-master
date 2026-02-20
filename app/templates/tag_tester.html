@@ -390,11 +390,21 @@
                     body: JSON.stringify({ review: reviewText })
                 });
 
+                if (!response.ok) {
+                    let detail = `서버 오류 (${response.status})`;
+                    try {
+                        const errJson = await response.json();
+                        if (errJson.detail) detail = errJson.detail;
+                    } catch (_) { /* ignore non-JSON error body */ }
+                    showToast('분석 오류: ' + detail, 'error');
+                    return;
+                }
+
                 const result = await response.json();
                 const data = result.data;
 
-                if (data.error) {
-                    showToast('분석 오류: ' + data.error, 'error');
+                if (!data) {
+                    showToast('서버 응답 형식이 올바르지 않습니다.', 'error');
                     return;
                 }
 
@@ -413,73 +423,122 @@
         function renderResults(data) {
             // Keywords
             const keywordsList = document.getElementById('keywordsList');
-            keywordsList.innerHTML = data.keywords.map(kw => `
-                <div class="keyword">
-                    <span class="keyword-sentiment ${kw.sentiment}"></span>
-                    ${kw.keyword}
-                </div>
-            `).join('');
+            keywordsList.textContent = '';
+            (data.keywords || []).forEach(kw => {
+                const div = document.createElement('div');
+                div.className = 'keyword';
+
+                const dot = document.createElement('span');
+                dot.className = 'keyword-sentiment ' + escapeAttr(kw.sentiment);
+
+                const text = document.createTextNode(escapeHtml(kw.keyword));
+
+                div.appendChild(dot);
+                div.appendChild(text);
+                keywordsList.appendChild(div);
+            });
 
             // Tag Groups
-            const tagGroups = document.getElementById('tagGroups');
-            const groupsHtml = [];
+            const tagGroupsEl = document.getElementById('tagGroups');
+            tagGroupsEl.textContent = '';
 
-            for (const [tagName, tagData] of Object.entries(data.tag_groups)) {
+            let hasGroup = false;
+            for (const [tagName, tagData] of Object.entries(data.tag_groups || {})) {
                 const positiveKws = tagData.positive || [];
                 const negativeKws = tagData.negative || [];
                 const neutralKws = tagData.neutral || [];
                 const total = positiveKws.length + negativeKws.length + neutralKws.length;
-
                 if (total === 0) continue;
+                hasGroup = true;
 
-                // 긍정/부정/중립 개수 각각 표시
-                let sentimentBadges = '';
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'tag-group';
+
+                // Header
+                const header = document.createElement('div');
+                header.className = 'tag-group-header';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'tag-group-name';
+                nameSpan.textContent = tagName;
+
+                const badgesDiv = document.createElement('div');
                 if (positiveKws.length > 0) {
-                    sentimentBadges += `<span class="tag-group-sentiment positive">긍정 ${positiveKws.length}개</span>`;
+                    const b = document.createElement('span');
+                    b.className = 'tag-group-sentiment positive';
+                    b.textContent = '긍정 ' + positiveKws.length + '개';
+                    badgesDiv.appendChild(b);
                 }
                 if (negativeKws.length > 0) {
-                    sentimentBadges += `<span class="tag-group-sentiment negative" style="margin-left: 6px;">부정 ${negativeKws.length}개</span>`;
+                    const b = document.createElement('span');
+                    b.className = 'tag-group-sentiment negative';
+                    b.style.marginLeft = '6px';
+                    b.textContent = '부정 ' + negativeKws.length + '개';
+                    badgesDiv.appendChild(b);
                 }
                 if (neutralKws.length > 0) {
-                    sentimentBadges += `<span class="tag-group-sentiment neutral" style="margin-left: 6px;">중립 ${neutralKws.length}개</span>`;
+                    const b = document.createElement('span');
+                    b.className = 'tag-group-sentiment neutral';
+                    b.style.marginLeft = '6px';
+                    b.textContent = '중립 ' + neutralKws.length + '개';
+                    badgesDiv.appendChild(b);
                 }
 
-                groupsHtml.push(`
-                    <div class="tag-group">
-                        <div class="tag-group-header">
-                            <span class="tag-group-name">${tagName}</span>
-                            <div>${sentimentBadges}</div>
-                        </div>
-                        <div class="tag-group-keywords">
-                            ${positiveKws.map(k => `<span class="tag-group-keyword" style="border-left: 3px solid var(--success);">${k}</span>`).join('')}
-                            ${negativeKws.map(k => `<span class="tag-group-keyword" style="border-left: 3px solid var(--error);">${k}</span>`).join('')}
-                            ${neutralKws.map(k => `<span class="tag-group-keyword" style="border-left: 3px solid var(--grey-5);">${k}</span>`).join('')}
-                        </div>
-                    </div>
-                `);
+                header.appendChild(nameSpan);
+                header.appendChild(badgesDiv);
+
+                // Keywords row
+                const kwRow = document.createElement('div');
+                kwRow.className = 'tag-group-keywords';
+
+                const appendKw = (list, borderColor) => {
+                    list.forEach(k => {
+                        const span = document.createElement('span');
+                        span.className = 'tag-group-keyword';
+                        span.style.borderLeft = '3px solid ' + borderColor;
+                        span.textContent = k;
+                        kwRow.appendChild(span);
+                    });
+                };
+                appendKw(positiveKws, 'var(--success)');
+                appendKw(negativeKws, 'var(--error)');
+                appendKw(neutralKws, 'var(--grey-5)');
+
+                groupDiv.appendChild(header);
+                groupDiv.appendChild(kwRow);
+                tagGroupsEl.appendChild(groupDiv);
             }
 
-            tagGroups.innerHTML = groupsHtml.join('') || '<p style="color: var(--grey-5);">분류된 태그가 없습니다.</p>';
+            if (!hasGroup) {
+                const p = document.createElement('p');
+                p.style.color = 'var(--grey-5)';
+                p.textContent = '분류된 태그가 없습니다.';
+                tagGroupsEl.appendChild(p);
+            }
 
             // Summary Stats
             const stats = document.getElementById('summaryStats');
-            const totalKw = data.keywords.length;
-            const positiveKw = data.keywords.filter(k => k.sentiment === 'positive').length;
-            const negativeKw = data.keywords.filter(k => k.sentiment === 'negative').length;
-            const neutralKw = data.keywords.filter(k => k.sentiment === 'neutral').length;
-            const sentimentKw = positiveKw + negativeKw;  // 감성 있는 키워드만
+            const totalKw = (data.keywords || []).length;
+            const positiveKw = (data.keywords || []).filter(k => k.sentiment === 'positive').length;
+            const negativeKw = (data.keywords || []).filter(k => k.sentiment === 'negative').length;
+            const neutralKw = (data.keywords || []).filter(k => k.sentiment === 'neutral').length;
+            const sentimentKw = positiveKw + negativeKw;
             const ratio = sentimentKw > 0 ? Math.round((positiveKw / sentimentKw) * 100) : 0;
 
-            stats.innerHTML = `총 키워드: ${totalKw}개
-긍정 키워드: ${positiveKw}개
-부정 키워드: ${negativeKw}개
-중립 키워드: ${neutralKw}개
-긍정 비율 (감성 키워드 중): ${ratio}%
-
-주요 태그: ${Object.keys(data.tag_groups).filter(t => {
+            const majorTags = Object.keys(data.tag_groups || {}).filter(t => {
                 const d = data.tag_groups[t];
                 return (d.positive?.length || 0) + (d.negative?.length || 0) + (d.neutral?.length || 0) > 0;
-            }).join(', ') || '없음'}`;
+            }).join(', ') || '없음';
+
+            stats.textContent = [
+                '총 키워드: ' + totalKw + '개',
+                '긍정 키워드: ' + positiveKw + '개',
+                '부정 키워드: ' + negativeKw + '개',
+                '중립 키워드: ' + neutralKw + '개',
+                '긍정 비율 (감성 키워드 중): ' + ratio + '%',
+                '',
+                '주요 태그: ' + majorTags,
+            ].join('\n');
         }
     </script>
 </body>
