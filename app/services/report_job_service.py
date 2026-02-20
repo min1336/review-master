@@ -47,6 +47,9 @@ class ReportJobService:
         Returns:
             작업 ID (UUID 문자열)
         """
+        # 완료된 태스크 정리
+        self._cleanup_completed_tasks()
+
         # 동일 조건의 활성 작업이 있는지 확인 (pending 또는 processing)
         # Race condition 방지를 위해 두 상태 모두 확인
         existing = await self.job_repo.get_active_by_branch_and_period(
@@ -160,6 +163,15 @@ class ReportJobService:
             )
         finally:
             # 완료된 태스크 제거
+            self._running_jobs.pop(job_id, None)
+
+    def _cleanup_completed_tasks(self) -> None:
+        """완료된 asyncio.Task 객체를 _running_jobs에서 제거"""
+        done_ids = [
+            job_id for job_id, task in self._running_jobs.items()
+            if task.done()
+        ]
+        for job_id in done_ids:
             self._running_jobs.pop(job_id, None)
 
     async def cancel_job(self, job_id: str, branch_id: int | None = None) -> bool:
