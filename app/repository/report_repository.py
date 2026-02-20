@@ -142,19 +142,6 @@ class ReportRepository(BaseRepository):
             저장된 리포트 데이터
         """
         try:
-            # 기존 최신 버전 조회
-            existing = await self._client.table(self.TABLE).select("version").eq(
-                "branch_id", branch_id
-            ).eq(
-                "period_start", period_start.strftime("%Y-%m-%d")
-            ).eq(
-                "period_end", period_end.strftime("%Y-%m-%d")
-            ).order("version", desc=True).limit(1).execute()
-
-            next_version = 1
-            if existing.data:
-                next_version = (existing.data[0].get("version", 0) or 0) + 1
-
             data = {
                 "branch_id": branch_id,
                 "branch_name": branch_name,
@@ -163,12 +150,14 @@ class ReportRepository(BaseRepository):
                 "period_end": period_end.strftime("%Y-%m-%d"),
                 "total_reviews": total_reviews,
                 "report_data": report_data,
-                "version": next_version,
-                "is_viewed": False,  # 신규 리포트는 미조회 상태
+                "version": 1,
+                "is_viewed": False,
                 "updated_at": utc_now().isoformat(),
             }
 
-            result = await self._client.table(self.TABLE).insert(data).execute()
+            result = await self._client.table(self.TABLE).upsert(
+                data, on_conflict="branch_id,period_start,period_end"
+            ).execute()
 
             if result.data:
                 return result.data[0]
