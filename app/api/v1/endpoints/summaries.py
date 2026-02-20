@@ -5,8 +5,8 @@ Router: /api/summaries
 담당: HTTP 요청/응답 처리만 (비즈니스 로직은 Service에서)
 
 주요 엔드포인트:
-- GET /summaries: 업체 목록 조회 (날짜 필터링, status=pending 필터 지원)
-- PATCH /summaries/{branch_id}: 요약 부분 수정 (상태 변경 포함)
+- GET /summaries: 업체 목록 조회 (날짜 필터링 지원)
+- PATCH /summaries/{branch_id}: 요약 부분 수정
 """
 
 from __future__ import annotations
@@ -25,7 +25,6 @@ router = APIRouter(tags=["summaries"])
 
 @router.get("")
 async def api_summaries(
-    status: str | None = Query(None, description="상태 필터"),
     region: str | None = Query(None, description="지역 필터"),
     keyword: str | None = Query(None, description="키워드/업체명 검색"),
     min_rating: float | None = Query(None, description="최소 평점"),
@@ -54,7 +53,6 @@ async def api_summaries(
     parsed_date_to = parse_date(review_date_to, end_of_day=True)
 
     summaries = await service.get_summaries(
-        status=status,
         region=region,
         keyword=keyword,
         min_rating=min_rating,

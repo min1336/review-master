@@ -14,7 +14,7 @@
     <!-- Dashboard CSS (Inlined) -->
     <style>
         :root {
-            /* Dashboard-specific overrides */
+            /* Dashboard-specific overrides — 대시보드는 shared-theme 대비 더 촘촘한 간격/그림자 사용 */
             --blue-grey-light: #f1f4f9;
             --max-width: 1200px;
             --radius-lg: 16px;
@@ -1818,16 +1818,6 @@
 
             const REPORT_REVIEW_THRESHOLD = 30;
 
-            const STATUS_CLASS_MAP = Object.freeze({
-                'draft': 'grey',
-                'published': 'success'
-            });
-
-            const STATUS_LABEL_MAP = Object.freeze({
-                'draft': '보류',
-                'published': '게시'
-            });
-
             const DEFAULT_TAGS = Object.freeze([
                 '직원이 친절함',
                 '사고 처리를 잘해줌',
@@ -2198,7 +2188,6 @@
 
                 if (filters.keyword) params.set('keyword', filters.keyword);
                 if (filters.region) params.set('region', filters.region);
-                if (filters.status) params.set('status', filters.status);
                 if (state.dateFilter.from) params.set('review_date_from', state.dateFilter.from);
                 if (state.dateFilter.to) params.set('review_date_to', state.dateFilter.to);
 
@@ -2223,12 +2212,6 @@
                 });
             }
 
-            async function apiUpdateStatus(branchId, status) {
-                return apiRequest(`${API_PREFIX}/summaries/${branchId}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ status })
-                });
-            }
 
             async function apiRegenerateSummary(branchId) {
                 return apiRequest(`${API_PREFIX}/summaries/${branchId}/regenerate`, {
@@ -2323,44 +2306,6 @@
                 if (statReviews) statReviews.textContent = stats.total_reviews?.toLocaleString() || '0';
             }
 
-            function renderStatusBars(data) {
-                return `
-                <div style="display: flex; flex-direction: column; gap: 20px; padding: 8px 0;">
-                    ${renderStatusBar('Draft', data.draft, '#999', '#666', '#f0f0f0')}
-                    ${renderStatusBar('Published', data.published, '#10b981', '#059669', '#d1fae5')}
-                </div>
-            `;
-            }
-
-            function renderStatusBar(label, data, colorStart, colorEnd, bgColor) {
-                const icons = {
-                    'Draft': `<svg width="16" height="16" fill="none" stroke="${colorStart}" stroke-width="2" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <polyline points="12 6 12 12 16 14"></polyline>
-                </svg>`,
-                    'Published': `<svg width="16" height="16" fill="none" stroke="${colorStart}" stroke-width="2" viewBox="0 0 24 24">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>`
-                };
-
-                const badgeClass = label === 'Draft' ? 'badge-grey' : 'badge-success';
-
-                return `
-                <div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            ${icons[label]}
-                            <span style="font-weight: 500;">${label}</span>
-                        </div>
-                        <span class="badge ${badgeClass}">${data.count}</span>
-                    </div>
-                    <div style="background: ${bgColor}; height: 6px; border-radius: 3px; overflow: hidden;">
-                        <div style="background: linear-gradient(90deg, ${colorStart} 0%, ${colorEnd} 100%); height: 100%; width: ${data.pct}%; transition: width 0.6s ease;"></div>
-                    </div>
-                </div>
-            `;
-            }
-
             function renderTable(data, onDetailClick) {
                 const tableEl = getElement('summaries-table');
 
@@ -2392,7 +2337,7 @@
             function renderTableRow(row, onDetailClick) {
                 const bestSummary = getBestSummary(row);
                 const summaryPreview = bestSummary
-                    ? (bestSummary.length > 40 ? bestSummary.substring(0, 40) + '...' : bestSummary)
+                    ? escapeHtml(bestSummary.length > 40 ? bestSummary.substring(0, 40) + '...' : bestSummary)
                     : '<span style="color: var(--grey-5); font-style: italic;">요약 없음</span>';
 
                 const isFav = isFavorite(row.branch_id);
@@ -2405,9 +2350,9 @@
                     <td>
                         <div class="branch-info">
                             <span class="company-name">
-                                ${isFav ? '<span style="color: #f59e0b; margin-right: 4px;">⭐</span>' : ''}${row.affiliate_name || row.branch_name || '-'}
+                                ${isFav ? '<span style="color: #f59e0b; margin-right: 4px;">⭐</span>' : ''}${escapeHtml(row.affiliate_name || row.branch_name || '-')}
                             </span>
-                            ${row.affiliate_name && row.branch_name ? `<span class="branch-name">${row.branch_name}</span>` : ''}
+                            ${row.affiliate_name && row.branch_name ? `<span class="branch-name">${escapeHtml(row.branch_name)}</span>` : ''}
                         </div>
                     </td>
                     <td class="summary-cell" style="font-size: 13px; color: var(--grey-3); line-height: 1.5;">${summaryPreview}</td>
@@ -2745,7 +2690,7 @@
                     enterEditMode,
                     cancelEditMode,
                     saveAllChanges,
-                    updateStatus,
+
                     showSummaryTab,
                     regenerateSummary,
                     applyPendingSummary,
@@ -3223,10 +3168,6 @@
                             <button class="btn btn-secondary" onclick="window.dashboardHandlers.enterEditMode()">✏️ 수정</button>
                             <button class="btn btn-secondary" onclick="window.dashboardHandlers.toggleReviews(${data.branch_id})" id="btn-toggle-reviews">📋 리뷰 보기</button>
                         </div>
-                        <div style="display: flex; gap: 8px;">
-                            <button class="btn btn-secondary btn-sm" onclick="window.dashboardHandlers.updateStatus(${data.branch_id}, 'draft')">보류</button>
-                            <button class="btn btn-primary btn-sm" onclick="window.dashboardHandlers.updateStatus(${data.branch_id}, 'published')">게시</button>
-                        </div>
                     </div>
                     <div id="edit-mode-buttons" style="display: none; justify-content: flex-end; gap: 12px;">
                         <button class="btn btn-secondary" onclick="window.dashboardHandlers.cancelEditMode()">취소</button>
@@ -3646,13 +3587,20 @@
                     }
                 } catch (error) {
                     console.error('Report load error:', error);
-                    body.innerHTML = `
-                        <div style="text-align: center; padding: 40px;">
-                            <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
-                            <div style="font-size: 16px; color: var(--grey-2);">리포트 조회 실패</div>
-                            <div style="font-size: 14px; color: var(--grey-5); margin-top: 8px;">${error.message}</div>
-                        </div>
-                    `;
+                    body.textContent = '';
+                    const errWrap = document.createElement('div');
+                    errWrap.style.cssText = 'text-align: center; padding: 40px;';
+                    const errIcon = document.createElement('div');
+                    errIcon.style.cssText = 'font-size: 48px; margin-bottom: 16px;';
+                    errIcon.textContent = '\u274C';
+                    const errTitle = document.createElement('div');
+                    errTitle.style.cssText = 'font-size: 16px; color: var(--grey-2);';
+                    errTitle.textContent = '리포트 조회 실패';
+                    const errMsg = document.createElement('div');
+                    errMsg.style.cssText = 'font-size: 14px; color: var(--grey-5); margin-top: 8px;';
+                    errMsg.textContent = error.message;
+                    errWrap.append(errIcon, errTitle, errMsg);
+                    body.appendChild(errWrap);
                 }
             }
 
@@ -4455,22 +4403,6 @@
 
                 const url = `${API_PREFIX}/reports/${reportState.branchId}/pdf?start_date=${reportState.startDate}&end_date=${reportState.endDate}`;
                 window.open(url, '_blank');
-            }
-
-            async function updateStatus(branchId, status) {
-                try {
-                    const result = await apiUpdateStatus(branchId, status);
-
-                    if (result.success) {
-                        showToast(`✅ 상태가 ${STATUS_LABEL_MAP[status] || status}로 변경되었습니다.`, 'success');
-                        closeModal();
-                        await loadStats();
-                        await loadSummaries();
-                    }
-                } catch (e) {
-                    console.error('Status update error:', e);
-                    showToast('❌ 상태 변경 실패: ' + e.message, 'error');
-                }
             }
 
             async function toggleReviews(branchId) {

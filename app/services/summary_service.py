@@ -89,7 +89,6 @@ class SummaryService:
 
     async def get_summaries(
         self,
-        status: str | None = None,
         region: str | None = None,
         keyword: str | None = None,
         min_rating: float | None = None,
@@ -133,7 +132,6 @@ class SummaryService:
                 summaries = [s for s in summaries if s.branch_id in branch_ids_filter]
         else:
             summaries = await self.summary_repo.get_all_with_filters(
-                status=status,
                 region=region,
                 min_reviews=min_reviews,
                 limit=limit,
@@ -165,11 +163,6 @@ class SummaryService:
         """요약 수정"""
         data["branch_id"] = branch_id
         result = await self.summary_repo.upsert_by_branch_id(data)
-        return result.model_dump() if result else None
-
-    async def update_status(self, branch_id: int, status: str) -> dict | None:
-        """상태 변경"""
-        result = await self.summary_repo.update_status(branch_id, status)
         return result.model_dump() if result else None
 
     async def get_stats(self) -> SummaryStatsDTO:

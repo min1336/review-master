@@ -15,7 +15,6 @@ class SummaryUpdate(BaseModel):
     summary_6m: str | None = None
     summary_3m: str | None = None
     summary_1m: str | None = None
-    status: str | None = Field(None, pattern="^(draft|approved|published)$")
 
 
 class RegenerateRequest(BaseModel):

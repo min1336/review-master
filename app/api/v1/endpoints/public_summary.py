@@ -36,19 +36,13 @@ async def api_get_public_summary(
             "branch_id": summary.branch_id,
             "branch_name": summary.branch_name,
             "region": summary.region,
-            "status": summary.status,
             "review_count": summary.review_count,
             "avg_rating": summary.avg_rating,
             "updated_at": summary.updated_at,
         }
 
-        if summary.status == "published":
-            latest = SummaryService.pick_latest_summary(summary)
-            if not latest:
-                raise HTTPException(status_code=404, detail="Summary content not available")
-            data["summary"] = latest
-        else:
-            data["summary"] = "요약이 대기중입니다."
+        latest = SummaryService.pick_latest_summary(summary)
+        data["summary"] = latest or "요약이 아직 생성되지 않았습니다."
 
         return api_response(data)
     except HTTPException:

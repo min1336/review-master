@@ -38,7 +38,6 @@ class SummaryRepository(BaseRepository[Summary]):
 
     async def get_all_with_filters(
         self,
-        status: str | None = None,
         region: str | None = None,
         min_reviews: int = 0,
         limit: int = 50,
@@ -51,8 +50,6 @@ class SummaryRepository(BaseRepository[Summary]):
 
         if min_reviews > 0:
             query = query.gte("review_count", min_reviews)
-        if status:
-            query = query.eq("status", status)
         if region:
             query = query.ilike("region", f"%{region}%")
 
@@ -72,32 +69,12 @@ class SummaryRepository(BaseRepository[Summary]):
         if "branch_id" not in data:
             raise ValueError("branch_id는 필수입니다")
 
-        existing = (
-            await self._client.table(self.table_name)
-            .select("status")
-            .eq("branch_id", data["branch_id"])
-            .execute()
-        )
-
-        if "status" not in data and not existing.data:
-            data["status"] = "draft"
-
         result = (
             await self._client.table(self.table_name)
             .upsert(data, on_conflict="branch_id")
             .execute()
         )
 
-        return self.model(**result.data[0]) if result.data else None
-
-    async def update_status(self, branch_id: int, status: str) -> Summary | None:
-        """상태 변경"""
-        result = (
-            await self._client.table(self.table_name)
-            .update({"status": status})
-            .eq("branch_id", branch_id)
-            .execute()
-        )
         return self.model(**result.data[0]) if result.data else None
 
     async def update_field(self, branch_id: int, field: str, value) -> Summary | None:
@@ -115,24 +92,6 @@ class SummaryRepository(BaseRepository[Summary]):
         total = (
             await self._client.table(self.table_name)
             .select("id", count="exact")
-            .execute()
-        )
-        draft = (
-            await self._client.table(self.table_name)
-            .select("id", count="exact")
-            .eq("status", "draft")
-            .execute()
-        )
-        approved = (
-            await self._client.table(self.table_name)
-            .select("id", count="exact")
-            .eq("status", "approved")
-            .execute()
-        )
-        published = (
-            await self._client.table(self.table_name)
-            .select("id", count="exact")
-            .eq("status", "published")
             .execute()
         )
 
@@ -156,9 +115,6 @@ class SummaryRepository(BaseRepository[Summary]):
 
         return SummaryStatsDTO(
             total=total.count or 0,
-            draft=draft.count or 0,
-            approved=approved.count or 0,
-            published=published.count or 0,
             total_reviews=total_reviews,
         )
 
@@ -444,7 +400,6 @@ class SummaryRepository(BaseRepository[Summary]):
             # pending 데이터로 실제 필드 업데이트
             update_data = {
                 "pending_summaries": {},  # pending 초기화
-                "status": "draft",  # 승인 후 draft 상태
                 "updated_at": utc_now().isoformat(),
             }
 

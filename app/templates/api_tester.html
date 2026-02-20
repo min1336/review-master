@@ -261,16 +261,6 @@
             margin-bottom: 16px;
         }
 
-        .status-badge.published {
-            background: var(--success-bg);
-            color: var(--success-text);
-        }
-
-        .status-badge.draft {
-            background: var(--warning-bg);
-            color: var(--warning-text);
-        }
-
         .status-badge.error {
             background: var(--error-bg);
             color: var(--error-text);
@@ -307,14 +297,6 @@
             font-size: 14px;
             line-height: 1.8;
             white-space: pre-wrap;
-        }
-
-        .summary-text.published {
-            border-left: 4px solid var(--success);
-        }
-
-        .summary-text.draft {
-            border-left: 4px solid var(--warning);
         }
 
         .error-message {
@@ -615,16 +597,7 @@
         }
 
         function renderSummarySuccess(container, data) {
-            const isPublished = data.status === 'published';
-            const statusLabel = isPublished ? 'published' : 'draft';
-            const statusText = isPublished ? '게시' : '보류';
-
             const card = document.createElement('div');
-
-            const badge = document.createElement('span');
-            badge.className = 'status-badge ' + statusLabel;
-            badge.textContent = statusText;
-            card.appendChild(badge);
 
             const metaGrid = document.createElement('div');
             metaGrid.className = 'result-meta';
@@ -731,7 +704,7 @@
 
             // Badge
             const badge = document.createElement('span');
-            badge.className = 'status-badge published';
+            badge.className = 'status-badge';
             badge.textContent = 'AI Report';
             card.appendChild(badge);
 
@@ -773,7 +746,7 @@
             card.appendChild(sumTitle);
 
             const summaryDiv = document.createElement('div');
-            summaryDiv.className = 'summary-text published';
+            summaryDiv.className = 'summary-text';
             summaryDiv.textContent = data.period_summary || '-';
             card.appendChild(summaryDiv);
 

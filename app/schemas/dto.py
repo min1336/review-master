@@ -479,17 +479,11 @@ class SummaryStatsDTO:
     """
 
     total: int
-    draft: int
-    approved: int
-    published: int
     total_reviews: int
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "total": self.total,
-            "draft": self.draft,
-            "approved": self.approved,
-            "published": self.published,
             "total_reviews": self.total_reviews,
         }
 
