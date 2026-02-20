@@ -153,6 +153,8 @@ class ProcessedReviewDTO:
     is_negative_filtered: bool = False
     tag_sentiments: dict[str, dict[str, list[str]]] = field(default_factory=dict)
     # 구조: {"직원이 친절함": {"positive": ["친절", "좋은"], "negative": [], "neutral": []}, ...}
+    rating_car: float | None = None
+    rating_convenience: float | None = None
 
     @property
     def branch_id(self) -> int:

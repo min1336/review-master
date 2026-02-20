@@ -14,6 +14,9 @@ from .steps.sentiment_stats import SentimentStatsUpdater
 from .steps.tag_aggregator import TagAggregator
 from .steps.car_model_tags import CarModelTagAggregator
 from .steps.keyword_manager import KeywordManager
+from .steps.review_tag_mapper import ReviewTagMapper
+from .steps.monthly_stats import MonthlyStatsUpdater
+from .steps.monthly_car_model_stats import MonthlyCarModelStatsUpdater
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +31,9 @@ class UnifiedPipeline:
         self.tag_aggregator = TagAggregator()
         self.car_model_tags = CarModelTagAggregator()
         self.keyword_manager = KeywordManager()
+        self.review_tag_mapper = ReviewTagMapper()
+        self.monthly_stats = MonthlyStatsUpdater()
+        self.monthly_car_model_stats = MonthlyCarModelStatsUpdater()
 
     async def run(
         self,
@@ -191,6 +197,70 @@ class UnifiedPipeline:
             logger.error(f"Step 6(keyword_manager) 실패: {e}")
             result.add_step(PipelineStepResultDTO(
                 step_name="keyword_manager", success=False,
+                input_count=input_count, output_count=0,
+                error_message=str(e),
+                duration_seconds=round(time.monotonic() - t0, 3),
+            ))
+
+        # Step 7: review_tag_mappings
+        t0 = time.monotonic()
+        try:
+            s7 = await self.review_tag_mapper.save(client, processed)
+            result.add_step(PipelineStepResultDTO(
+                step_name="review_tag_mapper", success=True,
+                input_count=input_count, output_count=s7,
+                duration_seconds=round(time.monotonic() - t0, 3),
+            ))
+            logger.info(f"Step 7 완료: {s7}개 review_tag_mappings 저장")
+            if progress_callback:
+                await progress_callback(92, "리뷰 태그 매핑 완료")
+        except Exception as e:
+            logger.error(f"Step 7(review_tag_mapper) 실패: {e}")
+            result.add_step(PipelineStepResultDTO(
+                step_name="review_tag_mapper", success=False,
+                input_count=input_count, output_count=0,
+                error_message=str(e),
+                duration_seconds=round(time.monotonic() - t0, 3),
+            ))
+
+        # Step 8: monthly_rating/sentiment/tag_stats
+        t0 = time.monotonic()
+        try:
+            s8 = await self.monthly_stats.update(client, processed)
+            total_monthly = sum(s8.values()) if isinstance(s8, dict) else 0
+            result.add_step(PipelineStepResultDTO(
+                step_name="monthly_stats", success=True,
+                input_count=input_count, output_count=total_monthly,
+                duration_seconds=round(time.monotonic() - t0, 3),
+            ))
+            logger.info(f"Step 8 완료: {s8}")
+            if progress_callback:
+                await progress_callback(95, "월별 통계 완료")
+        except Exception as e:
+            logger.error(f"Step 8(monthly_stats) 실패: {e}")
+            result.add_step(PipelineStepResultDTO(
+                step_name="monthly_stats", success=False,
+                input_count=input_count, output_count=0,
+                error_message=str(e),
+                duration_seconds=round(time.monotonic() - t0, 3),
+            ))
+
+        # Step 9: monthly_car_model_tag_stats
+        t0 = time.monotonic()
+        try:
+            s9 = await self.monthly_car_model_stats.update(client, processed)
+            result.add_step(PipelineStepResultDTO(
+                step_name="monthly_car_model_stats", success=True,
+                input_count=input_count, output_count=s9,
+                duration_seconds=round(time.monotonic() - t0, 3),
+            ))
+            logger.info(f"Step 9 완료: {s9}개 monthly_car_model_tag_stats 저장")
+            if progress_callback:
+                await progress_callback(98, "차량 월별 통계 완료")
+        except Exception as e:
+            logger.error(f"Step 9(monthly_car_model_stats) 실패: {e}")
+            result.add_step(PipelineStepResultDTO(
+                step_name="monthly_car_model_stats", success=False,
                 input_count=input_count, output_count=0,
                 error_message=str(e),
                 duration_seconds=round(time.monotonic() - t0, 3),

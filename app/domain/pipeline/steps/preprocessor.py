@@ -71,6 +71,8 @@ class ReviewPreprocessor:
                     sentiment=sentiment,
                     sentiment_score=score,
                     tag_sentiments=tag_sentiments,
+                    rating_car=self._safe_float(raw.get("rating_car")),
+                    rating_convenience=self._safe_float(raw.get("rating_convenience")),
                 )
             )
 
