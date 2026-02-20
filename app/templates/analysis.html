@@ -8,48 +8,16 @@
     <link rel="stylesheet" as="style" crossorigin
         href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="{{ base_path }}/static/css/shared-theme.css">
 
     <style>
         :root {
-            --primary: #0d6ffc;
-            --primary-hover: #0b5ed7;
-            --primary-light: #e3f0ff;
-            --success: #10b981;
-            --success-light: #d1fae5;
-            --warning: #f59e0b;
-            --warning-light: #fef3c7;
-            --error: #ef4444;
-            --error-light: #fee2e2;
-            --grey-1: #1e1e1e;
-            --grey-2: #333333;
-            --grey-3: #555555;
-            --grey-5: #999999;
-            --grey-7: #dddddd;
-            --grey-8: #eeeeee;
-            --grey-9: #f8f8f8;
             --max-width: 1400px;
-            --radius: 12px;
-            --radius-sm: 8px;
-            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
             --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            --spacing-xs: 4px;
-            --spacing-sm: 8px;
-            --spacing-md: 16px;
-            --spacing-lg: 24px;
-            --spacing-xl: 32px;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
         }
 
         body {
             font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--grey-9);
-            color: var(--grey-1);
-            line-height: 1.5;
         }
 
         /* Header */
@@ -1172,6 +1140,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+    <script src="{{ base_path }}/static/js/shared-utils.js"></script>
     <script>
         // API Prefix
         const API_PREFIX = '{{ api_prefix }}';
@@ -1673,7 +1642,7 @@
                 }
             } catch (error) {
                 console.error('Failed to mark selected as read:', error);
-                alert('읽음 처리 중 오류가 발생했습니다.');
+                showToast('읽음 처리 중 오류가 발생했습니다.', 'error');
             } finally {
                 const btn = document.getElementById('btn-mark-selected');
                 if (btn) {
@@ -1884,7 +1853,7 @@
 
             } catch (error) {
                 console.error('Failed to export reviews:', error);
-                alert('리뷰 내보내기에 실패했습니다.');
+                showToast('리뷰 내보내기에 실패했습니다.', 'error');
             } finally {
                 // 버튼 복원
                 exportBtn.disabled = false;
@@ -2205,7 +2174,7 @@
                             const msg = result.new_reviews > 0
                                 ? `동기화 완료: 신규 리뷰 ${result.new_reviews}건`
                                 : '동기화 완료: 신규 리뷰가 없습니다.';
-                            alert(msg);
+                            showToast(msg, 'success');
 
                             await checkSyncStatus();
                             if (result.new_reviews > 0) {
@@ -2218,20 +2187,20 @@
 
                     if (status.status === 'failed') {
                         removeSyncOverlay();
-                        alert(status.error || status.message || '동기화에 실패했습니다.');
+                        showToast(status.error || status.message || '동기화에 실패했습니다.', 'error');
                         return;
                     }
                 }
 
                 // 타임아웃
                 removeSyncOverlay();
-                alert('동기화 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+                showToast('동기화 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.', 'error');
 
             } catch (error) {
                 removeSyncOverlay();
                 if (error.name !== 'AbortError') {
                     console.error('Manual sync failed:', error);
-                    alert('동기화 중 오류가 발생했습니다.');
+                    showToast('동기화 중 오류가 발생했습니다.', 'error');
                 }
             } finally {
                 syncAbortController = null;
@@ -2300,7 +2269,7 @@
                 await checkDailyScheduler();
             } catch (error) {
                 console.error('Failed to toggle daily scheduler:', error);
-                alert('상태 변경 실패');
+                showToast('상태 변경 실패', 'error');
                 toggleBtn.disabled = false;
             }
         }
@@ -2317,7 +2286,7 @@
                 await checkDailyScheduler();
             } catch (error) {
                 console.error('Failed to update daily time:', error);
-                alert('시간 변경 실패');
+                showToast('시간 변경 실패', 'error');
                 await checkDailyScheduler();
             }
         }
@@ -2364,7 +2333,7 @@
                 }
             } catch (error) {
                 console.error('Failed to mark all as read:', error);
-                alert('읽음 처리 중 오류가 발생했습니다.');
+                showToast('읽음 처리 중 오류가 발생했습니다.', 'error');
             } finally {
                 btn.disabled = false;
                 btn.textContent = '모두 읽음';

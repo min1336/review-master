@@ -7,42 +7,21 @@
     <title>API 테스트 - Review Summary AI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ base_path }}/static/css/shared-theme.css">
     <style>
         :root {
-            --primary: #0d6ffc;
-            --primary-hover: #0b5ed7;
             --primary-light: #e8f0fe;
-            --success: #10b981;
             --success-bg: #dcfce7;
             --success-text: #166534;
-            --warning: #f59e0b;
             --warning-bg: #fef3c7;
             --warning-text: #92400e;
-            --error: #ef4444;
             --error-bg: #fee2e2;
             --error-text: #991b1b;
-            --grey-1: #1e1e1e;
-            --grey-3: #555555;
-            --grey-5: #999999;
-            --grey-7: #dddddd;
-            --grey-8: #eeeeee;
-            --grey-9: #f8f8f8;
             --radius: 8px;
-            --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
         }
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--grey-9);
-            color: var(--grey-1);
-            line-height: 1.5;
-            min-height: 100vh;
         }
 
         .header {
@@ -498,6 +477,7 @@
         </div>
     </div>
 
+    <script src="{{ base_path }}/static/js/shared-utils.js"></script>
     <script>
         const API_PREFIX = '{{ api_prefix }}';
         const BASE_PATH = API_PREFIX.replace('/api', '');
@@ -520,8 +500,8 @@
             const today = new Date();
             const threeMonthsAgo = new Date(today);
             threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-            document.getElementById('reportEndDate').value = formatDate(today);
-            document.getElementById('reportStartDate').value = formatDate(threeMonthsAgo);
+            document.getElementById('reportEndDate').value = formatDateForAPI(today);
+            document.getElementById('reportStartDate').value = formatDateForAPI(threeMonthsAgo);
 
             // Tab 전환
             document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -568,16 +548,12 @@
             });
         });
 
-        function formatDate(d) {
-            return d.getFullYear() + '-' +
-                String(d.getMonth() + 1).padStart(2, '0') + '-' +
-                String(d.getDate()).padStart(2, '0');
-        }
+        // formatDateForAPI: shared-utils.js에서 제공
 
         function getApiKey() {
             const key = document.getElementById('apiKeyInput').value.trim();
             if (!key) {
-                alert('API 키를 입력해주세요.');
+                showToast('API 키를 입력해주세요.', 'warning');
                 document.getElementById('apiKeyInput').focus();
                 return null;
             }
@@ -605,7 +581,7 @@
 
             const branchId = document.getElementById('summaryBranchId').value.trim();
             if (!branchId) {
-                alert('Branch ID를 입력해주세요.');
+                showToast('Branch ID를 입력해주세요.', 'warning');
                 document.getElementById('summaryBranchId').focus();
                 return;
             }
@@ -701,7 +677,7 @@
 
             const branchId = document.getElementById('reportBranchId').value.trim();
             if (!branchId) {
-                alert('Branch ID를 입력해주세요.');
+                showToast('Branch ID를 입력해주세요.', 'warning');
                 document.getElementById('reportBranchId').focus();
                 return;
             }
@@ -709,7 +685,7 @@
             const startDate = document.getElementById('reportStartDate').value;
             const endDate = document.getElementById('reportEndDate').value;
             if (!startDate || !endDate) {
-                alert('분석 기간을 설정해주세요.');
+                showToast('분석 기간을 설정해주세요.', 'warning');
                 return;
             }
 

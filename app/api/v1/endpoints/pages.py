@@ -24,13 +24,21 @@ _templates_dir = Path(__file__).parent.parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_templates_dir))
 
 
+def _page_context() -> dict:
+    """모든 페이지 라우트에 공통으로 전달되는 context"""
+    return {
+        "api_prefix": settings.api_prefix,
+        "base_path": settings.api_prefix.replace("/api", ""),
+    }
+
+
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """메인 대시보드"""
     return templates.TemplateResponse(
         request=request,
         name="dashboard_v2.html",
-        context={"api_prefix": settings.api_prefix},
+        context=_page_context(),
     )
 
 
@@ -40,7 +48,7 @@ async def tag_tester(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="tag_tester.html",
-        context={"api_prefix": settings.api_prefix},
+        context=_page_context(),
     )
 
 
@@ -50,7 +58,7 @@ async def api_tester(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="api_tester.html",
-        context={"api_prefix": settings.api_prefix},
+        context=_page_context(),
     )
 
 
@@ -60,7 +68,7 @@ async def review_detail_test(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="review_detail_test.html",
-        context={"api_prefix": settings.api_prefix},
+        context=_page_context(),
     )
 
 
@@ -70,5 +78,5 @@ async def analysis(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="analysis.html",
-        context={"api_prefix": settings.api_prefix},
+        context=_page_context(),
     )
