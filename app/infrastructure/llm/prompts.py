@@ -51,46 +51,6 @@ class SummaryPromptBuilder:
 - 지점명이나 지역 특성을 반영한 차별화 포인트 포함
 </constraints>"""
 
-    # ============================================================
-    # 지점 유형별 Few-shot 예시 (자연스러운 문단)
-    # ============================================================
-    EXAMPLES_AIRPORT = """
-<examples>
-[공항 지점 예시]
-태그: 직원이 친절함, 차량이 청결함, 차량외관이 좋음, 배달 서비스가 우수함, 가격이 저렴함
-출력:
-친절한 직원들의 빠른 응대로 공항 도착 후 바로 차량을 인수받을 수 있습니다. 청결하게 관리된 차량 상태가 인상적이며, 딜리버리 서비스가 정시 운행되어 터미널 이동도 수월합니다. 특히 합리적인 가격에 픽업부터 반납까지 모든 절차가 간편하게 진행되어, 여행의 시작과 마무리를 편리하게 할 수 있는 지점입니다.
-</examples>"""
-
-    EXAMPLES_CITY = """
-<examples>
-[시내 지점 예시 1]
-태그: 직원이 친절함, 가격이 저렴함, 차량이 청결함, 차량외관이 좋음, 배달 서비스가 우수함
-출력:
-친절한 직원분들의 신속한 응대로 대기 시간 없이 바로 출발할 수 있습니다. 차량은 항상 청결하게 관리되어 있고, 합리적인 가격으로 가성비가 뛰어납니다. 차량 상태도 양호하여 안심하고 이용할 수 있으며, 반납 절차도 간편해서 비즈니스 출장이나 일상적인 이용에 적합한 지점입니다.
-
-[시내 지점 예시 2 - 리뷰 수 적음]
-태그: 직원이 친절함, 차량이 청결함, 가격이 저렴함
-출력:
-친절한 직원분들의 세심한 응대가 돋보이는 지점입니다. 차량 상태가 깔끔하게 관리되어 있으며, 합리적인 가격으로 이용하실 수 있습니다. 시내 중심에 위치하여 접근성이 좋고, 간편한 절차로 편리하게 이용 가능한 곳입니다.
-</examples>"""
-
-    EXAMPLES_TOURIST = """
-<examples>
-[관광지 지점 예시]
-태그: 직원이 친절함, 배달 서비스가 우수함, 차량이 청결함, 가격이 저렴함, 차량외관이 좋음
-출력:
-친절한 직원분들이 상세한 안내와 함께 여행 정보까지 제공해주셔서 든든합니다. 청결하게 관리된 차량으로 쾌적한 드라이브를 즐길 수 있으며, 딜리버리 서비스도 원활하게 운영됩니다. 합리적인 가격에 차량 상태까지 양호해, 여행을 더욱 즐겁게 만들어주는 지점입니다.
-</examples>"""
-
-    EXAMPLES_DEFAULT = """
-<examples>
-[기본 예시]
-태그: 직원이 친절함, 차량이 청결함, 가격이 저렴함, 차량외관이 좋음, 배달 서비스가 우수함
-출력:
-친절한 직원분들의 빠른 응대로 기분 좋게 이용을 시작할 수 있습니다. 차량은 청결하게 관리되어 있어 쾌적하며, 합리적인 가격으로 가성비도 뛰어납니다. 차량 상태가 양호하고 체계적인 서비스 덕분에 처음 이용하시는 분들도 편하게 이용하실 수 있는 지점입니다.
-</examples>"""
-
     @classmethod
     def detect_branch_type(cls, branch_name: str) -> BranchType:
         """
@@ -139,80 +99,6 @@ class SummaryPromptBuilder:
                 return region
 
         return None
-
-    @classmethod
-    def get_examples_for_type(cls, branch_type: BranchType) -> str:
-        """지점 유형별 예시 반환"""
-        examples_map = {
-            BranchType.AIRPORT: cls.EXAMPLES_AIRPORT,
-            BranchType.CITY: cls.EXAMPLES_CITY,
-            BranchType.TOURIST: cls.EXAMPLES_TOURIST,
-            BranchType.DEFAULT: cls.EXAMPLES_DEFAULT,
-        }
-        return examples_map.get(branch_type, cls.EXAMPLES_DEFAULT)
-
-    @classmethod
-    def create_summary_prompt(
-        cls,
-        keywords: list[str],
-        review_count: int,
-        representative_reviews: list[str] | None = None,
-        branch_name: str | None = None,
-    ) -> tuple:
-        """
-        요약 프롬프트 생성
-
-        Args:
-            keywords: 키워드 리스트
-            review_count: 리뷰 수
-            representative_reviews: 대표 리뷰 리스트
-            branch_name: 지점명 (유형 판별용)
-
-        Returns:
-            tuple: (system_prompt, user_prompt)
-        """
-        # 지점 유형 판별
-        branch_type = cls.detect_branch_type(branch_name)
-
-        # 지역 추출
-        region = cls.extract_region(branch_name)
-        region_emphasis = (
-            REGION_CONFIG["region_emphasis"].get(region, []) if region else []
-        )
-
-        # 시스템 프롬프트 = 기본 + 유형별 예시
-        system_prompt = cls.SUMMARY_SYSTEM + cls.get_examples_for_type(branch_type)
-
-        # 대표 리뷰 포맷팅
-        reviews_text = ""
-        if representative_reviews:
-            for idx, review in enumerate(representative_reviews, 1):
-                review_truncated = str(review)[:100]
-                reviews_text += f'{idx}. "{review_truncated}"\n'
-
-        # 지역 강조 텍스트
-        region_text = ""
-        if region:
-            region_text = f"\n- 지역: {region}"
-            if region_emphasis:
-                region_text += f" (강조 포인트: {', '.join(region_emphasis)})"
-
-        # 유저 프롬프트 생성
-        user_prompt = f"""다음 데이터를 바탕으로 렌터카 지점 소개 문구를 작성해주세요.
-
-<data>
-- 지점명: {branch_name or "미지정"}
-- 분석 리뷰 수: {review_count}개
-- 핵심 태그: {", ".join(keywords[:5])}{region_text}
-</data>
-
-<representative_reviews>
-{reviews_text if reviews_text else "(리뷰 없음)"}
-</representative_reviews>
-
-위 데이터를 기반으로 자연스럽게 이어지는 하나의 문단(200~250자)을 작성하세요."""
-
-        return system_prompt, user_prompt
 
     # ============================================================
     # Enhanced Few-shot 예시 (카테고리 + 세분화 태그 형식)
