@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class SummaryUpdate(BaseModel):
-    """요약 수정 요청"""
+    """요약 부분 수정 요청 (PATCH)"""
 
     region: str | None = None
     keywords: list[str] | None = None
@@ -15,12 +15,7 @@ class SummaryUpdate(BaseModel):
     summary_6m: str | None = None
     summary_3m: str | None = None
     summary_1m: str | None = None
-
-
-class StatusUpdate(BaseModel):
-    """상태 변경 요청"""
-
-    status: str = Field(..., pattern="^(draft|approved|published)$")
+    status: str | None = Field(None, pattern="^(draft|approved|published)$")
 
 
 class RegenerateRequest(BaseModel):

@@ -41,7 +41,7 @@ from .entities import (
     Summary,
     Tag,
 )
-from .summary import RegenerateRequest, StatusUpdate, SummaryUpdate
+from .summary import RegenerateRequest, SummaryUpdate
 from .tag import (
     BulkMappingRequest,
     CategoryCreate,
@@ -93,7 +93,6 @@ __all__ = [
     "Tag",
     # summary
     "RegenerateRequest",
-    "StatusUpdate",
     "SummaryUpdate",
     # tag
     "BulkMappingRequest",
