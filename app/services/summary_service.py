@@ -570,13 +570,13 @@ class SummaryService:
         """
         감정별로 분리된 대표 리뷰 샘플링 (등간격)
 
-        marketing: 긍정 4 + 부정 1 = 5개
-        operational: 긍정 3 + 부정 3 = 6개
+        marketing: 긍정 5 + 부정 2 = 7개
+        operational: 긍정 4 + 부정 4 = 8개
         """
         if mode == "operational":
-            pos_limit, neg_limit = 3, 3
+            pos_limit, neg_limit = 4, 4
         else:
-            pos_limit, neg_limit = 4, 1
+            pos_limit, neg_limit = 5, 2
 
         result = {"positive": [], "negative": []}
 
@@ -597,7 +597,7 @@ class SummaryService:
                 .execute()
             )
             pos_reviews = [
-                r["content"][:200] for r in pos_result.data if r.get("content")
+                r["content"][:250] for r in pos_result.data if r.get("content")
             ]
             result["positive"] = self._sample_evenly(pos_reviews, pos_limit)
 
@@ -617,7 +617,7 @@ class SummaryService:
                 .execute()
             )
             neg_reviews = [
-                r["content"][:200] for r in neg_result.data if r.get("content")
+                r["content"][:250] for r in neg_result.data if r.get("content")
             ]
             result["negative"] = self._sample_evenly(neg_reviews, neg_limit)
 

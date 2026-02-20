@@ -169,6 +169,44 @@ def strip_markdown_formatting(text: str) -> str:
     return text.strip()
 
 
+def validate_report_content(
+    text: str,
+    negative_ratio: float = 0.0,
+    tag_data: list[dict] | None = None,
+) -> tuple[bool, list[str]]:
+    """
+    리포트 내용 품질 검증 (기존 validate_summary와 별도)
+
+    Args:
+        text: 리포트 텍스트
+        negative_ratio: 전체 부정률 (0~100)
+        tag_data: 태그별 부정 데이터
+
+    Returns:
+        (통과 여부, 경고 목록)
+    """
+    warnings = []
+
+    # 1. 부정 언급 필수 검증
+    if negative_ratio >= 20:
+        negative_indicators = ["개선", "부정", "아쉬", "부족", "불만", "낮은", "높은 부정"]
+        has_negative_mention = any(ind in text for ind in negative_indicators)
+        if not has_negative_mention:
+            warnings.append(
+                f"부정률 {negative_ratio:.0f}%이나 리포트에 개선점 미언급"
+            )
+
+    # 2. 수치 인용 검증 (최소 2회)
+    number_pattern = re.compile(r'\d+[%건개]')
+    number_mentions = number_pattern.findall(text)
+    if len(number_mentions) < 2:
+        warnings.append(
+            f"수치 인용 부족: {len(number_mentions)}회 (최소 2회 권장)"
+        )
+
+    return len(warnings) == 0, warnings
+
+
 def validate_and_log(text: str, branch_name: str = None) -> tuple[bool, str]:
     """
     검증 및 로그용 결과 반환

@@ -741,7 +741,8 @@ class ReportService:
                 praise = v.get("top_praise", "")
                 issue = v.get("top_issue", "")
                 like = v.get("like_ratio", 0)
-                line = f"{model}({count}건, 호평 {like}%"
+                like_count = round(count * like / 100) if count > 0 else 0
+                line = f"{model}({count}건, 호평 {like_count}건"
                 if praise:
                     line += f", 강점: {praise}"
                 if issue:
@@ -827,7 +828,7 @@ class ReportService:
                 tag_details=affiliate_tags,
                 top_positive_tags=self._to_dicts(top_positive_tags),
                 top_negative_tags=self._to_dicts(top_negative_tags),
-                sample_reviews=sample_reviews,
+                sample_reviews=None,
             )
 
             llm_provider = get_provider()
@@ -835,7 +836,7 @@ class ReportService:
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 max_tokens=300,
-                temperature=0.7,
+                temperature=0.5,
             )
 
             content = response.content if hasattr(response, "content") else str(response)
@@ -879,7 +880,7 @@ class ReportService:
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 max_tokens=300,
-                temperature=0.7,
+                temperature=0.5,
             )
 
             content = response.content if hasattr(response, "content") else str(response)
@@ -1185,25 +1186,21 @@ class ReportService:
             else:
                 avg_sentiment = 0.5  # 중립
 
-            # top_praise: positive_count가 가장 높은 태그 (비율 포함)
+            # top_praise: positive_count가 가장 높은 태그 (건수 표기)
             top_praise_tag = ""
             max_positive = 0
             for tag_name, tag_stats in data["tags"].items():
                 if tag_stats["positive"] > max_positive:
                     max_positive = tag_stats["positive"]
-                    tag_total = tag_stats["total"]
-                    ratio = int(round((tag_stats["positive"] / tag_total) * 100)) if tag_total > 0 else 0
-                    top_praise_tag = f"{tag_name}({ratio}%)"
+                    top_praise_tag = f"{tag_name}({max_positive}건)"
 
-            # top_issue: negative_count가 가장 높은 태그 (비율 포함)
+            # top_issue: negative_count가 가장 높은 태그 (건수 표기)
             top_issue_tag = ""
             max_negative = 0
             for tag_name, tag_stats in data["tags"].items():
                 if tag_stats["negative"] > max_negative:
                     max_negative = tag_stats["negative"]
-                    tag_total = tag_stats["total"]
-                    ratio = int(round((tag_stats["negative"] / tag_total) * 100)) if tag_total > 0 else 0
-                    top_issue_tag = f"{tag_name}({ratio}%)"
+                    top_issue_tag = f"{tag_name}({max_negative}건)"
 
             # 호불호 비율 계산 (퍼센트)
             like_ratio = int(round((total_positive / total) * 100)) if total > 0 else 0
@@ -1380,14 +1377,10 @@ class ReportService:
             for tag_name, stats in tags.items():
                 if stats["positive"] > max_positive:
                     max_positive = stats["positive"]
-                    tag_total = stats["total"]
-                    ratio = int(round((stats["positive"] / tag_total) * 100)) if tag_total > 0 else 0
-                    top_praise = f"{tag_name}({ratio}%)"
+                    top_praise = f"{tag_name}({max_positive}건)"
                 if stats["negative"] > max_negative:
                     max_negative = stats["negative"]
-                    tag_total = stats["total"]
-                    ratio = int(round((stats["negative"] / tag_total) * 100)) if tag_total > 0 else 0
-                    top_issue = f"{tag_name}({ratio}%)"
+                    top_issue = f"{tag_name}({max_negative}건)"
 
             result_map[car_model] = {
                 "top_praise": top_praise,
@@ -1632,17 +1625,19 @@ class ReportService:
 
         try:
             llm_provider = get_provider()
+            report_mode = tag_sentiments is not None
+            temperature = 0.5 if report_mode else 0.7
             response = await llm_provider.async_generate(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 max_tokens=max_tokens,
-                temperature=0.7,
+                temperature=temperature,
             )
 
             content = response.content if hasattr(response, "content") else str(response)
 
             # LLM 응답 품질 검증 및 자동 정제
-            from infrastructure.llm.validator import validate_summary, FORBIDDEN_WORDS, strip_markdown_formatting
+            from infrastructure.llm.validator import validate_summary, FORBIDDEN_WORDS, strip_markdown_formatting, validate_report_content
             validation_mode = "report" if tag_sentiments else "summary"
             # 마크다운 서식 항상 제거 (검증 전에 먼저 정제)
             content = strip_markdown_formatting(content)
@@ -1665,6 +1660,21 @@ class ReportService:
                     "]+", "", content
                 )
                 content = content.strip()
+
+            # 리포트 모드 내용 품질 검증
+            if tag_sentiments and sentiment_stats:
+                neg_ratio = 0
+                total = sentiment_stats.get("total", 0)
+                if total > 0:
+                    neg_ratio = sentiment_stats.get("negative", 0) / total * 100
+
+                is_content_valid, content_warnings = validate_report_content(
+                    content, negative_ratio=neg_ratio
+                )
+                if not is_content_valid:
+                    logging.warning(
+                        f"리포트 내용 검증 경고 (branch_id={branch_id}): {content_warnings}"
+                    )
 
             return content
         except Exception as e:

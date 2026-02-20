@@ -46,7 +46,9 @@ class SummaryPromptBuilder:
 - 마크다운, 이모지, 특수문자 사용 금지
 - 과장 표현 금지: "최고", "완벽", "강력추천", "무조건"
 - 부정적 내용 작성 금지
-- 제공된 태그 중 최소 3개 자연스럽게 포함
+- 제공된 태그 중 최소 4개 자연스럽게 포함
+- "~합니다", "~입니다" 문체로 통일
+- 지점명이나 지역 특성을 반영한 차별화 포인트 포함
 </constraints>"""
 
     # ============================================================
@@ -62,10 +64,15 @@ class SummaryPromptBuilder:
 
     EXAMPLES_CITY = """
 <examples>
-[시내 지점 예시]
+[시내 지점 예시 1]
 태그: 직원이 친절함, 가격이 저렴함, 차량이 청결함, 차량외관이 좋음, 배달 서비스가 우수함
 출력:
 친절한 직원분들의 신속한 응대로 대기 시간 없이 바로 출발할 수 있습니다. 차량은 항상 청결하게 관리되어 있고, 합리적인 가격으로 가성비가 뛰어납니다. 차량 상태도 양호하여 안심하고 이용할 수 있으며, 반납 절차도 간편해서 비즈니스 출장이나 일상적인 이용에 적합한 지점입니다.
+
+[시내 지점 예시 2 - 리뷰 수 적음]
+태그: 직원이 친절함, 차량이 청결함, 가격이 저렴함
+출력:
+친절한 직원분들의 세심한 응대가 돋보이는 지점입니다. 차량 상태가 깔끔하게 관리되어 있으며, 합리적인 가격으로 이용하실 수 있습니다. 시내 중심에 위치하여 접근성이 좋고, 간편한 절차로 편리하게 이용 가능한 곳입니다.
 </examples>"""
 
     EXAMPLES_TOURIST = """
@@ -232,7 +239,7 @@ class SummaryPromptBuilder:
 
     ENHANCED_EXAMPLES_CITY = """
 <examples>
-[시내 지점 예시]
+[시내 지점 예시 1]
 태그 분석:
 [직원이 친절함]
 - 친절 (긍정 85%, 120건)
@@ -246,6 +253,20 @@ class SummaryPromptBuilder:
 
 출력:
 친절한 직원분들의 신속한 응대로 대기 시간 없이 바로 출발할 수 있습니다. 차량은 항상 청결하게 관리되어 있고, 합리적인 가격으로 가성비가 뛰어납니다. 차량 상태도 양호하여 안심하고 이용할 수 있으며, 반납 절차도 간편해서 비즈니스 출장이나 일상적인 이용에 적합한 지점입니다.
+
+[시내 지점 예시 2 - 리뷰 수 적음]
+태그 분석:
+[직원이 친절함]
+- 친절 (긍정 82%, 25건)
+
+[차량이 청결함]
+- 청결 (긍정 76%, 18건)
+
+[가격이 저렴함]
+- 가격 (긍정 79%, 20건)
+
+출력:
+친절한 직원분들의 세심한 응대가 돋보이는 지점입니다. 차량 상태가 깔끔하게 관리되어 있으며, 합리적인 가격으로 이용하실 수 있습니다. 시내 중심에 위치하여 접근성이 좋고, 간편한 절차로 편리하게 이용 가능한 곳입니다.
 </examples>"""
 
     ENHANCED_EXAMPLES_TOURIST = """
@@ -584,7 +605,7 @@ class RichSummaryPromptBuilder:
 
 <output_format>
 하나의 흐름으로 이어지는 설명식 문단(400~600자)으로 작성합니다.
-분석 기간과 리뷰 수 개요로 시작하여, 긍정률/부정률 수치와 주요 강점을 서술하고,
+분석 기간과 리뷰 수 개요로 시작하여, 긍정/부정 건수와 주요 강점을 서술하고,
 개선이 필요한 부분을 언급한 뒤, 운영 관점의 제안으로 자연스럽게 마무리합니다.
 섹션 구분이나 제목 없이 문장이 매끄럽게 이어지도록 작성하세요.
 </output_format>
@@ -592,10 +613,18 @@ class RichSummaryPromptBuilder:
 <writing_style>
 - 객관적이고 분석적인 톤
 - 숫자 데이터를 근거로 활용
-- 실제 리뷰 내용을 자연스럽게 인용
+- 통계 건수를 근거로 서술
 - 운영자 관점에서 실용적인 인사이트 제공
 - 접속사를 활용해 문장 간 자연스럽게 연결
 </writing_style>
+
+<data_usage_rules>
+- 부정률이 20% 이상인 태그는 반드시 리포트에서 언급하세요
+- 수치 데이터를 최소 3회 이상 인용하세요 (예: "긍정 102건/120건", "부정 18건")
+- 운영 제안은 구체적 액션으로 작성하세요:
+  나쁜 예: "서비스 개선이 필요합니다"
+  좋은 예: "전화응대 부정률이 35%로 높으므로, 전화 응대 매뉴얼 재교육을 권장합니다"
+</data_usage_rules>
 
 <constraints>
 - 마크다운 서식 전면 금지: **, *, -, #, [], () 등 일체 사용 금지
@@ -653,28 +682,23 @@ class RichSummaryPromptBuilder:
             neg_ratio = round(neg / total * 100) if total > 0 else 0
 
             if pos_ratio >= STRENGTH_POSITIVE_RATIO:
-                positive_tags.append(f"{name}(긍정 {pos_ratio}%, {pos}/{total}건)")
+                positive_tags.append(f"{name}(긍정 {pos}건/{total}건)")
             if neg_ratio >= IMPROVEMENT_NEGATIVE_RATIO:
-                negative_tags.append(f"{name}(부정 {neg_ratio}%, {neg}/{total}건)")
+                negative_tags.append(f"{name}(부정 {neg}건/{total}건)")
 
-        # 전체 감정 비율
+        # 전체 감정 건수
         total_sentiment = sentiment_stats.get("total", 0)
-        if total_sentiment > 0:
-            overall_positive = round(
-                sentiment_stats.get("positive", 0) / total_sentiment * 100
-            )
-            overall_negative = round(
-                sentiment_stats.get("negative", 0) / total_sentiment * 100
-            )
-        else:
-            overall_positive = 0
-            overall_negative = 0
+        pos_count = sentiment_stats.get("positive", 0)
+        neg_count = sentiment_stats.get("negative", 0)
+
+        # 부정률 20%+ 태그 개수
+        high_neg_count = len(negative_tags)
 
         # 대표 리뷰 포맷팅 (최대 8개)
         reviews_text = ""
         if sample_reviews:
             for idx, review in enumerate(sample_reviews[:8], 1):
-                review_truncated = str(review)[:150]
+                review_truncated = str(review)[:250]
                 reviews_text += f'{idx}. "{review_truncated}"\n'
 
         # 차량 분석 텍스트
@@ -686,12 +710,17 @@ class RichSummaryPromptBuilder:
 - 지점명: {branch_name}
 - 분석 기간: {start_date} ~ {end_date}
 - 총 리뷰 수: {total_reviews}건
-- 전체 긍정률: {overall_positive}%, 부정률: {overall_negative}%
+- 전체 긍정: {pos_count}건, 부정: {neg_count}건 (총 {total_sentiment}건)
 </data>
 
 <tag_analysis>
-긍정 평가 높은 태그: {', '.join(positive_tags) if positive_tags else '없음'}
-부정 평가 있는 태그: {', '.join(negative_tags) if negative_tags else '없음'}
+[강점 태그]
+{', '.join(positive_tags) if positive_tags else '없음'}
+
+[주의 태그 - 반드시 리포트에 반영]
+{', '.join(negative_tags) if negative_tags else '없음'}
+
+전체 태그 중 부정률 20% 이상: {high_neg_count}개
 </tag_analysis>
 
 <vehicle_analysis>
@@ -728,12 +757,13 @@ class RichSummaryPromptBuilder:
 
 <task>
 주어진 태그별 감정 통계와 태그 순위 데이터를 분석하여 업체 서비스 평가 텍스트를 작성하세요.
-잘한점 칭찬으로 시작하고, 개선점과 보완 시 기대효과로 마무리합니다.
+잘한점을 7, 개선점을 3 비율로 서술합니다.
+잘한점 칭찬으로 시작하고, 개선점에 대한 구체적 액션 제안, 보완 시 기대효과로 마무리합니다.
 </task>
 
 <writing_style>
 - 객관적이고 분석적인 톤
-- 숫자 데이터를 근거로 활용
+- 건수 데이터를 근거로 활용
 - 잘한점을 먼저 언급한 후 개선점 서술
 - 보완 시 예상되는 긍정적 효과로 마무리
 </writing_style>
@@ -743,6 +773,7 @@ class RichSummaryPromptBuilder:
 - 이모지, 특수문자 사용 금지
 - 과장 표현 금지: "최고", "완벽", "강력추천"
 - 제공되지 않은 정보 추측 금지
+- 리뷰 원문을 직접 인용하지 마세요
 - 150-250자 분량
 - 반드시 순수 텍스트 문단으로만 작성
 </constraints>"""
@@ -757,7 +788,9 @@ class RichSummaryPromptBuilder:
 
 <task>
 주어진 태그별 감정 통계와 차량 순위 데이터를 분석하여 차량 평가 텍스트를 작성하세요.
-강점을 먼저 나열하고, 아쉬운점과 보완 시 기대효과로 마무리합니다.
+강점을 7, 아쉬운점을 3 비율로 서술합니다.
+강점을 먼저 나열하고, 아쉬운점에 대한 구체적 개선 방안, 보완 시 기대효과로 마무리합니다.
+차량 모델명과 수치를 반드시 인용하세요.
 </task>
 
 <writing_style>
@@ -806,25 +839,20 @@ class RichSummaryPromptBuilder:
             pos_ratio = round(pos / total * 100)
             neg_ratio = round(neg / total * 100)
             if neg_ratio > pos_ratio:
-                tag_stats_lines.append(f"  {name}(부정 {neg_ratio}%, {total}건)")
+                tag_stats_lines.append(f"  {name}(부정 {neg}건/{total}건)")
             else:
-                tag_stats_lines.append(f"  {name}(긍정 {pos_ratio}%, {total}건)")
+                tag_stats_lines.append(f"  {name}(긍정 {pos}건/{total}건)")
         tag_stats_text = "\n".join(tag_stats_lines) if tag_stats_lines else "  데이터 없음"
 
         pos_lines = "\n".join(
-            f"  {i+1}. {t.get('tag_name', '')}({t.get('ratio', 0)}%, {t.get('count', 0)}건)"
+            f"  {i+1}. {t.get('tag_name', '')}({t.get('count', 0)}건)"
             for i, t in enumerate(top_positive_tags[:5])
         ) or "  데이터 없음"
 
         neg_lines = "\n".join(
-            f"  {i+1}. {t.get('tag_name', '')}(부정 {t.get('ratio', 0)}%, {t.get('count', 0)}건)"
+            f"  {i+1}. {t.get('tag_name', '')}({t.get('count', 0)}건)"
             for i, t in enumerate(top_negative_tags[:5])
         ) or "  데이터 없음"
-
-        reviews_text = ""
-        if sample_reviews:
-            for idx, review in enumerate(sample_reviews[:5], 1):
-                reviews_text += f'{idx}. "{str(review)[:100]}"\n'
 
         user_prompt = f"""다음 데이터를 바탕으로 {branch_name}의 업체 서비스 평가 텍스트를 작성하세요.
 
@@ -836,8 +864,6 @@ class RichSummaryPromptBuilder:
 개선점 Top 5:
 {neg_lines}
 </affiliate_analysis>
-
-{f'<sample_reviews>{chr(10)}{reviews_text}</sample_reviews>' if reviews_text else ''}
 
 잘한점 칭찬으로 시작하고, 개선점 및 보완 시 예상효과를 포함하여 150-250자로 작성하세요."""
 
@@ -873,18 +899,18 @@ class RichSummaryPromptBuilder:
             pos_ratio = round(pos / total * 100)
             neg_ratio = round(neg / total * 100)
             if neg_ratio > pos_ratio:
-                tag_stats_lines.append(f"  {name}(부정 {neg_ratio}%, {total}건)")
+                tag_stats_lines.append(f"  {name}(부정 {neg}건/{total}건)")
             else:
-                tag_stats_lines.append(f"  {name}(긍정 {pos_ratio}%, {total}건)")
+                tag_stats_lines.append(f"  {name}(긍정 {pos}건/{total}건)")
         tag_stats_text = "\n".join(tag_stats_lines) if tag_stats_lines else "  데이터 없음"
 
         liked_lines = "\n".join(
-            f"  {i+1}. {v.get('model', '')}(호평 {v.get('ratio', 0)}%) {', '.join(v.get('tags', [])[:3])}"
+            f"  {i+1}. {v.get('model', '')}(호평 {v.get('ratio', 0)}건) {', '.join(v.get('tags', [])[:3])}"
             for i, v in enumerate(top_liked_vehicles[:5])
         ) or "  데이터 없음"
 
         disliked_lines = "\n".join(
-            f"  {i+1}. {v.get('model', '')}(불만 {v.get('ratio', 0)}%) {', '.join(v.get('tags', [])[:3])}"
+            f"  {i+1}. {v.get('model', '')}(불만 {v.get('ratio', 0)}건) {', '.join(v.get('tags', [])[:3])}"
             for i, v in enumerate(top_disliked_vehicles[:5])
         ) or "  데이터 없음"
 
