@@ -145,3 +145,5 @@ data/*.npz
 /docs
 data/
 static/
+*.png
+*.jpg
