@@ -409,8 +409,8 @@
                 <button class="btn-go" id="btn-load">조회</button>
             </div>
             <div class="preset-row" id="preset-btns">
-                <button class="preset-btn" data-period="1m" aria-pressed="false">1개월</button>
-                <button class="preset-btn active" data-period="3m" aria-pressed="true">3개월</button>
+                <button class="preset-btn active" data-period="1m" aria-pressed="true">1개월</button>
+                <button class="preset-btn" data-period="3m" aria-pressed="false">3개월</button>
                 <button class="preset-btn" data-period="6m" aria-pressed="false">6개월</button>
                 <button class="preset-btn" data-period="1y" aria-pressed="false">12개월</button>
                 <button class="preset-btn" data-period="all" aria-pressed="false">전체</button>
@@ -591,7 +591,7 @@
         // 기간 프리셋 → summary 필드 매핑
         var PERIOD_FIELD = { '1m': 'summary_1m', '3m': 'summary_3m', '6m': 'summary_6m', '1y': 'summary_1y', 'all': 'summary_all' };
         var PERIOD_LABEL = { '1m': '최근 1개월', '3m': '최근 3개월', '6m': '최근 6개월', '1y': '최근 12개월', 'all': '전체 기간' };
-        var currentPeriod = '3m';
+        var currentPeriod = '1m';
         var cachedData = null;
         var branchItems = [];
         var selectedBranchId = '';
@@ -867,11 +867,32 @@
         }
 
         function updatePresetAvailability(data) {
+            var preferOrder = ['1m', '3m', '6m', '1y', 'all'];
+            var bestPeriod = null;
+
             document.querySelectorAll('.preset-btn').forEach(function (btn) {
                 var field = PERIOD_FIELD[btn.dataset.period];
                 var hasData = !!data[field];
                 btn.classList.toggle('no-data', !hasData);
             });
+
+            // 가장 짧은 유효 기간 자동 선택
+            for (var i = 0; i < preferOrder.length; i++) {
+                if (data[PERIOD_FIELD[preferOrder[i]]]) {
+                    bestPeriod = preferOrder[i];
+                    break;
+                }
+            }
+
+            if (bestPeriod && bestPeriod !== currentPeriod) {
+                currentPeriod = bestPeriod;
+                document.querySelectorAll('.preset-btn').forEach(function (btn) {
+                    var isTarget = btn.dataset.period === bestPeriod;
+                    btn.classList.toggle('active', isTarget);
+                    btn.setAttribute('aria-pressed', isTarget ? 'true' : 'false');
+                });
+                renderAISummaryCard(data);
+            }
         }
 
         // ─── Event Bindings ──────────────────────────
