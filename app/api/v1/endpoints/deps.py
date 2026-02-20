@@ -31,8 +31,18 @@ if TYPE_CHECKING:
     from services.tag_service import TagService
 
 
+# ============================================================
+# Database Client
+# ============================================================
+
+
 async def get_db_client() -> AsyncClient:
     return await get_client()
+
+
+# ============================================================
+# Repositories — Summaries & Reviews
+# ============================================================
 
 
 async def get_summary_repo(
@@ -59,6 +69,11 @@ async def get_review_repo(
     return BranchReviewRepository(client)
 
 
+# ============================================================
+# Repositories — Tags & Sentiment
+# ============================================================
+
+
 async def get_tag_repo(
     client: AsyncClient = Depends(get_db_client),
 ) -> TagRepository:
@@ -73,6 +88,11 @@ async def get_sentiment_repo(
     from repository.sentiment_repository import SentimentRepository
 
     return SentimentRepository(client)
+
+
+# ============================================================
+# Repositories — Affiliates & Reports
+# ============================================================
 
 
 async def get_affiliate_repo(
@@ -116,7 +136,7 @@ async def get_report_job_repo(
 
 
 # ============================================================
-# Services
+# Services — Summaries
 # ============================================================
 
 
@@ -129,6 +149,11 @@ async def get_summary_service(
     from services.summary_service import SummaryService
 
     return SummaryService(summary_repo, branch_tag_repo, review_repo, sentiment_repo)
+
+
+# ============================================================
+# Services — Tags & Sentiment
+# ============================================================
 
 
 async def get_tag_service(
@@ -148,6 +173,11 @@ async def get_sentiment_service(
     from services.sentiment_service import SentimentService
 
     return SentimentService(sentiment_repo)
+
+
+# ============================================================
+# Services — External & Analysis
+# ============================================================
 
 
 async def get_carmore_service(
@@ -189,6 +219,11 @@ async def get_sync_service(
     return SyncService(review_repo, _get_athena_client())
 
 
+# ============================================================
+# Services — Reports
+# ============================================================
+
+
 async def get_report_service(
     summary_repo: SummaryRepository = Depends(get_summary_repo),
     review_repo: BranchReviewRepository = Depends(get_review_repo),
@@ -197,10 +232,22 @@ async def get_report_service(
     sentiment_repo: SentimentRepository = Depends(get_sentiment_repo),
 ) -> ReportService:
     from services.report_service import ReportService
+    from services.report_cache_service import ReportCacheService
+    from services.tag_stats_calculator import TagStatsCalculator
+    from services.report_ai_generator import ReportAIGenerator
     from services.vehicle_analyzer import VehicleAnalyzer
     from infrastructure.pdf.generator import PDFGenerator
 
-    return ReportService(summary_repo, review_repo, branch_tag_repo, report_repo, sentiment_repo, PDFGenerator(), VehicleAnalyzer())
+    cache_service = ReportCacheService(report_repo, review_repo, branch_tag_repo)
+    tag_calculator = TagStatsCalculator(branch_tag_repo)
+    ai_generator = ReportAIGenerator(summary_repo, review_repo)
+
+    return ReportService(
+        summary_repo, review_repo, branch_tag_repo,
+        report_repo, sentiment_repo,
+        PDFGenerator(), VehicleAnalyzer(),
+        cache_service, tag_calculator, ai_generator,
+    )
 
 
 async def get_report_job_service(
@@ -210,6 +257,11 @@ async def get_report_job_service(
     from services.report_job_service import ReportJobService
 
     return ReportJobService(job_repo, report_service)
+
+
+# ============================================================
+# Services — Sync & Scheduler
+# ============================================================
 
 
 async def get_sync_job_service() -> "SyncJobService":
@@ -234,6 +286,11 @@ async def get_sync_scheduler_dep():
     from infrastructure.scheduler.sync_scheduler import get_scheduler
 
     return get_scheduler()
+
+
+# ============================================================
+# Security
+# ============================================================
 
 
 async def require_public_api_key(

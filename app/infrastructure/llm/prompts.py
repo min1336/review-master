@@ -714,21 +714,9 @@ class RichSummaryPromptBuilder:
         Returns:
             tuple: (system_prompt, user_prompt)
         """
-        tag_stats_lines = []
-        for t in tag_details:
-            name = t.get("tag_name", "")
-            pos = t.get("positive", 0)
-            neg = t.get("negative", 0)
-            total = t.get("total", 0)
-            if total == 0:
-                continue
-            pos_ratio = round(pos / total * 100)
-            neg_ratio = round(neg / total * 100)
-            if neg_ratio > pos_ratio:
-                tag_stats_lines.append(f"  {name}(부정 {neg}건/{total}건)")
-            else:
-                tag_stats_lines.append(f"  {name}(긍정 {pos}건/{total}건)")
-        tag_stats_text = "\n".join(tag_stats_lines) if tag_stats_lines else "  데이터 없음"
+        from infrastructure.llm.prompt_helpers import format_tag_stats_lines
+
+        tag_stats_text = format_tag_stats_lines(tag_details)
 
         pos_lines = "\n".join(
             f"  {i+1}. {t.get('tag_name', '')}({t.get('count', 0)}건)"
@@ -774,21 +762,9 @@ class RichSummaryPromptBuilder:
         Returns:
             tuple: (system_prompt, user_prompt)
         """
-        tag_stats_lines = []
-        for t in tag_details:
-            name = t.get("tag_name", "")
-            pos = t.get("positive", 0)
-            neg = t.get("negative", 0)
-            total = t.get("total", 0)
-            if total == 0:
-                continue
-            pos_ratio = round(pos / total * 100)
-            neg_ratio = round(neg / total * 100)
-            if neg_ratio > pos_ratio:
-                tag_stats_lines.append(f"  {name}(부정 {neg}건/{total}건)")
-            else:
-                tag_stats_lines.append(f"  {name}(긍정 {pos}건/{total}건)")
-        tag_stats_text = "\n".join(tag_stats_lines) if tag_stats_lines else "  데이터 없음"
+        from infrastructure.llm.prompt_helpers import format_tag_stats_lines
+
+        tag_stats_text = format_tag_stats_lines(tag_details)
 
         liked_lines = "\n".join(
             f"  {i+1}. {v.get('model', '')}(호평 {v.get('ratio', 0)}건) {', '.join(v.get('tags', [])[:3])}"
