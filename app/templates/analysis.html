@@ -800,91 +800,6 @@
             border-color: #e53e3e;
         }
 
-        .scheduler-status {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 12px;
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 20px;
-            font-size: 12px;
-            color: white;
-        }
-
-        .scheduler-indicator {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #ef4444;
-        }
-
-        .scheduler-indicator.active {
-            background: #10b981;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.5;
-            }
-        }
-
-        .scheduler-info {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .scheduler-label {
-            font-weight: 500;
-        }
-
-        .scheduler-next {
-            font-size: 10px;
-            opacity: 0.8;
-        }
-
-        .scheduler-toggle {
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 11px;
-            transition: background 0.2s;
-        }
-
-        .scheduler-toggle:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        .scheduler-toggle:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .scheduler-interval {
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            color: white;
-            padding: 4px 6px;
-            border-radius: 4px;
-            font-size: 11px;
-            cursor: pointer;
-            outline: none;
-        }
-
-        .scheduler-interval option {
-            background: #333;
-            color: white;
-        }
     </style>
 </head>
 
@@ -892,58 +807,15 @@
     <header class="header">
         <h1>리뷰 분석</h1>
         <div class="header-actions">
-            <!-- 스케줄러 상태 -->
-            <!-- 스케줄러 상태 (일일 동기화 + 신규 리뷰) -->
-            <div style="display: flex; gap: 8px;">
-                <!-- 수동 동기화 -->
-                <button class="manual-sync-btn" id="btn-manual-sync" onclick="manualSync()" title="수동 동기화">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="23 4 23 10 17 10"></polyline>
-                        <polyline points="1 20 1 14 7 14"></polyline>
-                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                    </svg>
-                    수동 동기화
-                </button>
-                <!-- 일일 동기화 스케줄러 -->
-                <div class="scheduler-status" id="daily-scheduler">
-                    <div class="scheduler-indicator" id="daily-indicator"></div>
-                    <div class="scheduler-info">
-                        <span class="scheduler-label">일일 동기화</span>
-                        <span class="scheduler-next" id="daily-next"></span>
-                    </div>
-                    <select class="scheduler-interval" id="daily-hour" onchange="updateDailyTime(this.value)"
-                        title="매일 실행 시간">
-                        <option value="0">00시</option>
-                        <option value="1">01시</option>
-                        <option value="2">02시</option>
-                        <option value="3">03시</option>
-                        <option value="4">04시</option>
-                        <option value="5">05시</option>
-                        <option value="6">06시</option>
-                        <option value="7">07시</option>
-                        <option value="8">08시</option>
-                        <option value="9">09시</option>
-                        <option value="10">10시</option>
-                        <option value="11">11시</option>
-                        <option value="12">12시</option>
-                        <option value="13">13시</option>
-                        <option value="14">14시</option>
-                        <option value="15">15시</option>
-                        <option value="16">16시</option>
-                        <option value="17">17시</option>
-                        <option value="18">18시</option>
-                        <option value="19">19시</option>
-                        <option value="20">20시</option>
-                        <option value="21">21시</option>
-                        <option value="22">22시</option>
-                        <option value="23">23시</option>
-                    </select>
-                    <button class="scheduler-toggle" id="daily-toggle" onclick="toggleDailyScheduler()"
-                        disabled>Stop</button>
-                </div>
-
-            </div>
+            <button class="manual-sync-btn" id="btn-manual-sync" onclick="manualSync()" title="수동 동기화">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <polyline points="1 20 1 14 7 14"></polyline>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+                수동 동기화
+            </button>
 
             <button class="btn btn-secondary" id="btn-back">대시보드로 돌아가기</button>
         </div>
@@ -1195,9 +1067,6 @@
 
             // 접기/펼치기 상태 복원
             restoreCollapseState();
-
-            // 스케줄러 상태 확인
-            checkAllSchedulers();
 
             // 동기화 상태 확인
             await checkSyncStatus();
@@ -2203,90 +2072,6 @@
                 btn.classList.remove('syncing');
             }
         }
-
-        // =============================================
-        // 스케줄러 관련 함수
-        // =============================================
-
-        // 모든 스케줄러 상태 확인
-        function checkAllSchedulers() {
-            checkDailyScheduler();
-        }
-
-        // 1. 일일 동기화 스케줄러 (SyncScheduler)
-        async function checkDailyScheduler() {
-            try {
-                const response = await fetch(`${API_PREFIX}/sync/scheduler/status`);
-                const data = (await response.json()).data;
-
-                const indicator = document.getElementById('daily-indicator');
-                const nextRun = document.getElementById('daily-next');
-                const toggleBtn = document.getElementById('daily-toggle');
-                const hourSelect = document.getElementById('daily-hour');
-
-                // 시간 선택 설정
-                hourSelect.value = data.sync_hour;
-
-                if (data.is_running) {
-                    indicator.classList.add('active');
-                    if (toggleBtn) toggleBtn.style.display = 'none';
-
-                    if (data.next_run_time) {
-                        const next = new Date(data.next_run_time);
-                        const hours = String(next.getHours()).padStart(2, '0');
-                        const minutes = String(next.getMinutes()).padStart(2, '0');
-                        nextRun.textContent = `다음: ${hours}:${minutes}`;
-                    } else {
-                        nextRun.textContent = '';
-                    }
-                } else {
-                    indicator.classList.remove('active');
-                    nextRun.textContent = '중지됨';
-                    if (toggleBtn) toggleBtn.style.display = 'none';
-                }
-            } catch (error) {
-                console.error('Failed to check daily scheduler:', error);
-            }
-        }
-
-        async function toggleDailyScheduler() {
-            const toggleBtn = document.getElementById('daily-toggle');
-            const isRunning = toggleBtn.dataset.running === 'true';
-
-            toggleBtn.disabled = true;
-            toggleBtn.textContent = '...';
-
-            try {
-                const endpoint = isRunning ? 'stop' : 'start';
-                const response = await fetch(`${API_PREFIX}/sync/scheduler/${endpoint}`, {
-                    method: 'POST'
-                });
-                await checkDailyScheduler();
-            } catch (error) {
-                console.error('Failed to toggle daily scheduler:', error);
-                showToast('상태 변경 실패', 'error');
-                toggleBtn.disabled = false;
-            }
-        }
-
-        async function updateDailyTime(hour) {
-            try {
-                const response = await fetch(`${API_PREFIX}/sync/scheduler/time`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ hour: parseInt(hour), minute: 0 })
-                });
-
-                if (!response.ok) throw new Error('Failed');
-                await checkDailyScheduler();
-            } catch (error) {
-                console.error('Failed to update daily time:', error);
-                showToast('시간 변경 실패', 'error');
-                await checkDailyScheduler();
-            }
-        }
-
-        // 스케줄러 상태는 서버 부팅 시 결정되므로 페이지 로드 시 1회만 조회 (DOMContentLoaded에서 호출)
 
         // =============================================
         // 동기화 관련 함수
