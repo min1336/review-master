@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from datetime import datetime
 
 from models.tag import BranchTag
 
@@ -103,3 +104,17 @@ class BranchTagRepository(BaseRepository[BranchTag]):
                     f"tag {tag_id}: {e}"
                 )
         return success_count
+
+    async def get_tag_stats_by_period(
+        self, branch_id: int, start_date: datetime, end_date: datetime,
+    ) -> list[dict]:
+        """기간별 태그 감정 통계 (review_tag_mappings RPC)"""
+        result = await self._client.rpc(
+            "getTagStatsByPeriod",
+            {
+                "branchId": branch_id,
+                "startDate": start_date.isoformat(),
+                "endDate": end_date.isoformat(),
+            },
+        ).execute()
+        return result.data or []

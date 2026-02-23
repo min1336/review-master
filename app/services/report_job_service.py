@@ -13,6 +13,7 @@ from uuid import UUID
 
 if TYPE_CHECKING:
     from repository.report_job_repository import ReportJobRepository
+    from schemas.report import ResolvedReportConfig
     from services.report_service import ReportService
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ class ReportJobService:
         branch_id: int,
         start_date: datetime,
         end_date: datetime,
+        report_config: "ResolvedReportConfig | None" = None,
     ) -> str:
         """
         리포트 생성 작업 제출
@@ -60,7 +62,7 @@ class ReportJobService:
             # 메모리에 없지만 pending 상태인 작업은 다시 시작
             if existing["status"] == "pending" and job_id not in self._running_jobs:
                 task = asyncio.create_task(
-                    self._run_job(job_id, branch_id, start_date, end_date)
+                    self._run_job(job_id, branch_id, start_date, end_date, report_config)
                 )
                 self._running_jobs[job_id] = task
             return job_id
@@ -74,7 +76,7 @@ class ReportJobService:
 
         # 백그라운드 태스크로 리포트 생성 시작
         task = asyncio.create_task(
-            self._run_job(job_id, branch_id, start_date, end_date)
+            self._run_job(job_id, branch_id, start_date, end_date, report_config)
         )
         self._running_jobs[job_id] = task
 
@@ -118,6 +120,7 @@ class ReportJobService:
         branch_id: int,
         start_date: datetime,
         end_date: datetime,
+        report_config: "ResolvedReportConfig | None" = None,
     ) -> None:
         """
         백그라운드에서 리포트 생성 실행
@@ -142,6 +145,7 @@ class ReportJobService:
                 start_date=start_date,
                 end_date=end_date,
                 progress_callback=progress_callback,
+                report_config=report_config,
             )
 
             # 완료 상태로 변경 (report_id는 별도 저장하지 않음)

@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from repository.sentiment_repository import SentimentRepository
     from repository.summary_repository import SummaryRepository
     from infrastructure.pdf.generator import PDFGenerator
+    from schemas.report import ResolvedReportConfig
     from services.report_ai_generator import ReportAIGenerator
     from services.report_cache_service import ReportCacheService
     from services.tag_stats_calculator import TagStatsCalculator
@@ -43,6 +44,10 @@ from schemas.report import (  # noqa: F401
     StrengthItem,
     TopTagItem,
     ReportData,
+    TrendItem,
+    TrendComparison,
+    BenchmarkData,
+    PriorityAction,
 )
 
 
@@ -287,7 +292,13 @@ class ReportService:
         """
         return await self.generate_report(branch_id, start_date, end_date)
 
-    async def _step_collect(self, branch_id: int, start_date: datetime | None = None, end_date: datetime | None = None) -> dict:
+    async def _step_collect(
+        self,
+        branch_id: int,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        report_config: "ResolvedReportConfig | None" = None,
+    ) -> dict:
         """
         Step 1: 지점 기본 정보 수집
 
@@ -295,6 +306,7 @@ class ReportService:
             branch_id: 지점 ID
             start_date: 시작일 (차량 분석 기간 필터용)
             end_date: 종료일 (차량 분석 기간 필터용)
+            report_config: 리포트 커스텀 설정
 
         Returns:
             dict: 수집된 기본 정보 (tags는 _step_tags에서 태그명으로 채워짐)
@@ -305,11 +317,13 @@ class ReportService:
 
         summary_data = summary.model_dump()
 
-        # 차량별 분석 데이터 수집
-        vehicle_analysis = await self.vehicle_analyzer.get_vehicle_analysis(branch_id, start_date, end_date)
-
-        # 차량별 태그 raw 데이터 (VehicleRankItem 생성용, 기간 필터 적용)
-        vehicle_tags_raw = await self.vehicle_analyzer.get_vehicle_tags_raw(branch_id)
+        # 차량별 분석 데이터 수집 (config에 따라 스킵 가능)
+        vehicle_analysis = []
+        vehicle_tags_raw = {}
+        include_vehicles = report_config.data.include_vehicles if report_config else True
+        if include_vehicles:
+            vehicle_analysis = await self.vehicle_analyzer.get_vehicle_analysis(branch_id, start_date, end_date)
+            vehicle_tags_raw = await self.vehicle_analyzer.get_vehicle_tags_raw(branch_id)
 
         return {
             "branch_id": branch_id,
@@ -321,23 +335,217 @@ class ReportService:
             "vehicle_tags_raw": vehicle_tags_raw,
         }
 
-    async def _step_tags(self, branch_id: int) -> dict:
+    async def _step_tags(
+        self,
+        branch_id: int,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> dict:
         """Step 2: 지점별 태그 감정 데이터 (tag_calculator 위임)"""
         if self.tag_calculator:
-            return await self.tag_calculator.compute(branch_id)
+            return await self.tag_calculator.compute(branch_id, start_date, end_date)
         # fallback: tag_calculator 미주입 시 직접 수행
         from services.tag_stats_calculator import TagStatsCalculator
         calc = TagStatsCalculator(self.branch_tag_repo)
-        return await calc.compute(branch_id)
+        return await calc.compute(branch_id, start_date, end_date)
 
-    async def _step_ai(self, data: dict) -> dict:
+    # ================================================================
+    # 카테고리별 액션 제안 매핑
+    # ================================================================
+    ACTION_SUGGESTIONS: dict[str, dict] = {
+        "직원이 친절함": {
+            "issue": "고객 응대 품질 부정 피드백 발생",
+            "action": "CS 응대 매뉴얼 점검 및 직원 재교육 실시",
+            "effort": "low",
+        },
+        "차량외관이 좋음": {
+            "issue": "차량 외관 상태에 대한 불만",
+            "action": "입출고 시 외관 체크리스트 도입 및 정기 점검 강화",
+            "effort": "medium",
+        },
+        "가격이 저렴함": {
+            "issue": "가격 또는 추가 비용 관련 불만",
+            "action": "요금 체계 투명화 및 사전 안내 프로세스 개선",
+            "effort": "low",
+        },
+        "차량이 청결함": {
+            "issue": "차량 실내 청결 상태 미흡",
+            "action": "출고 전 실내 청소 프로세스 강화 및 체크리스트 운용",
+            "effort": "low",
+        },
+        "사고 처리를 잘해줌": {
+            "issue": "사고 접수 및 처리 과정 불만",
+            "action": "사고 처리 매뉴얼 정비 및 고객 안내 절차 개선",
+            "effort": "medium",
+        },
+        "주유비 부담 없음": {
+            "issue": "주유 또는 연료 관련 불만",
+            "action": "연료 정책 안내 명확화 및 반납 시 주유량 기준 재정비",
+            "effort": "low",
+        },
+        "배달 서비스가 우수함": {
+            "issue": "배차/딜리버리/대기시간 관련 불만",
+            "action": "배차 프로세스 점검 및 예상 대기시간 사전 안내 도입",
+            "effort": "medium",
+        },
+    }
+
+    async def _step_insights(
+        self,
+        branch_id: int,
+        start_date: datetime,
+        end_date: datetime,
+        tags: dict,
+    ) -> dict:
+        """Step 2.5: 인사이트 산출 (트렌드 비교 + 벤치마크 + 우선순위 액션)
+
+        기존 구조를 깨뜨리지 않는 선택적 단계입니다.
+        실패 시 빈 dict를 반환하여 리포트 생성을 중단하지 않습니다.
+        """
+        insights: dict = {}
+
+        # --- 1. 트렌드 비교 ---
+        try:
+            period_length = end_date - start_date
+            prev_end = start_date
+            prev_start = prev_end - period_length
+
+            # 이전 기간 리뷰 수를 먼저 확인 — 0건이면 비교 무의미 (all-time fallback 방지)
+            prev_review_count = 0
+            if self.review_repo:
+                try:
+                    prev_review_count = await self.review_repo.count_by_branch(
+                        branch_id, review_date_from=prev_start, review_date_to=prev_end,
+                    )
+                except Exception:
+                    pass
+
+            if prev_review_count > 0 and tags.get("tag_by_category"):
+                prev_tags = await self._step_tags(branch_id, prev_start, prev_end)
+
+                if prev_tags.get("tag_by_category"):
+                    from services.tag_stats_calculator import TagStatsCalculator
+                    trend_data = TagStatsCalculator.compute_trend(
+                        current_category_stats=tags["tag_by_category"],
+                        previous_category_stats=prev_tags["tag_by_category"],
+                        current_sentiment=tags.get("sentiment_stats", {}),
+                        previous_sentiment=prev_tags.get("sentiment_stats", {}),
+                    )
+
+                    insights["trend_comparison"] = TrendComparison(
+                        previous_period=f"{prev_start.strftime('%Y-%m-%d')} ~ {prev_end.strftime('%Y-%m-%d')}",
+                        current_period=f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
+                        previous_total_reviews=prev_review_count,
+                        current_total_reviews=0,  # _step_build에서 채움
+                        overall_positive_change=trend_data["overall_positive_change"],
+                        overall_negative_change=trend_data["overall_negative_change"],
+                        category_trends=[TrendItem(**t) for t in trend_data["category_trends"]],
+                    )
+        except Exception as e:
+            logger.warning(f"트렌드 비교 산출 실패 (무시): {e}")
+
+        # --- 2. 벤치마크 ---
+        try:
+            summary = await self.summary_repo.get_by_branch_id(branch_id)
+            branch_rating = summary.avg_rating if summary and summary.avg_rating else 0.0
+            region_name = summary.region if summary else ""
+
+            region_data = await self.summary_repo.get_region_data()
+            if region_data:
+                all_ratings = [r["avg_rating"] for r in region_data if r.get("avg_rating")]
+                regional_ratings = [
+                    r["avg_rating"] for r in region_data
+                    if r.get("avg_rating") and r.get("region") == region_name
+                ]
+
+                national_avg = round(sum(all_ratings) / len(all_ratings), 2) if all_ratings else 0.0
+                regional_avg = round(sum(regional_ratings) / len(regional_ratings), 2) if regional_ratings else 0.0
+
+                # 백분위 계산 (상위 N%)
+                national_rank_pct = 0
+                if all_ratings and branch_rating > 0:
+                    higher_count = sum(1 for r in all_ratings if r > branch_rating)
+                    national_rank_pct = round(higher_count / len(all_ratings) * 100)
+
+                regional_rank_pct = 0
+                if regional_ratings and branch_rating > 0:
+                    higher_count = sum(1 for r in regional_ratings if r > branch_rating)
+                    regional_rank_pct = round(higher_count / len(regional_ratings) * 100)
+
+                insights["benchmark"] = BenchmarkData(
+                    branch_rating=branch_rating,
+                    regional_avg_rating=regional_avg,
+                    national_avg_rating=national_avg,
+                    regional_rank_pct=regional_rank_pct,
+                    national_rank_pct=national_rank_pct,
+                    region_name=region_name or "",
+                    total_branches_in_region=len(regional_ratings),
+                    total_branches_national=len(all_ratings),
+                )
+        except Exception as e:
+            logger.warning(f"벤치마크 산출 실패 (무시): {e}")
+
+        # --- 3. 우선순위 액션 ---
+        try:
+            category_stats = tags.get("tag_by_category", {})
+            tag_details = tags.get("tag_details", [])
+            actions: list[PriorityAction] = []
+
+            for cat_name, stats in category_stats.items():
+                total = stats.get("total", 0)
+                neg = stats.get("negative", 0)
+                if total == 0 or neg == 0:
+                    continue
+                neg_ratio = round(neg / total * 100)
+                if neg_ratio < 15:
+                    continue
+
+                suggestion = self.ACTION_SUGGESTIONS.get(cat_name, {})
+                impact = "high" if neg_ratio >= 30 else ("medium" if neg_ratio >= 20 else "low")
+
+                # 해당 카테고리에서 가장 부정 많은 태그 찾기
+                worst_tag = ""
+                worst_neg = 0
+                for td in tag_details:
+                    if td.get("category_name") == cat_name and td.get("negative", 0) > worst_neg:
+                        worst_neg = td["negative"]
+                        worst_tag = td.get("tag_name", "")
+
+                actions.append(PriorityAction(
+                    rank=0,
+                    category_name=cat_name,
+                    tag_name=worst_tag,
+                    issue=suggestion.get("issue", f"{cat_name} 관련 부정 피드백 발생"),
+                    action=suggestion.get("action", f"{cat_name} 영역 점검 및 개선 필요"),
+                    impact=impact,
+                    effort=suggestion.get("effort", "medium"),
+                    negative_ratio=neg_ratio,
+                    negative_count=neg,
+                ))
+
+            # 영향도 순 정렬 (부정률 내림차순)
+            actions.sort(key=lambda a: a.negative_ratio, reverse=True)
+            for i, action in enumerate(actions):
+                action.rank = i + 1
+
+            insights["priority_actions"] = actions[:5]
+        except Exception as e:
+            logger.warning(f"우선순위 액션 산출 실패 (무시): {e}")
+
+        return insights
+
+    async def _step_ai(
+        self,
+        data: dict,
+        report_config: "ResolvedReportConfig | None" = None,
+    ) -> dict:
         """Step 3: AI 분석 (ai_generator 위임)"""
         if self.ai_generator:
-            return await self.ai_generator.generate_all(data)
+            return await self.ai_generator.generate_all(data, report_config=report_config)
         # fallback: ai_generator 미주입 시 직접 수행
         from services.report_ai_generator import ReportAIGenerator
         gen = ReportAIGenerator(self.summary_repo, self.review_repo)
-        return await gen.generate_all(data)
+        return await gen.generate_all(data, report_config=report_config)
 
     async def _step_build(
         self,
@@ -346,6 +554,8 @@ class ReportService:
         ai: dict,
         start_date: datetime,
         end_date: datetime,
+        insights: dict | None = None,
+        report_config: "ResolvedReportConfig | None" = None,
     ) -> ReportData:
         """
         Step 4: 리포트 조립 및 저장
@@ -356,16 +566,37 @@ class ReportService:
             ai: Step 3에서 생성된 AI 분석 결과
             start_date: 시작일
             end_date: 종료일
+            insights: Step 2.5에서 산출된 인사이트 (선택적)
+            report_config: 리포트 커스텀 설정
 
         Returns:
             ReportData: 최종 리포트
         """
+        from schemas.report import ResolvedReportConfig
+        cfg = report_config or ResolvedReportConfig()
         # 차량 순위 생성
         vehicle_tags_raw = collected.get("vehicle_tags_raw", {})
         vehicle_analysis_list = collected.get("vehicle_analysis", [])
         top_liked, top_disliked = self.vehicle_analyzer.build_vehicle_rankings(
             vehicle_tags_raw, vehicle_analysis_list
         )
+
+        # config에 따라 섹션 조건부 포함
+        affiliate_eval = None
+        if cfg.output.include_affiliate_eval:
+            affiliate_eval = AffiliateEvaluation(
+                top_positive=tags.get("top_positive_tags", []),
+                top_negative=tags.get("top_negative_tags", []),
+                ai_text=ai.get("affiliate_ai_text", ""),
+            )
+
+        vehicle_eval = None
+        if cfg.output.include_vehicle_eval:
+            vehicle_eval = VehicleEvaluation(
+                top_liked=top_liked,
+                top_disliked=top_disliked,
+                ai_text=ai.get("vehicle_ai_text", ""),
+            )
 
         report = ReportData(
             branch_id=collected["branch_id"],
@@ -375,7 +606,7 @@ class ReportService:
             period_end=end_date.strftime("%Y-%m-%d"),
             total_reviews=collected["total_reviews"],
             top_tags=collected["tags"],
-            period_summary=ai["period_summary"],
+            period_summary=ai["period_summary"] if cfg.output.include_period_summary else "",
             strengths=tags.get("strengths", []),
             improvements=tags.get("improvements", []),
             strengths_detail=[
@@ -388,18 +619,21 @@ class ReportService:
                 TopTagItem(**d) for d in tags.get("top_tags_detail", [])
             ],
             vehicle_analysis=[VehicleAnalysis(**v) for v in vehicle_analysis_list],
-            affiliate_evaluation=AffiliateEvaluation(
-                top_positive=tags.get("top_positive_tags", []),
-                top_negative=tags.get("top_negative_tags", []),
-                ai_text=ai.get("affiliate_ai_text", ""),
-            ),
-            vehicle_evaluation=VehicleEvaluation(
-                top_liked=top_liked,
-                top_disliked=top_disliked,
-                ai_text=ai.get("vehicle_ai_text", ""),
-            ),
+            affiliate_evaluation=affiliate_eval,
+            vehicle_evaluation=vehicle_eval,
             generated_at=to_kst(utc_now()).strftime("%Y-%m-%d %H:%M"),
         )
+
+        # 인사이트 데이터 추가 (선택적, 실패해도 리포트 생성에 영향 없음)
+        if insights:
+            if cfg.output.include_trend_comparison and "trend_comparison" in insights:
+                trend = insights["trend_comparison"]
+                trend.current_total_reviews = collected["total_reviews"]
+                report.trend_comparison = trend
+            if cfg.output.include_benchmark and "benchmark" in insights:
+                report.benchmark = insights["benchmark"]
+            if cfg.output.include_priority_actions and "priority_actions" in insights:
+                report.priority_actions = insights["priority_actions"]
 
         # DB 저장
         if self.report_repo:
@@ -424,6 +658,7 @@ class ReportService:
         start_date: datetime,
         end_date: datetime,
         progress_callback: Callable[[int], Awaitable[None]] | None = None,
+        report_config: "ResolvedReportConfig | None" = None,
     ) -> ReportData:
         """
         리팩토링된 리포트 생성 (단계별 함수 호출)
@@ -441,13 +676,16 @@ class ReportService:
             ReportData: 리포트 데이터
         """
 
+        from schemas.report import ResolvedReportConfig
+        cfg = report_config or ResolvedReportConfig()
+
         async def update_progress(value: int) -> None:
             if progress_callback:
                 await progress_callback(value)
 
         # Step 1: 데이터 수집 (10-20%)
         await update_progress(10)
-        collected = await self._step_collect(branch_id, start_date, end_date)
+        collected = await self._step_collect(branch_id, start_date, end_date, cfg)
         await update_progress(20)
 
         # 리뷰가 없는 경우 빈 리포트 반환
@@ -475,9 +713,12 @@ class ReportService:
             except Exception as e:
                 logger.warning(f"기간별 리뷰 수 조회 실패: {e}")
 
-        # Step 2: 태그 분석 (20-40%)
+        # Step 2: 태그 분석 (20-40%) — config에 따라 스킵 가능
         await update_progress(20)
-        tags = await self._step_tags(branch_id)
+        if cfg.data.include_tags:
+            tags = await self._step_tags(branch_id, start_date, end_date)
+        else:
+            tags = {}
         await update_progress(40)
 
         # 태그 데이터가 있으면 태그명으로 tags 대체 (과거 NLP 키워드 대신 최신 태그 사용)
@@ -492,8 +733,7 @@ class ReportService:
             vehicle_tags_raw, collected.get("vehicle_analysis", [])
         )
 
-        # Step 3: AI 분석 ×2 병렬 (40-85%)
-        await update_progress(40)
+        # Step 2.5: 인사이트 산출 (트렌드+벤치마크+액션) — 병렬로 AI와 동시 실행
         ai_data = {
             **collected,
             **tags,
@@ -502,12 +742,27 @@ class ReportService:
             "top_liked_vehicles": [v.model_dump() for v in top_liked],
             "top_disliked_vehicles": [v.model_dump() for v in top_disliked],
         }
-        ai = await self._step_ai(ai_data)
+
+        # Step 3 + Step 2.5 병렬 실행
+        need_insights = (
+            cfg.output.include_trend_comparison
+            or cfg.output.include_benchmark
+            or cfg.output.include_priority_actions
+        )
+
+        async def _empty_insights() -> dict:
+            return {}
+
+        ai_result, insights = await asyncio.gather(
+            self._step_ai(ai_data, cfg),
+            self._step_insights(branch_id, start_date, end_date, tags) if need_insights else _empty_insights(),
+        )
+        ai = ai_result
         await update_progress(85)
 
         # Step 4: 리포트 조립 및 저장 (85-100%)
         await update_progress(85)
-        report = await self._step_build(collected, tags, ai, start_date, end_date)
+        report = await self._step_build(collected, tags, ai, start_date, end_date, insights, cfg)
         await update_progress(100)
 
         return report

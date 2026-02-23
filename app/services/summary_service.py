@@ -38,11 +38,12 @@ class SummaryService:
     ]
     MIN_REVIEWS_FOR_SUMMARY = 30
 
-    def __init__(self, summary_repo, branch_tag_repo, review_repo, sentiment_repo=None):
+    def __init__(self, summary_repo, branch_tag_repo, review_repo, sentiment_repo=None, athena_client=None):
         self.summary_repo = summary_repo
         self.branch_tag_repo = branch_tag_repo
         self.review_repo = review_repo
         self.sentiment_repo = sentiment_repo
+        self.athena_client = athena_client
 
     # ================================================================
     # Repository 래핑 메서드 (레이어드 아키텍처 준수)
@@ -384,7 +385,7 @@ class SummaryService:
             branch_id, period_key
         )
 
-        # 5. 감정 통계 조회 (branch_sentiment_stats)
+        # 5. 감정 통계 조회 (monthly_sentiment_stats 집계)
         sentiment_stats = {"positive": 0, "negative": 0, "neutral": 0, "total": 0}
         if self.sentiment_repo:
             try:
@@ -494,29 +495,109 @@ class SummaryService:
         self, branch_id: int, period_key: str
     ) -> list[dict]:
         """
-        BranchTagRepository로 태그를 조회하고 카테고리별로 그룹핑
+        monthly_tag_stats에서 기간별 태그를 조회하고 카테고리별로 그룹핑
 
-        선택된 기간(period_key)으로 먼저 조회하고,
-        결과가 3개 미만이면 "all"로 fallback합니다.
+        월별 태그 통계를 기간(period_key)에 맞게 집계하고,
+        결과가 3개 미만이면 branch_tags "all"로 fallback합니다.
 
         Returns:
             [{"category": "직원이 친절함", "tags": [{"name": "친절", "positive_ratio": 85, ...}]}]
         """
         try:
+            # monthly_tag_stats에서 기간별 집계 시도
+            if period_key != "all":
+                grouped = await self._fetch_tags_from_monthly(branch_id, period_key)
+                if len(grouped) >= 1:
+                    return grouped
+
+            # fallback: branch_tags "all"
             branch_tags = await self.branch_tag_repo.get_by_branch(
-                branch_id, period_type=period_key, limit=15
+                branch_id, period_type="all", limit=15
             )
-
-            # 3개 미만이면 전체 기간으로 fallback
-            if len(branch_tags) < 3:
-                branch_tags = await self.branch_tag_repo.get_by_branch(
-                    branch_id, period_type="all", limit=15
-                )
-
             return self._group_tags_by_category(branch_tags)
         except Exception as e:
             logger.warning(f"태그 조회 실패 (branch_id={branch_id}): {e}")
             return []
+
+    async def _fetch_tags_from_monthly(
+        self, branch_id: int, period_key: str
+    ) -> list[dict]:
+        """monthly_tag_stats에서 기간 집계 → 카테고리 그룹핑"""
+        from repository.session import get_client
+
+        months_map = {"1m": 1, "3m": 3, "6m": 6, "1y": 12}
+        months = months_map.get(period_key, 6)
+        now = utc_now()
+        start_period = (now - timedelta(days=months * 30)).strftime("%Y-%m")
+
+        client = await get_client()
+        result = await (
+            client.table("monthly_tag_stats")
+            .select("tag_id, positive_count, negative_count, neutral_count")
+            .eq("branch_id", branch_id)
+            .gte("period", start_period)
+            .execute()
+        )
+
+        if not result.data:
+            return []
+
+        # tag_id별 집계
+        tag_agg: dict[int, dict[str, int]] = {}
+        for row in result.data:
+            tid = row["tag_id"]
+            if tid not in tag_agg:
+                tag_agg[tid] = {"positive": 0, "negative": 0, "neutral": 0}
+            tag_agg[tid]["positive"] += row.get("positive_count", 0) or 0
+            tag_agg[tid]["negative"] += row.get("negative_count", 0) or 0
+            tag_agg[tid]["neutral"] += row.get("neutral_count", 0) or 0
+
+        if len(tag_agg) < 3:
+            return []
+
+        # tag 정보 조회 (name, category)
+        tag_ids = list(tag_agg.keys())
+        tags_result = await (
+            client.table("tags")
+            .select("id, name, categories(name)")
+            .in_("id", tag_ids)
+            .execute()
+        )
+
+        tag_info: dict[int, tuple[str, str]] = {}
+        for row in tags_result.data:
+            cat = row.get("categories") or {}
+            tag_info[row["id"]] = (row["name"], cat.get("name", "기타"))
+
+        # 카테고리별 그룹핑
+        from collections import defaultdict
+        category_groups: dict[str, list[dict]] = defaultdict(list)
+
+        # total 기준 상위 15개
+        sorted_tags = sorted(
+            tag_agg.items(),
+            key=lambda x: sum(x[1].values()),
+            reverse=True,
+        )[:15]
+
+        for tid, counts in sorted_tags:
+            name, cat_name = tag_info.get(tid, ("", "기타"))
+            if not name:
+                continue
+            total = counts["positive"] + counts["negative"] + counts["neutral"]
+            pos_ratio = round(counts["positive"] / total * 100) if total > 0 else 0
+            neg_ratio = round(counts["negative"] / total * 100) if total > 0 else 0
+            category_groups[cat_name].append({
+                "name": name,
+                "positive_ratio": pos_ratio,
+                "negative_ratio": neg_ratio,
+                "total": total,
+            })
+
+        return [
+            {"category": cat, "tags": tags}
+            for cat, tags in category_groups.items()
+        ]
 
     @staticmethod
     def _group_tags_by_category(branch_tags: list) -> list[dict]:
@@ -565,6 +646,8 @@ class SummaryService:
 
         marketing: 긍정 5 + 부정 2 = 7개
         operational: 긍정 4 + 부정 4 = 8개
+
+        Athena에서 최신 리뷰 조회 → Supabase sentiment 병합 → 감정별 분리
         """
         if mode == "operational":
             pos_limit, neg_limit = 4, 4
@@ -573,8 +656,16 @@ class SummaryService:
 
         result = {"positive": [], "negative": []}
 
+        if self.athena_client is not None:
+            try:
+                return await self._fetch_representative_reviews_via_athena(
+                    branch_id, start_date, pos_limit, neg_limit
+                )
+            except Exception as e:
+                logger.warning(f"Athena 리뷰 샘플링 실패, Supabase 폴백: {e}")
+
+        # Supabase 폴백
         try:
-            # 긍정 리뷰 조회
             pos_query = (
                 client.table("branch_reviews")
                 .select("content")
@@ -594,7 +685,6 @@ class SummaryService:
             ]
             result["positive"] = self._sample_evenly(pos_reviews, pos_limit)
 
-            # 부정 리뷰 조회
             neg_query = (
                 client.table("branch_reviews")
                 .select("content")
@@ -618,6 +708,50 @@ class SummaryService:
             logger.warning(f"리뷰 샘플링 실패 (branch_id={branch_id}): {e}")
 
         return result
+
+    async def _fetch_representative_reviews_via_athena(
+        self,
+        branch_id: int,
+        start_date,
+        pos_limit: int,
+        neg_limit: int,
+    ) -> dict[str, list[str]]:
+        """Athena 리뷰 + Supabase sentiment → 감정별 분리 샘플링"""
+        date_from = start_date.strftime("%Y-%m-%d") if start_date else None
+
+        rows, _ = await asyncio.to_thread(
+            self.athena_client.fetch_reviews_by_branch,
+            branch_id=branch_id,
+            date_from=date_from,
+            limit=50,
+        )
+
+        if not rows:
+            return {"positive": [], "negative": []}
+
+        # Supabase에서 sentiment 병합
+        review_ids = [int(r["review_id"]) for r in rows if r.get("review_id")]
+        sentiment_map = {}
+        if review_ids:
+            sentiment_map = await self.review_repo.get_sentiments_by_review_ids(review_ids)
+
+        pos_reviews = []
+        neg_reviews = []
+        for row in rows:
+            content = row.get("content", "")
+            if not content or not content.strip():
+                continue
+            rid = int(row["review_id"]) if row.get("review_id") else None
+            sent = sentiment_map.get(rid, "neutral") if rid else "neutral"
+            if sent == "positive":
+                pos_reviews.append(content[:250])
+            elif sent == "negative":
+                neg_reviews.append(content[:250])
+
+        return {
+            "positive": self._sample_evenly(pos_reviews, pos_limit),
+            "negative": self._sample_evenly(neg_reviews, neg_limit),
+        }
 
     @staticmethod
     def _sample_evenly(items: list, n: int) -> list:
@@ -888,7 +1022,24 @@ class SummaryService:
         limit: int = 100,
         offset: int = 0,
     ) -> BranchReviewsDTO:
-        """지점별 원본 리뷰 목록 조회 (필터링 지원)"""
+        """지점별 원본 리뷰 목록 조회 (Athena primary, Supabase fallback)
+
+        Athena 원본에는 sentiment/car_model이 없으므로 해당 필터 시 Supabase 사용.
+        """
+        use_athena = (
+            self.athena_client is not None
+            and car_model is None
+            and sentiment is None
+        )
+
+        if use_athena:
+            try:
+                return await self._get_branch_reviews_via_athena(
+                    branch_id, review_date_from, review_date_to, limit, offset
+                )
+            except Exception as e:
+                logger.warning(f"Athena 리뷰 조회 실패, Supabase 폴백: {e}")
+
         return await self.review_repo.get_by_branch(
             branch_id=branch_id,
             car_model=car_model,
@@ -899,6 +1050,38 @@ class SummaryService:
             offset=offset,
         )
 
+    async def _get_branch_reviews_via_athena(
+        self,
+        branch_id: int,
+        review_date_from: datetime | None,
+        review_date_to: datetime | None,
+        limit: int,
+        offset: int,
+    ) -> BranchReviewsDTO:
+        """Athena에서 리뷰 조회 + Supabase sentiment 병합"""
+        date_from = review_date_from.strftime("%Y-%m-%d") if review_date_from else None
+        date_to = review_date_to.strftime("%Y-%m-%d") if review_date_to else None
+
+        rows, total = await asyncio.to_thread(
+            self.athena_client.fetch_reviews_by_branch,
+            branch_id=branch_id,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+            offset=offset,
+        )
+
+        # Supabase에서 sentiment 병합
+        review_ids = [int(r["review_id"]) for r in rows if r.get("review_id")]
+        if review_ids:
+            sentiment_map = await self.review_repo.get_sentiments_by_review_ids(review_ids)
+            for row in rows:
+                rid = int(row["review_id"]) if row.get("review_id") else None
+                if rid and rid in sentiment_map:
+                    row["sentiment"] = sentiment_map[rid]
+
+        return BranchReviewsDTO(reviews=rows, total=total)
+
     async def get_car_model_tags(
         self,
         branch_id: int,
@@ -907,6 +1090,8 @@ class SummaryService:
         """
         지점별 차량 모델 태그 분석
 
+        monthly_car_model_tag_stats + car_models_master + branch_car_models에서 집계.
+
         Args:
             branch_id: 지점 ID
             car_model: 특정 차량 모델만 조회 (None이면 전체)
@@ -914,59 +1099,37 @@ class SummaryService:
         Returns:
             BranchCarModelsDTO: 차량별 태그 통계
         """
+        from repository.car_model_repository import CarModelRepository
         from repository.session import get_client
 
         client = await get_client()
-
-        # car_model_tags 테이블에서 조회
-        query = (
-            client.table("car_model_tags")
-            .select("*, tags(id, name)")
-            .eq("branch_id", branch_id)
-        )
-
-        if car_model:
-            query = query.eq("car_model", car_model)
+        repo = CarModelRepository(client)
 
         try:
-            result = await query.execute()
+            rows = await repo.get_car_model_tags(branch_id, car_model)
         except Exception as e:
-            # 테이블이 없으면 빈 결과 반환
-            if "Could not find" in str(e):
-                return BranchCarModelsDTO(
-                    branch_id=branch_id,
-                    car_models=[],
-                    error="car_model_tags 테이블이 없습니다. SQL을 먼저 실행하세요.",
-                )
-            raise
+            logger.warning(f"차량 태그 조회 실패 (branch_id={branch_id}): {e}")
+            return BranchCarModelsDTO(branch_id=branch_id, car_models=[])
 
-        if not result.data:
+        if not rows:
             return BranchCarModelsDTO(branch_id=branch_id, car_models=[])
 
         # 차량별로 그룹화
         car_data: dict[str, dict] = {}
-
-        for row in result.data:
+        for row in rows:
             car = row["car_model"]
-            tag_info = row.get("tags") or {}
-            tag_name = tag_info.get("name", "기타")
+            tag_name = row.get("tag_name", "기타")
 
             if car not in car_data:
                 car_data[car] = {"name": car, "tags": {}, "review_count": 0}
 
-            if tag_name not in car_data[car]["tags"]:
-                car_data[car]["tags"][tag_name] = {
-                    "name": tag_name,
-                    "positive": 0,
-                    "negative": 0,
-                    "neutral": 0,
-                    "total": 0,
-                }
-
-            car_data[car]["tags"][tag_name]["positive"] += row.get("positive_count", 0)
-            car_data[car]["tags"][tag_name]["negative"] += row.get("negative_count", 0)
-            car_data[car]["tags"][tag_name]["neutral"] += row.get("neutral_count", 0)
-            car_data[car]["tags"][tag_name]["total"] += row.get("total_count", 0)
+            car_data[car]["tags"][tag_name] = {
+                "name": tag_name,
+                "positive": row.get("positive_count", 0),
+                "negative": row.get("negative_count", 0),
+                "neutral": row.get("neutral_count", 0),
+                "total": row.get("total_count", 0),
+            }
 
         # 리뷰 수 조회 (branch_reviews 테이블)
         for car in car_data:
@@ -985,7 +1148,6 @@ class SummaryService:
         # DTO로 변환
         car_models_dto: list[CarModelDTO] = []
         for car, data in sorted(car_data.items()):
-            # 태그 DTO 생성 (total 기준 정렬)
             tags_dto = sorted(
                 [
                     CarModelTagDTO(

@@ -39,10 +39,12 @@ async def api_generate_report_async(
     validate_date_range_d(data.start_date, data.end_date)
 
     try:
+        report_config = data.to_resolved_config()
         job_id = await job_service.submit_job(
             branch_id=branch_id,
             start_date=date_to_utc(data.start_date),
             end_date=date_to_utc(data.end_date, end_of_day=True),
+            report_config=report_config,
         )
         return api_response({
             "job_id": job_id,

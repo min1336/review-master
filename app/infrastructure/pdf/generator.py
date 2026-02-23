@@ -82,7 +82,7 @@ class PDFGenerator:
     # ================================================================
 
     def generate_simple(self, report: ReportData) -> bytes:
-        if report.affiliate_evaluation:
+        if isinstance(report.top_tags_detail, list):
             return self._generate_new_format(report)
         return self._generate_legacy_format(report)
 
@@ -115,10 +115,11 @@ class PDFGenerator:
         self._hr(pdf, m, w)
 
         # ── 1. 요약 ──
-        self._section(pdf, font, "1. 요약")
-        pdf.set_font(font, "", 9)
-        pdf.multi_cell(w, row, report.period_summary or "요약 없음")
-        pdf.ln(gap)
+        if report.period_summary:
+            self._section(pdf, font, "1. 요약")
+            pdf.set_font(font, "", 9)
+            pdf.multi_cell(w, row, report.period_summary)
+            pdf.ln(gap)
 
         # ── 2. 업체 평가 ──
         aff = report.affiliate_evaluation
@@ -169,6 +170,116 @@ class PDFGenerator:
                 pdf.set_text_color(80, 80, 80)
                 pdf.multi_cell(w, 4, veh.ai_text)
                 pdf.set_text_color(0, 0, 0)
+                pdf.ln(gap)
+
+        # ── 4. 트렌드 비교 ──
+        if report.trend_comparison:
+            tc = report.trend_comparison
+            self._section(pdf, font, "4. 트렌드 비교")
+
+            pdf.set_font(font, "", 8)
+            pdf.cell(w, row, f"이전 기간: {tc.previous_period} ({tc.previous_total_reviews}건)",
+                     new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(w, row, f"현재 기간: {tc.current_period} ({tc.current_total_reviews}건)",
+                     new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(gap)
+
+            pos_sign = "+" if tc.overall_positive_change >= 0 else ""
+            neg_sign = "+" if tc.overall_negative_change >= 0 else ""
+            pdf.set_font(font, "B", 9)
+            pdf.cell(w, row, f"긍정률 변화: {pos_sign}{tc.overall_positive_change}%p  |  부정률 변화: {neg_sign}{tc.overall_negative_change}%p",
+                     new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(gap)
+
+            if tc.category_trends:
+                col_cat = 50
+                col_prev = 30
+                col_cur = 30
+                col_chg = w - col_cat - col_prev - col_cur
+
+                pdf.set_font(font, "B", 7)
+                pdf.set_fill_color(240, 240, 240)
+                pdf.cell(col_cat, row, " 카테고리", border=1, fill=True)
+                pdf.cell(col_prev, row, " 이전", border=1, fill=True, align="C")
+                pdf.cell(col_cur, row, " 현재", border=1, fill=True, align="C")
+                pdf.cell(col_chg, row, " 변화", border=1, fill=True, align="C")
+                pdf.ln(row)
+
+                pdf.set_font(font, "", 7)
+                for t in tc.category_trends:
+                    arrow = "▲" if t.direction == "up" else ("▼" if t.direction == "down" else "-")
+                    chg_sign = "+" if t.change >= 0 else ""
+                    pdf.cell(col_cat, row, f" {t.category_name}", border=1)
+                    pdf.cell(col_prev, row, f"{t.previous_ratio}%", border=1, align="C")
+                    pdf.cell(col_cur, row, f"{t.current_ratio}%", border=1, align="C")
+                    pdf.cell(col_chg, row, f"{arrow} {chg_sign}{t.change}%p", border=1, align="C")
+                    pdf.ln(row)
+            pdf.ln(gap)
+
+        # ── 5. 벤치마크 ──
+        if report.benchmark:
+            bm = report.benchmark
+            self._section(pdf, font, "5. 벤치마크")
+
+            col_third = (w - 8) / 3
+            pdf.set_font(font, "B", 8)
+            pdf.cell(col_third, row, "이 지점", align="C")
+            pdf.set_x(pdf.get_x() + 4)
+            pdf.cell(col_third, row, f"{bm.region_name or '지역'} 평균", align="C")
+            pdf.set_x(pdf.get_x() + 4)
+            pdf.cell(col_third, row, "전국 평균", align="C")
+            pdf.ln(row)
+
+            pdf.set_font(font, "B", 12)
+            pdf.cell(col_third, 7, f"{bm.branch_rating:.1f}", align="C")
+            pdf.set_x(pdf.get_x() + 4)
+            pdf.cell(col_third, 7, f"{bm.regional_avg_rating:.1f}", align="C")
+            pdf.set_x(pdf.get_x() + 4)
+            pdf.cell(col_third, 7, f"{bm.national_avg_rating:.1f}", align="C")
+            pdf.ln(7)
+
+            pdf.set_font(font, "", 7)
+            pdf.set_text_color(100, 100, 100)
+            pdf.cell(col_third, row, "", align="C")
+            pdf.set_x(pdf.get_x() + 4)
+            pdf.cell(col_third, row, f"상위 {bm.regional_rank_pct}% ({bm.total_branches_in_region}개 지점)", align="C")
+            pdf.set_x(pdf.get_x() + 4)
+            pdf.cell(col_third, row, f"상위 {bm.national_rank_pct}% ({bm.total_branches_national}개 지점)", align="C")
+            pdf.ln(row)
+            pdf.set_text_color(0, 0, 0)
+
+            if bm.branch_rating > 0:
+                pdf.set_font(font, "", 8)
+                if bm.branch_rating >= bm.regional_avg_rating:
+                    msg = f"이 지점은 {bm.region_name or '해당 지역'} 평균 이상의 평점을 유지하고 있습니다."
+                else:
+                    msg = f"이 지점은 {bm.region_name or '해당 지역'} 평균보다 낮은 평점이므로, 개선 조치가 필요할 수 있습니다."
+                pdf.multi_cell(w, row, msg)
+            pdf.ln(gap)
+
+        # ── 6. 우선순위 액션 ──
+        if report.priority_actions:
+            self._section(pdf, font, "6. 우선순위 액션")
+
+            for a in report.priority_actions:
+                impact_kr = "높음" if a.impact == "high" else ("보통" if a.impact == "medium" else "낮음")
+                effort_kr = "높음" if a.effort == "high" else ("보통" if a.effort == "medium" else "낮음")
+
+                pdf.set_font(font, "B", 9)
+                pdf.cell(w, row, f"{a.rank}순위: {a.category_name}",
+                         new_x="LMARGIN", new_y="NEXT")
+
+                pdf.set_font(font, "", 7)
+                pdf.set_text_color(100, 100, 100)
+                pdf.cell(w, row, f"  영향: {impact_kr}  |  난이도: {effort_kr}  |  부정률 {a.negative_ratio}% ({a.tag_name} {a.negative_count}건)",
+                         new_x="LMARGIN", new_y="NEXT")
+                pdf.set_text_color(0, 0, 0)
+
+                pdf.set_font(font, "", 8)
+                pdf.cell(w, row, f"  {a.issue}",
+                         new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(w, row, f"  -> {a.action}",
+                         new_x="LMARGIN", new_y="NEXT")
                 pdf.ln(gap)
 
         # ── 푸터 ──

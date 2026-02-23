@@ -695,6 +695,95 @@ class RichSummaryPromptBuilder:
 - 반드시 순수 텍스트 문단으로만 작성
 </constraints>"""
 
+    # ============================================================
+    # 커스텀 설정 적용 (리포트 커스터마이징용)
+    # ============================================================
+
+    PERSPECTIVE_MAP = {
+        "operational": "",
+        "marketing": "\n\n<perspective>\n마케팅 관점에서 분석하세요. 고객 유치와 브랜드 이미지 강화에 도움이 되는 인사이트를 중심으로 서술하세요.\n</perspective>",
+        "executive": "\n\n<perspective>\n경영진 보고 관점에서 분석하세요. 핵심 KPI와 비즈니스 임팩트를 중심으로 간결하게 서술하세요.\n</perspective>",
+    }
+
+    TONE_MAP = {
+        "analytical": "",
+        "friendly": "친근하고 이해하기 쉬운 톤",
+        "formal": "격식체의 정중하고 체계적인 톤",
+    }
+
+    PERSPECTIVE_REPLACE_MAP = {
+        "operational": "",
+        "marketing": "마케팅 관점에서 고객 유치와 브랜드 강화 중심의 인사이트 제공",
+        "executive": "경영진 보고 관점에서 핵심 KPI와 비즈니스 임팩트 중심의 인사이트 제공",
+    }
+
+    @classmethod
+    def apply_custom_config(
+        cls,
+        system_prompt: str,
+        user_prompt: str,
+        custom_instruction: str = "",
+        perspective: str = "operational",
+        tone: str = "analytical",
+        max_length: int | None = None,
+    ) -> tuple[str, str]:
+        """리포트 커스텀 설정을 프롬프트에 적용
+
+        Args:
+            system_prompt: 기존 시스템 프롬프트
+            user_prompt: 기존 유저 프롬프트
+            custom_instruction: 사용자 커스텀 지시사항
+            perspective: 분석 관점 (operational/marketing/executive)
+            tone: 톤 (analytical/friendly/formal)
+            max_length: 출력 최대 글자 수
+
+        Returns:
+            tuple: (수정된 system_prompt, 수정된 user_prompt)
+        """
+        import re
+
+        _TONE_ANCHOR = "객관적이고 분석적인 톤"
+        _PERSPECTIVE_ANCHOR = "운영자 관점에서 실용적인 인사이트 제공"
+
+        # tone 적용: <writing_style> 내 하드코딩된 톤을 교체
+        tone_replace = cls.TONE_MAP.get(tone, "")
+        if tone_replace:
+            if _TONE_ANCHOR not in system_prompt:
+                logger.warning("톤 교체 대상 문자열이 시스템 프롬프트에 없음")
+            system_prompt = system_prompt.replace(_TONE_ANCHOR, tone_replace)
+
+        # perspective 적용: <writing_style> 내 하드코딩된 관점을 교체 + 추가 지시
+        perspective_replace = cls.PERSPECTIVE_REPLACE_MAP.get(perspective, "")
+        if perspective_replace:
+            if _PERSPECTIVE_ANCHOR in system_prompt:
+                system_prompt = system_prompt.replace(
+                    _PERSPECTIVE_ANCHOR, perspective_replace
+                )
+            perspective_append = cls.PERSPECTIVE_MAP.get(perspective, "")
+            if perspective_append:
+                system_prompt += perspective_append
+
+        # max_length 동적 교체
+        if max_length:
+            system_prompt = re.sub(
+                r"\d{3,4}~\d{3,4}자",
+                f"{max_length - 100}~{max_length}자",
+                system_prompt,
+            )
+            system_prompt = re.sub(
+                r"\d{3,4}자 분량",
+                f"{max_length}자 분량",
+                system_prompt,
+            )
+
+        # custom_instruction: 시스템 프롬프트에 추가 (우선순위 높음)
+        if custom_instruction.strip():
+            sanitized = re.sub(r'</?[a-zA-Z_][^>]*>', '', custom_instruction.strip())
+            if sanitized:
+                system_prompt += f"\n\n<user_instruction>\n아래 지시사항을 반드시 최우선으로 따르세요:\n{sanitized}\n</user_instruction>"
+
+        return system_prompt, user_prompt
+
     @classmethod
     def create_affiliate_evaluation_prompt(
         cls,

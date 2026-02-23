@@ -29,72 +29,92 @@ class ReportAIGenerator:
         self,
         summary_repo: SummaryRepository,
         review_repo: BranchReviewRepository,
+        athena_client=None,
     ) -> None:
         self.summary_repo = summary_repo
         self.review_repo = review_repo
+        self.athena_client = athena_client
 
-    async def generate_all(self, data: dict) -> dict:
+    async def generate_all(self, data: dict, report_config=None) -> dict:
         """3개 LLM 호출 병렬 실행 (Step 3 오케스트레이터)
 
         Args:
             data: 이전 단계에서 수집된 데이터
+            report_config: ResolvedReportConfig (커스텀 설정)
 
         Returns:
             dict: {period_summary, affiliate_ai_text, vehicle_ai_text}
         """
-        # 대표 리뷰 수집
-        sample_reviews = await self._collect_sample_reviews(data)
+        from schemas.report import ResolvedReportConfig
+        cfg = report_config or ResolvedReportConfig()
+
+        # 대표 리뷰 수집 (config에 따라 스킵 가능)
+        sample_reviews = []
+        if cfg.data.include_sample_reviews:
+            sample_reviews = await self._collect_sample_reviews(data, limit=cfg.data.sample_review_count)
 
         # 차량 분석 요약 텍스트 생성
         vehicle_summary = self._build_vehicle_summary(data.get("vehicle_analysis", []))
 
+        # 코루틴 목록 (조건부 포함)
+        coros = []
+        coro_keys = []
+
         # 1. 기간 요약 생성
-        summary_coro = self._generate_period_summary(
-            branch_name=data["branch_name"],
-            total_reviews=data["total_reviews"],
-            top_tags=data["tags"],
-            start_date=data["start_date"],
-            end_date=data["end_date"],
-            branch_id=data.get("branch_id"),
-            tag_sentiments=data.get("tag_sentiments"),
-            sentiment_stats=data.get("sentiment_stats"),
-            sample_reviews=sample_reviews,
-            vehicle_summary=vehicle_summary,
-        )
+        if cfg.output.include_period_summary:
+            coros.append(self._generate_period_summary(
+                branch_name=data["branch_name"],
+                total_reviews=data["total_reviews"],
+                top_tags=data["tags"],
+                start_date=data["start_date"],
+                end_date=data["end_date"],
+                branch_id=data.get("branch_id"),
+                tag_sentiments=data.get("tag_sentiments"),
+                sentiment_stats=data.get("sentiment_stats"),
+                sample_reviews=sample_reviews,
+                vehicle_summary=vehicle_summary,
+                report_config=cfg,
+            ))
+            coro_keys.append("period_summary")
 
         # 2. 업체 평가 텍스트 (통합 메서드)
-        affiliate_coro = self._generate_evaluation_text(
-            branch_name=data["branch_name"],
-            tag_details=data.get("tag_details", []),
-            category_filter=AFFILIATE_CATEGORIES,
-            prompt_method="create_affiliate_evaluation_prompt",
-            top_positive=data.get("top_positive_tags", []),
-            top_negative=data.get("top_negative_tags", []),
-            sample_reviews=None,
-            label="업체",
-        )
+        if cfg.output.include_affiliate_eval:
+            coros.append(self._generate_evaluation_text(
+                branch_name=data["branch_name"],
+                tag_details=data.get("tag_details", []),
+                category_filter=AFFILIATE_CATEGORIES,
+                prompt_method="create_affiliate_evaluation_prompt",
+                top_positive=data.get("top_positive_tags", []),
+                top_negative=data.get("top_negative_tags", []),
+                sample_reviews=None,
+                label="업체",
+                report_config=cfg,
+            ))
+            coro_keys.append("affiliate_ai_text")
 
         # 3. 차량 평가 텍스트 (통합 메서드)
-        vehicle_coro = self._generate_evaluation_text(
-            branch_name=data["branch_name"],
-            tag_details=data.get("tag_details", []),
-            category_filter=VEHICLE_CATEGORIES,
-            prompt_method="create_vehicle_evaluation_prompt",
-            top_positive=data.get("top_liked_vehicles", []),
-            top_negative=data.get("top_disliked_vehicles", []),
-            sample_reviews=sample_reviews,
-            label="차량",
-        )
+        if cfg.output.include_vehicle_eval:
+            coros.append(self._generate_evaluation_text(
+                branch_name=data["branch_name"],
+                tag_details=data.get("tag_details", []),
+                category_filter=VEHICLE_CATEGORIES,
+                prompt_method="create_vehicle_evaluation_prompt",
+                top_positive=data.get("top_liked_vehicles", []),
+                top_negative=data.get("top_disliked_vehicles", []),
+                sample_reviews=sample_reviews,
+                label="차량",
+                report_config=cfg,
+            ))
+            coro_keys.append("vehicle_ai_text")
 
-        # 3개 병렬 실행
-        period_summary, affiliate_text, vehicle_text = await asyncio.gather(
-            summary_coro, affiliate_coro, vehicle_coro
-        )
+        # 병렬 실행
+        results = await asyncio.gather(*coros) if coros else []
+        result_map = dict(zip(coro_keys, results))
 
         return {
-            "period_summary": period_summary,
-            "affiliate_ai_text": affiliate_text,
-            "vehicle_ai_text": vehicle_text,
+            "period_summary": result_map.get("period_summary", ""),
+            "affiliate_ai_text": result_map.get("affiliate_ai_text", ""),
+            "vehicle_ai_text": result_map.get("vehicle_ai_text", ""),
         }
 
     # ----------------------------------------------------------------
@@ -119,6 +139,7 @@ class ReportAIGenerator:
         top_negative: list,
         sample_reviews: list[str] | None,
         label: str,
+        report_config=None,
     ) -> str:
         """업체/차량 평가 공통 LLM 호출"""
         filtered_tags = [
@@ -146,12 +167,26 @@ class ReportAIGenerator:
                 sample_reviews=sample_reviews,
             )
 
+            # 커스텀 설정 적용
+            temperature = 0.5
+            max_tokens = 300
+            if report_config:
+                system_prompt, user_prompt = RichSummaryPromptBuilder.apply_custom_config(
+                    system_prompt, user_prompt,
+                    custom_instruction=report_config.prompt.custom_instruction,
+                    perspective=report_config.prompt.analysis_perspective,
+                    tone=report_config.prompt.tone,
+                    max_length=report_config.output.eval_max_length,
+                )
+                temperature = report_config.prompt.temperature
+                max_tokens = report_config.output.eval_max_length // 2 + 50
+
             llm_provider = get_provider()
             response = await llm_provider.async_generate(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
-                max_tokens=300,
-                temperature=0.5,
+                max_tokens=max_tokens,
+                temperature=temperature,
             )
 
             content = response.content if hasattr(response, "content") else str(response)
@@ -177,6 +212,7 @@ class ReportAIGenerator:
         sentiment_stats: dict | None = None,
         sample_reviews: list[str] | None = None,
         vehicle_summary: str | None = None,
+        report_config=None,
     ) -> str:
         """기간 요약 생성 (DB 저장된 요약 우선 사용)"""
         # 1. DB에 저장된 요약 확인 (토큰 절약)
@@ -248,6 +284,20 @@ class ReportAIGenerator:
             llm_provider = get_provider()
             report_mode = tag_sentiments is not None
             temperature = 0.5 if report_mode else 0.7
+
+            # 커스텀 설정 적용
+            if report_config and report_mode:
+                from infrastructure.llm.prompts import RichSummaryPromptBuilder
+                system_prompt, user_prompt = RichSummaryPromptBuilder.apply_custom_config(
+                    system_prompt, user_prompt,
+                    custom_instruction=report_config.prompt.custom_instruction,
+                    perspective=report_config.prompt.analysis_perspective,
+                    tone=report_config.prompt.tone,
+                    max_length=report_config.output.summary_max_length,
+                )
+                temperature = report_config.prompt.temperature
+                max_tokens = report_config.output.summary_max_length // 2 + 50
+
             response = await llm_provider.async_generate(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
@@ -331,16 +381,41 @@ class ReportAIGenerator:
     # 헬퍼
     # ----------------------------------------------------------------
 
-    async def _collect_sample_reviews(self, data: dict) -> list[str]:
-        """대표 리뷰 수집"""
+    async def _collect_sample_reviews(self, data: dict, limit: int = 10) -> list[str]:
+        """대표 리뷰 수집 (Athena primary, Supabase fallback)"""
         sample_reviews: list[str] = []
-        if data.get("tag_sentiments") and self.review_repo:
+        if not data.get("tag_sentiments"):
+            return sample_reviews
+
+        branch_id = data.get("branch_id")
+        start_date = data.get("start_date")
+        end_date = data.get("end_date")
+
+        # Athena 경로
+        if self.athena_client is not None and branch_id:
+            try:
+                date_from = start_date.strftime("%Y-%m-%d") if start_date else None
+                date_to = end_date.strftime("%Y-%m-%d") if end_date else None
+                sample_reviews = await asyncio.to_thread(
+                    self.athena_client.fetch_sample_reviews,
+                    branch_id=branch_id,
+                    date_from=date_from,
+                    date_to=date_to,
+                    limit=limit,
+                )
+                if sample_reviews:
+                    return sample_reviews
+            except Exception as e:
+                logger.warning(f"Athena 대표 리뷰 조회 실패, Supabase 폴백: {e}")
+
+        # Supabase 폴백
+        if self.review_repo:
             try:
                 result = await self.review_repo.get_by_branch(
-                    branch_id=data.get("branch_id"),
-                    review_date_from=data.get("start_date"),
-                    review_date_to=data.get("end_date"),
-                    limit=10,
+                    branch_id=branch_id,
+                    review_date_from=start_date,
+                    review_date_to=end_date,
+                    limit=limit,
                 )
                 sample_reviews = [
                     r.get("content", "") for r in result.reviews if r.get("content")
