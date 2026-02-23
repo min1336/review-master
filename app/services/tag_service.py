@@ -10,6 +10,7 @@ import threading
 from schemas.dto import (
     KeywordSentimentDTO,
     TagAnalysisResultDTO,
+    TagDetailDTO,
     TagGroupDTO,
 )
 
@@ -122,37 +123,107 @@ class TagService:
     # ============================================================
 
     async def analyze_tags(self, review_text: str) -> TagAnalysisResultDTO:
-        """리뷰 텍스트 태그 분석 (파이프라인 동일 로직: ABSA + 임베딩 + 규칙)"""
+        """리뷰 텍스트 태그 분석 (파이프라인 동일 로직: ABSA + 임베딩 + 규칙)
+
+        Returns 3-level hierarchy:
+            카테고리(7개) → 태그(52개) → 키워드
+        """
 
         def analyze():
+            from domain.analysis.patterns import TAG_REGISTRY
+            from domain.analysis.sentiment_core import (
+                detect_keyword_sentiment_with_context,
+            )
+
+            # ── 룩업 테이블 구축 ──
+            categories = set(TAG_REGISTRY.keys())
+            tag_to_category: dict[str, str] = {}
+            for cat_name, cat_meta in TAG_REGISTRY.items():
+                for sub_tag_name in cat_meta.tags:
+                    tag_to_category[sub_tag_name] = cat_name
+
+            def _find_sub_tag(keyword: str, category_name: str) -> str:
+                """키워드가 카테고리 내 어떤 세분화 태그에 속하는지 찾기"""
+                kw_lower = keyword.lower().strip()
+                cat_meta = TAG_REGISTRY[category_name]
+                for sub_name, sub_meta in cat_meta.tags.items():
+                    for rule_kw in sub_meta.keywords:
+                        if kw_lower == rule_kw or rule_kw in kw_lower:
+                            return sub_name
+                return cat_meta.default_tag
+
+            # ── 분석 실행 ──
             extractor = _get_extractor()
             keywords = extractor.extract(review_text)
 
             classifier = _get_classifier()
-
-            # 파이프라인과 동일: classify_review (ABSA + 임베딩 결합)
             tag_sentiments = classifier.classify_review(
                 review=review_text, keywords=keywords
             )
 
-            # tag_sentiments → DTO 변환
-            keyword_results = []
-            tag_groups: dict[str, TagGroupDTO] = {}
-            seen_keywords: set[str] = set()
+            # ── 3계층 구조 구축: 카테고리 → 태그 → 키워드 ──
+            structured: dict[str, dict] = {}
 
-            for tag_name, sentiments in tag_sentiments.items():
-                if tag_name == "기타":
+            for name, sentiments in tag_sentiments.items():
+                if name == "기타":
                     continue
 
-                group = TagGroupDTO(
-                    positive=sentiments.get("positive", []),
-                    negative=sentiments.get("negative", []),
-                    neutral=sentiments.get("neutral", []),
-                )
-                tag_groups[tag_name] = group
+                # 카테고리 결정
+                if name in categories:
+                    cat_name = name
+                    is_sub_tag = False
+                elif name in tag_to_category:
+                    cat_name = tag_to_category[name]
+                    is_sub_tag = True
+                else:
+                    continue
+
+                if cat_name not in structured:
+                    structured[cat_name] = {
+                        "positive": [], "negative": [], "neutral": [],
+                        "tags": {},
+                    }
+
+                cat = structured[cat_name]
 
                 for sent_type in ("positive", "negative", "neutral"):
                     for kw in sentiments.get(sent_type, []):
+                        # 카테고리 레벨 키워드 집계
+                        if kw not in cat[sent_type]:
+                            cat[sent_type].append(kw)
+
+                        # 세분화 태그 결정
+                        sub_tag = name if is_sub_tag else _find_sub_tag(kw, cat_name)
+                        if sub_tag not in cat["tags"]:
+                            cat["tags"][sub_tag] = {
+                                "positive": [], "negative": [], "neutral": [],
+                            }
+                        if kw not in cat["tags"][sub_tag][sent_type]:
+                            cat["tags"][sub_tag][sent_type].append(kw)
+
+            # ── DTO 변환 ──
+            keyword_results: list[KeywordSentimentDTO] = []
+            tag_groups: dict[str, TagGroupDTO] = {}
+            seen_keywords: set[str] = set()
+
+            for cat_name, cat_data in structured.items():
+                tag_details: dict[str, TagDetailDTO] = {}
+                for sub_name, sub_sents in cat_data["tags"].items():
+                    tag_details[sub_name] = TagDetailDTO(
+                        positive=sub_sents["positive"],
+                        negative=sub_sents["negative"],
+                        neutral=sub_sents["neutral"],
+                    )
+
+                tag_groups[cat_name] = TagGroupDTO(
+                    positive=cat_data["positive"],
+                    negative=cat_data["negative"],
+                    neutral=cat_data["neutral"],
+                    tags=tag_details,
+                )
+
+                for sent_type in ("positive", "negative", "neutral"):
+                    for kw in cat_data[sent_type]:
                         if kw not in seen_keywords:
                             keyword_results.append(
                                 KeywordSentimentDTO(keyword=kw, sentiment=sent_type)
@@ -160,10 +231,6 @@ class TagService:
                             seen_keywords.add(kw)
 
             # 태그에 매핑되지 않은 키워드도 포함 (감정만 표시)
-            from domain.analysis.sentiment_core import (
-                detect_keyword_sentiment_with_context,
-            )
-
             for kw in keywords:
                 if kw not in seen_keywords:
                     sentiment = detect_keyword_sentiment_with_context(

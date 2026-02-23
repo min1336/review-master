@@ -710,8 +710,8 @@ class KeywordSentimentDTO:
 
 
 @dataclass
-class TagGroupDTO:
-    """태그 그룹 DTO"""
+class TagDetailDTO:
+    """세분화 태그 DTO (카테고리 내 52개 태그)"""
 
     positive: list[str] = field(default_factory=list)
     negative: list[str] = field(default_factory=list)
@@ -723,6 +723,28 @@ class TagGroupDTO:
             "negative": self.negative,
             "neutral": self.neutral,
         }
+
+
+@dataclass
+class TagGroupDTO:
+    """태그 그룹 DTO (카테고리 레벨)"""
+
+    positive: list[str] = field(default_factory=list)
+    negative: list[str] = field(default_factory=list)
+    neutral: list[str] = field(default_factory=list)
+    tags: dict[str, TagDetailDTO] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "positive": self.positive,
+            "negative": self.negative,
+            "neutral": self.neutral,
+        }
+        if self.tags:
+            result["tags"] = {
+                name: detail.to_dict() for name, detail in self.tags.items()
+            }
+        return result
 
 
 @dataclass
@@ -1083,6 +1105,7 @@ __all__ = [
     "BranchReviewsDTO",
     # Tag Service
     "KeywordSentimentDTO",
+    "TagDetailDTO",
     "TagGroupDTO",
     "TagAnalysisResultDTO",
     # Sentiment Service
