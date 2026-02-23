@@ -851,6 +851,124 @@
             transform: none;
         }
 
+        /* Report Settings Panel */
+        .settings-toggle {
+            width: 100%;
+            margin-top: 16px;
+            margin-bottom: 16px;
+            padding: 10px 16px;
+            background: var(--grey-9, #f9fafb);
+            border: 1px solid var(--grey-7, #e5e7eb);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--grey-3, #374151);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s;
+        }
+        .settings-toggle:hover {
+            background: var(--grey-8, #f3f4f6);
+            border-color: var(--grey-6, #d1d5db);
+        }
+        .settings-toggle .toggle-arrow {
+            transition: transform 0.2s;
+            font-size: 12px;
+        }
+        .settings-toggle.open .toggle-arrow {
+            transform: rotate(180deg);
+        }
+        .settings-panel {
+            display: none;
+            margin-top: 12px;
+        }
+        .settings-panel.open {
+            display: block;
+            margin-bottom: 16px;
+        }
+        .settings-section {
+            border: 1px solid var(--grey-6, #d1d5db);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            background: var(--grey-9, #f9fafb);
+        }
+        .settings-section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--grey-2, #1f2937);
+            margin-bottom: 12px;
+        }
+        .settings-checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            font-size: 13px;
+            color: var(--grey-2, #1f2937);
+            cursor: pointer;
+        }
+        .settings-checkbox-row input[type="checkbox"] {
+            accent-color: var(--primary, #6366f1);
+        }
+        .settings-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--grey-2, #1f2937);
+        }
+        .settings-slider-row input[type="range"] {
+            flex: 1;
+            accent-color: var(--primary, #6366f1);
+        }
+        .settings-slider-row .slider-value {
+            min-width: 40px;
+            text-align: right;
+            font-weight: 600;
+            color: var(--grey-2, #1f2937);
+        }
+        .settings-select-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--grey-2, #1f2937);
+        }
+        .settings-select-row select {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid var(--grey-7, #e5e7eb);
+            border-radius: var(--radius-sm, 6px);
+            font-size: 13px;
+            font-family: inherit;
+            background: white;
+        }
+        .settings-textarea-row {
+            margin-top: 8px;
+        }
+        .settings-textarea-row textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--grey-7, #e5e7eb);
+            border-radius: var(--radius-sm, 6px);
+            font-size: 13px;
+            resize: vertical;
+            font-family: inherit;
+            min-height: 60px;
+            box-sizing: border-box;
+        }
+        .char-count {
+            text-align: right;
+            font-size: 11px;
+            color: var(--grey-5, #6b7280);
+            margin-top: 4px;
+        }
+
         /* Review Count Info */
         .period-count-badge {
             font-size: 11px;
@@ -1603,7 +1721,6 @@
         <div class="header-actions">
             <button class="btn btn-outline" id="btn-review-detail"
                 style="border-color: #10b981; color: #10b981;">리뷰 상세 테스트</button>
-            <button class="btn btn-outline" id="btn-api-tester">API 테스트</button>
             <button class="btn btn-primary" id="btn-analysis">분석</button>
             <button class="btn btn-secondary" id="btn-tag-tester">태그 분석 테스트</button>
         </div>
@@ -1835,11 +1952,11 @@
 
             function buildCarmoreReviewUrl(reservationId) {
                 const today = new Date();
-                const threeMonthsAgo = new Date(today);
-                threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+                const oneMonthAgo = new Date(today);
+                oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
 
                 const endDate = formatDateForAPI(today);
-                const startDate = formatDateForAPI(threeMonthsAgo);
+                const startDate = formatDateForAPI(oneMonthAgo);
 
                 const params = new URLSearchParams({
                     sp: 'reservation_idx',
@@ -2246,11 +2363,6 @@
                 return result.data;
             }
 
-            async function apiSyncAffiliates() {
-                return apiRequest(`${API_PREFIX}/carmore/sync/affiliates`, {
-                    method: 'POST'
-                });
-            }
 
             // ============================================================
             // UI (ui.js)
@@ -2684,7 +2796,6 @@
                     removeCustomTag,
                     closeModal,
                     clearDateFilter,
-                    syncAffiliates,
                     toggleFavorite: handleToggleFavorite,
                     // AI Report handlers
                     openReportModal,
@@ -2702,8 +2813,6 @@
                     deleteReport
                 };
 
-                // Also expose to global for onclick in header
-                window.syncAffiliates = syncAffiliates;
                 window.handleSort = handleSort;
                 window.prevPage = prevPage;
                 window.nextPage = nextPage;
@@ -2711,15 +2820,9 @@
 
             function bindEvents() {
                 // 헤더 네비게이션 버튼
-                const btnApiTester = document.getElementById('btn-api-tester');
                 const btnAnalysis = document.getElementById('btn-analysis');
                 const btnTagTester = document.getElementById('btn-tag-tester');
 
-                if (btnApiTester) {
-                    btnApiTester.addEventListener('click', () => {
-                        window.location.href = `${BASE_PATH}/api-tester`;
-                    });
-                }
                 if (btnAnalysis) {
                     btnAnalysis.addEventListener('click', () => {
                         window.location.href = `${BASE_PATH}/analysis`;
@@ -3441,7 +3544,31 @@
                 affiliateName: '',
                 startDate: '',
                 endDate: '',
-                reportData: null
+                reportData: null,
+                config: {
+                    output: {
+                        include_period_summary: true,
+                        include_affiliate_eval: true,
+                        include_vehicle_eval: true,
+                        include_trend_comparison: true,
+                        include_benchmark: true,
+                        include_priority_actions: true,
+                        summary_max_length: 600,
+                        eval_max_length: 250,
+                    },
+                    data: {
+                        include_tags: true,
+                        include_vehicles: true,
+                        include_sample_reviews: true,
+                        sample_review_count: 10,
+                    },
+                    prompt: {
+                        custom_instruction: '',
+                        analysis_perspective: 'operational',
+                        tone: 'analytical',
+                        temperature: 0.5,
+                    },
+                },
             };
             let reviewCountCache = null;
 
@@ -3450,6 +3577,23 @@
                 reportState.branchName = branchName;
                 reportState.affiliateName = affiliateName;
                 reportState.reportData = null;
+                // config 리셋
+                reportState.config = {
+                    output: {
+                        include_period_summary: true, include_affiliate_eval: true,
+                        include_vehicle_eval: true, include_trend_comparison: true,
+                        include_benchmark: true, include_priority_actions: true,
+                        summary_max_length: 600, eval_max_length: 250,
+                    },
+                    data: {
+                        include_tags: true, include_vehicles: true,
+                        include_sample_reviews: true, sample_review_count: 10,
+                    },
+                    prompt: {
+                        custom_instruction: '', analysis_perspective: 'operational',
+                        tone: 'analytical', temperature: 0.5,
+                    },
+                };
 
                 // 기본 날짜 설정 (최근 1개월 → 30건 미만이면 자동 확장)
                 const today = new Date();
@@ -3770,6 +3914,35 @@
                 infoBar.textContent = '리뷰 수 확인 중...';
                 container.appendChild(infoBar);
 
+                // 고급 설정 토글
+                const toggleBtn = document.createElement('button');
+                toggleBtn.className = 'settings-toggle';
+                toggleBtn.type = 'button';
+                const toggleLabel = document.createElement('span');
+                toggleLabel.textContent = '고급 설정';
+                const toggleArrow = document.createElement('span');
+                toggleArrow.className = 'toggle-arrow';
+                toggleArrow.textContent = '\u25BC';
+                toggleBtn.appendChild(toggleLabel);
+                toggleBtn.appendChild(toggleArrow);
+
+                const settingsPanel = document.createElement('div');
+                settingsPanel.className = 'settings-panel';
+                settingsPanel.id = 'report-settings-panel';
+
+                toggleBtn.addEventListener('click', () => {
+                    toggleBtn.classList.toggle('open');
+                    settingsPanel.classList.toggle('open');
+                });
+
+                container.appendChild(toggleBtn);
+
+                // 설정 섹션 빌드
+                buildOutputSettings(settingsPanel);
+                buildDataSettings(settingsPanel);
+                buildPromptSettings(settingsPanel);
+                container.appendChild(settingsPanel);
+
                 // 생성 버튼
                 const genBtn = document.createElement('button');
                 genBtn.className = 'btn-generate-report';
@@ -3780,6 +3953,156 @@
                 body.replaceChildren(container);
 
                 fetchReviewCounts();
+            }
+
+            // ============================================================
+            // Report Settings Builders (DOM API only)
+            // ============================================================
+
+            function buildSettingsCheckbox(parent, label, configPath, configKey) {
+                const row = document.createElement('label');
+                row.className = 'settings-checkbox-row';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = reportState.config[configPath][configKey];
+                cb.addEventListener('change', () => {
+                    reportState.config[configPath][configKey] = cb.checked;
+                });
+                const span = document.createElement('span');
+                span.textContent = label;
+                row.appendChild(cb);
+                row.appendChild(span);
+                parent.appendChild(row);
+            }
+
+            function buildSettingsSlider(parent, label, configPath, configKey, min, max, step, unit) {
+                const row = document.createElement('div');
+                row.className = 'settings-slider-row';
+                const lbl = document.createElement('span');
+                lbl.textContent = label;
+                lbl.style.minWidth = '90px';
+                const slider = document.createElement('input');
+                slider.type = 'range';
+                slider.min = String(min);
+                slider.max = String(max);
+                slider.step = String(step);
+                slider.value = String(reportState.config[configPath][configKey]);
+                const valSpan = document.createElement('span');
+                valSpan.className = 'slider-value';
+                valSpan.textContent = slider.value + (unit || '');
+                slider.addEventListener('input', () => {
+                    const val = configKey === 'temperature' ? parseFloat(slider.value) : parseInt(slider.value, 10);
+                    reportState.config[configPath][configKey] = val;
+                    valSpan.textContent = slider.value + (unit || '');
+                });
+                row.appendChild(lbl);
+                row.appendChild(slider);
+                row.appendChild(valSpan);
+                parent.appendChild(row);
+            }
+
+            function buildSettingsSelect(parent, label, configPath, configKey, options) {
+                const row = document.createElement('div');
+                row.className = 'settings-select-row';
+                const lbl = document.createElement('span');
+                lbl.textContent = label;
+                lbl.style.minWidth = '90px';
+                const sel = document.createElement('select');
+                options.forEach(opt => {
+                    const o = document.createElement('option');
+                    o.value = opt.value;
+                    o.textContent = opt.label;
+                    if (opt.value === reportState.config[configPath][configKey]) o.selected = true;
+                    sel.appendChild(o);
+                });
+                sel.addEventListener('change', () => {
+                    reportState.config[configPath][configKey] = sel.value;
+                });
+                row.appendChild(lbl);
+                row.appendChild(sel);
+                parent.appendChild(row);
+            }
+
+            function buildOutputSettings(panel) {
+                const section = document.createElement('div');
+                section.className = 'settings-section';
+                const title = document.createElement('div');
+                title.className = 'settings-section-title';
+                title.textContent = '출력 섹션';
+                section.appendChild(title);
+
+                buildSettingsCheckbox(section, '기간 요약', 'output', 'include_period_summary');
+                buildSettingsCheckbox(section, '업체 평가', 'output', 'include_affiliate_eval');
+                buildSettingsCheckbox(section, '차량 평가', 'output', 'include_vehicle_eval');
+                buildSettingsCheckbox(section, '트렌드 비교', 'output', 'include_trend_comparison');
+                buildSettingsCheckbox(section, '벤치마크', 'output', 'include_benchmark');
+                buildSettingsCheckbox(section, '우선순위 액션', 'output', 'include_priority_actions');
+                buildSettingsSlider(section, '요약 분량', 'output', 'summary_max_length', 400, 1000, 50, '자');
+                buildSettingsSlider(section, '평가 분량', 'output', 'eval_max_length', 150, 400, 50, '자');
+
+                panel.appendChild(section);
+            }
+
+            function buildDataSettings(panel) {
+                const section = document.createElement('div');
+                section.className = 'settings-section';
+                const title = document.createElement('div');
+                title.className = 'settings-section-title';
+                title.textContent = '데이터 범위';
+                section.appendChild(title);
+
+                buildSettingsCheckbox(section, '태그 분석 포함', 'data', 'include_tags');
+                buildSettingsCheckbox(section, '차량 분석 포함', 'data', 'include_vehicles');
+                buildSettingsCheckbox(section, '샘플 리뷰 포함', 'data', 'include_sample_reviews');
+                buildSettingsSlider(section, '샘플 리뷰 수', 'data', 'sample_review_count', 5, 20, 1, '건');
+
+                panel.appendChild(section);
+            }
+
+            function buildPromptSettings(panel) {
+                const section = document.createElement('div');
+                section.className = 'settings-section';
+                const title = document.createElement('div');
+                title.className = 'settings-section-title';
+                title.textContent = '분석 설정';
+                section.appendChild(title);
+
+                buildSettingsSelect(section, '분석 관점', 'prompt', 'analysis_perspective', [
+                    { value: 'operational', label: '운영 관점' },
+                    { value: 'marketing', label: '마케팅 관점' },
+                    { value: 'executive', label: '경영진 보고' },
+                ]);
+                buildSettingsSelect(section, '톤', 'prompt', 'tone', [
+                    { value: 'analytical', label: '분석적' },
+                    { value: 'friendly', label: '친근한' },
+                    { value: 'formal', label: '격식체' },
+                ]);
+                buildSettingsSlider(section, 'Temperature', 'prompt', 'temperature', 0.0, 1.0, 0.1, '');
+
+                // 커스텀 지시사항 textarea
+                const taRow = document.createElement('div');
+                taRow.className = 'settings-textarea-row';
+                const taLabel = document.createElement('div');
+                taLabel.textContent = '커스텀 지시사항';
+                taLabel.style.fontSize = '13px';
+                taLabel.style.marginBottom = '6px';
+                const ta = document.createElement('textarea');
+                ta.placeholder = '추가 분석 요청사항을 입력하세요 (최대 500자)';
+                ta.maxLength = 500;
+                ta.value = reportState.config.prompt.custom_instruction;
+                const charCount = document.createElement('div');
+                charCount.className = 'char-count';
+                charCount.textContent = ta.value.length + '/500';
+                ta.addEventListener('input', () => {
+                    reportState.config.prompt.custom_instruction = ta.value;
+                    charCount.textContent = ta.value.length + '/500';
+                });
+                taRow.appendChild(taLabel);
+                taRow.appendChild(ta);
+                taRow.appendChild(charCount);
+                section.appendChild(taRow);
+
+                panel.appendChild(section);
             }
 
             function onReportDateChange() {
@@ -3923,7 +4246,10 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             start_date: reportState.startDate,
-                            end_date: reportState.endDate
+                            end_date: reportState.endDate,
+                            output_config: reportState.config.output,
+                            data_config: reportState.config.data,
+                            prompt_config: reportState.config.prompt,
                         }),
                         signal: reportPollingController.signal
                     });
@@ -4162,7 +4488,10 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             start_date: reportState.startDate,
-                            end_date: reportState.endDate
+                            end_date: reportState.endDate,
+                            output_config: reportState.config.output,
+                            data_config: reportState.config.data,
+                            prompt_config: reportState.config.prompt,
                         }),
                         signal: reportPollingController.signal
                     });
@@ -4200,7 +4529,7 @@
                 const body = getElement('report-modal-body');
                 if (!body) return;
 
-                const hasNewFormat = data.affiliate_evaluation != null;
+                const hasNewFormat = Array.isArray(data.top_tags_detail);
                 if (!hasNewFormat) {
                     renderLegacyReportContent(data, isNew);
                     return;
@@ -4245,14 +4574,17 @@
                     </div>
 
                     <!-- 섹션 1: 요약 -->
+                    ${data.period_summary ? `
                     <div class="report-section">
                         <div class="report-section-title">요약</div>
                         <div class="report-summary-box">
-                            ${escapeHtml(data.period_summary || '요약 정보가 없습니다.')}
+                            ${escapeHtml(data.period_summary)}
                         </div>
                     </div>
+                    ` : ''}
 
                     <!-- 섹션 2: 업체 평가 -->
+                    ${data.affiliate_evaluation ? `
                     <div class="report-section">
                         <div class="report-section-title">업체 평가</div>
                         <div style="display: flex; gap: 16px;">
@@ -4267,8 +4599,10 @@
                         </div>
                         ${aff.ai_text ? `<div class="report-summary-box" style="margin-top:12px; border-left-color:#6366f1;">${escapeHtml(aff.ai_text)}</div>` : ''}
                     </div>
+                    ` : ''}
 
                     <!-- 섹션 3: 차량 평가 -->
+                    ${data.vehicle_evaluation ? `
                     <div class="report-section">
                         <div class="report-section-title">차량 평가</div>
                         <div style="display: flex; gap: 16px;">
@@ -4283,6 +4617,115 @@
                         </div>
                         ${veh.ai_text ? `<div class="report-summary-box" style="margin-top:12px; border-left-color:#6366f1;">${escapeHtml(veh.ai_text)}</div>` : ''}
                     </div>
+                    ` : ''}
+
+                    <!-- 섹션 4: 트렌드 비교 (선택적) -->
+                    ${data.trend_comparison ? `
+                    <div class="report-section">
+                        <div class="report-section-title">트렌드 비교</div>
+                        <div style="display:flex;gap:12px;margin-bottom:12px;">
+                            <div style="flex:1;background:var(--grey-8);border-radius:8px;padding:12px;text-align:center;">
+                                <div style="font-size:12px;color:var(--grey-5);margin-bottom:4px;">이전 기간</div>
+                                <div style="font-size:13px;color:var(--grey-3);">${escapeHtml(data.trend_comparison.previous_period)}</div>
+                                <div style="font-size:12px;color:var(--grey-5);margin-top:2px;">${data.trend_comparison.previous_total_reviews}건</div>
+                            </div>
+                            <div style="flex:1;background:var(--grey-8);border-radius:8px;padding:12px;text-align:center;">
+                                <div style="font-size:12px;color:var(--grey-5);margin-bottom:4px;">현재 기간</div>
+                                <div style="font-size:13px;color:var(--grey-3);">${escapeHtml(data.trend_comparison.current_period)}</div>
+                                <div style="font-size:12px;color:var(--grey-5);margin-top:2px;">${data.trend_comparison.current_total_reviews}건</div>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:12px;margin-bottom:12px;">
+                            <div style="flex:1;background:${data.trend_comparison.overall_positive_change >= 0 ? 'rgba(16,185,129,0.06)' : 'rgba(239,68,68,0.06)'};border:1px solid ${data.trend_comparison.overall_positive_change >= 0 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'};border-radius:8px;padding:12px;text-align:center;">
+                                <div style="font-size:12px;color:var(--grey-5);">긍정률 변화</div>
+                                <div style="font-size:18px;font-weight:700;color:${data.trend_comparison.overall_positive_change >= 0 ? '#10b981' : '#ef4444'};">${data.trend_comparison.overall_positive_change >= 0 ? '+' : ''}${data.trend_comparison.overall_positive_change}%p</div>
+                            </div>
+                            <div style="flex:1;background:${data.trend_comparison.overall_negative_change <= 0 ? 'rgba(16,185,129,0.06)' : 'rgba(239,68,68,0.06)'};border:1px solid ${data.trend_comparison.overall_negative_change <= 0 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'};border-radius:8px;padding:12px;text-align:center;">
+                                <div style="font-size:12px;color:var(--grey-5);">부정률 변화</div>
+                                <div style="font-size:18px;font-weight:700;color:${data.trend_comparison.overall_negative_change <= 0 ? '#10b981' : '#ef4444'};">${data.trend_comparison.overall_negative_change >= 0 ? '+' : ''}${data.trend_comparison.overall_negative_change}%p</div>
+                            </div>
+                        </div>
+                        ${(data.trend_comparison.category_trends || []).length > 0 ? `
+                        <div style="border:1px solid var(--grey-7);border-radius:8px;overflow:hidden;">
+                            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                                <thead>
+                                    <tr style="background:var(--grey-8);">
+                                        <th style="padding:8px 12px;text-align:left;color:var(--grey-4);font-weight:600;">카테고리</th>
+                                        <th style="padding:8px 12px;text-align:center;color:var(--grey-4);font-weight:600;">이전</th>
+                                        <th style="padding:8px 12px;text-align:center;color:var(--grey-4);font-weight:600;">현재</th>
+                                        <th style="padding:8px 12px;text-align:center;color:var(--grey-4);font-weight:600;">변화</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.trend_comparison.category_trends.map(t => `
+                                    <tr style="border-top:1px solid var(--grey-7);">
+                                        <td style="padding:8px 12px;color:var(--grey-3);">${escapeHtml(t.category_name)}</td>
+                                        <td style="padding:8px 12px;text-align:center;color:var(--grey-4);">${t.previous_ratio}%</td>
+                                        <td style="padding:8px 12px;text-align:center;color:var(--grey-3);">${t.current_ratio}%</td>
+                                        <td style="padding:8px 12px;text-align:center;font-weight:600;color:${t.direction === 'up' ? '#10b981' : t.direction === 'down' ? '#ef4444' : 'var(--grey-4)'};">
+                                            ${t.direction === 'up' ? '▲' : t.direction === 'down' ? '▼' : '―'} ${t.change >= 0 ? '+' : ''}${t.change}%p
+                                        </td>
+                                    </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        ` : ''}
+                    </div>
+                    ` : ''}
+
+                    <!-- 섹션 5: 벤치마크 (선택적) -->
+                    ${data.benchmark ? `
+                    <div class="report-section">
+                        <div class="report-section-title">벤치마크</div>
+                        <div style="display:flex;gap:12px;">
+                            <div style="flex:1;background:var(--grey-8);border-radius:8px;padding:14px;text-align:center;">
+                                <div style="font-size:12px;color:var(--grey-5);margin-bottom:6px;">이 지점</div>
+                                <div style="font-size:22px;font-weight:700;color:#f59e0b;">${data.benchmark.branch_rating.toFixed(1)}</div>
+                            </div>
+                            <div style="flex:1;background:var(--grey-8);border-radius:8px;padding:14px;text-align:center;">
+                                <div style="font-size:12px;color:var(--grey-5);margin-bottom:6px;">${escapeHtml(data.benchmark.region_name || '지역')} 평균</div>
+                                <div style="font-size:22px;font-weight:700;color:var(--grey-3);">${data.benchmark.regional_avg_rating.toFixed(1)}</div>
+                                <div style="font-size:11px;color:var(--grey-5);margin-top:2px;">상위 ${data.benchmark.regional_rank_pct}% (${data.benchmark.total_branches_in_region}개 지점)</div>
+                            </div>
+                            <div style="flex:1;background:var(--grey-8);border-radius:8px;padding:14px;text-align:center;">
+                                <div style="font-size:12px;color:var(--grey-5);margin-bottom:6px;">전국 평균</div>
+                                <div style="font-size:22px;font-weight:700;color:var(--grey-3);">${data.benchmark.national_avg_rating.toFixed(1)}</div>
+                                <div style="font-size:11px;color:var(--grey-5);margin-top:2px;">상위 ${data.benchmark.national_rank_pct}% (${data.benchmark.total_branches_national}개 지점)</div>
+                            </div>
+                        </div>
+                        ${data.benchmark.branch_rating > 0 ? `
+                        <div style="margin-top:12px;background:${data.benchmark.branch_rating >= data.benchmark.regional_avg_rating ? 'rgba(16,185,129,0.06)' : 'rgba(239,68,68,0.06)'};border:1px solid ${data.benchmark.branch_rating >= data.benchmark.regional_avg_rating ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'};border-radius:8px;padding:10px 14px;font-size:13px;color:var(--grey-3);">
+                            ${data.benchmark.branch_rating >= data.benchmark.regional_avg_rating
+                                ? '이 지점은 ' + escapeHtml(data.benchmark.region_name || '해당 지역') + ' 평균 이상의 평점을 유지하고 있습니다.'
+                                : '이 지점은 ' + escapeHtml(data.benchmark.region_name || '해당 지역') + ' 평균보다 낮은 평점이므로, 개선 조치가 필요할 수 있습니다.'}
+                        </div>
+                        ` : ''}
+                    </div>
+                    ` : ''}
+
+                    <!-- 섹션 6: 우선순위 액션 (선택적) -->
+                    ${data.priority_actions && data.priority_actions.length > 0 ? `
+                    <div class="report-section">
+                        <div class="report-section-title">우선순위 액션</div>
+                        <div style="display:flex;flex-direction:column;gap:10px;">
+                            ${data.priority_actions.map(a => `
+                            <div style="background:var(--grey-8);border-radius:8px;padding:14px;border-left:4px solid ${a.impact === 'high' ? '#ef4444' : a.impact === 'medium' ? '#f59e0b' : '#10b981'};">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                    <span style="font-size:14px;font-weight:600;color:var(--grey-2);">${a.rank}순위: ${escapeHtml(a.category_name)}</span>
+                                    <div style="display:flex;gap:6px;">
+                                        <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${a.impact === 'high' ? 'rgba(239,68,68,0.1)' : a.impact === 'medium' ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)'};color:${a.impact === 'high' ? '#ef4444' : a.impact === 'medium' ? '#f59e0b' : '#10b981'};">영향 ${a.impact === 'high' ? '높음' : a.impact === 'medium' ? '보통' : '낮음'}</span>
+                                        <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(99,102,241,0.1);color:#6366f1;">난이도 ${a.effort === 'high' ? '높음' : a.effort === 'medium' ? '보통' : '낮음'}</span>
+                                    </div>
+                                </div>
+                                <div style="font-size:12px;color:var(--grey-4);margin-bottom:4px;">부정률 ${a.negative_ratio}% · ${escapeHtml(a.tag_name)} ${a.negative_count}건</div>
+                                <div style="font-size:13px;color:var(--grey-4);margin-bottom:4px;">${escapeHtml(a.issue)}</div>
+                                <div style="font-size:13px;color:var(--grey-3);">${escapeHtml(a.action)}</div>
+                            </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
 
                     <div style="text-align: center; padding: 8px 0; color: var(--grey-5); font-size: 12px; margin-top: 16px; border-top: 1px solid var(--grey-7); padding-top: 16px;">
                         Generated by Carmore AI · ${escapeHtml(data.generated_at || new Date().toLocaleString('ko-KR'))}
@@ -4552,7 +4995,22 @@
             }
 
             async function loadReviews(branchId) {
-                showReviewsLoading();
+                const carModel = getElement('filter-car-model')?.value || '';
+                const sentiment = getElement('filter-sentiment')?.value || '';
+                const useAthena = !carModel && !sentiment;
+
+                const listEl = getElement('reviews-list');
+                if (listEl) {
+                    const msg = useAthena ? '원본 리뷰 검색 중... (2~4초 소요)' : '로딩 중...';
+                    listEl.textContent = '';
+                    const div = document.createElement('div');
+                    div.className = 'loading';
+                    const spinner = document.createElement('div');
+                    spinner.className = 'spinner';
+                    div.appendChild(spinner);
+                    div.appendChild(document.createTextNode(msg));
+                    listEl.appendChild(div);
+                }
 
                 const offset = state.reviews.currentPage * state.reviews.pageSize;
 
@@ -4560,8 +5018,8 @@
                     const result = await fetchBranchReviews(branchId, {
                         limit: state.reviews.pageSize,
                         offset,
-                        carModel: getElement('filter-car-model')?.value || '',
-                        sentiment: getElement('filter-sentiment')?.value || ''
+                        carModel,
+                        sentiment,
                     });
 
                     console.log('📋 리뷰 API 응답:', result);
@@ -4581,7 +5039,14 @@
 
                 } catch (e) {
                     console.error('Reviews load error:', e);
-                    getElement('reviews-list').innerHTML = '<div style="padding: 24px; text-align: center; color: var(--error);">로드 실패</div>';
+                    const el = getElement('reviews-list');
+                    if (el) {
+                        el.textContent = '';
+                        const errDiv = document.createElement('div');
+                        errDiv.style.cssText = 'padding: 24px; text-align: center; color: var(--error);';
+                        errDiv.textContent = '로드 실패';
+                        el.appendChild(errDiv);
+                    }
                 }
             }
 
@@ -4593,11 +5058,6 @@
                 }
 
                 loadReviews(branchId);
-            }
-
-            async function syncAffiliates() {
-                // TODO: 구현 예정
-                showToast('업체 동기화 기능은 준비 중입니다.', 'info');
             }
 
             // Expose global handlers immediately (before DOMContentLoaded)

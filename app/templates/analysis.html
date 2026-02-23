@@ -1170,18 +1170,15 @@
         let currentSort = 'latest';
         const pageSize = 5;
 
-        // Date filter (default: last 30 days)
-        const _today = new Date();
-        const _30DaysAgo = new Date(_today);
-        _30DaysAgo.setDate(_today.getDate() - 30);
+        // Date filter (default: 전체)
         const _formatLocalDate = (date) => {
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         };
-        let dateFrom = _formatLocalDate(_30DaysAgo);
-        let dateTo = _formatLocalDate(_today);
+        let dateFrom = null;
+        let dateTo = null;
 
         // Search state
         let hasSearched = false;
@@ -1210,7 +1207,7 @@
                 mode: 'range',
                 dateFormat: 'Y-m-d',
                 locale: 'ko',
-                defaultDate: [dateFrom, dateTo],
+                defaultDate: [],
                 onChange: function (selectedDates) {
                     if (selectedDates.length === 2) {
                         // 로컬 날짜 포맷 (타임존 문제 방지)
@@ -1479,17 +1476,14 @@
             selectedRegions = [];
             selectedSimplified = [];
             selectedBranches = [];
-            const _resetToday = new Date();
-            const _reset30DaysAgo = new Date(_resetToday);
-            _reset30DaysAgo.setDate(_resetToday.getDate() - 30);
-            dateFrom = _formatLocalDate(_reset30DaysAgo);
-            dateTo = _formatLocalDate(_resetToday);
+            dateFrom = null;
+            dateTo = null;
             currentSort = 'latest';
             hasSearched = false;
 
             document.getElementById('sentimentFilter').value = '';
             document.getElementById('sortSelect').value = 'latest';
-            flatpickr('#dateRangeFilter').setDate([dateFrom, dateTo]);
+            flatpickr('#dateRangeFilter').clear();
 
             renderChips('regionChips', [], () => { });
             renderBranchChips();
@@ -1977,9 +1971,6 @@
         async function openReservation(reviewId, reviewDate, dbId, isNewSection = false) {
             if (reviewId && reviewId !== '-') {
                 let url = `https://dev-admin.carmore.kr/partners/Reviewmanage?sp=reservation_idx&sv=${reviewId}`;
-                if (reviewDate) {
-                    url += `&startdate=${reviewDate}&enddate=${reviewDate}`;
-                }
                 window.open(url, '_blank');
 
                 // 해당 리뷰 읽음 처리 (DB ID가 있는 경우)
@@ -2002,13 +1993,14 @@
                         // 신규 리뷰 섹션: API 재조회로 개수 통일
                         await loadNewReviews();
                     } else {
-                        // 검색 결과 섹션에서 클릭한 경우: NEW 태그만 제거
+                        // 검색 결과 섹션에서 클릭한 경우: NEW 태그 제거 + 신규 카운트 동기화
                         const reviewItem = document.querySelector(`#reviewList .review-item[data-id="${dbId}"]`);
                         if (reviewItem) {
                             reviewItem.classList.remove('is-new');
                             const newTag = reviewItem.querySelector('.new-tag');
                             if (newTag) newTag.remove();
                         }
+                        await loadNewReviews();
                     }
                 }
             } catch (error) {
