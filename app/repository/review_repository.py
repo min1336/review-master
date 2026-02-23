@@ -45,7 +45,7 @@ class BranchReviewRepository(BaseRepository[Review]):
                         "branch_name": r.get("branch_name") or r.get("예약_지점명"),
                         "company_name": r.get("company_name")
                         or r.get("예약_업체명"),
-                        "content": r.get("content") or r.get("리뷰내용"),
+                        "content": None,  # Athena에서 실시간 조회 (이중 저장 제거)
                         "rating_service": rating_svc,
                         "rating_car": r.get("rating_car") or r.get("차량평점"),
                         "rating_convenience": rating_conv,

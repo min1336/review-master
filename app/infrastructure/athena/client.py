@@ -406,6 +406,56 @@ class AthenaClient:
             logger.error(f"Athena 필터 검색 실패: {e}")
             raise
 
+    def fetch_reviews_by_branch(
+        self,
+        branch_id: int,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        sort_by: str = "latest",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[dict], int]:
+        """단일 지점 리뷰 조회 (대시보드/분석 페이지용)
+
+        fetch_reviews_with_filters의 단일 지점 편의 래퍼.
+
+        Returns:
+            (리뷰 목록, 전체 개수)
+        """
+        return self.fetch_reviews_with_filters(
+            branch_ids=[branch_id],
+            date_from=date_from,
+            date_to=date_to,
+            sort_by=sort_by,
+            limit=limit,
+            offset=offset,
+        )
+
+    def fetch_sample_reviews(
+        self,
+        branch_id: int,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = 10,
+    ) -> list[str]:
+        """LLM 프롬프트용 샘플 리뷰 content 목록 조회
+
+        Returns:
+            리뷰 content 문자열 리스트 (빈 content 제외)
+        """
+        reviews, _ = self.fetch_reviews_with_filters(
+            branch_ids=[branch_id],
+            date_from=date_from,
+            date_to=date_to,
+            sort_by="latest",
+            limit=limit,
+            offset=0,
+        )
+        return [
+            r["content"] for r in reviews
+            if r.get("content") and r["content"].strip()
+        ]
+
     def fetch_reviews_since(
         self, since: datetime, limit: int | None = None
     ) -> list[dict]:

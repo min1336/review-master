@@ -92,7 +92,7 @@ class VehicleAnalyzer:
         """통합 차량 분석 (기간 필터 여부에 따라 소스 자동 선택)
 
         기간 필터가 있으면 branch_reviews에서 직접 집계하고,
-        없으면 car_model_tags 테이블을 사용합니다.
+        없으면 monthly_car_model_tag_stats에서 집계합니다.
         """
         from repository.session import get_client
 
@@ -103,10 +103,10 @@ class VehicleAnalyzer:
                 client, branch_id, start_date, end_date
             )
 
-        return await self._get_vehicle_analysis_from_car_model_tags(client, branch_id)
+        return await self._get_vehicle_analysis_from_monthly_stats(branch_id)
 
     async def get_vehicle_tags_raw(self, branch_id: int) -> dict:
-        """car_model_tags에서 차량별 태그 데이터 조회 (VehicleRankItem용)
+        """monthly_car_model_tag_stats에서 차량별 태그 데이터 조회 (VehicleRankItem용)
 
         카테고리 정보를 포함하여 차량 카테고리 태그만 필터링합니다.
 
@@ -114,54 +114,16 @@ class VehicleAnalyzer:
             dict: {car_model: {"total_positive": N, "total_negative": N, "total_count": N,
                    "tags": {tag_name: {"positive": N, "negative": N, "total": N, "category_name": str}}}}
         """
+        from repository.car_model_repository import CarModelRepository
         from repository.session import get_client
 
         client = await get_client()
+        repo = CarModelRepository(client)
         try:
-            result = await (
-                client.table("car_model_tags")
-                .select(
-                    "car_model, positive_count, negative_count, total_count, tags(name, categories(name))"
-                )
-                .eq("branch_id", branch_id)
-                .execute()
-            )
+            return await repo.get_vehicle_tags_raw(branch_id)
         except Exception as e:
             logger.warning(f"차량 태그 raw 조회 실패 (branch_id={branch_id}): {e}")
             return {}
-
-        if not result.data:
-            return {}
-
-        car_data: dict[str, dict] = {}
-        for row in result.data:
-            car_model = row.get("car_model", "기타")
-            tag_info = row.get("tags") or {}
-            tag_name = tag_info.get("name", "기타")
-            cat_info = tag_info.get("categories") or {}
-            cat_name = cat_info.get("name", "")
-            positive = row.get("positive_count", 0)
-            negative = row.get("negative_count", 0)
-            total = row.get("total_count", 0)
-
-            if car_model not in car_data:
-                car_data[car_model] = {
-                    "total_positive": 0,
-                    "total_negative": 0,
-                    "total_count": 0,
-                    "tags": {},
-                }
-            car_data[car_model]["total_positive"] += positive
-            car_data[car_model]["total_negative"] += negative
-            car_data[car_model]["total_count"] += total
-            car_data[car_model]["tags"][tag_name] = {
-                "positive": positive,
-                "negative": negative,
-                "total": total,
-                "category_name": cat_name,
-            }
-
-        return car_data
 
     def build_vehicle_rankings(
         self,
@@ -260,55 +222,23 @@ class VehicleAnalyzer:
     # 내부 메서드
     # ----------------------------------------------------------------
 
-    async def _get_vehicle_analysis_from_car_model_tags(
-        self, client, branch_id: int
+    async def _get_vehicle_analysis_from_monthly_stats(
+        self, branch_id: int,
     ) -> list:
-        """car_model_tags 테이블에서 차량별 분석 데이터 조회 후 변환"""
+        """monthly_car_model_tag_stats에서 차량별 분석 데이터 조회 후 변환"""
+        from repository.car_model_repository import CarModelRepository
+        from repository.session import get_client
+
+        client = await get_client()
+        repo = CarModelRepository(client)
         try:
-            result = await (
-                client.table("car_model_tags")
-                .select(
-                    "car_model, tag_id, positive_count, negative_count, neutral_count, total_count, tags(name)"
-                )
-                .eq("branch_id", branch_id)
-                .execute()
-            )
+            car_data = await repo.get_vehicle_analysis_data(branch_id)
         except Exception as e:
             logger.warning(f"차량별 분석 조회 실패 (branch_id={branch_id}): {e}")
             return []
 
-        if not result.data:
+        if not car_data:
             return []
-
-        car_data: dict[str, dict] = {}
-
-        for row in result.data:
-            car_model = row.get("car_model", "기타")
-            tag_info = row.get("tags") or {}
-            tag_name = tag_info.get("name", "기타")
-
-            positive = row.get("positive_count", 0)
-            negative = row.get("negative_count", 0)
-            neutral = row.get("neutral_count", 0)
-            total = row.get("total_count", 0)
-
-            if car_model not in car_data:
-                car_data[car_model] = {
-                    "total_count": 0,
-                    "total_positive": 0,
-                    "total_negative": 0,
-                    "tags": {},
-                }
-
-            car_data[car_model]["total_count"] += total
-            car_data[car_model]["total_positive"] += positive
-            car_data[car_model]["total_negative"] += negative
-            car_data[car_model]["tags"][tag_name] = {
-                "positive": positive,
-                "negative": negative,
-                "neutral": neutral,
-                "total": total,
-            }
 
         return self._convert_to_vehicle_analysis(car_data)
 
@@ -377,7 +307,7 @@ class VehicleAnalyzer:
         return self._convert_to_vehicle_analysis(car_data)
 
     async def _get_vehicle_tag_info(self, client, branch_id: int) -> dict:
-        """car_model_tags에서 차량별 대표 태그 정보 조회 (기간 무관)
+        """monthly_car_model_tag_stats에서 차량별 대표 태그 정보 조회 (기간 무관)
 
         top_praise, top_issue 계산에 필요한 태그 통계를 반환합니다.
         _convert_to_vehicle_analysis의 tags 구조와 호환되도록
@@ -386,34 +316,23 @@ class VehicleAnalyzer:
         Returns:
             dict: {car_model: {tag_name: {"positive": N, "negative": N, "total": N}}}
         """
+        from repository.car_model_repository import CarModelRepository
+
+        repo = CarModelRepository(client)
         try:
-            result = await (
-                client.table("car_model_tags")
-                .select(
-                    "car_model, positive_count, negative_count, total_count, tags(name)"
-                )
-                .eq("branch_id", branch_id)
-                .execute()
-            )
+            raw = await repo.get_vehicle_analysis_data(branch_id)
         except Exception:
             return {}
 
-        if not result.data:
-            return {}
-
+        # get_vehicle_analysis_data의 tags에서 neutral 제외하여 호환 형식으로 변환
         car_tags: dict[str, dict] = {}
-        for row in result.data:
-            car_model = row.get("car_model", "기타")
-            tag_info = row.get("tags") or {}
-            tag_name = tag_info.get("name", "기타")
-
-            if car_model not in car_tags:
-                car_tags[car_model] = {}
-
-            car_tags[car_model][tag_name] = {
-                "positive": row.get("positive_count", 0),
-                "negative": row.get("negative_count", 0),
-                "total": row.get("total_count", 0),
-            }
+        for car_model, data in raw.items():
+            car_tags[car_model] = {}
+            for tag_name, tag_stats in data.get("tags", {}).items():
+                car_tags[car_model][tag_name] = {
+                    "positive": tag_stats.get("positive", 0),
+                    "negative": tag_stats.get("negative", 0),
+                    "total": tag_stats.get("total", 0),
+                }
 
         return car_tags

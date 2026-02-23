@@ -8,13 +8,11 @@ from .monthly_stats import MonthlyStatsUpdater
 from .preprocessor import ReviewPreprocessor
 from .review_tag_mapper import ReviewTagMapper
 from .review_updater import ReviewSentimentUpdater
-from .sentiment_stats import SentimentStatsUpdater
 from .tag_aggregator import TagAggregator
 
 __all__ = [
     "ReviewPreprocessor",
     "ReviewSentimentUpdater",
-    "SentimentStatsUpdater",
     "TagAggregator",
     "CarModelTagAggregator",
     "KeywordManager",

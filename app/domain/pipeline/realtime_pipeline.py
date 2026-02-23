@@ -56,7 +56,7 @@ class RealtimePipeline(BasePipeline):
 
     - 리뷰 1개를 받아 즉시 처리
     - 내용 유무에 따라 분기 처리
-    - branch_sentiment_stats + branch_tags 증분 업데이트
+    - monthly_sentiment_stats + branch_tags 증분 업데이트
     """
 
     def __init__(self) -> None:
@@ -242,7 +242,7 @@ class RealtimePipeline(BasePipeline):
         """
         DB 저장 (트랜잭션으로 증분 업데이트)
 
-        1. branch_sentiment_stats: 전체 감정 +1
+        1. monthly_sentiment_stats: 전체 감정 +1
         2. branch_tags: 태그별 감정 +1
         """
         client = await self._get_supabase()
@@ -264,66 +264,46 @@ class RealtimePipeline(BasePipeline):
     async def _increment_sentiment_stats(
         self, client: AsyncClient, branch_id: int, sentiment: str
     ) -> None:
-        """branch_sentiment_stats 증분 업데이트"""
-        # 현재 값 조회
+        """monthly_sentiment_stats 증분 업데이트 (현재 월)"""
+        from datetime import datetime
+
+        period = datetime.now().strftime("%Y-%m")
+
         result = await (
-            client.table("branch_sentiment_stats")
+            client.table("monthly_sentiment_stats")
             .select("*")
             .eq("branch_id", branch_id)
+            .eq("period", period)
             .execute()
         )
 
+        pos_delta = 1 if sentiment == "positive" else 0
+        neg_delta = 1 if sentiment == "negative" else 0
+        neu_delta = 1 if sentiment == "neutral" else 0
+
         if result.data:
-            # UPDATE (증분)
             row = result.data[0]
-            positive = row.get("positive_count", 0)
-            negative = row.get("negative_count", 0)
-            neutral = row.get("neutral_count", 0)
-
-            if sentiment == "positive":
-                positive += 1
-            elif sentiment == "negative":
-                negative += 1
-            else:
-                neutral += 1
-
-            total = positive + negative + neutral
-            pos_ratio = round(positive / total * 100, 2) if total > 0 else 0
-            neg_ratio = round(negative / total * 100, 2) if total > 0 else 0
-
-            await (
-                client.table("branch_sentiment_stats")
-                .update({
-                    "positive_count": positive,
-                    "negative_count": negative,
-                    "neutral_count": neutral,
-                    "total_count": total,
-                    "positive_ratio": pos_ratio,
-                    "negative_ratio": neg_ratio,
-                    "updated_at": "now()",
-                })
-                .eq("branch_id", branch_id)
-                .execute()
-            )
+            new_pos = (row.get("positive_count", 0) or 0) + pos_delta
+            new_neg = (row.get("negative_count", 0) or 0) + neg_delta
+            new_neu = (row.get("neutral_count", 0) or 0) + neu_delta
         else:
-            # INSERT (신규)
-            positive = 1 if sentiment == "positive" else 0
-            negative = 1 if sentiment == "negative" else 0
-            neutral = 1 if sentiment == "neutral" else 0
+            new_pos, new_neg, new_neu = pos_delta, neg_delta, neu_delta
 
-            await (
-                client.table("branch_sentiment_stats")
-                .insert({
+        await (
+            client.table("monthly_sentiment_stats")
+            .upsert(
+                {
                     "branch_id": branch_id,
-                    "positive_count": positive,
-                    "negative_count": negative,
-                    "neutral_count": neutral,
-                    "total_count": 1,
-                    "positive_ratio": positive * 100,
-                    "negative_ratio": negative * 100,
-                })
-                .execute()
+                    "period": period,
+                    "positive_count": new_pos,
+                    "negative_count": new_neg,
+                    "neutral_count": new_neu,
+                    "review_count": new_pos + new_neg + new_neu,
+                },
+                on_conflict="branch_id,period",
             )
+            .execute()
+        )
 
     async def _get_tag_id(self, client: AsyncClient, tag_name: str) -> int | None:
         """태그 이름으로 ID 조회 (캐시 사용)"""

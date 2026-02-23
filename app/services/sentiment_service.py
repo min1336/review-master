@@ -19,9 +19,4 @@ class SentimentService:
 
     async def get_all_stats(self) -> list[dict]:
         """전체 지점 감정통계"""
-        stats_list = await self.sentiment_repo.get_all_stats()
-        return [s.model_dump() for s in stats_list]
-
-    async def upsert_stats(self, stats_list: list[dict]) -> int:
-        """감정통계 저장"""
-        return await self.sentiment_repo.upsert_stats(stats_list)
+        return await self.sentiment_repo.get_all_stats()

@@ -10,7 +10,6 @@ from schemas.dto import PipelineResultDTO, PipelineStepResultDTO
 
 from .steps.preprocessor import ReviewPreprocessor
 from .steps.review_updater import ReviewSentimentUpdater
-from .steps.sentiment_stats import SentimentStatsUpdater
 from .steps.tag_aggregator import TagAggregator
 from .steps.car_model_tags import CarModelTagAggregator
 from .steps.keyword_manager import KeywordManager
@@ -27,7 +26,6 @@ class UnifiedPipeline:
     def __init__(self) -> None:
         self.preprocessor = ReviewPreprocessor()
         self.review_updater = ReviewSentimentUpdater()
-        self.sentiment_stats = SentimentStatsUpdater()
         self.tag_aggregator = TagAggregator()
         self.car_model_tags = CarModelTagAggregator()
         self.keyword_manager = KeywordManager()
@@ -118,26 +116,7 @@ class UnifiedPipeline:
                 duration_seconds=round(time.monotonic() - t0, 3),
             ))
 
-        # Step 3: branch_sentiment_stats
-        t0 = time.monotonic()
-        try:
-            s3 = await self.sentiment_stats.update(client, processed)
-            result.add_step(PipelineStepResultDTO(
-                step_name="sentiment_stats", success=True,
-                input_count=input_count, output_count=s3,
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-            logger.info(f"Step 3 완료: {s3}개 지점 감정 통계 갱신")
-            if progress_callback:
-                await progress_callback(70, "감정 통계 완료")
-        except Exception as e:
-            logger.error(f"Step 3(sentiment_stats) 실패: {e}")
-            result.add_step(PipelineStepResultDTO(
-                step_name="sentiment_stats", success=False,
-                input_count=input_count, output_count=0,
-                error_message=str(e),
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
+        # Step 3: (제거됨 — monthly_stats Step 8에서 monthly_sentiment_stats 처리)
 
         # Step 4: tags + branch_tags
         t0 = time.monotonic()
@@ -160,22 +139,22 @@ class UnifiedPipeline:
                 duration_seconds=round(time.monotonic() - t0, 3),
             ))
 
-        # Step 5: car_model_tags
+        # Step 5: car_models_master + branch_car_models
         t0 = time.monotonic()
         try:
             s5 = await self.car_model_tags.aggregate(client, processed)
             result.add_step(PipelineStepResultDTO(
-                step_name="car_model_tags", success=True,
+                step_name="car_model_master", success=True,
                 input_count=input_count, output_count=s5 if isinstance(s5, int) else 0,
                 duration_seconds=round(time.monotonic() - t0, 3),
             ))
             logger.info(f"Step 5 완료: {s5}")
             if progress_callback:
-                await progress_callback(85, "차량 모델 태그 완료")
+                await progress_callback(85, "차량 마스터/관계 갱신 완료")
         except Exception as e:
-            logger.error(f"Step 5(car_model_tags) 실패: {e}")
+            logger.error(f"Step 5(car_model_master) 실패: {e}")
             result.add_step(PipelineStepResultDTO(
-                step_name="car_model_tags", success=False,
+                step_name="car_model_master", success=False,
                 input_count=input_count, output_count=0,
                 error_message=str(e),
                 duration_seconds=round(time.monotonic() - t0, 3),
