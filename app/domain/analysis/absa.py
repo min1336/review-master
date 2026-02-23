@@ -32,7 +32,11 @@ from .patterns import (
     POSITIVE_EXCEPTION_REGEX,
     POSITIVE_REGEX,
 )
-from .sentiment_core import check_double_negation, count_sentiment_matches
+from .sentiment_core import (
+    _is_negation_prefixed_only,
+    check_double_negation,
+    count_sentiment_matches,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +74,9 @@ class RuleBasedABSA:
             "배달 서비스가 우수함",
             ["배차", "차량", "픽업", "도착", "출발", "시간", "대기", "기다"],
         ),
-        "빨리": ("배달 서비스가 우수함", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
-        "빠르": ("배달 서비스가 우수함", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
+        "빨리": ("배달 서비스가 우수함", ["배차", "차량", "픽업", "처리", "배달", "대기", "응대"]),
+        "빠르": ("배달 서비스가 우수함", ["배차", "차량", "픽업", "처리", "배달", "대기", "응대"]),
+        "빨랐": ("배달 서비스가 우수함", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
     }
 
     # 긍정 키워드 + 없다 → 부정
@@ -89,7 +94,7 @@ class RuleBasedABSA:
         Args:
             chunker: 절 분리기 (기본값: 새로 생성)
         """
-        self._chunker = chunker or ClauseChunker()
+        self._chunker = chunker or ClauseChunker(use_punctuation=True)
 
         # Aspect 키워드 → 태그 역매핑 (patterns.py TAG_REGISTRY에서 파생)
         self._keyword_to_aspect = {}
@@ -156,6 +161,8 @@ class RuleBasedABSA:
 
         return results
 
+    # 부정 접두사 로직은 sentiment_core._is_negation_prefixed_only() 사용
+
     def _find_aspects(self, text: str) -> dict[str, list[str]]:
         """텍스트에서 Aspect 키워드 찾기"""
         found = {}  # {aspect: [keywords]}
@@ -166,6 +173,10 @@ class RuleBasedABSA:
             if keyword in text_lower:
                 # 일반 긍정어는 단독 사용 시 제외
                 if keyword in GENERAL_POSITIVE_KEYWORDS:
+                    continue
+
+                # 부정 접두사 복합어 안에서만 등장하면 제외 (불친절 → 친절 오탐 방지)
+                if _is_negation_prefixed_only(keyword, text_lower):
                     continue
 
                 if aspect not in found:
@@ -189,10 +200,10 @@ class RuleBasedABSA:
 
     # 부정어+긍정어 패턴: 긍정 표현이 부정되는 경우
     NEGATED_POSITIVE_PATTERNS = [
-        re.compile(r"친절.{0,3}(?:지\s*않|지\s*못|하지\s*않)"),
-        re.compile(r"깨끗.{0,3}(?:지\s*않|하지\s*않)"),
-        re.compile(r"좋.{0,3}(?:지\s*않|지\s*못)"),
-        re.compile(r"편.{0,3}(?:지\s*않|하지\s*않)"),
+        re.compile(r"친절.{0,6}(?:지\s*않|지\s*못|하지\s*않)"),
+        re.compile(r"깨끗.{0,6}(?:지\s*않|하지\s*않)"),
+        re.compile(r"좋.{0,6}(?:지\s*않|지\s*못)"),
+        re.compile(r"편.{0,6}(?:지\s*않|하지\s*않)"),
     ]
 
     def _determine_sentiment(self, text: str) -> tuple[str, float]:
@@ -357,7 +368,7 @@ class RuleBasedABSA:
         weak_count = sum(1 for w in weak_positive if w in text)
 
         # Negative check
-        weak_negative = ["...", ";;;", "ㅜ", "ㅠ", "근데", "다만", "불", "안"]
+        weak_negative = ["...", ";;;", "ㅜ", "ㅠ", "근데", "다만", "불"]
         neg_count = sum(1 for w in weak_negative if w in text)
 
         # Decision
@@ -437,18 +448,16 @@ class RuleBasedABSA:
 
         result = defaultdict(lambda: {"positive": [], "negative": [], "neutral": []})
 
-        # ABSA 분석 수행
-        absa_results = self.analyze(review)
-
-        # 결과 변환
-        for item in absa_results:
-            aspect = item["aspect"]
-            sentiment = item["sentiment"]
-            keywords_found = item.get("keywords", [])
-
-            for kw in keywords_found:
-                if kw not in result[aspect][sentiment]:
-                    result[aspect][sentiment].append(kw)
+        # 절별 ABSA 분석 (merge 없이 — 같은 카테고리의 긍정/부정 모두 유지)
+        clauses = self._chunker.chunk(review)
+        for clause in clauses:
+            clause_results = self._analyze_clause(clause)
+            for ao in clause_results:
+                aspect = ao.aspect
+                sentiment = ao.sentiment
+                for kw in ao.keywords:
+                    if kw not in result[aspect][sentiment]:
+                        result[aspect][sentiment].append(kw)
 
         # 빈 태그 제거
         return {

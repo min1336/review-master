@@ -35,8 +35,8 @@ class KeywordExtractor:
         """
         self.stopwords = stopwords or LexiconConfig.STOP_WORDS
         self.min_length = min_length
-        # XR(어근) 추가: 깨끗, 저렴 등
-        self.pos_tags = pos_tags or ["NNG", "NNP", "VA", "XR"]
+        # XR(어근): 깨끗, 저렴 등 / IC(감탄사): 강추, 대박 등
+        self.pos_tags = pos_tags or ["NNG", "NNP", "VA", "XR", "IC"]
 
         # Kiwi 초기화 (지연 로딩)
         self._kiwi = None
@@ -94,8 +94,9 @@ class KeywordExtractor:
                 tag = token.tag
                 word = token.form
 
-                # 지정된 품사만 추출
-                is_target_pos = tag in self.pos_tags
+                # 지정된 품사만 추출 (VA-I 등 하이픈 변형도 허용)
+                base_tag = tag.split("-")[0]
+                is_target_pos = tag in self.pos_tags or base_tag in self.pos_tags
                 is_valid = len(word) >= self.min_length and word not in self.stopwords
                 if is_target_pos and is_valid:
                     keywords.append(word)

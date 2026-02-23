@@ -59,6 +59,12 @@ class HybridClassifier:
     DEFAULT_MODEL = EMBEDDING_MODEL
     DEFAULT_THRESHOLD = SIMILARITY_THRESHOLD
 
+    # 임베딩 분류에 부적합한 범용 키워드 (문맥 없이 카테고리 결정 불가)
+    _GENERIC_KEYWORDS: set[str] = {
+        "상태", "필요", "부분", "장소", "개선", "괜찮",
+        "불편", "정도", "느낌", "전체", "전반",
+    }
+
     def __init__(
         self,
         model_name: str | None = None,
@@ -176,20 +182,24 @@ class HybridClassifier:
 
         keyword_lower = keyword.lower().strip()
 
-        # 일반 긍정어 처리: 규칙 매칭 시도 후, 1자는 기타, 2자+ 임베딩 위임
+        # 범용 키워드: 문맥 없이 카테고리 결정 불가 → 규칙 매칭만 시도
+        if keyword_lower in self._GENERIC_KEYWORDS:
+            rule_result = self._check_rule_based_mapping(keyword)
+            if rule_result:
+                return rule_result
+            return ("기타", 0.0)
+
+        # 일반 긍정어 처리: 규칙 매칭만 시도 (임베딩 오분류 방지)
         if keyword_lower in GENERAL_POSITIVE_KEYWORDS:
             rule_result = self._check_rule_based_mapping(keyword)
             if rule_result:
                 return rule_result
-            if len(keyword_lower) <= 1:
-                return ("기타", 0.0)
-            # 2자 이상은 아래 임베딩 분류로 fall-through
+            return ("기타", 0.0)
 
-        else:
-            # 규칙 기반 매핑 우선
-            rule_result = self._check_rule_based_mapping(keyword)
-            if rule_result:
-                return rule_result
+        # 규칙 기반 매핑 우선
+        rule_result = self._check_rule_based_mapping(keyword)
+        if rule_result:
+            return rule_result
 
         # 임베딩 기반 분류
         keyword_embedding = np.array(list(self._model.embed([keyword])))[0]
@@ -224,16 +234,18 @@ class HybridClassifier:
 
             kw_lower = kw.lower().strip()
 
+            # 범용 키워드: 규칙 매칭만 시도
+            if kw_lower in self._GENERIC_KEYWORDS:
+                rule_result = self._check_rule_based_mapping(kw)
+                if rule_result:
+                    results[i] = rule_result
+                continue
+
+            # 일반 긍정어: 규칙 매칭만 시도 (임베딩 오분류 방지)
             if kw_lower in GENERAL_POSITIVE_KEYWORDS:
                 rule_result = self._check_rule_based_mapping(kw)
                 if rule_result:
                     results[i] = rule_result
-                elif len(kw_lower) <= 1:
-                    results[i] = ("기타", 0.0)
-                else:
-                    # 2자 이상 일반 긍정어: 임베딩 분류로 위임
-                    embedding_indices.append(i)
-                    embedding_keywords.append(kw)
                 continue
 
             rule_result = self._check_rule_based_mapping(kw)
@@ -338,26 +350,29 @@ class HybridClassifier:
 
         result = defaultdict(lambda: {"positive": [], "negative": [], "neutral": []})
 
-        # 1. ABSA로 리뷰 전체 분석
-        absa_results = self._absa.analyze(review)
+        # 1. ABSA로 리뷰 전체 분석 (절별 감정 유지 — merge 손실 방지)
+        absa_tag_groups = self._absa.classify_review(review)
 
-        for item in absa_results:
-            aspect = item["aspect"]
-            sentiment = item["sentiment"]
-            keywords_found = item.get("keywords", [])
+        for aspect, sentiments in absa_tag_groups.items():
+            for sent_type in ("positive", "negative", "neutral"):
+                for kw in sentiments.get(sent_type, []):
+                    if kw not in result[aspect][sent_type]:
+                        result[aspect][sent_type].append(kw)
 
-            for kw in keywords_found:
-                if kw not in result[aspect][sentiment]:
-                    result[aspect][sentiment].append(kw)
+        # ABSA가 분류한 키워드 수집 (임베딩 재분류 방지)
+        absa_classified = set()
+        for sentiments in result.values():
+            for sent_type in ("positive", "negative", "neutral"):
+                absa_classified.update(sentiments[sent_type])
 
-        # 2. 키워드가 있으면 임베딩 분류기로 추가 분석
+        # 2. 키워드가 있으면 임베딩 분류기로 추가 분석 (ABSA 미분류 키워드만)
         if keywords:
             classifications = self.classify_keywords_with_context(keywords, review)
 
             for kw, (tag, _score, sentiment) in zip(
                 keywords, classifications, strict=False
             ):
-                if tag == "기타":
+                if tag == "기타" or kw in absa_classified:
                     continue
 
                 if kw not in result[tag][sentiment]:

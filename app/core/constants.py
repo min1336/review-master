@@ -8,7 +8,7 @@
 # -- 임베딩 / 분류 --
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
 SIMILARITY_THRESHOLD = 0.35
-CONTEXT_WINDOW_SIZE = 30
+CONTEXT_WINDOW_SIZE = 50
 
 # -- 리포트 임계값 --
 STRENGTH_POSITIVE_RATIO = 60     # 카테고리 긍정률 >= 60% -> 현상유지
