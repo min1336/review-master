@@ -148,7 +148,10 @@ async def get_summary_service(
 ) -> SummaryService:
     from services.summary_service import SummaryService
 
-    return SummaryService(summary_repo, branch_tag_repo, review_repo, sentiment_repo)
+    return SummaryService(
+        summary_repo, branch_tag_repo, review_repo, sentiment_repo,
+        athena_client=_get_athena_client(),
+    )
 
 
 # ============================================================
@@ -240,7 +243,7 @@ async def get_report_service(
 
     cache_service = ReportCacheService(report_repo, review_repo, branch_tag_repo)
     tag_calculator = TagStatsCalculator(branch_tag_repo)
-    ai_generator = ReportAIGenerator(summary_repo, review_repo)
+    ai_generator = ReportAIGenerator(summary_repo, review_repo, athena_client=_get_athena_client())
 
     return ReportService(
         summary_repo, review_repo, branch_tag_repo,
@@ -275,17 +278,6 @@ async def get_realtime_pipeline() -> "RealtimePipeline":
 
     return RealtimePipeline()
 
-
-async def get_monthly_scheduler_dep():
-    from infrastructure.scheduler.monthly_scheduler import get_monthly_scheduler
-
-    return get_monthly_scheduler()
-
-
-async def get_sync_scheduler_dep():
-    from infrastructure.scheduler.sync_scheduler import get_scheduler
-
-    return get_scheduler()
 
 
 # ============================================================

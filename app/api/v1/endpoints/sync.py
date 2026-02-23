@@ -7,10 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from schemas.common import api_response
 from schemas.sync import (
     MarkReadRequest,
-    UpdateScheduleTimeRequest,
 )
 
-from .deps import get_sync_job_service, get_sync_scheduler_dep, get_sync_service
+from .deps import get_sync_job_service, get_sync_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["sync"])
@@ -62,43 +61,4 @@ async def api_mark_reviews_as_read(
     marked_count = await sync_service.mark_reviews_as_read(request.review_ids)
     return api_response({
         "marked_count": marked_count,
-    })
-
-
-@router.get("/scheduler/status")
-async def api_get_scheduler_status(
-    scheduler=Depends(get_sync_scheduler_dep),
-) -> dict[str, Any]:
-    """일일 동기화 스케줄러 상태 조회"""
-    hour, minute = scheduler.get_schedule_time()
-    next_run = scheduler.get_next_run_time()
-    return api_response({
-        "is_running": scheduler.is_running,
-        "next_run_time": next_run.isoformat() if next_run is not None else None,
-        "sync_hour": hour,
-        "sync_minute": minute,
-    })
-
-
-@router.post("/scheduler/time")
-async def api_update_scheduler_time(
-    request: UpdateScheduleTimeRequest,
-    scheduler=Depends(get_sync_scheduler_dep),
-) -> dict[str, Any]:
-    """일일 동기화 스케줄러 시간 변경"""
-    success = await scheduler.update_schedule_time(request.hour, request.minute)
-
-    if not success:
-        raise HTTPException(
-            status_code=400,
-            detail="시간은 0~23시, 분은 0~59 사이여야 합니다",
-        )
-
-    hour, minute = scheduler.get_schedule_time()
-    next_run = scheduler.get_next_run_time()
-    return api_response({
-        "is_running": scheduler.is_running,
-        "next_run_time": next_run.isoformat() if next_run is not None else None,
-        "sync_hour": hour,
-        "sync_minute": minute,
     })

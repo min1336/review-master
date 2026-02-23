@@ -127,3 +127,4 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 - `python app/scripts/run_auto_mapping.py` — 키워드 자동 매핑
 
 > 상세 API 엔드포인트, DB 테이블, 대시보드 UI 패턴 → `.claude/docs/reference.md` 참조
+> DB 스키마 상세 (27개 테이블 컬럼, 관계도, 데이터 흐름) → `.claude/docs/database-schema.md` 참조

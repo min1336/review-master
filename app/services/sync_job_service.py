@@ -37,7 +37,10 @@ class SyncJobService:
     """동기화 비동기 작업 관리 (인메모리 싱글턴)"""
 
     _instance: SyncJobService | None = None
-    _active_job: SyncJobState | None = None
+    _MAX_COMPLETED_JOBS = 5
+
+    def __init__(self) -> None:
+        self._jobs: dict[str, SyncJobState] = {}
 
     @classmethod
     def get_instance(cls) -> SyncJobService:
@@ -51,12 +54,15 @@ class SyncJobService:
         이미 활성 작업이 있으면 기존 job_id를 반환한다.
         """
         # 이미 실행 중인 작업이 있는 경우
-        if self._active_job and self._active_job.status in ("pending", "processing"):
-            return self._to_response(self._active_job)
+        for job in self._jobs.values():
+            if job.status in ("pending", "processing"):
+                return self._to_response(job)
+
+        self._prune_old_jobs()
 
         job_id = uuid4().hex[:12]
         state = SyncJobState(job_id=job_id)
-        self._active_job = state
+        self._jobs[job_id] = state
 
         task = asyncio.create_task(self._run_job(state))
         state.task = task
@@ -65,23 +71,37 @@ class SyncJobService:
 
     def get_job_status(self, job_id: str) -> SyncJobStatusResponse | None:
         """작업 상태 조회 (DB 접근 없음)"""
-        if not self._active_job or self._active_job.job_id != job_id:
+        state = self._jobs.get(job_id)
+        if state is None:
             return None
-        return self._to_response(self._active_job)
+        return self._to_response(state)
 
     async def cancel_job(self, job_id: str) -> bool:
         """작업 취소"""
-        if not self._active_job or self._active_job.job_id != job_id:
+        state = self._jobs.get(job_id)
+        if state is None:
             return False
 
-        if self._active_job.task and not self._active_job.task.done():
-            self._active_job.task.cancel()
-            self._active_job.status = "failed"
-            self._active_job.error = "사용자에 의해 취소됨"
+        if state.task and not state.task.done():
+            state.task.cancel()
+            state.status = "failed"
+            state.error = "사용자에 의해 취소됨"
             logger.info(f"동기화 작업 취소: {job_id}")
             return True
 
         return False
+
+    def _prune_old_jobs(self) -> None:
+        """완료/실패 작업이 _MAX_COMPLETED_JOBS를 초과하면 오래된 것부터 제거"""
+        done = [
+            s for s in self._jobs.values()
+            if s.status in ("completed", "failed")
+        ]
+        if len(done) <= self._MAX_COMPLETED_JOBS:
+            return
+        done.sort(key=lambda s: s.created_at)
+        for s in done[: len(done) - self._MAX_COMPLETED_JOBS]:
+            self._jobs.pop(s.job_id, None)
 
     async def _run_job(self, state: SyncJobState) -> None:
         """백그라운드에서 동기화 실행"""

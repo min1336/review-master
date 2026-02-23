@@ -4,7 +4,7 @@ from fastapi import APIRouter
 
 from .endpoints import (
     analysis,
-    monthly_scheduler,
+    n8n,
     realtime,
     report,
     report_generate,
@@ -36,5 +36,5 @@ api_router.include_router(report_generate.router, prefix="/reports")
 api_router.include_router(sync.router, prefix="/sync")
 api_router.include_router(realtime.router, prefix="/realtime")
 
-# --- Scheduler ---
-api_router.include_router(monthly_scheduler.router, prefix="/scheduler/monthly")
+# --- n8n Webhooks ---
+api_router.include_router(n8n.router, prefix="/n8n")

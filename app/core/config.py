@@ -69,7 +69,6 @@ class Settings(BaseSettings):
     athena_output_bucket: str = ""
 
     # 스케줄러 설정
-    scheduler_enabled: bool = True  # 스케줄러 활성화 여부
     sync_hour: int = 6  # 동기화 실행 시간 (시)
     sync_minute: int = 0  # 동기화 실행 시간 (분)
 
