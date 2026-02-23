@@ -25,6 +25,7 @@ ABSA + FastEmbed 임베딩을 결합하여 정확도 향상:
 from __future__ import annotations
 
 import logging
+import warnings
 from collections import defaultdict
 
 import numpy as np
@@ -103,6 +104,11 @@ class HybridClassifier:
 
             from fastembed import TextEmbedding
 
+            warnings.filterwarnings(
+                "ignore",
+                message=".*now uses mean pooling.*",
+                category=UserWarning,
+            )
             self._model = TextEmbedding(model_name=self.model_name)
 
             self._tag_manager = TagEmbeddingManager(model=self._model)

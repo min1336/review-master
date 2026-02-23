@@ -40,7 +40,7 @@ def _get_classifier():
         with _init_lock:
             if _classifier_instance is None:
                 from domain.analysis import HybridClassifier
-                _classifier_instance = HybridClassifier()
+                _classifier_instance = HybridClassifier(lazy_load=False)
     return _classifier_instance
 
 

@@ -6,7 +6,7 @@
 """
 
 # -- 임베딩 / 분류 --
-EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
+EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
 SIMILARITY_THRESHOLD = 0.35
 CONTEXT_WINDOW_SIZE = 50
 
