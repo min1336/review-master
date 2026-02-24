@@ -30,6 +30,7 @@ dependencies = [
     "boto3>=1.34.0",
     # Scheduler
     "apscheduler>=3.10.0",
+    "croniter>=1.3.0",
     # PDF Generation
     "fpdf2>=2.8.0",
 ]

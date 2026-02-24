@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     # n8n 웹훅 설정
     # 로컬(기본): /webhook-test (동기 응답), Docker/실서버: N8N_TEST_MODE=false → /webhook
     n8n_test_mode: bool = True
+    n8n_api_key: SecretStr = SecretStr("")
 
     # 스케줄러 설정
     sync_hour: int = 6  # 동기화 실행 시간 (시)

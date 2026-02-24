@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>n8n 스케줄러 관리</title>
+    <link rel="stylesheet" as="style" crossorigin
+        href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <link rel="stylesheet" href="{{ base_path }}/static/css/shared-theme.css">
+
+    <style>
+        .container {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 24px 16px;
+        }
+
+        /* Workflow Card */
+        .wf-card {
+            background: white;
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 16px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--grey-7);
+        }
+
+        .wf-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .wf-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--grey-1);
+        }
+
+        .wf-desc {
+            font-size: 13px;
+            color: var(--grey-5);
+            margin-bottom: 16px;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-badge.active { background: var(--success-light); color: #065f46; }
+        .status-badge.inactive { background: var(--error-light); color: #991b1b; }
+        .status-badge.unknown { background: var(--grey-8); color: var(--grey-5); }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-badge.active .status-dot { background: var(--success); }
+        .status-badge.inactive .status-dot { background: var(--error); }
+        .status-badge.unknown .status-dot { background: var(--grey-5); }
+
+        /* Schedule Info */
+        .schedule-info {
+            background: var(--grey-9);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .schedule-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--grey-5);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+
+        .schedule-value { font-size: 15px; font-weight: 600; color: var(--grey-1); }
+
+        .schedule-cron {
+            font-size: 13px;
+            color: var(--grey-3);
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            margin-top: 2px;
+        }
+
+        .next-runs { margin-top: 8px; font-size: 12px; color: var(--grey-5); }
+        .next-runs li { margin-left: 16px; padding: 2px 0; }
+
+        /* Cron Editor - Visual Time Picker */
+        .cron-editor { margin-bottom: 16px; }
+
+        .cron-editor-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--grey-2);
+            margin-bottom: 10px;
+        }
+
+        /* Frequency tabs */
+        .freq-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 14px;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            border: 1px solid var(--grey-7);
+        }
+
+        .freq-tab {
+            flex: 1;
+            padding: 8px 0;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 500;
+            border: none;
+            background: white;
+            color: var(--grey-3);
+            cursor: pointer;
+            transition: all 0.2s;
+            border-right: 1px solid var(--grey-7);
+        }
+
+        .freq-tab:last-child { border-right: none; }
+        .freq-tab.selected { background: var(--primary); color: white; }
+        .freq-tab:hover:not(.selected) { background: var(--grey-9); }
+
+        /* Day-of-week buttons */
+        .dow-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 14px;
+        }
+
+        .dow-btn {
+            width: 40px;
+            height: 36px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--grey-7);
+            background: white;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--grey-3);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .dow-btn.selected {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .dow-btn:hover:not(.selected) { background: var(--grey-9); border-color: var(--grey-5); }
+
+        /* Day-of-month selector */
+        .dom-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .dom-label {
+            font-size: 13px;
+            color: var(--grey-3);
+            white-space: nowrap;
+        }
+
+        .dom-select {
+            padding: 6px 10px;
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+            outline: none;
+            min-width: 70px;
+        }
+
+        .dom-select:focus { border-color: var(--primary); }
+
+        /* Time picker row */
+        .time-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .time-label {
+            font-size: 13px;
+            color: var(--grey-3);
+            white-space: nowrap;
+        }
+
+        .time-select {
+            padding: 8px 10px;
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            font-size: 16px;
+            font-weight: 600;
+            background: white;
+            cursor: pointer;
+            outline: none;
+            min-width: 70px;
+            text-align: center;
+        }
+
+        .time-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(13, 111, 252, 0.1); }
+
+        .time-colon {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--grey-3);
+        }
+
+        /* Quick presets */
+        .quick-presets {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+
+        .preset-chip {
+            padding: 5px 12px;
+            border-radius: 16px;
+            border: 1px solid var(--grey-7);
+            background: white;
+            font-size: 12px;
+            color: var(--grey-3);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .preset-chip:hover { border-color: var(--primary); color: var(--primary); background: rgba(13, 111, 252, 0.05); }
+        .preset-chip.active { border-color: var(--primary); color: var(--primary); background: rgba(13, 111, 252, 0.08); font-weight: 600; }
+
+        /* Generated cron display */
+        .cron-result {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: var(--grey-9);
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            color: var(--grey-5);
+        }
+
+        .cron-result code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 13px;
+            color: var(--grey-2);
+            font-weight: 600;
+        }
+
+        .cron-validation { font-size: 12px; margin-top: 6px; min-height: 18px; }
+        .cron-validation.valid { color: var(--success); }
+        .cron-validation.invalid { color: var(--error); }
+
+        /* Actions */
+        .wf-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding-top: 16px;
+            border-top: 1px solid var(--grey-7);
+        }
+
+        .btn-schedule {
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-schedule:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-save { background: var(--primary); color: white; }
+        .btn-save:hover:not(:disabled) { background: var(--primary-hover); }
+        .btn-toggle-active { background: var(--success); color: white; }
+        .btn-toggle-active:hover:not(:disabled) { background: #059669; }
+        .btn-toggle-inactive { background: var(--error); color: white; }
+        .btn-toggle-inactive:hover:not(:disabled) { background: #dc2626; }
+        .btn-trigger { background: var(--warning); color: #1a1a1a; }
+        .btn-trigger:hover:not(:disabled) { background: #d97706; }
+        .spacer { flex: 1; }
+
+        /* Loading */
+        .loading-container { text-align: center; padding: 60px 0; color: var(--grey-5); }
+
+        .spinner {
+            display: inline-block;
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--grey-7);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .error-banner {
+            background: var(--error-light);
+            color: #991b1b;
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            margin-bottom: 16px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <h1>n8n 스케줄러 관리</h1>
+        <div class="header-actions">
+            <button class="btn btn-outline" id="btn-back"
+                style="border-color: rgba(255,255,255,0.5); color: white;">대시보드</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div id="content">
+            <div class="loading-container">
+                <div class="spinner"></div>
+                <p style="margin-top: 12px;">워크플로 정보를 불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shared Utils (escapeHtml, escapeAttr, debounce, showToast, apiRequest) -->
+    <script src="{{ base_path }}/static/js/shared-utils.js"></script>
+
+    <script>
+        const API_PREFIX = '{{ api_prefix }}';
+        const BASE_PATH = API_PREFIX.replace('/api', '');
+
+        const QUICK_PRESETS = [
+            { label: '매일 6시', cron: '0 6 * * *' },
+            { label: '매일 7시', cron: '0 7 * * *' },
+            { label: '매일 9시', cron: '0 9 * * *' },
+            { label: '매주 월 9시', cron: '0 9 * * 1' },
+            { label: '매월 1일 7시', cron: '0 7 1 * *' },
+        ];
+
+        const DOW_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+        const FREQ_DAILY = 'daily', FREQ_WEEKLY = 'weekly', FREQ_MONTHLY = 'monthly';
+
+        // ── 페이지 초기화 ────────────────────────────────
+
+        document.getElementById('btn-back').addEventListener('click', function () {
+            window.location.href = BASE_PATH + '/';
+        });
+
+        loadWorkflows();
+
+        // ── DOM 빌더 헬퍼 ────────────────────────────────
+
+        function el(tag, attrs, children) {
+            var node = document.createElement(tag);
+            if (attrs) {
+                Object.keys(attrs).forEach(function (k) {
+                    if (k === 'className') node.className = attrs[k];
+                    else if (k === 'textContent') node.textContent = attrs[k];
+                    else if (k === 'style' && typeof attrs[k] === 'object') {
+                        Object.assign(node.style, attrs[k]);
+                    } else node.setAttribute(k, attrs[k]);
+                });
+            }
+            if (children) {
+                children.forEach(function (child) {
+                    if (typeof child === 'string') node.appendChild(document.createTextNode(child));
+                    else if (child) node.appendChild(child);
+                });
+            }
+            return node;
+        }
+
+        // ── 워크플로 목록 로드 ──────────────────────────────
+
+        async function loadWorkflows() {
+            try {
+                var result = await apiRequest(API_PREFIX + '/n8n/scheduler/workflows');
+                renderWorkflows(result.data);
+            } catch (e) {
+                var container = document.getElementById('content');
+                container.textContent = '';
+                var banner = el('div', { className: 'error-banner' },
+                    ['워크플로 정보를 불러올 수 없습니다: ' + (e.message || '알 수 없는 오류')]);
+                container.appendChild(banner);
+            }
+        }
+
+        // ── 렌더링 (DOM 메서드 사용) ──────────────────────
+
+        function renderWorkflows(workflows) {
+            var container = document.getElementById('content');
+            container.textContent = '';
+
+            if (!workflows || workflows.length === 0) {
+                container.appendChild(el('div', { className: 'error-banner' }, ['관리 대상 워크플로가 없습니다.']));
+                return;
+            }
+
+            workflows.forEach(function (wf) {
+                container.appendChild(buildCard(wf));
+                bindCardEvents(wf);
+            });
+        }
+
+        function buildCard(wf) {
+            var statusClass = wf.active === true ? 'active' : wf.active === false ? 'inactive' : 'unknown';
+            var statusText = wf.active === true ? '활성' : wf.active === false ? '비활성' : '알 수 없음';
+
+            // Badge
+            var badge = el('span', { className: 'status-badge ' + statusClass }, [
+                el('span', { className: 'status-dot' }),
+                statusText
+            ]);
+
+            // Header
+            var header = el('div', { className: 'wf-card-header' }, [
+                el('span', { className: 'wf-name', textContent: wf.name }),
+                badge
+            ]);
+
+            // Desc
+            var desc = el('div', { className: 'wf-desc', textContent: wf.description || '' });
+
+            // Schedule Info
+            var scheduleInfo = el('div', { className: 'schedule-info' }, [
+                el('div', { className: 'schedule-label', textContent: '현재 스케줄' }),
+                el('div', { className: 'schedule-value', textContent: wf.cron_description || '스케줄 없음' }),
+                el('div', { className: 'schedule-cron', textContent: wf.cron_expression || '-' })
+            ]);
+
+            if (wf.next_runs && wf.next_runs.length > 0) {
+                var ul = el('ul', { className: 'next-runs' });
+                wf.next_runs.forEach(function (r) {
+                    ul.appendChild(el('li', { textContent: r }));
+                });
+                scheduleInfo.appendChild(ul);
+            }
+
+            // Visual Cron Editor
+            var editor = buildCronEditor(wf);
+
+            // Actions
+            var toggleBtnClass = wf.active ? 'btn-toggle-inactive' : 'btn-toggle-active';
+            var toggleBtnText = wf.active ? '비활성화' : '활성화';
+
+            var btnSave = el('button', { className: 'btn-schedule btn-save', id: 'btn-save-' + wf.id, textContent: '스케줄 저장' });
+            var btnToggle = el('button', { className: 'btn-schedule ' + toggleBtnClass, id: 'btn-toggle-' + wf.id, textContent: toggleBtnText });
+            btnToggle.dataset.active = String(wf.active);
+            var btnTrigger = el('button', { className: 'btn-schedule btn-trigger', id: 'btn-trigger-' + wf.id, textContent: '지금 실행' });
+
+            var actions = el('div', { className: 'wf-actions' }, [
+                btnSave, btnToggle, el('span', { className: 'spacer' }), btnTrigger
+            ]);
+
+            return el('div', { className: 'wf-card', id: 'card-' + wf.id }, [
+                header, desc, scheduleInfo, editor, actions
+            ]);
+        }
+
+        // ── 시각적 크론 에디터 빌더 ────────────────────────
+
+        function parseCronToUI(expr) {
+            var parts = (expr || '').trim().split(/\s+/);
+            if (parts.length !== 5) return { freq: FREQ_DAILY, minute: 0, hour: 6, dow: 1, dom: 1 };
+            var minute = parseInt(parts[0]) || 0;
+            var hour = parseInt(parts[1]) || 0;
+            var dom = parts[2], dow = parts[4];
+            if (dow !== '*') return { freq: FREQ_WEEKLY, minute: minute, hour: hour, dow: parseInt(dow) || 1, dom: 1 };
+            if (dom !== '*') return { freq: FREQ_MONTHLY, minute: minute, hour: hour, dow: 1, dom: parseInt(dom) || 1 };
+            return { freq: FREQ_DAILY, minute: minute, hour: hour, dow: 1, dom: 1 };
+        }
+
+        function uiToCron(state) {
+            var m = String(state.minute), h = String(state.hour);
+            if (state.freq === FREQ_WEEKLY) return m + ' ' + h + ' * * ' + state.dow;
+            if (state.freq === FREQ_MONTHLY) return m + ' ' + h + ' ' + state.dom + ' * *';
+            return m + ' ' + h + ' * * *';
+        }
+
+        // 각 카드의 상태를 저장
+        var editorStates = {};
+
+        function buildCronEditor(wf) {
+            var state = parseCronToUI(wf.cron_expression);
+            editorStates[wf.id] = state;
+
+            var wrap = el('div', { className: 'cron-editor', id: 'editor-' + wf.id });
+
+            // Title
+            wrap.appendChild(el('div', { className: 'cron-editor-title', textContent: '스케줄 변경' }));
+
+            // Quick Presets
+            var presets = el('div', { className: 'quick-presets', id: 'presets-' + wf.id });
+            QUICK_PRESETS.forEach(function (p) {
+                var chip = el('button', { className: 'preset-chip', textContent: p.label });
+                chip.dataset.cron = p.cron;
+                if (p.cron === wf.cron_expression) chip.classList.add('active');
+                presets.appendChild(chip);
+            });
+            wrap.appendChild(presets);
+
+            // Frequency Tabs
+            var tabs = el('div', { className: 'freq-tabs', id: 'freq-tabs-' + wf.id });
+            [{ key: FREQ_DAILY, label: '매일' }, { key: FREQ_WEEKLY, label: '매주' }, { key: FREQ_MONTHLY, label: '매월' }]
+                .forEach(function (f) {
+                    var tab = el('button', { className: 'freq-tab' + (state.freq === f.key ? ' selected' : ''), textContent: f.label });
+                    tab.dataset.freq = f.key;
+                    tabs.appendChild(tab);
+                });
+            wrap.appendChild(tabs);
+
+            // Day-of-week row (hidden unless weekly)
+            var dowRow = el('div', { className: 'dow-row', id: 'dow-row-' + wf.id });
+            if (state.freq !== FREQ_WEEKLY) dowRow.style.display = 'none';
+            DOW_LABELS.forEach(function (label, i) {
+                var btn = el('button', { className: 'dow-btn' + (state.dow === i ? ' selected' : ''), textContent: label });
+                btn.dataset.dow = String(i);
+                dowRow.appendChild(btn);
+            });
+            wrap.appendChild(dowRow);
+
+            // Day-of-month row (hidden unless monthly)
+            var domSelect = el('select', { className: 'dom-select', id: 'dom-select-' + wf.id });
+            for (var d = 1; d <= 31; d++) {
+                var opt = el('option', { value: String(d), textContent: d + '일' });
+                if (d === state.dom) opt.selected = true;
+                domSelect.appendChild(opt);
+            }
+            var domRow = el('div', { className: 'dom-row', id: 'dom-row-' + wf.id }, [
+                el('span', { className: 'dom-label', textContent: '매월' }),
+                domSelect,
+                el('span', { className: 'dom-label', textContent: '에 실행' })
+            ]);
+            if (state.freq !== FREQ_MONTHLY) domRow.style.display = 'none';
+            wrap.appendChild(domRow);
+
+            // Time picker
+            var hourSel = el('select', { className: 'time-select', id: 'hour-sel-' + wf.id });
+            for (var h = 0; h < 24; h++) {
+                var hOpt = el('option', { value: String(h), textContent: String(h).padStart(2, '0') });
+                if (h === state.hour) hOpt.selected = true;
+                hourSel.appendChild(hOpt);
+            }
+            var minSel = el('select', { className: 'time-select', id: 'min-sel-' + wf.id });
+            var minOptions = [0, 5, 10, 15, 20, 30, 45];
+            if (minOptions.indexOf(state.minute) === -1) minOptions.push(state.minute);
+            minOptions.sort(function (a, b) { return a - b; });
+            minOptions.forEach(function (m) {
+                var mOpt = el('option', { value: String(m), textContent: String(m).padStart(2, '0') });
+                if (m === state.minute) mOpt.selected = true;
+                minSel.appendChild(mOpt);
+            });
+            var timeRow = el('div', { className: 'time-row' }, [
+                el('span', { className: 'time-label', textContent: '실행 시각' }),
+                hourSel,
+                el('span', { className: 'time-colon', textContent: ':' }),
+                minSel
+            ]);
+            wrap.appendChild(timeRow);
+
+            // Cron result display
+            var cronCode = el('code', { id: 'cron-display-' + wf.id, textContent: uiToCron(state) });
+            wrap.appendChild(el('div', { className: 'cron-result' }, [
+                el('span', { textContent: '크론 표현식:' }),
+                cronCode
+            ]));
+
+            // Validation
+            wrap.appendChild(el('div', { className: 'cron-validation', id: 'cron-validation-' + wf.id }));
+
+            return wrap;
+        }
+
+        function refreshCronDisplay(wfId) {
+            var state = editorStates[wfId];
+            var expr = uiToCron(state);
+            var display = document.getElementById('cron-display-' + wfId);
+            if (display) display.textContent = expr;
+
+            // Highlight matching preset
+            var presets = document.querySelectorAll('#presets-' + wfId + ' .preset-chip');
+            presets.forEach(function (chip) {
+                chip.classList.toggle('active', chip.dataset.cron === expr);
+            });
+
+            validateCron(wfId, expr);
+        }
+
+        // ── 이벤트 바인딩 ────────────────────────────────
+
+        function bindCardEvents(wf) {
+            var btnSave = document.getElementById('btn-save-' + wf.id);
+            var btnToggle = document.getElementById('btn-toggle-' + wf.id);
+            var btnTrigger = document.getElementById('btn-trigger-' + wf.id);
+
+            // Quick presets
+            document.querySelectorAll('#presets-' + wf.id + ' .preset-chip').forEach(function (chip) {
+                chip.addEventListener('click', function () {
+                    var parsed = parseCronToUI(chip.dataset.cron);
+                    editorStates[wf.id] = parsed;
+                    syncUIFromState(wf.id);
+                    refreshCronDisplay(wf.id);
+                });
+            });
+
+            // Frequency tabs
+            document.querySelectorAll('#freq-tabs-' + wf.id + ' .freq-tab').forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    document.querySelectorAll('#freq-tabs-' + wf.id + ' .freq-tab').forEach(function (t) { t.classList.remove('selected'); });
+                    tab.classList.add('selected');
+                    editorStates[wf.id].freq = tab.dataset.freq;
+
+                    document.getElementById('dow-row-' + wf.id).style.display = tab.dataset.freq === FREQ_WEEKLY ? 'flex' : 'none';
+                    document.getElementById('dom-row-' + wf.id).style.display = tab.dataset.freq === FREQ_MONTHLY ? 'flex' : 'none';
+                    refreshCronDisplay(wf.id);
+                });
+            });
+
+            // Day-of-week buttons
+            document.querySelectorAll('#dow-row-' + wf.id + ' .dow-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    document.querySelectorAll('#dow-row-' + wf.id + ' .dow-btn').forEach(function (b) { b.classList.remove('selected'); });
+                    btn.classList.add('selected');
+                    editorStates[wf.id].dow = parseInt(btn.dataset.dow);
+                    refreshCronDisplay(wf.id);
+                });
+            });
+
+            // Day-of-month
+            var domSelect = document.getElementById('dom-select-' + wf.id);
+            if (domSelect) {
+                domSelect.addEventListener('change', function () {
+                    editorStates[wf.id].dom = parseInt(domSelect.value);
+                    refreshCronDisplay(wf.id);
+                });
+            }
+
+            // Hour & Minute
+            var hourSel = document.getElementById('hour-sel-' + wf.id);
+            var minSel = document.getElementById('min-sel-' + wf.id);
+            hourSel.addEventListener('change', function () {
+                editorStates[wf.id].hour = parseInt(hourSel.value);
+                refreshCronDisplay(wf.id);
+            });
+            minSel.addEventListener('change', function () {
+                editorStates[wf.id].minute = parseInt(minSel.value);
+                refreshCronDisplay(wf.id);
+            });
+
+            btnSave.addEventListener('click', function () { updateSchedule(wf.id); });
+            btnToggle.addEventListener('click', function () { toggleWorkflow(wf.id); });
+            btnTrigger.addEventListener('click', function () { triggerWorkflow(wf.id); });
+        }
+
+        function syncUIFromState(wfId) {
+            var state = editorStates[wfId];
+
+            // Freq tabs
+            document.querySelectorAll('#freq-tabs-' + wfId + ' .freq-tab').forEach(function (t) {
+                t.classList.toggle('selected', t.dataset.freq === state.freq);
+            });
+            document.getElementById('dow-row-' + wfId).style.display = state.freq === FREQ_WEEKLY ? 'flex' : 'none';
+            document.getElementById('dom-row-' + wfId).style.display = state.freq === FREQ_MONTHLY ? 'flex' : 'none';
+
+            // DOW
+            document.querySelectorAll('#dow-row-' + wfId + ' .dow-btn').forEach(function (b) {
+                b.classList.toggle('selected', parseInt(b.dataset.dow) === state.dow);
+            });
+
+            // DOM
+            var domSel = document.getElementById('dom-select-' + wfId);
+            if (domSel) domSel.value = String(state.dom);
+
+            // Time
+            document.getElementById('hour-sel-' + wfId).value = String(state.hour);
+            document.getElementById('min-sel-' + wfId).value = String(state.minute);
+        }
+
+        // ── API 호출 함수들 ──────────────────────────────
+
+        async function validateCron(wfId, expression) {
+            var valEl = document.getElementById('cron-validation-' + wfId);
+            if (!valEl) return;
+
+            if (!expression || !expression.trim()) {
+                valEl.textContent = '';
+                valEl.className = 'cron-validation';
+                return;
+            }
+
+            try {
+                var result = await apiRequest(API_PREFIX + '/n8n/scheduler/cron/validate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ expression: expression.trim() }),
+                });
+                var d = result.data;
+                if (d.valid) {
+                    valEl.textContent = d.description + ' — 다음 실행: ' + (d.next_runs[0] || '');
+                    valEl.className = 'cron-validation valid';
+                } else {
+                    valEl.textContent = d.error;
+                    valEl.className = 'cron-validation invalid';
+                }
+            } catch (e) {
+                valEl.textContent = '검증 실패';
+                valEl.className = 'cron-validation invalid';
+            }
+        }
+
+        async function updateSchedule(wfId) {
+            var btn = document.getElementById('btn-save-' + wfId);
+            var expr = uiToCron(editorStates[wfId]);
+
+            btn.disabled = true;
+            btn.textContent = '저장 중...';
+
+            try {
+                var result = await apiRequest(API_PREFIX + '/n8n/scheduler/schedule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ workflow_id: wfId, cron_expression: expr }),
+                });
+                showToast(result.data.message, 'success');
+                await loadWorkflows();
+            } catch (e) {
+                showToast('스케줄 변경 실패: ' + (e.message || ''), 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '스케줄 저장';
+            }
+        }
+
+        async function toggleWorkflow(wfId) {
+            var btn = document.getElementById('btn-toggle-' + wfId);
+            var currentlyActive = btn.dataset.active === 'true';
+            var newActive = !currentlyActive;
+
+            var action = newActive ? '활성화' : '비활성화';
+            if (!confirm('이 워크플로를 ' + action + '하시겠습니까?')) return;
+
+            btn.disabled = true;
+
+            try {
+                var result = await apiRequest(API_PREFIX + '/n8n/scheduler/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ workflow_id: wfId, active: newActive }),
+                });
+                showToast(result.data.message, 'success');
+                await loadWorkflows();
+            } catch (e) {
+                showToast('상태 변경 실패: ' + (e.message || ''), 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function triggerWorkflow(wfId) {
+            var btn = document.getElementById('btn-trigger-' + wfId);
+
+            if (!confirm('이 워크플로를 지금 수동 실행하시겠습니까?')) return;
+
+            btn.disabled = true;
+            var originalText = btn.textContent;
+            btn.textContent = '실행 중...';
+
+            try {
+                var result = await apiRequest(API_PREFIX + '/n8n/scheduler/trigger', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ workflow_id: wfId }),
+                });
+                showToast(result.data.message, 'success');
+            } catch (e) {
+                showToast('실행 실패: ' + (e.message || ''), 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+    </script>
+</body>
+
+</html>

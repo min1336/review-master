@@ -9,11 +9,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from core.config import get_settings
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-
-from core.config import get_settings
 
 router = APIRouter(tags=["pages"])
 settings = get_settings()
@@ -57,5 +56,15 @@ async def analysis(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="analysis.html",
+        context=_page_context(),
+    )
+
+
+@router.get("/scheduler", response_class=HTMLResponse)
+async def scheduler(request: Request):
+    """n8n 스케줄러 관리 페이지"""
+    return templates.TemplateResponse(
+        request=request,
+        name="scheduler.html",
         context=_page_context(),
     )
