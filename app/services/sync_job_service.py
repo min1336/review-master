@@ -133,7 +133,12 @@ class SyncJobService:
             except Exception as e:
                 logger.debug(f"Athena 클라이언트 초기화 스킵: {e}")
 
-            sync_service = SyncService(review_repo, athena_client)
+            from repository.new_review_repository import NewReviewRepository
+
+            new_review_repo = NewReviewRepository(client)
+            sync_service = SyncService(
+                review_repo, athena_client, new_review_repo=new_review_repo
+            )
 
             result = await sync_service.sync_reviews(progress_callback=progress_callback)
 

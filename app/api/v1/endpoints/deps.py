@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from domain.pipeline import RealtimePipeline
     from repository.affiliate_repository import AffiliateRepository
     from repository.branch_tag_repository import BranchTagRepository
+    from repository.new_review_repository import NewReviewRepository
     from repository.report_job_repository import ReportJobRepository
     from repository.report_repository import ReportRepository
     from repository.review_repository import BranchReviewRepository
@@ -205,21 +206,34 @@ def _get_athena_client():
     return None
 
 
+async def get_new_review_repo(
+    client: AsyncClient = Depends(get_db_client),
+) -> NewReviewRepository:
+    from repository.new_review_repository import NewReviewRepository
+
+    return NewReviewRepository(client)
+
+
 async def get_analysis_service(
     review_repo: BranchReviewRepository = Depends(get_review_repo),
     summary_repo: SummaryRepository = Depends(get_summary_repo),
+    new_review_repo: NewReviewRepository = Depends(get_new_review_repo),
 ) -> AnalysisService:
     from services.analysis_service import AnalysisService
 
-    return AnalysisService(review_repo, summary_repo, _get_athena_client())
+    return AnalysisService(
+        review_repo, summary_repo, _get_athena_client(),
+        new_review_repo=new_review_repo,
+    )
 
 
 async def get_sync_service(
     review_repo: BranchReviewRepository = Depends(get_review_repo),
+    new_review_repo: NewReviewRepository = Depends(get_new_review_repo),
 ) -> SyncService:
     from services.sync_service import SyncService
 
-    return SyncService(review_repo, _get_athena_client())
+    return SyncService(review_repo, _get_athena_client(), new_review_repo=new_review_repo)
 
 
 # ============================================================

@@ -10,6 +10,7 @@ from core.timezone import utc_now
 
 from domain.pipeline.unified_pipeline import UnifiedPipeline
 from infrastructure.athena import AthenaClient
+from repository.new_review_repository import NewReviewRepository
 from repository.review_repository import BranchReviewRepository
 from repository.sync_metadata_repository import SyncMetadataRepository
 from repository.session import get_client
@@ -28,10 +29,12 @@ class SyncService:
         review_repo: BranchReviewRepository,
         athena_client: AthenaClient | None = None,
         pipeline: UnifiedPipeline | None = None,
+        new_review_repo: NewReviewRepository | None = None,
     ) -> None:
         self._review_repo = review_repo
         self._athena_client = athena_client
         self._pipeline = pipeline or UnifiedPipeline()
+        self._new_review_repo = new_review_repo
 
     async def sync_reviews(
         self,
@@ -106,6 +109,11 @@ class SyncService:
             ]
             saved_count = await self._review_repo.upsert_batch(save_data)
             logger.info(f"branch_reviews 저장 완료: {saved_count}개 (is_new=true)")
+
+            # 4-1. new_reviews에 content 포함 임시 저장
+            if self._new_review_repo:
+                new_saved = await self._new_review_repo.upsert_batch(reviews_to_process)
+                logger.info(f"new_reviews 저장 완료: {new_saved}개 (content 포함)")
 
             if progress_callback:
                 await progress_callback(35, f"{saved_count}건 저장 완료")

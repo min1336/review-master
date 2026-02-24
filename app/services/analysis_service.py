@@ -21,6 +21,7 @@ from schemas.dto import (
 
 if TYPE_CHECKING:
     from infrastructure.athena import AthenaClient
+    from repository.new_review_repository import NewReviewRepository
     from repository.review_repository import BranchReviewRepository
     from repository.summary_repository import SummaryRepository
 
@@ -69,10 +70,12 @@ class AnalysisService:
         review_repo: BranchReviewRepository,
         summary_repo: SummaryRepository,
         athena_client: AthenaClient | None = None,
+        new_review_repo: NewReviewRepository | None = None,
     ):
         self.review_repo = review_repo
         self.summary_repo = summary_repo
         self.athena_client = athena_client
+        self.new_review_repo = new_review_repo
 
     async def get_filter_options(self) -> FilterOptionsDTO:
         """
@@ -188,6 +191,37 @@ class AnalysisService:
             # 결합 결과가 빈 리스트면 빈 결과 반환
             if effective_branch_ids is not None and len(effective_branch_ids) == 0:
                 return AnalysisReviewListDTO(reviews=[], total=0)
+
+            # 신규 리뷰 분기: new_reviews 테이블에서 content 포함 조회
+            if is_new is True and self.new_review_repo:
+                result = await self.new_review_repo.search_with_filters(
+                    branch_ids=effective_branch_ids,
+                    date_from=date_from,
+                    date_to=date_to,
+                    sort_by=sort_by,
+                    limit=limit,
+                    offset=offset,
+                )
+
+                if result.total > 0:
+                    # sentiment 보강: branch_reviews에서 병합
+                    review_ids = [
+                        int(r["review_id"]) for r in result.reviews if r.get("review_id")
+                    ]
+                    sentiment_map = {}
+                    if review_ids:
+                        sentiment_map = await self.review_repo.get_sentiments_by_review_ids(
+                            review_ids
+                        )
+                    for row in result.reviews:
+                        rid = int(row["review_id"]) if row.get("review_id") else None
+                        if rid and rid in sentiment_map:
+                            row["sentiment"] = sentiment_map[rid]
+
+                    reviews = [AnalysisReviewDTO.from_db_row(row) for row in result.reviews]
+                    return AnalysisReviewListDTO(reviews=reviews, total=result.total)
+
+                # new_reviews가 비어있으면 branch_reviews로 폴백
 
             # Athena 분기: Athena 원본(new_review_list)에는 sentiment/is_new 컬럼이 없으므로,
             # 해당 필터가 있으면 Supabase(branch_reviews)에서 처리한다.
