@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-from collections import Counter
 from datetime import datetime, timedelta
 
 from models.review import Review
@@ -136,6 +135,16 @@ class BranchReviewRepository(BaseRepository[Review]):
             car_models=car_models,
         )
 
+    async def get_distinct_car_models(self, branch_id: int) -> list[str]:
+        """지점의 고유 차량 모델 목록 조회"""
+        result = (
+            await self._client.table(self.table_name)
+            .select("car_model")
+            .eq("branch_id", branch_id)
+            .execute()
+        )
+        return sorted({r["car_model"] for r in result.data if r.get("car_model")})
+
     async def count_by_branch(
         self,
         branch_id: int,
@@ -157,37 +166,9 @@ class BranchReviewRepository(BaseRepository[Review]):
         return result.count or 0
 
     async def get_stats(self) -> list[dict]:
-        """지점별 리뷰 통계"""
-        result = (
-            await self._client.table(self.table_name)
-            .select("branch_id, branch_name, company_name")
-            .execute()
-        )
-
-        if not result.data:
-            return []
-
-        branch_counts = Counter()
-        branch_data: dict[int, dict] = {}
-
-        for r in result.data:
-            bid = r["branch_id"]
-            branch_counts[bid] += 1
-            if bid not in branch_data:
-                branch_data[bid] = {
-                    "branch_name": r["branch_name"],
-                    "company_name": r.get("company_name"),
-                }
-
-        return [
-            {
-                "branch_id": bid,
-                "branch_name": branch_data[bid]["branch_name"],
-                "company_name": branch_data[bid]["company_name"],
-                "review_count": count,
-            }
-            for bid, count in branch_counts.most_common()
-        ]
+        """지점별 리뷰 통계 (RPC로 DB 서버에서 집계)"""
+        result = await self._client.rpc("get_review_stats_by_branch").execute()
+        return result.data or []
 
     async def search_with_filters(
         self,

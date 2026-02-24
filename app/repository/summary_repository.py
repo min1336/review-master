@@ -88,34 +88,12 @@ class SummaryRepository(BaseRepository[Summary]):
         return self.model(**result.data[0]) if result.data else None
 
     async def get_stats(self) -> SummaryStatsDTO:
-        """통계 조회"""
-        total = (
-            await self._client.table(self.table_name)
-            .select("id", count="exact")
-            .execute()
-        )
-
-        # 총 리뷰 수 계산
-        total_reviews = 0
-        offset = 0
-        page_size = 1000
-        while True:
-            reviews = (
-                await self._client.table(self.table_name)
-                .select("review_count")
-                .range(offset, offset + page_size - 1)
-                .execute()
-            )
-            if not reviews.data:
-                break
-            total_reviews += sum(r.get("review_count", 0) or 0 for r in reviews.data)
-            if len(reviews.data) < page_size:
-                break
-            offset += page_size
-
+        """통계 조회 (RPC로 DB 서버에서 집계)"""
+        result = await self._client.rpc("get_summary_stats").execute()
+        row = result.data[0] if result.data else {}
         return SummaryStatsDTO(
-            total=total.count or 0,
-            total_reviews=total_reviews,
+            total=row.get("total_branches", 0),
+            total_reviews=row.get("total_reviews", 0),
         )
 
     async def search(
