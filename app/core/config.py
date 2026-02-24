@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     athena_database: str = "carmore"
     athena_output_bucket: str = ""
 
+    # n8n 웹훅 설정
+    # 로컬(기본): /webhook-test (동기 응답), Docker/실서버: N8N_TEST_MODE=false → /webhook
+    n8n_test_mode: bool = True
+
     # 스케줄러 설정
     sync_hour: int = 6  # 동기화 실행 시간 (시)
     sync_minute: int = 0  # 동기화 실행 시간 (분)

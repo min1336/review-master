@@ -1973,98 +1973,56 @@
             // 프로그레스 오버레이 표시
             const overlay = createSyncProgressOverlay();
             document.body.appendChild(overlay);
+            updateSyncProgress(30, 'n8n 동기화 요청 중...');
 
             syncAbortController = new AbortController();
-            let currentJobId = null;
 
             // 취소 버튼 이벤트
             const cancelBtn = document.getElementById('sync-cancel-btn');
-            cancelBtn.addEventListener('click', async () => {
+            cancelBtn.addEventListener('click', () => {
                 if (syncAbortController) syncAbortController.abort();
-                if (currentJobId) {
-                    try {
-                        await fetch(`${API_PREFIX}/sync/jobs/${currentJobId}`, {
-                            method: 'DELETE',
-                        });
-                    } catch (e) { /* ignore */ }
-                }
                 removeSyncOverlay();
                 btn.disabled = false;
                 btn.classList.remove('syncing');
             });
 
             try {
-                // 1. 비동기 작업 제출
-                const submitRes = await fetch(`${API_PREFIX}/sync/reviews`, {
+                // n8n 웹훅 호출 (단일 요청, 서버 타임아웃 120초)
+                const res = await fetch(`${API_PREFIX}/n8n/review-sync`, {
                     method: 'POST',
                     signal: syncAbortController.signal,
                 });
 
-                if (!submitRes.ok) {
-                    const err = await submitRes.json();
-                    throw new Error(err.detail || '동기화 시작 실패');
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `동기화 실패 (${res.status})`);
                 }
 
-                const submitData = (await submitRes.json()).data;
-                currentJobId = submitData.job_id;
-                updateSyncProgress(submitData.progress, submitData.message || '작업 시작됨');
+                const body = await res.json().catch(() => null);
+                const result = body?.data;
 
-                // 2. 폴링 (2초 간격, 최대 90회 = 3분)
-                const MAX_POLLS = 90;
-                let polls = 0;
-
-                while (polls < MAX_POLLS) {
-                    await new Promise(r => setTimeout(r, 2000));
-                    polls++;
-
-                    const pollRes = await fetch(`${API_PREFIX}/sync/jobs/${currentJobId}`, {
-                        signal: syncAbortController.signal,
-                    });
-
-                    if (!pollRes.ok) {
-                        throw new Error('상태 조회 실패');
-                    }
-
-                    const status = (await pollRes.json()).data;
-                    updateSyncProgress(status.progress, status.message);
-
-                    if (status.status === 'completed') {
-                        updateSyncProgress(100, '동기화 완료!');
-                        await new Promise(r => setTimeout(r, 500));
-                        removeSyncOverlay();
-
-                        const result = status.result;
-                        if (result) {
-                            const msg = result.new_reviews > 0
-                                ? `동기화 완료: 신규 리뷰 ${result.new_reviews}건`
-                                : '동기화 완료: 신규 리뷰가 없습니다.';
-                            showToast(msg, 'success');
-
-                            await checkSyncStatus();
-                            if (result.new_reviews > 0) {
-                                await loadNewReviews();
-                                await loadReviews();
-                            }
-                        }
-                        return;
-                    }
-
-                    if (status.status === 'failed') {
-                        removeSyncOverlay();
-                        showToast(status.error || status.message || '동기화에 실패했습니다.', 'error');
-                        return;
-                    }
-                }
-
-                // 타임아웃
+                updateSyncProgress(100, '동기화 완료!');
+                await new Promise(r => setTimeout(r, 500));
                 removeSyncOverlay();
-                showToast('동기화 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.', 'error');
+
+                if (result && typeof result.new_reviews === 'number') {
+                    const msg = result.new_reviews > 0
+                        ? `동기화 완료: 신규 리뷰 ${result.new_reviews}건`
+                        : '동기화 완료: 신규 리뷰가 없습니다.';
+                    showToast(msg, 'success');
+                } else {
+                    showToast('동기화가 완료되었습니다.', 'success');
+                }
+
+                // UI 갱신
+                await loadNewReviews();
+                if (hasSearched) await loadReviews();
 
             } catch (error) {
                 removeSyncOverlay();
                 if (error.name !== 'AbortError') {
                     console.error('Manual sync failed:', error);
-                    showToast('동기화 중 오류가 발생했습니다.', 'error');
+                    showToast(error.message || '동기화 중 오류가 발생했습니다.', 'error');
                 }
             } finally {
                 syncAbortController = null;
