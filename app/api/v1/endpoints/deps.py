@@ -4,9 +4,11 @@ import hmac
 import logging
 from functools import lru_cache
 from typing import TYPE_CHECKING
+
 from fastapi import Depends, Header, HTTPException, status
-from repository.session import get_client
-from supabase import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from repository.database import get_session
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +37,14 @@ if TYPE_CHECKING:
 
 
 # ============================================================
-# Database Client
+# Database Session
 # ============================================================
 
 
-async def get_db_client() -> AsyncClient:
-    return await get_client()
+async def get_db_session(
+    session: AsyncSession = Depends(get_session),
+) -> AsyncSession:
+    return session
 
 
 # ============================================================
@@ -49,27 +53,27 @@ async def get_db_client() -> AsyncClient:
 
 
 async def get_summary_repo(
-    client: AsyncClient = Depends(get_db_client),
+    session: AsyncSession = Depends(get_db_session),
 ) -> SummaryRepository:
     from repository.summary_repository import SummaryRepository
 
-    return SummaryRepository(client)
+    return SummaryRepository(session)
 
 
 async def get_branch_tag_repo(
-    client: AsyncClient = Depends(get_db_client),
+    session: AsyncSession = Depends(get_db_session),
 ) -> BranchTagRepository:
     from repository.branch_tag_repository import BranchTagRepository
 
-    return BranchTagRepository(client)
+    return BranchTagRepository(session)
 
 
 async def get_review_repo(
-    client: AsyncClient = Depends(get_db_client),
+    session: AsyncSession = Depends(get_db_session),
 ) -> BranchReviewRepository:
     from repository.review_repository import BranchReviewRepository
 
-    return BranchReviewRepository(client)
+    return BranchReviewRepository(session)
 
 
 # ============================================================
@@ -78,19 +82,19 @@ async def get_review_repo(
 
 
 async def get_tag_repo(
-    client: AsyncClient = Depends(get_db_client),
+    session: AsyncSession = Depends(get_db_session),
 ) -> TagRepository:
     from repository.tag_repository import TagRepository
 
-    return TagRepository(client)
+    return TagRepository(session)
 
 
 async def get_sentiment_repo(
-    client: AsyncClient = Depends(get_db_client),
+    session: AsyncSession = Depends(get_db_session),
 ) -> SentimentRepository:
     from repository.sentiment_repository import SentimentRepository
 
-    return SentimentRepository(client)
+    return SentimentRepository(session)
 
 
 # ============================================================
@@ -99,51 +103,51 @@ async def get_sentiment_repo(
 
 
 async def get_affiliate_repo(
-    client: AsyncClient = Depends(get_db_client),
+    session: AsyncSession = Depends(get_db_session),
 ) -> AffiliateRepository:
     from repository.affiliate_repository import AffiliateRepository
 
-    return AffiliateRepository(client)
+    return AffiliateRepository(session)
 
 
 async def get_category_repo(
-    client: AsyncClient = Depends(get_db_client),
+    session: AsyncSession = Depends(get_db_session),
 ) -> CategoryRepository:
     from repository.tag_repository import CategoryRepository
 
-    return CategoryRepository(client)
+    return CategoryRepository(session)
 
 
 async def get_mapping_repo(
-    client: AsyncClient = Depends(get_db_client),
+    session: AsyncSession = Depends(get_db_session),
 ) -> MappingRepository:
     from repository.tag_repository import MappingRepository
 
-    return MappingRepository(client)
+    return MappingRepository(session)
 
 
 async def get_report_repo(
-    client: AsyncClient = Depends(get_db_client),
+    session: AsyncSession = Depends(get_db_session),
 ) -> ReportRepository:
     from repository.report_repository import ReportRepository
 
-    return ReportRepository(client)
+    return ReportRepository(session)
 
 
 async def get_preset_repo(
-    client: AsyncClient = Depends(get_db_client),
+    session: AsyncSession = Depends(get_db_session),
 ) -> PresetRepository:
     from repository.preset_repository import PresetRepository
 
-    return PresetRepository(client)
+    return PresetRepository(session)
 
 
 async def get_report_job_repo(
-    client: AsyncClient = Depends(get_db_client),
+    session: AsyncSession = Depends(get_db_session),
 ) -> ReportJobRepository:
     from repository.report_job_repository import ReportJobRepository
 
-    return ReportJobRepository(client)
+    return ReportJobRepository(session)
 
 
 # ============================================================
@@ -217,11 +221,11 @@ def _get_athena_client():
 
 
 async def get_new_review_repo(
-    client: AsyncClient = Depends(get_db_client),
+    session: AsyncSession = Depends(get_db_session),
 ) -> NewReviewRepository:
     from repository.new_review_repository import NewReviewRepository
 
-    return NewReviewRepository(client)
+    return NewReviewRepository(session)
 
 
 async def get_analysis_service(

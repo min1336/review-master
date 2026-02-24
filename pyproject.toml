@@ -13,7 +13,9 @@ dependencies = [
     "pydantic>=2.7.0",
     "pydantic-settings>=2.1.0",
     # Database
-    "supabase>=2.3.0",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
     "httpx>=0.26.0",
     # Data Processing
     "pandas>=2.1.0",

@@ -22,7 +22,7 @@ from schemas.dto import (
 
 # 순환 참조 방지
 if TYPE_CHECKING:
-    from supabase import AsyncClient
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +40,12 @@ class BasePipeline(ABC):
     - Kiwi 키워드 추출
     - 전처리/필터링 (욕설, 광고, 빈 리뷰)
     - 감정 분석 (Lexicon 기반)
-    - Supabase 연동 (비동기)
+    - DB 세션 관리 (비동기)
     """
 
     def __init__(self) -> None:
         self.kiwi = None
-        self._supabase_client: AsyncClient | None = None
+        self._session_factory: async_sessionmaker[AsyncSession] | None = None
         self._sentiment_analyzer = None  # UnifiedSentimentAnalyzer
         self._hybrid_classifier = None  # HybridClassifier (태그 분류용)
 
@@ -61,18 +61,18 @@ class BasePipeline(ABC):
         except ImportError:
             logger.warning("Kiwi 미설치 - 정규식 폴백 사용")
 
-    async def _get_supabase(self) -> AsyncClient:
-        """Supabase 비동기 클라이언트 획득 (lazy loading)"""
-        if self._supabase_client is None:
+    async def _get_session(self) -> AsyncSession:
+        """DB 비동기 세션 획득 (lazy loading)"""
+        if self._session_factory is None:
             try:
-                from repository.session import get_client
+                from repository.database import get_session_factory
 
-                self._supabase_client = await get_client()
-                logger.info("Supabase 비동기 연결 완료")
+                self._session_factory = get_session_factory()
+                logger.info("DB 세션 팩토리 연결 완료")
             except Exception as e:
-                logger.warning(f"Supabase 연결 실패: {e}")
+                logger.warning(f"DB 세션 팩토리 획득 실패: {e}")
                 raise
-        return self._supabase_client
+        return self._session_factory()
 
     # =========================================================================
     # 키워드 추출

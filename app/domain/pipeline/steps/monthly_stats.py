@@ -5,10 +5,19 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from repository.orm_models import (
+    MonthlyRatingStatsORM,
+    MonthlySentimentStatsORM,
+    MonthlyTagStatsORM,
+    TagORM,
+)
 from schemas.dto import ProcessedReviewDTO
 
 if TYPE_CHECKING:
-    from supabase import AsyncClient
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +26,11 @@ class MonthlyStatsUpdater:
     """월별 통계 3개 테이블을 한 스텝에서 처리"""
 
     async def update(
-        self, client: AsyncClient, processed: list[ProcessedReviewDTO]
+        self, session: AsyncSession, processed: list[ProcessedReviewDTO]
     ) -> dict:
-        rating_count = await self._update_rating_stats(client, processed)
-        sentiment_count = await self._update_sentiment_stats(client, processed)
-        tag_count = await self._update_tag_stats(client, processed)
+        rating_count = await self._update_rating_stats(session, processed)
+        sentiment_count = await self._update_sentiment_stats(session, processed)
+        tag_count = await self._update_tag_stats(session, processed)
 
         return {
             "rating_stats": rating_count,
@@ -33,10 +42,10 @@ class MonthlyStatsUpdater:
     # 4a. monthly_rating_stats
     # ------------------------------------------------------------------
     async def _update_rating_stats(
-        self, client: AsyncClient, processed: list[ProcessedReviewDTO]
+        self, session: AsyncSession, processed: list[ProcessedReviewDTO]
     ) -> int:
-        """(branch_id, period) 그룹핑 → 평점 평균 계산 → upsert"""
-        # 메모리 집계: (branch_id, period) → {sum_service, sum_car, sum_conv, count}
+        """(branch_id, period) 그룹핑 -> 평점 평균 계산 -> upsert"""
+        # 메모리 집계: (branch_id, period) -> {sum_service, sum_car, sum_conv, count}
         groups: dict[tuple[int, str], dict] = {}
 
         for pr in processed:
@@ -66,18 +75,22 @@ class MonthlyStatsUpdater:
         if not groups:
             return 0
 
-        # 기존 데이터 조회 → 증분 합산
+        # 기존 데이터 조회 -> 증분 합산
         saved = 0
         for (branch_id, period), g in groups.items():
             try:
-                existing = await (
-                    client.table("monthly_rating_stats")
-                    .select("*")
-                    .eq("branch_id", branch_id)
-                    .eq("period", period)
-                    .execute()
+                result = await session.execute(
+                    select(MonthlyRatingStatsORM)
+                    .where(MonthlyRatingStatsORM.branch_id == branch_id)
+                    .where(MonthlyRatingStatsORM.period == period)
                 )
-                old = existing.data[0] if existing.data else {}
+                existing_row = result.scalar_one_or_none()
+                old: dict = {}
+                if existing_row:
+                    old = {
+                        c.key: getattr(existing_row, c.key)
+                        for c in MonthlyRatingStatsORM.__table__.columns
+                    }
 
                 old_review_count = old.get("review_count", 0) or 0
                 new_review_count = old_review_count + g["review_count"]
@@ -95,21 +108,28 @@ class MonthlyStatsUpdater:
                     g["sum_convenience"], g["cnt_convenience"],
                 )
 
-                await (
-                    client.table("monthly_rating_stats")
-                    .upsert(
-                        {
-                            "branch_id": branch_id,
-                            "period": period,
-                            "avg_rating_service": avg_service,
-                            "avg_rating_car": avg_car,
-                            "avg_rating_convenience": avg_conv,
-                            "review_count": new_review_count,
+                values = {
+                    "branch_id": branch_id,
+                    "period": period,
+                    "avg_rating_service": avg_service,
+                    "avg_rating_car": avg_car,
+                    "avg_rating_convenience": avg_conv,
+                    "review_count": new_review_count,
+                }
+                stmt = (
+                    pg_insert(MonthlyRatingStatsORM.__table__)
+                    .values(**values)
+                    .on_conflict_do_update(
+                        index_elements=["branch_id", "period"],
+                        set_={
+                            "avg_rating_service": values["avg_rating_service"],
+                            "avg_rating_car": values["avg_rating_car"],
+                            "avg_rating_convenience": values["avg_rating_convenience"],
+                            "review_count": values["review_count"],
                         },
-                        on_conflict="branch_id,period",
                     )
-                    .execute()
                 )
+                await session.execute(stmt)
                 saved += 1
             except Exception as e:
                 logger.warning(
@@ -123,9 +143,9 @@ class MonthlyStatsUpdater:
     # 4b. monthly_sentiment_stats
     # ------------------------------------------------------------------
     async def _update_sentiment_stats(
-        self, client: AsyncClient, processed: list[ProcessedReviewDTO]
+        self, session: AsyncSession, processed: list[ProcessedReviewDTO]
     ) -> int:
-        """(branch_id, period) 그룹핑 → positive/negative/neutral 카운트 → upsert"""
+        """(branch_id, period) 그룹핑 -> positive/negative/neutral 카운트 -> upsert"""
         groups: dict[tuple[int, str], dict[str, int]] = {}
 
         for pr in processed:
@@ -144,35 +164,46 @@ class MonthlyStatsUpdater:
         saved = 0
         for (branch_id, period), counts in groups.items():
             try:
-                existing = await (
-                    client.table("monthly_sentiment_stats")
-                    .select("*")
-                    .eq("branch_id", branch_id)
-                    .eq("period", period)
-                    .execute()
+                result = await session.execute(
+                    select(MonthlySentimentStatsORM)
+                    .where(MonthlySentimentStatsORM.branch_id == branch_id)
+                    .where(MonthlySentimentStatsORM.period == period)
                 )
-                old = existing.data[0] if existing.data else {}
+                existing_row = result.scalar_one_or_none()
+                old: dict = {}
+                if existing_row:
+                    old = {
+                        c.key: getattr(existing_row, c.key)
+                        for c in MonthlySentimentStatsORM.__table__.columns
+                    }
 
                 new_pos = (old.get("positive_count", 0) or 0) + counts["positive"]
                 new_neg = (old.get("negative_count", 0) or 0) + counts["negative"]
                 new_neu = (old.get("neutral_count", 0) or 0) + counts["neutral"]
                 total = new_pos + new_neg + new_neu
 
-                await (
-                    client.table("monthly_sentiment_stats")
-                    .upsert(
-                        {
-                            "branch_id": branch_id,
-                            "period": period,
-                            "positive_count": new_pos,
-                            "negative_count": new_neg,
-                            "neutral_count": new_neu,
-                            "review_count": total,
+                values = {
+                    "branch_id": branch_id,
+                    "period": period,
+                    "positive_count": new_pos,
+                    "negative_count": new_neg,
+                    "neutral_count": new_neu,
+                    "review_count": total,
+                }
+                stmt = (
+                    pg_insert(MonthlySentimentStatsORM.__table__)
+                    .values(**values)
+                    .on_conflict_do_update(
+                        index_elements=["branch_id", "period"],
+                        set_={
+                            "positive_count": values["positive_count"],
+                            "negative_count": values["negative_count"],
+                            "neutral_count": values["neutral_count"],
+                            "review_count": values["review_count"],
                         },
-                        on_conflict="branch_id,period",
                     )
-                    .execute()
                 )
+                await session.execute(stmt)
                 saved += 1
             except Exception as e:
                 logger.warning(
@@ -186,9 +217,9 @@ class MonthlyStatsUpdater:
     # 4c. monthly_tag_stats
     # ------------------------------------------------------------------
     async def _update_tag_stats(
-        self, client: AsyncClient, processed: list[ProcessedReviewDTO]
+        self, session: AsyncSession, processed: list[ProcessedReviewDTO]
     ) -> int:
-        """(branch_id, period, tag_name) 그룹핑 → 감정 카운트 → upsert"""
+        """(branch_id, period, tag_name) 그룹핑 -> 감정 카운트 -> upsert"""
         groups: dict[tuple[int, str, str], dict[str, int]] = {}
 
         for pr in processed:
@@ -209,18 +240,16 @@ class MonthlyStatsUpdater:
         if not groups:
             return 0
 
-        # tag_name → tag_id 일괄 변환
+        # tag_name -> tag_id 일괄 변환
         all_tag_names = {k[2] for k in groups}
         tag_id_cache: dict[str, int] = {}
         try:
-            result = await (
-                client.table("tags")
-                .select("id, name")
-                .in_("name", list(all_tag_names))
-                .execute()
+            result = await session.execute(
+                select(TagORM.id, TagORM.name)
+                .where(TagORM.name.in_(list(all_tag_names)))
             )
-            for row in result.data:
-                tag_id_cache[row["name"]] = row["id"]
+            for row in result.all():
+                tag_id_cache[row.name] = row.id
         except Exception as e:
             logger.warning(f"tags 배치 조회 실패: {e}")
             return 0
@@ -231,35 +260,45 @@ class MonthlyStatsUpdater:
             if not tag_id:
                 continue
             try:
-                existing = await (
-                    client.table("monthly_tag_stats")
-                    .select("*")
-                    .eq("branch_id", branch_id)
-                    .eq("period", period)
-                    .eq("tag_id", tag_id)
-                    .execute()
+                result = await session.execute(
+                    select(MonthlyTagStatsORM)
+                    .where(MonthlyTagStatsORM.branch_id == branch_id)
+                    .where(MonthlyTagStatsORM.period == period)
+                    .where(MonthlyTagStatsORM.tag_id == tag_id)
                 )
-                old = existing.data[0] if existing.data else {}
+                existing_row = result.scalar_one_or_none()
+                old: dict = {}
+                if existing_row:
+                    old = {
+                        c.key: getattr(existing_row, c.key)
+                        for c in MonthlyTagStatsORM.__table__.columns
+                    }
 
                 new_pos = (old.get("positive_count", 0) or 0) + counts["positive"]
                 new_neg = (old.get("negative_count", 0) or 0) + counts["negative"]
                 new_neu = (old.get("neutral_count", 0) or 0) + counts["neutral"]
 
-                await (
-                    client.table("monthly_tag_stats")
-                    .upsert(
-                        {
-                            "branch_id": branch_id,
-                            "period": period,
-                            "tag_id": tag_id,
-                            "positive_count": new_pos,
-                            "negative_count": new_neg,
-                            "neutral_count": new_neu,
+                values = {
+                    "branch_id": branch_id,
+                    "period": period,
+                    "tag_id": tag_id,
+                    "positive_count": new_pos,
+                    "negative_count": new_neg,
+                    "neutral_count": new_neu,
+                }
+                stmt = (
+                    pg_insert(MonthlyTagStatsORM.__table__)
+                    .values(**values)
+                    .on_conflict_do_update(
+                        index_elements=["branch_id", "period", "tag_id"],
+                        set_={
+                            "positive_count": values["positive_count"],
+                            "negative_count": values["negative_count"],
+                            "neutral_count": values["neutral_count"],
                         },
-                        on_conflict="branch_id,period,tag_id",
                     )
-                    .execute()
                 )
+                await session.execute(stmt)
                 saved += 1
             except Exception as e:
                 logger.warning(

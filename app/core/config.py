@@ -36,9 +36,24 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     openai_rpm: int = 3500
 
-    # Supabase 설정
-    supabase_url: str = ""
-    supabase_key: SecretStr = SecretStr("")
+    # Database 설정 (SQLAlchemy + asyncpg)
+    database_url: str = ""  # postgresql+asyncpg://user:pass@host:port/dbname
+    database_user: str = ""
+    database_password: str = ""
+    database_host: str = ""
+    database_port: str = "5432"
+    database_name: str = "postgres"
+
+    def get_database_url(self) -> str:
+        """DATABASE_URL 우선, 없으면 개별 필드로 조합"""
+        if self.database_url:
+            return self.database_url
+        if self.database_host and self.database_user:
+            return (
+                f"postgresql+asyncpg://{self.database_user}:{self.database_password}"
+                f"@{self.database_host}:{self.database_port}/{self.database_name}"
+            )
+        return ""
 
     # 파이프라인 설정
     sentiment_threshold: float = 0.45

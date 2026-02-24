@@ -12,21 +12,23 @@ import logging
 from math import exp
 from typing import TYPE_CHECKING
 
+from sqlalchemy import text
+
 from core.decay import DECAY_LAMBDA
 
 if TYPE_CHECKING:
-    from supabase import AsyncClient
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-DAILY_DECAY: float = exp(-DECAY_LAMBDA)  # ≈ 0.99005 (일 약 1% 감쇠)
+DAILY_DECAY: float = exp(-DECAY_LAMBDA)  # ~ 0.99005 (일 약 1% 감쇠)
 MIN_WEIGHTED_SCORE: float = 0.01          # 완전 소멸 방지 최솟값
 
 
 class DecayJob:
     """branch_tags.weighted_score 일별 감쇠 적용"""
 
-    async def run(self, client: AsyncClient) -> int:
+    async def run(self, session: AsyncSession) -> int:
         """
         모든 branch_tags (period_type='all')의 weighted_score에
         일별 감쇠를 적용합니다.
@@ -35,11 +37,12 @@ class DecayJob:
             처리된 행 수
         """
         try:
-            result = await client.rpc(
-                "apply_tag_decay",
+            result = await session.execute(
+                text("SELECT apply_tag_decay(:decay_factor, :min_score)"),
                 {"decay_factor": DAILY_DECAY, "min_score": MIN_WEIGHTED_SCORE},
-            ).execute()
-            count = result.data if isinstance(result.data, int) else 0
+            )
+            row = result.scalar()
+            count = row if isinstance(row, int) else 0
             logger.info("DecayJob 완료: %d행 처리 (decay=%.5f)", count, DAILY_DECAY)
             return count
         except Exception as e:

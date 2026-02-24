@@ -116,31 +116,38 @@ class SyncJobService:
 
             # SyncService 인스턴스 생성
             from infrastructure.athena import AthenaClient
+            from repository.database import get_session_factory
             from repository.review_repository import BranchReviewRepository
-            from repository.session import get_client
             from services.sync_service import SyncService
 
-            client = await get_client()
-            review_repo = BranchReviewRepository(client)
-
-            athena_client: AthenaClient | None = None
+            session = get_session_factory()()
             try:
-                from core.config import get_settings
+                review_repo = BranchReviewRepository(session)
 
-                settings = get_settings()
-                if settings.aws_access_key_id and settings.athena_output_bucket:
-                    athena_client = AthenaClient()
-            except Exception as e:
-                logger.debug(f"Athena 클라이언트 초기화 스킵: {e}")
+                athena_client: AthenaClient | None = None
+                try:
+                    from core.config import get_settings
 
-            from repository.new_review_repository import NewReviewRepository
+                    settings = get_settings()
+                    if settings.aws_access_key_id and settings.athena_output_bucket:
+                        athena_client = AthenaClient()
+                except Exception as e:
+                    logger.debug(f"Athena 클라이언트 초기화 스킵: {e}")
 
-            new_review_repo = NewReviewRepository(client)
-            sync_service = SyncService(
-                review_repo, athena_client, new_review_repo=new_review_repo
-            )
+                from repository.new_review_repository import NewReviewRepository
 
-            result = await sync_service.sync_reviews(progress_callback=progress_callback)
+                new_review_repo = NewReviewRepository(session)
+                sync_service = SyncService(
+                    review_repo, athena_client, new_review_repo=new_review_repo
+                )
+
+                result = await sync_service.sync_reviews(progress_callback=progress_callback)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                await session.close()
 
             state.status = "completed"
             state.progress = 100

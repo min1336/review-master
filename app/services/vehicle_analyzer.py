@@ -9,7 +9,11 @@ import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from domain.analysis.patterns import VEHICLE_CATEGORIES
+from repository.orm_models import BranchReviewORM
 
 if TYPE_CHECKING:
     from services.report_service import VehicleAnalysis, VehicleRankItem
@@ -94,16 +98,18 @@ class VehicleAnalyzer:
         기간 필터가 있으면 branch_reviews에서 직접 집계하고,
         없으면 monthly_car_model_tag_stats에서 집계합니다.
         """
-        from repository.session import get_client
+        from repository.database import get_session_factory
 
-        client = await get_client()
+        session = get_session_factory()()
+        try:
+            if start_date and end_date:
+                return await self._get_vehicle_analysis_from_reviews(
+                    session, branch_id, start_date, end_date
+                )
 
-        if start_date and end_date:
-            return await self._get_vehicle_analysis_from_reviews(
-                client, branch_id, start_date, end_date
-            )
-
-        return await self._get_vehicle_analysis_from_monthly_stats(branch_id)
+            return await self._get_vehicle_analysis_from_monthly_stats(branch_id)
+        finally:
+            await session.close()
 
     async def get_vehicle_tags_raw(self, branch_id: int) -> dict:
         """monthly_car_model_tag_stats에서 차량별 태그 데이터 조회 (VehicleRankItem용)
@@ -115,15 +121,17 @@ class VehicleAnalyzer:
                    "tags": {tag_name: {"positive": N, "negative": N, "total": N, "category_name": str}}}}
         """
         from repository.car_model_repository import CarModelRepository
-        from repository.session import get_client
+        from repository.database import get_session_factory
 
-        client = await get_client()
-        repo = CarModelRepository(client)
+        session = get_session_factory()()
         try:
+            repo = CarModelRepository(session)
             return await repo.get_vehicle_tags_raw(branch_id)
         except Exception as e:
             logger.warning(f"차량 태그 raw 조회 실패 (branch_id={branch_id}): {e}")
             return {}
+        finally:
+            await session.close()
 
     def build_vehicle_rankings(
         self,
@@ -227,15 +235,17 @@ class VehicleAnalyzer:
     ) -> list:
         """monthly_car_model_tag_stats에서 차량별 분석 데이터 조회 후 변환"""
         from repository.car_model_repository import CarModelRepository
-        from repository.session import get_client
+        from repository.database import get_session_factory
 
-        client = await get_client()
-        repo = CarModelRepository(client)
+        session = get_session_factory()()
         try:
+            repo = CarModelRepository(session)
             car_data = await repo.get_vehicle_analysis_data(branch_id)
         except Exception as e:
             logger.warning(f"차량별 분석 조회 실패 (branch_id={branch_id}): {e}")
             return []
+        finally:
+            await session.close()
 
         if not car_data:
             return []
@@ -244,7 +254,7 @@ class VehicleAnalyzer:
 
     async def _get_vehicle_analysis_from_reviews(
         self,
-        client,
+        session: AsyncSession,
         branch_id: int,
         start_date: datetime,
         end_date: datetime,
@@ -253,24 +263,25 @@ class VehicleAnalyzer:
         try:
             next_day = end_date + timedelta(days=1)
 
-            all_rows: list[dict] = []
+            all_rows: list[tuple] = []
             batch_size = 1000
             offset = 0
 
             while True:
-                result = await (
-                    client.table("branch_reviews")
-                    .select("car_model, sentiment")
-                    .eq("branch_id", branch_id)
-                    .gte("review_date", start_date.isoformat())
-                    .lt("review_date", next_day.isoformat())
-                    .range(offset, offset + batch_size - 1)
-                    .execute()
+                stmt = (
+                    select(BranchReviewORM.car_model, BranchReviewORM.sentiment)
+                    .where(BranchReviewORM.branch_id == branch_id)
+                    .where(BranchReviewORM.review_date >= start_date.isoformat())
+                    .where(BranchReviewORM.review_date < next_day.isoformat())
+                    .offset(offset)
+                    .limit(batch_size)
                 )
-                if not result.data:
+                result = await session.execute(stmt)
+                rows = result.all()
+                if not rows:
                     break
-                all_rows.extend(result.data)
-                if len(result.data) < batch_size:
+                all_rows.extend(rows)
+                if len(rows) < batch_size:
                     break
                 offset += batch_size
 
@@ -282,13 +293,13 @@ class VehicleAnalyzer:
             return []
 
         # branch_reviews에는 태그 정보가 없으므로 car_model_tags에서 태그 보강
-        tag_info = await self._get_vehicle_tag_info(client, branch_id)
+        tag_info = await self._get_vehicle_tag_info(session, branch_id)
 
         # 차량별 그룹화 (reviews 소스이므로 total_count = total, tags = tag_info에서)
         car_data: dict[str, dict] = {}
         for row in all_rows:
-            car_model = row.get("car_model") or "기타"
-            sentiment = row.get("sentiment", "neutral")
+            car_model = row.car_model or "기타"
+            sentiment = row.sentiment or "neutral"
 
             if car_model not in car_data:
                 car_data[car_model] = {
@@ -306,7 +317,7 @@ class VehicleAnalyzer:
 
         return self._convert_to_vehicle_analysis(car_data)
 
-    async def _get_vehicle_tag_info(self, client, branch_id: int) -> dict:
+    async def _get_vehicle_tag_info(self, session: AsyncSession, branch_id: int) -> dict:
         """monthly_car_model_tag_stats에서 차량별 대표 태그 정보 조회 (기간 무관)
 
         top_praise, top_issue 계산에 필요한 태그 통계를 반환합니다.
@@ -318,7 +329,7 @@ class VehicleAnalyzer:
         """
         from repository.car_model_repository import CarModelRepository
 
-        repo = CarModelRepository(client)
+        repo = CarModelRepository(session)
         try:
             raw = await repo.get_vehicle_analysis_data(branch_id)
         except Exception:

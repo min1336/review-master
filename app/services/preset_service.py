@@ -60,16 +60,11 @@ class PresetService:
         return result
 
     async def delete_preset(self, preset_id: int) -> bool:
-        """프리셋 삭제 (is_default=True 거부)"""
+        """프리셋 삭제"""
         existing = await self.preset_repo.get_by_id(preset_id)
         if not existing:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"프리셋을 찾을 수 없습니다 (id={preset_id})",
-            )
-        if existing.get("is_default"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="기본 프리셋은 삭제할 수 없습니다",
             )
         return await self.preset_repo.delete(preset_id)

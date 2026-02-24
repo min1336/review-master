@@ -6,26 +6,44 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy import delete, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.orm import selectinload
+
 from models.tag import Category, KeywordMapping, Tag
 
 from .base import BaseRepository
+from .orm_models import (
+    BranchKeywordORM,
+    CategoryORM,
+    KeywordMappingORM,
+    TagORM,
+)
 
 logger = logging.getLogger(__name__)
-
-# 테이블 이름 상수
-TABLE_TAGS = "tags"
-TABLE_CATEGORIES = "categories"
-TABLE_BRANCH_KEYWORDS = "branch_keywords"
 
 
 class TagRepository(BaseRepository[Tag]):
     """tags 테이블 Repository"""
 
     model = Tag
+    orm_model = TagORM
 
     @property
     def table_name(self) -> str:
         return "tags"
+
+    def _tag_from_orm(self, row: TagORM) -> Tag:
+        """TagORM -> Tag Pydantic 변환 (category 관계 포함)"""
+        data = {
+            c.key: getattr(row, c.key)
+            for c in TagORM.__table__.columns
+        }
+        if row.category is not None:
+            data["categories"] = Category.model_validate(
+                row.category, from_attributes=True
+            )
+        return Tag(**data)
 
     async def get_all_with_filters(
         self,
@@ -35,43 +53,45 @@ class TagRepository(BaseRepository[Tag]):
         is_active: bool = True,
     ) -> list[Tag]:
         """필터링된 태그 목록"""
-        query = self._client.table(self.table_name).select("*")
+        stmt = select(TagORM)
 
         if group_name:
-            query = query.eq("group_name", group_name)
+            stmt = stmt.where(TagORM.group_name == group_name)
         elif category_id is not None:
-            query = self._client.table(self.table_name).select(
-                "*, categories(id, name, color)"
-            )
-            query = query.eq("category_id", category_id)
+            stmt = stmt.options(selectinload(TagORM.category))
+            stmt = stmt.where(TagORM.category_id == category_id)
         if sentiment:
-            query = query.eq("sentiment", sentiment)
+            stmt = stmt.where(TagORM.sentiment == sentiment)
         if is_active is not None:
-            query = query.eq("is_active", is_active)
+            stmt = stmt.where(TagORM.is_active == is_active)
 
-        result = await query.order("name").execute()
-        return [self.model(**row) for row in result.data]
+        stmt = stmt.order_by(TagORM.name)
+        result = await self._session.execute(stmt)
+        rows = result.scalars().all()
+
+        if category_id is not None:
+            return [self._tag_from_orm(row) for row in rows]
+        return [self._to_pydantic(row) for row in rows]
 
     async def get_by_name(self, name: str) -> Tag | None:
         """이름으로 조회"""
-        result = (
-            await self._client.table(self.table_name)
-            .select("*")
-            .eq("name", name)
-            .execute()
+        result = await self._session.execute(
+            select(TagORM).where(TagORM.name == name)
         )
-        return self.model(**result.data[0]) if result.data else None
+        row = result.scalar_one_or_none()
+        return self._to_pydantic(row) if row else None
 
     async def get_with_category(self, tag_id: int) -> Tag | None:
         """카테고리 정보와 함께 조회"""
-        result = (
-            await self._client.table(self.table_name)
-            .select("*, categories(id, name, color)")
-            .eq("id", tag_id)
-            .single()
-            .execute()
+        result = await self._session.execute(
+            select(TagORM)
+            .options(selectinload(TagORM.category))
+            .where(TagORM.id == tag_id)
         )
-        return self.model(**result.data) if result.data else None
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        return self._tag_from_orm(row)
 
     async def get_or_create(
         self, name: str, category_id: int | None = None, sentiment: str = "positive"
@@ -81,17 +101,19 @@ class TagRepository(BaseRepository[Tag]):
         if existing:
             return existing
 
-        result = (
-            await self._client.table(self.table_name)
-            .insert({"name": name, "category_id": category_id, "sentiment": sentiment})
-            .execute()
+        stmt = (
+            pg_insert(TagORM.__table__)
+            .values(name=name, category_id=category_id, sentiment=sentiment)
+            .returning(TagORM.__table__)
         )
-        return self.model(**result.data[0])
+        result = await self._session.execute(stmt)
+        row = result.mappings().one()
+        return Tag(**row)
 
     async def get_groups(self) -> list[dict]:
         """고유 그룹 목록"""
         tags = await self.get_all_with_filters()
-        groups = {}
+        groups: dict[str, dict] = {}
         for tag in tags:
             gname = tag.group_name or "기타"
             if gname not in groups:
@@ -108,6 +130,7 @@ class CategoryRepository(BaseRepository[Category]):
     """categories 테이블 Repository"""
 
     model = Category
+    orm_model = CategoryORM
 
     @property
     def table_name(self) -> str:
@@ -115,109 +138,122 @@ class CategoryRepository(BaseRepository[Category]):
 
     async def get_all_active(self, is_active: bool = True) -> list[Category]:
         """활성 카테고리 목록"""
-        query = self._client.table(self.table_name).select("*")
+        stmt = select(CategoryORM)
         if is_active is not None:
-            query = query.eq("is_active", is_active)
-        result = await query.order("display_order").execute()
-        return [self.model(**row) for row in result.data]
+            stmt = stmt.where(CategoryORM.is_active == is_active)
+        stmt = stmt.order_by(CategoryORM.display_order)
+
+        result = await self._session.execute(stmt)
+        return [self._to_pydantic(row) for row in result.scalars().all()]
 
     async def delete_with_tags(self, category_id: int) -> bool:
         """카테고리 삭제 (소속 태그는 미분류로)"""
         # 소속 태그의 category_id를 null로
-        await (
-            self._client.table(TABLE_TAGS)
-            .update({"category_id": None})
-            .eq("category_id", category_id)
-            .execute()
+        await self._session.execute(
+            update(TagORM)
+            .where(TagORM.category_id == category_id)
+            .values(category_id=None)
         )
         # 카테고리 삭제
-        result = (
-            await self._client.table(self.table_name)
-            .delete()
-            .eq("id", category_id)
-            .execute()
+        result = await self._session.execute(
+            delete(CategoryORM).where(CategoryORM.id == category_id)
         )
-        return len(result.data) > 0 if result.data else False
+        return result.rowcount > 0
 
 
 class MappingRepository(BaseRepository[KeywordMapping]):
     """keyword_mappings 테이블 Repository"""
 
     model = KeywordMapping
+    orm_model = KeywordMappingORM
 
     @property
     def table_name(self) -> str:
         return "keyword_mappings"
 
+    def _mapping_from_orm(self, row: KeywordMappingORM) -> KeywordMapping:
+        """KeywordMappingORM -> KeywordMapping Pydantic 변환 (tag 관계 포함)"""
+        data = {
+            c.key: getattr(row, c.key)
+            for c in KeywordMappingORM.__table__.columns
+        }
+        if row.tag is not None:
+            data["tags"] = Tag.model_validate(row.tag, from_attributes=True)
+        return KeywordMapping(**data)
+
     async def get_mappings(
         self, tag_id: int | None = None, keyword: str | None = None
     ) -> list[KeywordMapping]:
         """매핑 목록 조회"""
-        query = self._client.table(self.table_name).select(
-            "*, tags(id, name, category_id, sentiment)"
+        stmt = (
+            select(KeywordMappingORM)
+            .options(selectinload(KeywordMappingORM.tag))
         )
 
         if tag_id is not None:
-            query = query.eq("tag_id", tag_id)
+            stmt = stmt.where(KeywordMappingORM.tag_id == tag_id)
         if keyword:
-            query = query.eq("keyword", keyword)
+            stmt = stmt.where(KeywordMappingORM.keyword == keyword)
 
-        result = await query.order("keyword").execute()
-        return [self.model(**row) for row in result.data]
+        stmt = stmt.order_by(KeywordMappingORM.keyword)
+        result = await self._session.execute(stmt)
+        return [self._mapping_from_orm(row) for row in result.scalars().all()]
 
     async def upsert_mapping(
         self, keyword: str, tag_id: int, is_auto: bool = True, confidence: float = 1.0
     ) -> KeywordMapping | None:
         """매핑 생성/업데이트 (keyword UNIQUE 기준)"""
-        result = (
-            await self._client.table(self.table_name)
-            .upsert(
-                {
-                    "keyword": keyword,
+        stmt = (
+            pg_insert(KeywordMappingORM.__table__)
+            .values(
+                keyword=keyword,
+                tag_id=tag_id,
+                is_auto=is_auto,
+                confidence=confidence,
+            )
+            .on_conflict_do_update(
+                index_elements=["keyword"],
+                set_={
                     "tag_id": tag_id,
                     "is_auto": is_auto,
                     "confidence": confidence,
                 },
-                on_conflict="keyword",
             )
-            .execute()
+            .returning(KeywordMappingORM.__table__)
         )
-        return self.model(**result.data[0]) if result.data else None
+        result = await self._session.execute(stmt)
+        row = result.mappings().one_or_none()
+        return KeywordMapping(**row) if row else None
 
     async def delete_by_keyword(self, keyword: str, tag_id: int) -> bool:
         """키워드와 태그 ID로 삭제"""
-        result = (
-            await self._client.table(self.table_name)
-            .delete()
-            .eq("keyword", keyword)
-            .eq("tag_id", tag_id)
-            .execute()
+        result = await self._session.execute(
+            delete(KeywordMappingORM)
+            .where(KeywordMappingORM.keyword == keyword)
+            .where(KeywordMappingORM.tag_id == tag_id)
         )
-        return len(result.data) > 0 if result.data else False
+        return result.rowcount > 0
 
     async def get_unmapped_keywords(self, limit: int = 100) -> list[dict]:
         """매핑되지 않은 키워드 목록 (배치 최적화)"""
         from collections import Counter
 
         # 모든 키워드와 카운트를 한 번에 조회
-        all_keywords_result = (
-            await self._client.table(TABLE_BRANCH_KEYWORDS).select("keyword").execute()
+        all_kw_result = await self._session.execute(
+            select(BranchKeywordORM.keyword)
         )
-        if not all_keywords_result.data:
+        all_keywords = all_kw_result.scalars().all()
+        if not all_keywords:
             return []
 
         # 키워드별 카운트 계산 (메모리에서)
-        keyword_counts = Counter(row["keyword"] for row in all_keywords_result.data)
+        keyword_counts = Counter(all_keywords)
 
         # 매핑된 키워드 조회
-        mapped_result = (
-            await self._client.table(self.table_name).select("keyword").execute()
+        mapped_result = await self._session.execute(
+            select(KeywordMappingORM.keyword)
         )
-        mapped_keywords = (
-            {row["keyword"] for row in mapped_result.data}
-            if mapped_result.data
-            else set()
-        )
+        mapped_keywords = set(mapped_result.scalars().all())
 
         # 매핑되지 않은 키워드만 필터링하고 카운트 기준 정렬
         unmapped_with_counts = [
@@ -235,19 +271,24 @@ class MappingRepository(BaseRepository[KeywordMapping]):
         success_count = 0
         for mapping in mappings:
             try:
-                await (
-                    self._client.table(self.table_name)
-                    .upsert(
-                        {
-                            "keyword": mapping["keyword"],
+                stmt = (
+                    pg_insert(KeywordMappingORM.__table__)
+                    .values(
+                        keyword=mapping["keyword"],
+                        tag_id=mapping["tag_id"],
+                        is_auto=mapping.get("is_auto", True),
+                        confidence=mapping.get("confidence", 1.0),
+                    )
+                    .on_conflict_do_update(
+                        index_elements=["keyword"],
+                        set_={
                             "tag_id": mapping["tag_id"],
                             "is_auto": mapping.get("is_auto", True),
                             "confidence": mapping.get("confidence", 1.0),
                         },
-                        on_conflict="keyword",
                     )
-                    .execute()
                 )
+                await self._session.execute(stmt)
                 success_count += 1
             except Exception as e:
                 keyword = mapping.get("keyword")

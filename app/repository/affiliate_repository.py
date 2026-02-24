@@ -5,13 +5,15 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.timezone import utc_now
-
 from models.affiliate import Affiliate, CarModel
 
 from .base import BaseRepository
+from .orm_models import AffiliateORM, CarModelORM
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,7 @@ class AffiliateRepository(BaseRepository[Affiliate]):
     """affiliates 테이블 Repository"""
 
     model = Affiliate
+    orm_model = AffiliateORM
 
     @property
     def table_name(self) -> str:
@@ -51,41 +54,50 @@ class AffiliateRepository(BaseRepository[Affiliate]):
         if not rows:
             return 0
 
-        result = (
-            await self._client.table(self.table_name)
-            .upsert(rows, on_conflict="affiliate_index")
-            .execute()
+        stmt = pg_insert(AffiliateORM.__table__).values(rows)
+        update_cols = {
+            col.name: col
+            for col in stmt.excluded
+            if col.name not in ("id", "affiliate_index", "created_at")
+        }
+        stmt = (
+            stmt.on_conflict_do_update(
+                index_elements=["affiliate_index"],
+                set_=update_cols,
+            )
+            .returning(AffiliateORM.id)
         )
-
-        return len(result.data) if result.data else 0
+        result = await self._session.execute(stmt)
+        return len(result.all())
 
     async def get_by_index(self, affiliate_index: int) -> Affiliate | None:
         """업체 인덱스로 조회"""
-        result = (
-            await self._client.table(self.table_name)
-            .select("*")
-            .eq("affiliate_index", affiliate_index)
-            .execute()
+        stmt = (
+            select(AffiliateORM)
+            .where(AffiliateORM.affiliate_index == affiliate_index)
         )
-        return self.model(**result.data[0]) if result.data else None
+        result = await self._session.execute(stmt)
+        row = result.scalar_one_or_none()
+        return self._to_pydantic(row) if row else None
 
     async def get_all_with_filters(
         self, location_type: str | None = None, is_active: bool = True
     ) -> list[Affiliate]:
         """필터링된 업체 목록"""
-        query = self._client.table(self.table_name).select("*")
+        stmt = select(AffiliateORM)
 
         if location_type:
-            query = query.eq("location_type", location_type)
+            stmt = stmt.where(AffiliateORM.location_type == location_type)
         if is_active is not None:
-            query = query.eq("is_active", is_active)
+            stmt = stmt.where(AffiliateORM.is_active == is_active)
 
-        result = await query.order("name").execute()
-        return [self.model(**row) for row in result.data]
+        stmt = stmt.order_by(AffiliateORM.name)
+        result = await self._session.execute(stmt)
+        return [self._to_pydantic(row) for row in result.scalars().all()]
 
     async def sync_from_api(self, api_client) -> dict:
         """Carmore API에서 업체 정보 동기화"""
-        result = {
+        sync_result = {
             "total": 0,
             "success": 0,
             "error": None,
@@ -95,8 +107,8 @@ class AffiliateRepository(BaseRepository[Affiliate]):
         try:
             response = api_client.get_affiliates(location_type="PARTNERS")
             if not response.success:
-                result["error"] = response.error
-                return result
+                sync_result["error"] = response.error
+                return sync_result
 
             if isinstance(response.data, dict):
                 affiliates = response.data.get("affiliates", [])
@@ -105,7 +117,7 @@ class AffiliateRepository(BaseRepository[Affiliate]):
             else:
                 affiliates = []
 
-            result["total"] = len(affiliates)
+            sync_result["total"] = len(affiliates)
 
             if affiliates:
                 normalized = []
@@ -130,18 +142,19 @@ class AffiliateRepository(BaseRepository[Affiliate]):
                         }
                     )
 
-                result["success"] = await self.upsert_batch(normalized)
+                sync_result["success"] = await self.upsert_batch(normalized)
 
         except Exception as e:
-            result["error"] = str(e)
+            sync_result["error"] = str(e)
 
-        return result
+        return sync_result
 
 
 class CarModelRepository(BaseRepository[CarModel]):
     """car_models 테이블 Repository"""
 
     model = CarModel
+    orm_model = CarModelORM
 
     @property
     def table_name(self) -> str:
@@ -153,19 +166,19 @@ class CarModelRepository(BaseRepository[CarModel]):
             return 0
 
         rows = []
-        for model in car_models:
-            model_id = model.get("model_id") or model.get("modelId") or model.get("id")
+        for cm in car_models:
+            model_id = cm.get("model_id") or cm.get("modelId") or cm.get("id")
             row = {
                 "model_id": model_id,
-                "name": model.get("name") or model.get("modelName", ""),
-                "name_en": model.get("name_en") or model.get("nameEn", ""),
-                "category": model.get("category") or model.get("carCategory", ""),
-                "brand": model.get("brand") or model.get("manufacturer", ""),
-                "seats": model.get("seats") or model.get("maxPassengers"),
-                "fuel_type": model.get("fuel_type") or model.get("fuelType", ""),
-                "transmission": model.get("transmission", ""),
-                "image_url": model.get("image_url") or model.get("imageUrl", ""),
-                "raw_data": model,
+                "name": cm.get("name") or cm.get("modelName", ""),
+                "name_en": cm.get("name_en") or cm.get("nameEn", ""),
+                "category": cm.get("category") or cm.get("carCategory", ""),
+                "brand": cm.get("brand") or cm.get("manufacturer", ""),
+                "seats": cm.get("seats") or cm.get("maxPassengers"),
+                "fuel_type": cm.get("fuel_type") or cm.get("fuelType", ""),
+                "transmission": cm.get("transmission", ""),
+                "image_url": cm.get("image_url") or cm.get("imageUrl", ""),
+                "raw_data": cm,
             }
             if row["model_id"]:
                 rows.append(row)
@@ -173,39 +186,48 @@ class CarModelRepository(BaseRepository[CarModel]):
         if not rows:
             return 0
 
-        result = (
-            await self._client.table(self.table_name)
-            .upsert(rows, on_conflict="model_id")
-            .execute()
+        stmt = pg_insert(CarModelORM.__table__).values(rows)
+        update_cols = {
+            col.name: col
+            for col in stmt.excluded
+            if col.name not in ("id", "model_id", "created_at")
+        }
+        stmt = (
+            stmt.on_conflict_do_update(
+                index_elements=["model_id"],
+                set_=update_cols,
+            )
+            .returning(CarModelORM.id)
         )
-
-        return len(result.data) if result.data else 0
+        result = await self._session.execute(stmt)
+        return len(result.all())
 
     async def get_by_model_id(self, model_id: str) -> CarModel | None:
         """차종 ID로 조회"""
-        result = (
-            await self._client.table(self.table_name)
-            .select("*")
-            .eq("model_id", model_id)
-            .execute()
+        stmt = (
+            select(CarModelORM)
+            .where(CarModelORM.model_id == model_id)
         )
-        return self.model(**result.data[0]) if result.data else None
+        result = await self._session.execute(stmt)
+        row = result.scalar_one_or_none()
+        return self._to_pydantic(row) if row else None
 
     async def get_all_with_category(
         self, category: str | None = None
     ) -> list[CarModel]:
         """카테고리별 차종 목록"""
-        query = self._client.table(self.table_name).select("*")
+        stmt = select(CarModelORM)
 
         if category:
-            query = query.eq("category", category)
+            stmt = stmt.where(CarModelORM.category == category)
 
-        result = await query.order("name").execute()
-        return [self.model(**row) for row in result.data]
+        stmt = stmt.order_by(CarModelORM.name)
+        result = await self._session.execute(stmt)
+        return [self._to_pydantic(row) for row in result.scalars().all()]
 
     async def sync_from_api(self, api_client) -> dict:
         """Carmore API에서 차종 정보 동기화"""
-        result = {
+        sync_result = {
             "total": 0,
             "success": 0,
             "error": None,
@@ -215,16 +237,16 @@ class CarModelRepository(BaseRepository[CarModel]):
         try:
             response = api_client.get_car_models()
             if not response.success:
-                result["error"] = response.error
-                return result
+                sync_result["error"] = response.error
+                return sync_result
 
             models = response.data if isinstance(response.data, list) else []
-            result["total"] = len(models)
+            sync_result["total"] = len(models)
 
             if models:
-                result["success"] = await self.upsert_batch(models)
+                sync_result["success"] = await self.upsert_batch(models)
 
         except Exception as e:
-            result["error"] = str(e)
+            sync_result["error"] = str(e)
 
-        return result
+        return sync_result

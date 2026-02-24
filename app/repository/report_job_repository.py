@@ -6,28 +6,32 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-
-from core.timezone import utc_now
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from supabase._async.client import AsyncClient
+from sqlalchemy import delete, func, select, update
 
-from .base import BaseRepository
+from core.timezone import utc_now
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from .orm_models import ReportJobORM
 
 logger = logging.getLogger(__name__)
 
 
-class ReportJobRepository(BaseRepository):
+class ReportJobRepository:
     """비동기 리포트 작업 상태 Repository"""
 
-    TABLE = "report_jobs"
     VALID_STATUSES = {"pending", "processing", "completed", "failed"}
 
-    @property
-    def table_name(self) -> str:
-        return self.TABLE
+    def __init__(self, session: AsyncSession):
+        self._session = session
+
+    @staticmethod
+    def _to_dict(row: ReportJobORM) -> dict[str, Any]:
+        return {c.key: getattr(row, c.key) for c in row.__table__.columns}
 
     async def create(
         self,
@@ -35,17 +39,7 @@ class ReportJobRepository(BaseRepository):
         period_start: datetime,
         period_end: datetime,
     ) -> dict[str, Any] | None:
-        """
-        새 작업 생성
-
-        Args:
-            branch_id: 지점 ID
-            period_start: 시작일
-            period_end: 종료일
-
-        Returns:
-            생성된 작업 데이터 (id 포함)
-        """
+        """새 작업 생성"""
         try:
             data = {
                 "branch_id": branch_id,
@@ -55,34 +49,34 @@ class ReportJobRepository(BaseRepository):
                 "progress": 0,
             }
 
-            result = await self._client.table(self.TABLE).insert(data).execute()
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-            if result.data:
-                return result.data[0]
+            stmt = (
+                pg_insert(ReportJobORM.__table__)
+                .values(**data)
+                .returning(ReportJobORM.__table__)
+            )
+            result = await self._session.execute(stmt)
+            row = result.mappings().one_or_none()
+            if row:
+                return dict(row)
             return None
         except Exception as e:
             logger.error(f"작업 생성 실패: {e}")
             raise
 
     async def get_by_id(self, job_id: str | UUID) -> dict[str, Any] | None:
-        """
-        작업 ID로 조회
-
-        Args:
-            job_id: 작업 UUID
-
-        Returns:
-            작업 데이터 또는 None
-        """
+        """작업 ID로 조회"""
         try:
-            result = (
-                await self._client.table(self.TABLE)
-                .select("*")
-                .eq("id", str(job_id))
-                .single()
-                .execute()
+            stmt = (
+                select(ReportJobORM)
+                .where(ReportJobORM.id == str(job_id))
             )
-            return result.data
+            result = await self._session.execute(stmt)
+            row = result.scalar_one_or_none()
+            if row:
+                return self._to_dict(row)
+            return None
         except Exception as e:
             logger.debug(f"작업 조회 실패 (없음): {e}")
             return None
@@ -95,23 +89,7 @@ class ReportJobRepository(BaseRepository):
         error_message: str | None = None,
         report_id: int | None = None,
     ) -> bool:
-        """
-        작업 상태 업데이트
-
-        Args:
-            job_id: 작업 UUID
-            status: 상태 (pending/processing/completed/failed)
-            progress: 진행률 (0-100)
-            error_message: 에러 메시지 (실패 시)
-            report_id: 생성된 리포트 ID (완료 시)
-
-        Returns:
-            업데이트 성공 여부
-
-        Raises:
-            ValueError: 유효하지 않은 상태값
-        """
-        # 상태값 검증
+        """작업 상태 업데이트"""
         if status not in self.VALID_STATUSES:
             raise ValueError(
                 f"유효하지 않은 상태: {status}. "
@@ -128,47 +106,32 @@ class ReportJobRepository(BaseRepository):
             if report_id is not None:
                 data["report_id"] = report_id
 
-            await self._client.table(self.TABLE).update(data).eq(
-                "id", str(job_id)
-            ).execute()
+            stmt = (
+                update(ReportJobORM)
+                .where(ReportJobORM.id == str(job_id))
+                .values(**data)
+            )
+            await self._session.execute(stmt)
             return True
         except Exception as e:
             logger.error(f"작업 상태 업데이트 실패: {e}")
             return False
 
     async def update_progress(self, job_id: str | UUID, progress: int) -> bool:
-        """
-        진행률만 업데이트
-
-        Args:
-            job_id: 작업 UUID
-            progress: 진행률 (0-100)
-
-        Returns:
-            업데이트 성공 여부
-        """
+        """진행률만 업데이트"""
         return await self.update_status(job_id, "processing", progress=progress)
 
     async def get_pending_jobs(self, limit: int = 10) -> list[dict[str, Any]]:
-        """
-        대기 중인 작업 목록 조회
-
-        Args:
-            limit: 조회 개수
-
-        Returns:
-            대기 중인 작업 목록
-        """
+        """대기 중인 작업 목록 조회"""
         try:
-            result = (
-                await self._client.table(self.TABLE)
-                .select("*")
-                .eq("status", "pending")
-                .order("created_at", desc=False)
+            stmt = (
+                select(ReportJobORM)
+                .where(ReportJobORM.status == "pending")
+                .order_by(ReportJobORM.created_at.asc())
                 .limit(limit)
-                .execute()
             )
-            return result.data or []
+            result = await self._session.execute(stmt)
+            return [self._to_dict(row) for row in result.scalars().all()]
         except Exception as e:
             logger.error(f"대기 작업 조회 실패: {e}")
             return []
@@ -180,34 +143,23 @@ class ReportJobRepository(BaseRepository):
         period_end: datetime,
         status: str | None = None,
     ) -> dict[str, Any] | None:
-        """
-        동일 조건의 기존 작업 조회
-
-        Args:
-            branch_id: 지점 ID
-            period_start: 시작일
-            period_end: 종료일
-            status: 상태 필터 (선택)
-
-        Returns:
-            작업 데이터 또는 None
-        """
+        """동일 조건의 기존 작업 조회"""
         try:
-            query = (
-                self._client.table(self.TABLE)
-                .select("*")
-                .eq("branch_id", branch_id)
-                .eq("period_start", period_start.strftime("%Y-%m-%d"))
-                .eq("period_end", period_end.strftime("%Y-%m-%d"))
+            stmt = (
+                select(ReportJobORM)
+                .where(ReportJobORM.branch_id == branch_id)
+                .where(ReportJobORM.period_start == period_start.date())
+                .where(ReportJobORM.period_end == period_end.date())
             )
 
             if status:
-                query = query.eq("status", status)
+                stmt = stmt.where(ReportJobORM.status == status)
 
-            result = await query.order("created_at", desc=True).limit(1).execute()
-
-            if result.data:
-                return result.data[0]
+            stmt = stmt.order_by(ReportJobORM.created_at.desc()).limit(1)
+            result = await self._session.execute(stmt)
+            row = result.scalar_one_or_none()
+            if row:
+                return self._to_dict(row)
             return None
         except Exception as e:
             logger.debug(f"작업 조회 실패: {e}")
@@ -219,63 +171,39 @@ class ReportJobRepository(BaseRepository):
         period_start: datetime,
         period_end: datetime,
     ) -> dict[str, Any] | None:
-        """
-        동일 조건의 활성 작업 조회 (pending 또는 processing)
-
-        Race condition 방지를 위해 pending과 processing 상태 모두 확인합니다.
-
-        Args:
-            branch_id: 지점 ID
-            period_start: 시작일
-            period_end: 종료일
-
-        Returns:
-            활성 작업 데이터 또는 None
-        """
+        """동일 조건의 활성 작업 조회 (pending 또는 processing)"""
         try:
-            result = (
-                await self._client.table(self.TABLE)
-                .select("*")
-                .eq("branch_id", branch_id)
-                .eq("period_start", period_start.strftime("%Y-%m-%d"))
-                .eq("period_end", period_end.strftime("%Y-%m-%d"))
-                .in_("status", ["pending", "processing"])
-                .order("created_at", desc=True)
+            stmt = (
+                select(ReportJobORM)
+                .where(ReportJobORM.branch_id == branch_id)
+                .where(ReportJobORM.period_start == period_start.date())
+                .where(ReportJobORM.period_end == period_end.date())
+                .where(ReportJobORM.status.in_(["pending", "processing"]))
+                .order_by(ReportJobORM.created_at.desc())
                 .limit(1)
-                .execute()
             )
-
-            if result.data:
-                return result.data[0]
+            result = await self._session.execute(stmt)
+            row = result.scalar_one_or_none()
+            if row:
+                return self._to_dict(row)
             return None
         except Exception as e:
             logger.debug(f"활성 작업 조회 실패: {e}")
             return None
 
     async def cleanup_old_jobs(self, days: int = 7) -> int:
-        """
-        오래된 작업 정리
-
-        Args:
-            days: 보관 기간 (일)
-
-        Returns:
-            삭제된 작업 수
-        """
+        """오래된 작업 정리"""
         try:
-            from datetime import timedelta
+            cutoff = utc_now() - timedelta(days=days)
 
-            cutoff = (utc_now() - timedelta(days=days)).isoformat()
-
-            result = (
-                await self._client.table(self.TABLE)
-                .delete()
-                .lt("created_at", cutoff)
-                .in_("status", ["completed", "failed"])
-                .execute()
+            stmt = (
+                delete(ReportJobORM)
+                .where(ReportJobORM.created_at < cutoff)
+                .where(ReportJobORM.status.in_(["completed", "failed"]))
+                .returning(ReportJobORM.id)
             )
-
-            return len(result.data) if result.data else 0
+            result = await self._session.execute(stmt)
+            return len(result.all())
         except Exception as e:
             logger.error(f"오래된 작업 정리 실패: {e}")
             return 0
@@ -285,32 +213,19 @@ class ReportJobRepository(BaseRepository):
         stale_minutes: int = 30,
         error_message: str = "작업 시간 초과",
     ) -> int:
-        """
-        고아 작업을 실패로 마킹 (서버 재시작 복구용)
-
-        processing 상태로 지정된 시간 이상 방치된 작업들을 failed로 변경합니다.
-
-        Args:
-            stale_minutes: 고아 작업으로 판단할 시간 (분)
-            error_message: 실패 메시지
-
-        Returns:
-            복구된 작업 수
-        """
+        """고아 작업을 실패로 마킹 (서버 재시작 복구용)"""
         try:
-            from datetime import timedelta
+            cutoff = utc_now() - timedelta(minutes=stale_minutes)
 
-            cutoff = (utc_now() - timedelta(minutes=stale_minutes)).isoformat()
-
-            result = (
-                await self._client.table(self.TABLE)
-                .update({"status": "failed", "error_message": error_message})
-                .eq("status", "processing")
-                .lt("updated_at", cutoff)
-                .execute()
+            stmt = (
+                update(ReportJobORM)
+                .where(ReportJobORM.status == "processing")
+                .where(ReportJobORM.updated_at < cutoff)
+                .values(status="failed", error_message=error_message)
+                .returning(ReportJobORM.id)
             )
-
-            count = len(result.data) if result.data else 0
+            result = await self._session.execute(stmt)
+            count = len(result.all())
             if count > 0:
                 logger.info(f"고아 작업 {count}개를 failed로 마킹")
             return count

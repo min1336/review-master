@@ -2,7 +2,7 @@
 
 branch_summaries.region 기준으로 대상 지점을 선정하고,
 Athena에서 리뷰 본문(content)을 포함한 전체 데이터를 조회하여 파이프라인을 실행합니다.
-결과는 기존 파이프라인과 동일하게 Supabase에 저장됩니다.
+결과는 기존 파이프라인과 동일하게 DB에 저장됩니다.
 
 NOTE: branch_reviews.content는 DB 아키텍처 변경(73ab4aa)으로 NULL이므로
       반드시 Athena에서 조회해야 합니다.
@@ -26,6 +26,8 @@ Usage:
     python app/scripts/run_region_pipeline.py --region 서울 --chunk 1000
 """
 
+from __future__ import annotations
+
 import argparse
 import asyncio
 import logging
@@ -45,18 +47,21 @@ PIPELINE_CHUNK = 500
 ATHENA_PAGE_SIZE = 50000
 
 
-async def fetch_region_branch_ids(client, region: str) -> list[int]:
+async def fetch_region_branch_ids(session, region: str) -> list[int]:
     """branch_summaries.region 기준으로 branch_id 목록 조회"""
-    logger.info(f"지점 조회: region LIKE '{region}%'")
+    from sqlalchemy import select
 
-    result = (
-        await client.table("branch_summaries")
-        .select("branch_id")
-        .like("region", f"{region}%")
-        .execute()
+    from repository.orm_models import BranchSummaryORM
+
+    logger.info("지점 조회: region LIKE '%s%%'", region)
+
+    result = await session.execute(
+        select(BranchSummaryORM.branch_id).where(
+            BranchSummaryORM.region.like(f"{region}%")
+        )
     )
-    branch_ids = [row["branch_id"] for row in result.data]
-    logger.info(f"  대상 지점: {len(branch_ids)}개")
+    branch_ids = list(result.scalars().all())
+    logger.info("  대상 지점: %d개", len(branch_ids))
     return branch_ids
 
 
@@ -96,18 +101,26 @@ async def main() -> None:
     parser.add_argument("--chunk", type=int, default=PIPELINE_CHUNK, help="청크 사이즈 (기본: 500)")
     args = parser.parse_args()
 
+    from core.config import get_settings
     from domain.pipeline.unified_pipeline import UnifiedPipeline
-    from repository.session import get_client
+    from repository.database import get_session_factory, init_db
+
+    settings = get_settings()
+    init_db(settings.get_database_url())
+    factory = get_session_factory()
 
     start = time.time()
     region = args.region
     chunk_size = args.chunk
 
-    logger.info(f"=== 지역 파이프라인 시작: {region} ===")
+    logger.info("=== 지역 파이프라인 시작: %s ===", region)
 
     # 1. branch_summaries에서 대상 지점 조회
-    client = await get_client()
-    branch_ids = await fetch_region_branch_ids(client, region)
+    session = factory()
+    try:
+        branch_ids = await fetch_region_branch_ids(session, region)
+    finally:
+        await session.close()
 
     if not branch_ids:
         logger.info("해당 지역에 지점이 없습니다.")
@@ -122,7 +135,7 @@ async def main() -> None:
         return
 
     total = len(reviews)
-    logger.info(f"파이프라인 입력: {total}건 (Athena 조회 소요: {time.time() - start:.1f}s)")
+    logger.info("파이프라인 입력: %d건 (Athena 조회 소요: %.1fs)", total, time.time() - start)
 
     # 3. UnifiedPipeline 청크 실행
     pipeline = UnifiedPipeline()

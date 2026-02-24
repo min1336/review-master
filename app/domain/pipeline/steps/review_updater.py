@@ -5,10 +5,13 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from sqlalchemy import update
+
+from repository.orm_models import BranchReviewORM
 from schemas.dto import ProcessedReviewDTO
 
 if TYPE_CHECKING:
-    from supabase import AsyncClient
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +20,7 @@ class ReviewSentimentUpdater:
     """branch_reviews.sentiment 업데이트"""
 
     async def update(
-        self, client: AsyncClient, processed: list[ProcessedReviewDTO]
+        self, session: AsyncSession, processed: list[ProcessedReviewDTO]
     ) -> int:
         """리뷰의 sentiment 컬럼을 업데이트한다."""
         # Group review IDs by sentiment value
@@ -35,11 +38,10 @@ class ReviewSentimentUpdater:
         # Batch update by sentiment value
         for sentiment, review_ids in sentiment_groups.items():
             try:
-                await (
-                    client.table("branch_reviews")
-                    .update({"sentiment": sentiment})
-                    .in_("id", review_ids)
-                    .execute()
+                await session.execute(
+                    update(BranchReviewORM)
+                    .where(BranchReviewORM.id.in_(review_ids))
+                    .values(sentiment=sentiment)
                 )
                 updated += len(review_ids)
             except Exception as e:

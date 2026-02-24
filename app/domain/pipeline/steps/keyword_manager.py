@@ -4,30 +4,42 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import datetime
-
-from core.timezone import utc_now
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from core.timezone import utc_now
+from repository.orm_models import BranchKeywordORM
 from schemas.dto import ProcessedReviewDTO
 
 if TYPE_CHECKING:
-    from supabase import AsyncClient
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_aware(dt: datetime | None) -> datetime | None:
+    """naive datetime을 UTC aware로 변환"""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 class KeywordManager:
     """지점별 키워드 누적 집계 및 branch_keywords 테이블 갱신"""
 
     async def update(
-        self, client: AsyncClient, processed: list[ProcessedReviewDTO]
+        self, session: AsyncSession, processed: list[ProcessedReviewDTO]
     ) -> int:
         """
         키워드 누적 업데이트
 
         Args:
-            client: Supabase AsyncClient
+            session: AsyncSession
             processed: 처리된 리뷰 목록
 
         Returns:
@@ -36,16 +48,12 @@ class KeywordManager:
         if not processed:
             return 0
 
-        # 1. 지점별 키워드 그룹화 (키워드 → {count, last_seen_at})
+        # 1. 지점별 키워드 그룹화 (키워드 -> {count, last_seen_at})
         branch_keywords: dict[int, dict[str, dict]] = defaultdict(dict)
 
         for pr in processed:
             branch_id = pr.branch_id
-            review_date = (
-                pr.review.created_at.isoformat()
-                if pr.review.created_at
-                else utc_now().isoformat()
-            )
+            review_date = _ensure_aware(pr.review.created_at) or utc_now()
 
             for keyword in pr.keywords:
                 existing = branch_keywords[branch_id].get(keyword)
@@ -69,24 +77,21 @@ class KeywordManager:
         for branch_id, keywords_data in branch_keywords.items():
             try:
                 # 2-1. 기존 키워드 로드
-                existing_data = await (
-                    client.table("branch_keywords")
-                    .select("keyword, count, last_seen_at")
-                    .eq("branch_id", branch_id)
-                    .execute()
+                result = await session.execute(
+                    select(
+                        BranchKeywordORM.keyword,
+                        BranchKeywordORM.count,
+                        BranchKeywordORM.last_seen_at,
+                    )
+                    .where(BranchKeywordORM.branch_id == branch_id)
                 )
 
                 existing_map: dict[str, dict] = {}
-                if existing_data.data:
-                    for row in existing_data.data:
-                        # DB에서 돌아온 last_seen_at을 문자열로 통일
-                        raw_date = row.get("last_seen_at")
-                        if hasattr(raw_date, "isoformat"):
-                            raw_date = raw_date.isoformat()
-                        existing_map[row["keyword"]] = {
-                            "count": row.get("count", 0),
-                            "last_seen_at": raw_date,
-                        }
+                for row in result.all():
+                    existing_map[row.keyword] = {
+                        "count": row.count or 0,
+                        "last_seen_at": _ensure_aware(row.last_seen_at),
+                    }
 
                 # 2-2. 누적 집계 (배치 내 등장 횟수 합산)
                 upsert_rows = []
@@ -97,10 +102,11 @@ class KeywordManager:
 
                     if existing:
                         new_count = existing["count"] + batch_count
-                        old_date = existing["last_seen_at"] or ""
-                        final_date = (
-                            new_date if new_date > old_date else old_date
-                        )
+                        old_date = existing["last_seen_at"]
+                        if old_date and new_date:
+                            final_date = max(new_date, old_date)
+                        else:
+                            final_date = new_date or old_date
                     else:
                         new_count = batch_count
                         final_date = new_date
@@ -114,14 +120,19 @@ class KeywordManager:
 
                 # 2-3. DB upsert
                 if upsert_rows:
-                    await (
-                        client.table("branch_keywords")
-                        .upsert(
-                            upsert_rows,
-                            on_conflict="branch_id,keyword",
+                    for row_data in upsert_rows:
+                        stmt = (
+                            pg_insert(BranchKeywordORM.__table__)
+                            .values(**row_data)
+                            .on_conflict_do_update(
+                                index_elements=["branch_id", "keyword"],
+                                set_={
+                                    "count": row_data["count"],
+                                    "last_seen_at": row_data["last_seen_at"],
+                                },
+                            )
                         )
-                        .execute()
-                    )
+                        await session.execute(stmt)
                     updated_branches += 1
                     logger.info(
                         f"지점 {branch_id} 키워드 {len(upsert_rows)}개 업데이트"

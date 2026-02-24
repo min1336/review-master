@@ -8,20 +8,24 @@ import logging
 from collections import defaultdict
 from datetime import datetime
 
+from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from models.tag import BranchTag
 
 from .base import BaseRepository
+from .orm_models import BranchTagORM, CategoryORM, TagORM
 
 logger = logging.getLogger(__name__)
-
-# 테이블 이름 상수
-TABLE_TAGS = "tags"
 
 
 class BranchTagRepository(BaseRepository[BranchTag]):
     """branch_tags 테이블 Repository"""
 
     model = BranchTag
+    orm_model = BranchTagORM
 
     @property
     def table_name(self) -> str:
@@ -31,16 +35,36 @@ class BranchTagRepository(BaseRepository[BranchTag]):
         self, branch_id: int, period_type: str = "all", limit: int = 10
     ) -> list[BranchTag]:
         """지점별 태그 조회"""
-        result = (
-            await self._client.table(self.table_name)
-            .select("*, tags(id, name, sentiment, categories(id, name, color))")
-            .eq("branch_id", branch_id)
-            .eq("period_type", period_type)
-            .order("count", desc=True)
+        stmt = (
+            select(BranchTagORM)
+            .options(
+                selectinload(BranchTagORM.tag).selectinload(TagORM.category)
+            )
+            .where(BranchTagORM.branch_id == branch_id)
+            .where(BranchTagORM.period_type == period_type)
+            .order_by(BranchTagORM.count.desc())
             .limit(limit)
-            .execute()
         )
-        return [self.model(**row) for row in result.data]
+        result = await self._session.execute(stmt)
+        rows = result.scalars().all()
+
+        branch_tags = []
+        for row in rows:
+            data = {c.key: getattr(row, c.key) for c in row.__table__.columns}
+            if row.tag:
+                tag_data = {
+                    c.key: getattr(row.tag, c.key)
+                    for c in row.tag.__table__.columns
+                }
+                if row.tag.category:
+                    tag_data["categories"] = {
+                        c.key: getattr(row.tag.category, c.key)
+                        for c in row.tag.category.__table__.columns
+                    }
+                data["tags"] = tag_data
+            branch_tags.append(BranchTag(**data))
+
+        return branch_tags
 
     async def get_batch_top_tags(
         self, branch_ids: list[int], period_type: str = "all", top_n: int = 3
@@ -50,26 +74,31 @@ class BranchTagRepository(BaseRepository[BranchTag]):
             return {}
 
         # 태그 이름 조회
-        tags_result = await self._client.table(TABLE_TAGS).select("id, name").execute()
-        tag_names = {t["id"]: t["name"] for t in tags_result.data}
+        tags_result = await self._session.execute(
+            select(TagORM.id, TagORM.name)
+        )
+        tag_names = {row.id: row.name for row in tags_result.all()}
 
         # 지점별 태그 조회
-        result = (
-            await self._client.table(self.table_name)
-            .select("branch_id, tag_id, count")
-            .in_("branch_id", branch_ids)
-            .eq("period_type", period_type)
-            .order("count", desc=True)
-            .execute()
+        stmt = (
+            select(
+                BranchTagORM.branch_id,
+                BranchTagORM.tag_id,
+                BranchTagORM.count,
+            )
+            .where(BranchTagORM.branch_id.in_(branch_ids))
+            .where(BranchTagORM.period_type == period_type)
+            .order_by(BranchTagORM.count.desc())
         )
+        result = await self._session.execute(stmt)
 
         # 지점별 그룹화
-        branch_tags = defaultdict(list)
-        for t in result.data:
-            bid = str(t["branch_id"])
+        branch_tags: dict[str, list] = defaultdict(list)
+        for row in result.all():
+            bid = str(row.branch_id)
             if len(branch_tags[bid]) < top_n:
                 branch_tags[bid].append(
-                    {"name": tag_names.get(t["tag_id"], "unknown"), "count": t["count"]}
+                    {"name": tag_names.get(row.tag_id, "unknown"), "count": row.count}
                 )
 
         return {str(bid): branch_tags.get(str(bid), []) for bid in branch_ids}
@@ -81,21 +110,25 @@ class BranchTagRepository(BaseRepository[BranchTag]):
         success_count = 0
         for tag in tags_data:
             try:
-                await (
-                    self._client.table(self.table_name)
-                    .upsert(
-                        {
-                            "branch_id": branch_id,
-                            "tag_id": tag["tag_id"],
-                            "period_type": period_type,
-                            "count": tag.get("count", 0),
-                            "weighted_score": tag.get("weighted_score", 0),
-                            "rank": tag.get("rank"),
-                        },
-                        on_conflict="branch_id,tag_id,period_type",
-                    )
-                    .execute()
+                values = {
+                    "branch_id": branch_id,
+                    "tag_id": tag["tag_id"],
+                    "period_type": period_type,
+                    "count": tag.get("count", 0),
+                    "weighted_score": tag.get("weighted_score", 0),
+                    "rank": tag.get("rank"),
+                }
+                stmt = pg_insert(BranchTagORM.__table__).values(**values)
+                update_cols = {
+                    k: v
+                    for k, v in values.items()
+                    if k not in ("branch_id", "tag_id", "period_type")
+                }
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["branch_id", "tag_id", "period_type"],
+                    set_=update_cols,
                 )
+                await self._session.execute(stmt)
                 success_count += 1
             except Exception as e:
                 tag_id = tag.get("tag_id")
@@ -109,12 +142,12 @@ class BranchTagRepository(BaseRepository[BranchTag]):
         self, branch_id: int, start_date: datetime, end_date: datetime,
     ) -> list[dict]:
         """기간별 태그 감정 통계 (review_tag_mappings RPC)"""
-        result = await self._client.rpc(
-            "getTagStatsByPeriod",
+        result = await self._session.execute(
+            text('SELECT * FROM "getTagStatsByPeriod"(:branchId, :startDate, :endDate)'),
             {
                 "branchId": branch_id,
                 "startDate": start_date.isoformat(),
                 "endDate": end_date.isoformat(),
             },
-        ).execute()
-        return result.data or []
+        )
+        return [dict(row) for row in result.mappings().all()]

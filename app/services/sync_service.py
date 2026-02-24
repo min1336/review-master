@@ -10,10 +10,10 @@ from core.timezone import utc_now
 
 from domain.pipeline.unified_pipeline import UnifiedPipeline
 from infrastructure.athena import AthenaClient
+from repository.database import get_session_factory
 from repository.new_review_repository import NewReviewRepository
 from repository.review_repository import BranchReviewRepository
 from repository.sync_metadata_repository import SyncMetadataRepository
-from repository.session import get_client
 from schemas.sync import SyncResultResponse
 
 logger = logging.getLogger(__name__)
@@ -60,9 +60,9 @@ class SyncService:
                 error="athena_client_not_configured",
             )
 
+        session = get_session_factory()()
         try:
-            client = await get_client()
-            metadata_repo = SyncMetadataRepository(client)
+            metadata_repo = SyncMetadataRepository(session)
 
             # 1. 마지막 동기화 시간 조회
             last_sync_at = await metadata_repo.get_last_sync_at(SYNC_TYPE)
@@ -80,6 +80,7 @@ class SyncService:
 
             if not athena_reviews:
                 await metadata_repo.update_last_sync_at(SYNC_TYPE)
+                await session.commit()
                 return SyncResultResponse(
                     success=True,
                     message="신규 리뷰가 없습니다",
@@ -128,6 +129,7 @@ class SyncService:
                 await progress_callback(95, "메타데이터 업데이트")
             await metadata_repo.update_last_sync_at(SYNC_TYPE)
 
+            await session.commit()
             duration = (utc_now() - start_time).total_seconds()
 
             logger.info(
@@ -151,6 +153,8 @@ class SyncService:
                 error=str(e),
                 duration_seconds=(utc_now() - start_time).total_seconds(),
             )
+        finally:
+            await session.close()
 
     async def mark_reviews_as_read(
         self, review_ids: list[int] | None = None

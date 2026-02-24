@@ -1,8 +1,10 @@
 """키워드 자동 매핑 실행 스크립트
 
 52개 태그 기반으로 branch_keywords를 keyword_mappings에 재분류합니다.
-DB 함수 get_unmapped_keywords()를 사용하여 Supabase row limit 우회.
+MappingRepository.get_unmapped_keywords()를 사용하여 미매핑 키워드를 조회합니다.
 """
+
+from __future__ import annotations
 
 import asyncio
 import logging
@@ -23,97 +25,102 @@ BATCH_SIZE = 500
 MAX_BATCHES = 50  # 최대 25,000건 (unique ~9,910)
 
 
-async def fetch_unmapped(client, limit: int) -> list[dict]:
-    """DB 함수로 미매핑 키워드 조회 (Supabase row limit 무관)"""
-    result = await client.rpc(
-        "get_unmapped_keywords", {"p_limit": limit}
-    ).execute()
-    return result.data or []
-
-
 async def main():
+    from core.config import get_settings
     from domain.analysis import HybridClassifier
     from domain.analysis.patterns import CATEGORY_DEFAULT_TAG
-    from repository.session import get_client
+    from repository.database import get_session_factory, init_db
     from repository.tag_repository import MappingRepository, TagRepository
 
-    client = await get_client()
-    tag_repo = TagRepository(client)
-    mapping_repo = MappingRepository(client)
+    settings = get_settings()
+    init_db(settings.get_database_url())
+    factory = get_session_factory()
 
-    # 1. DB 태그 → 이름:id 룩업
-    all_tags = await tag_repo.get_all_with_filters(is_active=True)
-    tag_name_to_id: dict[str, int] = {t.name: t.id for t in all_tags}
-    logger.info("Tags loaded: %d", len(tag_name_to_id))
+    session = factory()
+    try:
+        tag_repo = TagRepository(session)
+        mapping_repo = MappingRepository(session)
 
-    # 2. HybridClassifier 초기화 (한 번만)
-    logger.info("Initializing HybridClassifier...")
-    classifier = await asyncio.to_thread(lambda: HybridClassifier(lazy_load=False))
-    logger.info("Classifier ready.")
+        # 1. DB 태그 → 이름:id 룩업
+        all_tags = await tag_repo.get_all_with_filters(is_active=True)
+        tag_name_to_id: dict[str, int] = {t.name: t.id for t in all_tags}
+        logger.info("Tags loaded: %d", len(tag_name_to_id))
 
-    total_mapped = 0
-    total_skipped = 0
-    total_errors = 0
-    start = time.time()
+        # 2. HybridClassifier 초기화 (한 번만)
+        logger.info("Initializing HybridClassifier...")
+        classifier = await asyncio.to_thread(lambda: HybridClassifier(lazy_load=False))
+        logger.info("Classifier ready.")
 
-    for batch_num in range(1, MAX_BATCHES + 1):
-        # 3. 미매핑 키워드 조회 (SQL 함수)
-        unmapped = await fetch_unmapped(client, BATCH_SIZE)
-        if not unmapped:
-            logger.info("No more unmapped keywords.")
-            break
+        total_mapped = 0
+        total_skipped = 0
+        total_errors = 0
+        start = time.time()
 
-        keywords = [row["keyword"] for row in unmapped]
+        for batch_num in range(1, MAX_BATCHES + 1):
+            # 3. 미매핑 키워드 조회
+            unmapped = await mapping_repo.get_unmapped_keywords(limit=BATCH_SIZE)
+            if not unmapped:
+                logger.info("No more unmapped keywords.")
+                break
 
-        # 4. 배치 분류 (CPU-bound)
-        classifications = await asyncio.to_thread(
-            classifier.classify_keywords, keywords
-        )
+            keywords = [row["keyword"] for row in unmapped]
 
-        # 5. 매핑 생성
-        mapped = 0
-        skipped = 0
-        errors = 0
-        for row, (tag_group, _score, _sentiment) in zip(
-            unmapped, classifications, strict=False
-        ):
-            kw = row["keyword"]
-            try:
-                if tag_group == "기타":
-                    skipped += 1
-                    continue
+            # 4. 배치 분류 (CPU-bound)
+            classifications = await asyncio.to_thread(
+                classifier.classify_keywords, keywords
+            )
 
-                tag_id = tag_name_to_id.get(tag_group)
-                if not tag_id:
-                    default_tag = CATEGORY_DEFAULT_TAG.get(tag_group)
-                    if default_tag:
-                        tag_id = tag_name_to_id.get(default_tag)
+            # 5. 매핑 생성
+            mapped = 0
+            skipped = 0
+            errors = 0
+            for row, (tag_group, _score, _sentiment) in zip(
+                unmapped, classifications, strict=False
+            ):
+                kw = row["keyword"]
+                try:
+                    if tag_group == "기타":
+                        skipped += 1
+                        continue
 
-                if tag_id:
-                    await mapping_repo.upsert_mapping(kw, tag_id, is_auto=True)
-                    mapped += 1
-                else:
-                    skipped += 1
-            except Exception as e:
-                errors += 1
-                logger.warning("Error mapping '%s': %s", kw, e)
+                    tag_id = tag_name_to_id.get(tag_group)
+                    if not tag_id:
+                        default_tag = CATEGORY_DEFAULT_TAG.get(tag_group)
+                        if default_tag:
+                            tag_id = tag_name_to_id.get(default_tag)
 
-        total_mapped += mapped
-        total_skipped += skipped
-        total_errors += errors
+                    if tag_id:
+                        await mapping_repo.upsert_mapping(kw, tag_id, is_auto=True)
+                        mapped += 1
+                    else:
+                        skipped += 1
+                except Exception as e:
+                    errors += 1
+                    logger.warning("Error mapping '%s': %s", kw, e)
+
+            await session.commit()
+
+            total_mapped += mapped
+            total_skipped += skipped
+            total_errors += errors
+            elapsed = time.time() - start
+            logger.info(
+                "Batch %d: mapped=%d, skipped=%d, errors=%d | "
+                "Total: mapped=%d, skipped=%d, errors=%d (%.1fs)",
+                batch_num, mapped, skipped, errors,
+                total_mapped, total_skipped, total_errors, elapsed,
+            )
+
         elapsed = time.time() - start
         logger.info(
-            "Batch %d: mapped=%d, skipped=%d, errors=%d | "
-            "Total: mapped=%d, skipped=%d, errors=%d (%.1fs)",
-            batch_num, mapped, skipped, errors,
+            "=== COMPLETE === mapped=%d, skipped=%d, errors=%d in %.1fs",
             total_mapped, total_skipped, total_errors, elapsed,
         )
-
-    elapsed = time.time() - start
-    logger.info(
-        "=== COMPLETE === mapped=%d, skipped=%d, errors=%d in %.1fs",
-        total_mapped, total_skipped, total_errors, elapsed,
-    )
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
 
 
 if __name__ == "__main__":

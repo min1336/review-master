@@ -53,6 +53,14 @@ class TZAwareJSONResponse(JSONResponse):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan"""
+    from repository.database import close_db, init_db
+
+    # SQLAlchemy 엔진 초기화
+    db_url = settings.get_database_url()
+    if db_url:
+        init_db(db_url)
+        print("[Startup] Database engine initialized (asyncpg)")
+
     print("\n" + "=" * 60)
     print("Review Summary AI - FastAPI 운영팀 모니터링 대시보드")
     print("=" * 60)
@@ -69,21 +77,27 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    # 엔진 종료
+    if settings.get_database_url():
+        await close_db()
+
 
 async def _recover_stale_report_jobs():
     """서버 시작 시 고아 리포트 작업 복구"""
     try:
+        from repository.database import get_session_factory
         from repository.report_job_repository import ReportJobRepository
-        from repository.session import get_client
 
-        client = await get_client()
-        job_repo = ReportJobRepository(client)
-        recovered = await job_repo.mark_stale_jobs_failed(
-            stale_minutes=30,
-            error_message="서버 재시작으로 인한 작업 중단. 다시 시도해주세요.",
-        )
-        if recovered > 0:
-            print(f"[Startup] 고아 리포트 작업 {recovered}개 복구됨")
+        factory = get_session_factory()
+        async with factory() as session:
+            job_repo = ReportJobRepository(session)
+            recovered = await job_repo.mark_stale_jobs_failed(
+                stale_minutes=30,
+                error_message="서버 재시작으로 인한 작업 중단. 다시 시도해주세요.",
+            )
+            await session.commit()
+            if recovered > 0:
+                print(f"[Startup] 고아 리포트 작업 {recovered}개 복구됨")
     except Exception as e:
         print(f"[Startup] 고아 작업 복구 실패 (무시됨): {e}")
 

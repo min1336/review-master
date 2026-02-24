@@ -6,9 +6,12 @@ import json
 import logging
 from datetime import datetime, timedelta
 
-from supabase import AsyncClient
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from schemas.dto import BranchReviewsDTO
+
+from .orm_models import NewReviewORM
 
 logger = logging.getLogger(__name__)
 
@@ -16,12 +19,8 @@ logger = logging.getLogger(__name__)
 class NewReviewRepository:
     """new_reviews 테이블 접근"""
 
-    def __init__(self, client: AsyncClient) -> None:
-        self._client = client
-
-    @property
-    def table_name(self) -> str:
-        return "new_reviews"
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
 
     async def upsert_batch(self, reviews: list[dict], batch_size: int = 100) -> int:
         """신규 리뷰 일괄 저장 (content 포함)"""
@@ -55,12 +54,13 @@ class NewReviewRepository:
                     insert_data.append(data)
 
                 safe_data = json.loads(json.dumps(insert_data, default=str))
-                result = await self._client.rpc(
-                    "upsert_new_reviews",
-                    {"p_reviews": safe_data},
-                ).execute()
+                result = await self._session.execute(
+                    text("SELECT upsert_new_reviews(:p_reviews::jsonb)"),
+                    {"p_reviews": json.dumps(safe_data)},
+                )
 
-                count = result.data if isinstance(result.data, int) else len(batch)
+                row = result.scalar_one_or_none()
+                count = row if isinstance(row, int) else len(batch)
                 success_count += count
             except Exception as e:
                 logger.warning(f"Failed to upsert new reviews batch: {e}")
@@ -77,32 +77,50 @@ class NewReviewRepository:
         offset: int = 0,
     ) -> BranchReviewsDTO:
         """신규 리뷰 검색 (content 포함)"""
-        query = self._client.table(self.table_name).select("*", count="exact")
+        conditions = []
 
         if branch_ids:
-            query = query.in_("branch_id", branch_ids)
-
+            conditions.append(NewReviewORM.branch_id.in_(branch_ids))
         if date_from:
-            query = query.gte("review_date", date_from)
+            conditions.append(NewReviewORM.review_date >= date_from)
         if date_to:
             next_day = (
                 datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
             ).strftime("%Y-%m-%d")
-            query = query.lt("review_date", next_day)
+            conditions.append(NewReviewORM.review_date < next_day)
+
+        # 총 개수 조회
+        count_stmt = select(func.count()).select_from(NewReviewORM)
+        for cond in conditions:
+            count_stmt = count_stmt.where(cond)
+        count_result = await self._session.execute(count_stmt)
+        total_count = count_result.scalar_one()
+
+        # 데이터 조회
+        data_stmt = select(NewReviewORM)
+        for cond in conditions:
+            data_stmt = data_stmt.where(cond)
 
         if sort_by == "rating_low":
-            query = query.order("rating_service", desc=False, nullsfirst=False)
+            data_stmt = data_stmt.order_by(
+                NewReviewORM.rating_service.asc().nullslast()
+            )
         else:
-            query = query.order("review_date", desc=True)
+            data_stmt = data_stmt.order_by(NewReviewORM.review_date.desc())
 
-        query = query.range(offset, offset + limit - 1)
-        result = await query.execute()
+        data_stmt = data_stmt.offset(offset).limit(limit)
+        data_result = await self._session.execute(data_stmt)
+        rows = data_result.scalars().all()
 
-        # is_new=true 고정 (new_reviews에 있는 리뷰는 모두 신규)
-        reviews = [{**r, "is_new": True} for r in (result.data or [])]
+        # ORM → dict 변환, is_new=True 고정
+        reviews = []
+        for row in rows:
+            d = {c.key: getattr(row, c.key) for c in row.__table__.columns}
+            d["is_new"] = True
+            reviews.append(d)
 
         return BranchReviewsDTO(
             reviews=reviews,
-            total=result.count or 0,
+            total=total_count,
             car_models=[],
         )

@@ -5,12 +5,16 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
 from core.decay import compute_decay
 from core.timezone import utc_now
+from repository.orm_models import BranchTagORM, KeywordMappingORM, TagORM
 from schemas.dto import ProcessedReviewDTO
 
 if TYPE_CHECKING:
-    from supabase import AsyncClient
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +23,7 @@ class TagAggregator:
     """태그 매핑 + 지점별 태그 집계 (positive_count/negative_count)"""
 
     async def aggregate(
-        self, client: AsyncClient, processed: list[ProcessedReviewDTO]
+        self, session: AsyncSession, processed: list[ProcessedReviewDTO]
     ) -> dict:
         """tag_sentiments 기반으로 tags, keyword_mappings, branch_tags 갱신"""
         # 1. 지점별 태그+감정 메모리 집계
@@ -61,7 +65,7 @@ class TagAggregator:
                     if kw not in all_keywords_with_tags:
                         all_keywords_with_tags[kw] = tag_name
 
-        # 2. tags 배치 조회 → 없는 것만 개별 upsert
+        # 2. tags 배치 조회 -> 없는 것만 개별 upsert
         tag_id_cache: dict[str, int] = {}
         all_tag_names: set[str] = set()
         for tag_data in branch_tag_data.values():
@@ -69,14 +73,12 @@ class TagAggregator:
 
         if all_tag_names:
             try:
-                existing_tags = await (
-                    client.table("tags")
-                    .select("id, name")
-                    .in_("name", list(all_tag_names))
-                    .execute()
+                result = await session.execute(
+                    select(TagORM.id, TagORM.name)
+                    .where(TagORM.name.in_(list(all_tag_names)))
                 )
-                for row in existing_tags.data:
-                    tag_id_cache[row["name"]] = row["id"]
+                for row in result.all():
+                    tag_id_cache[row.name] = row.id
             except Exception as e:
                 logger.warning(f"tags 배치 조회 실패: {e}")
 
@@ -84,16 +86,19 @@ class TagAggregator:
             missing_tags = all_tag_names - set(tag_id_cache.keys())
             for tag_name in missing_tags:
                 try:
-                    result = await (
-                        client.table("tags")
-                        .upsert(
-                            {"name": tag_name, "is_active": True},
-                            on_conflict="name",
+                    stmt = (
+                        pg_insert(TagORM.__table__)
+                        .values(name=tag_name, is_active=True)
+                        .on_conflict_do_update(
+                            index_elements=["name"],
+                            set_={"is_active": True},
                         )
-                        .execute()
+                        .returning(TagORM.__table__.c.id)
                     )
-                    if result.data:
-                        tag_id_cache[tag_name] = result.data[0]["id"]
+                    result = await session.execute(stmt)
+                    row = result.scalar_one_or_none()
+                    if row is not None:
+                        tag_id_cache[tag_name] = row
                 except Exception as e:
                     logger.warning(f"태그 upsert 실패 (tag={tag_name}): {e}")
                     continue
@@ -109,15 +114,23 @@ class TagAggregator:
 
         if keyword_rows:
             try:
-                await (
-                    client.table("keyword_mappings")
-                    .upsert(keyword_rows, on_conflict="keyword")
-                    .execute()
-                )
+                for row_data in keyword_rows:
+                    stmt = (
+                        pg_insert(KeywordMappingORM.__table__)
+                        .values(**row_data)
+                        .on_conflict_do_update(
+                            index_elements=["keyword"],
+                            set_={
+                                "tag_id": row_data["tag_id"],
+                                "is_auto": row_data["is_auto"],
+                            },
+                        )
+                    )
+                    await session.execute(stmt)
             except Exception as e:
                 logger.warning(f"keyword_mappings 배치 upsert 실패: {e}")
 
-        # 4. branch_tags UPSERT (지점별 배치 조회 → 메모리 증분 → 배치 upsert)
+        # 4. branch_tags UPSERT (지점별 배치 조회 -> 메모리 증분 -> 배치 upsert)
         for branch_id, tag_data in branch_tag_data.items():
             tag_ids_for_branch: list[int] = [
                 tag_id_cache[tn] for tn in tag_data if tn in tag_id_cache
@@ -127,21 +140,31 @@ class TagAggregator:
 
             try:
                 # 지점의 기존 branch_tags를 한 번에 조회 (weighted_score 포함)
-                existing_result = await (
-                    client.table("branch_tags")
-                    .select("tag_id, positive_count, negative_count, neutral_count, count, weighted_score")
-                    .eq("branch_id", branch_id)
-                    .eq("period_type", "all")
-                    .in_("tag_id", tag_ids_for_branch)
-                    .execute()
+                existing_result = await session.execute(
+                    select(
+                        BranchTagORM.tag_id,
+                        BranchTagORM.positive_count,
+                        BranchTagORM.negative_count,
+                        BranchTagORM.neutral_count,
+                        BranchTagORM.count,
+                        BranchTagORM.weighted_score,
+                    )
+                    .where(BranchTagORM.branch_id == branch_id)
+                    .where(BranchTagORM.period_type == "all")
+                    .where(BranchTagORM.tag_id.in_(tag_ids_for_branch))
                 )
 
                 existing_map: dict[int, dict] = {}
-                for row in existing_result.data:
-                    existing_map[row["tag_id"]] = row
+                for row in existing_result.all():
+                    existing_map[row.tag_id] = {
+                        "positive_count": row.positive_count,
+                        "negative_count": row.negative_count,
+                        "neutral_count": row.neutral_count,
+                        "count": row.count,
+                        "weighted_score": row.weighted_score,
+                    }
 
                 # 메모리에서 증분 계산 후 배치 upsert
-                upsert_rows: list[dict] = []
                 for tag_name, counts in tag_data.items():
                     tag_id = tag_id_cache.get(tag_name)
                     if not tag_id:
@@ -177,7 +200,7 @@ class TagAggregator:
                     )
                     weighted_delta = counts.get("weighted_delta") or float(incremental)
 
-                    upsert_rows.append({
+                    values = {
                         "branch_id": branch_id,
                         "tag_id": tag_id,
                         "period_type": "all",
@@ -186,17 +209,22 @@ class TagAggregator:
                         "neutral_count": new_neu,
                         "count": new_total,
                         "weighted_score": existing_weighted + weighted_delta,
-                    })
-
-                if upsert_rows:
-                    await (
-                        client.table("branch_tags")
-                        .upsert(
-                            upsert_rows,
-                            on_conflict="branch_id,tag_id,period_type",
+                    }
+                    stmt = (
+                        pg_insert(BranchTagORM.__table__)
+                        .values(**values)
+                        .on_conflict_do_update(
+                            index_elements=["branch_id", "tag_id", "period_type"],
+                            set_={
+                                "positive_count": values["positive_count"],
+                                "negative_count": values["negative_count"],
+                                "neutral_count": values["neutral_count"],
+                                "count": values["count"],
+                                "weighted_score": values["weighted_score"],
+                            },
                         )
-                        .execute()
                     )
+                    await session.execute(stmt)
 
             except Exception as e:
                 logger.warning(

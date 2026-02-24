@@ -25,7 +25,7 @@ Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
 - **Backend**: Python 3.12, FastAPI
 - **NLP**: Kiwi (한국어 형태소 분석), FastEmbed (ONNX 기반)
 - **LLM**: OpenAI GPT-4o-mini
-- **Database**: Supabase (PostgreSQL)
+- **Database**: PostgreSQL (SQLAlchemy Async + asyncpg)
 - **Data**: pandas, openpyxl
 
 > **SQL 마이그레이션 규칙**: SQL 마이그레이션 생성 시 유효한 SQL만 출력할 것. 마크다운 주석, 'Step N' 어노테이션, 비-SQL 텍스트를 포함하지 말 것
@@ -46,7 +46,9 @@ SIMILARITY_THRESHOLD = 0.3       # 태그 분류 최소 유사도
 - `app/domain/pipeline/` — 배치/증분 처리 파이프라인
 - `app/infrastructure/llm/` — LLM 프로바이더 (OpenAI)
 - `app/services/` — 비즈니스 로직 레이어
-- `app/repository/` — DB 접근 레이어 (테이블 구조는 각 Repository 파일 참조)
+- `app/repository/` — DB 접근 레이어 (SQLAlchemy AsyncSession 기반)
+- `app/repository/database.py` — 엔진/세션 팩토리, `get_session()`, `with_retry`
+- `app/repository/orm_models.py` — SQLAlchemy ORM 모델 정의
 - `app/models/` — Pydantic DB 모델
 - `app/schemas/` — API 요청/응답 DTO
 - `app/templates/` — HTML 대시보드 (dashboard_v2, analysis)
@@ -73,7 +75,8 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 
 ## Environment Variables
 
-`.env` 필수: `OPENAI_API_KEY`, `LLM_PROVIDER`, `SUPABASE_URL`, `SUPABASE_KEY`, `API_PREFIX`
+`.env` 필수: `OPENAI_API_KEY`, `LLM_PROVIDER`, `DATABASE_URL`, `API_PREFIX`
+- `DATABASE_URL`: `postgresql+asyncpg://user:pass@host:port/dbname`
 - 로컬: `API_PREFIX=/api` / 서버: `API_PREFIX=/review/api`
 
 ## 태그 시스템
@@ -123,7 +126,8 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 ## 개발 명령어
 
 - `python -m py_compile <file.py>` — 문법 검사
-- `mcp__supabase__apply_migration` — Supabase 마이그레이션
+- `alembic upgrade head` — DB 마이그레이션 적용
+- `alembic revision --autogenerate -m "설명"` — 마이그레이션 생성
 - `python app/scripts/run_auto_mapping.py` — 키워드 자동 매핑
 
 > 상세 API 엔드포인트, DB 테이블, 대시보드 UI 패턴 → `.claude/docs/reference.md` 참조

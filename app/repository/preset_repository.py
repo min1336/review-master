@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import logging
 
-from supabase._async.client import AsyncClient
+from sqlalchemy import select, update, delete
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from repository.orm_models import PromptPresetORM
 
 logger = logging.getLogger(__name__)
 
@@ -12,31 +15,25 @@ logger = logging.getLogger(__name__)
 class PresetRepository:
     """프롬프트 프리셋 CRUD Repository"""
 
-    TABLE = "prompt_presets"
-
-    def __init__(self, client: AsyncClient):
-        self._client = client
+    def __init__(self, session: AsyncSession):
+        self._session = session
 
     async def get_all_active(self, branch_type: str | None = None) -> list[dict]:
         """활성 프리셋 목록 (전역 + 지점유형별 필터)"""
         try:
-            query = (
-                self._client.table(self.TABLE)
-                .select("*")
-                .eq("is_active", True)
-                .order("display_order")
-                .order("created_at")
+            stmt = (
+                select(PromptPresetORM)
+                .where(PromptPresetORM.is_active.is_(True))
+                .order_by(PromptPresetORM.display_order, PromptPresetORM.created_at)
             )
-            result = await query.execute()
-
-            if not result.data:
-                return []
+            result = await self._session.execute(stmt)
+            rows = result.scalars().all()
 
             # 전역(branch_type=None) + 매칭 branch_type 필터
             return [
-                row for row in result.data
-                if row.get("branch_type") is None
-                or row.get("branch_type") == branch_type
+                self._to_dict(row) for row in rows
+                if row.branch_type is None
+                or row.branch_type == branch_type
             ]
         except Exception as e:
             logger.error(f"프리셋 목록 조회 실패: {e}")
@@ -45,22 +42,21 @@ class PresetRepository:
     async def get_by_id(self, preset_id: int) -> dict | None:
         """프리셋 단일 조회"""
         try:
-            result = (
-                await self._client.table(self.TABLE)
-                .select("*")
-                .eq("id", preset_id)
-                .single()
-                .execute()
-            )
-            return result.data if result.data else None
+            stmt = select(PromptPresetORM).where(PromptPresetORM.id == preset_id)
+            result = await self._session.execute(stmt)
+            row = result.scalar_one_or_none()
+            return self._to_dict(row) if row else None
         except Exception:
             return None
 
     async def create(self, data: dict) -> dict | None:
         """프리셋 생성"""
         try:
-            result = await self._client.table(self.TABLE).insert(data).execute()
-            return result.data[0] if result.data else None
+            preset = PromptPresetORM(**data)
+            self._session.add(preset)
+            await self._session.flush()
+            await self._session.refresh(preset)
+            return self._to_dict(preset)
         except Exception as e:
             logger.error(f"프리셋 생성 실패: {e}")
             raise
@@ -69,14 +65,17 @@ class PresetRepository:
         """프리셋 수정"""
         try:
             from core.timezone import utc_now
-            data["updated_at"] = utc_now().isoformat()
-            result = (
-                await self._client.table(self.TABLE)
-                .update(data)
-                .eq("id", preset_id)
-                .execute()
+            data["updated_at"] = utc_now()
+            stmt = (
+                update(PromptPresetORM)
+                .where(PromptPresetORM.id == preset_id)
+                .values(**data)
             )
-            return result.data[0] if result.data else None
+            await self._session.execute(stmt)
+            await self._session.flush()
+            # 업데이트된 행 조회
+            row = await self._session.get(PromptPresetORM, preset_id)
+            return self._to_dict(row) if row else None
         except Exception as e:
             logger.error(f"프리셋 수정 실패: {e}")
             raise
@@ -84,13 +83,24 @@ class PresetRepository:
     async def delete(self, preset_id: int) -> bool:
         """프리셋 삭제"""
         try:
-            await (
-                self._client.table(self.TABLE)
-                .delete()
-                .eq("id", preset_id)
-                .execute()
-            )
-            return True
+            stmt = delete(PromptPresetORM).where(PromptPresetORM.id == preset_id)
+            result = await self._session.execute(stmt)
+            return result.rowcount > 0
         except Exception as e:
             logger.error(f"프리셋 삭제 실패: {e}")
             return False
+
+    @staticmethod
+    def _to_dict(row: PromptPresetORM) -> dict:
+        return {
+            "id": row.id,
+            "name": row.name,
+            "description": row.description,
+            "system_prompt": row.system_prompt,
+            "user_prompt_template": row.user_prompt_template,
+            "branch_type": row.branch_type,
+            "display_order": row.display_order,
+            "is_active": row.is_active,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        }

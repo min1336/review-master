@@ -1,6 +1,6 @@
-"""CSV 리뷰 데이터 → 파이프라인 처리 → Supabase 저장
+"""CSV 리뷰 데이터 → 파이프라인 처리 → DB 저장
 
-data/reviewList.csv를 읽어 UnifiedPipeline을 통해 Supabase 집계 테이블을 갱신합니다.
+data/reviewList.csv를 읽어 UnifiedPipeline을 통해 집계 테이블을 갱신합니다.
 Athena 없이 CSV만으로 전체 파이프라인(감정/태그/키워드 분석)을 구동합니다.
 
 업데이트 테이블:
@@ -15,6 +15,8 @@ Usage:
     cd /home/teamo2/Downloads/Review_Summary_AI
     python app/scripts/import_from_csv.py
 """
+
+from __future__ import annotations
 
 import asyncio
 import csv
@@ -34,7 +36,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # CSV 경로: 프로젝트 루트의 data/reviewList.csv
-CSV_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "reviewList.csv"
+CSV_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "review_list.csv"
 
 # 리뷰 상태 변환 맵 (한국어 → 영어)
 STATUS_MAP = {
@@ -119,9 +121,14 @@ PIPELINE_CHUNK = 500  # 청크당 처리 건수 (진행률 표시 + 부분 저�
 
 async def main() -> None:
     # 지연 임포트 (run_auto_mapping.py 패턴 — 모델 로딩 전 sys.path 확보)
+    from core.config import get_settings
     from domain.pipeline.unified_pipeline import UnifiedPipeline
+    from repository.database import get_session_factory, init_db
     from repository.review_repository import BranchReviewRepository
-    from repository.session import get_client
+
+    settings = get_settings()
+    init_db(settings.get_database_url())
+    factory = get_session_factory()
 
     start = time.time()
 
@@ -137,12 +144,19 @@ async def main() -> None:
 
     # 2. branch_reviews 원본 upsert
     logger.info("=== Step 0: branch_reviews 원본 저장 ===")
-    client = await get_client()
-    review_repo = BranchReviewRepository(client)
+    session = factory()
+    try:
+        review_repo = BranchReviewRepository(session)
 
-    upsert_rows = [{**r, "is_new": True} for r in raw_rows]
-    saved = await review_repo.upsert_batch(upsert_rows)
-    logger.info("  저장: %d건 (요청: %d건)", saved, total)
+        upsert_rows = [{**r, "is_new": True} for r in raw_rows]
+        saved = await review_repo.upsert_batch(upsert_rows)
+        await session.commit()
+        logger.info("  저장: %d건 (요청: %d건)", saved, total)
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
 
     # 3. UnifiedPipeline 청크 단위 실행 (진행률 표시)
     logger.info("=== Step 1~6: UnifiedPipeline 실행 (청크=%d) ===", PIPELINE_CHUNK)
@@ -182,7 +196,7 @@ async def main() -> None:
         total_processed / elapsed if elapsed > 0 else 0,
     )
     logger.info("")
-    logger.info("Supabase 검증 쿼리:")
+    logger.info("DB 검증 쿼리:")
     logger.info("  SELECT branch_id, total_count, positive_ratio FROM branch_sentiment_stats ORDER BY branch_id;")
     logger.info("  SELECT COUNT(*) FROM branch_reviews WHERE sentiment IS NOT NULL;")
 

@@ -1,11 +1,11 @@
+from __future__ import annotations
+
 import logging
 import time
 from collections.abc import Awaitable, Callable
-from datetime import datetime
 
 from core.timezone import utc_now
-
-from repository.session import get_client
+from repository.database import get_session_factory
 from schemas.dto import PipelineResultDTO, PipelineStepResultDTO
 
 from .steps.preprocessor import ReviewPreprocessor
@@ -57,193 +57,211 @@ class UnifiedPipeline:
         logger.info(f"통합 파이프라인 시작: {len(reviews)}개 리뷰")
 
         try:
-            client = await get_client()
+            factory = get_session_factory()
+            session = factory()
         except Exception as e:
             logger.error(f"DB 연결 실패: {e}")
             result.error_message = str(e)
             result.finished_at = utc_now()
             return result
 
-        # Step 1: 전처리 + 키워드 + 감정 + 태그 분류 (동기)
-        t0 = time.monotonic()
         try:
-            processed = self.preprocessor.process_batch(reviews)
-            result.add_step(PipelineStepResultDTO(
-                step_name="preprocessor", success=True,
-                input_count=len(reviews), output_count=len(processed),
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-            logger.info(f"Step 1 완료: {len(processed)}/{len(reviews)}개 처리")
-            if progress_callback:
-                await progress_callback(50, "전처리 완료")
+            # Step 1: 전처리 + 키워드 + 감정 + 태그 분류 (동기)
+            t0 = time.monotonic()
+            try:
+                processed = self.preprocessor.process_batch(reviews)
+                result.add_step(PipelineStepResultDTO(
+                    step_name="preprocessor", success=True,
+                    input_count=len(reviews), output_count=len(processed),
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+                logger.info(f"Step 1 완료: {len(processed)}/{len(reviews)}개 처리")
+                if progress_callback:
+                    await progress_callback(50, "전처리 완료")
+            except Exception as e:
+                logger.error(f"Step 1(preprocessor) 실패: {e}")
+                result.add_step(PipelineStepResultDTO(
+                    step_name="preprocessor", success=False,
+                    input_count=len(reviews), output_count=0,
+                    error_message=str(e),
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+                result.error_message = f"전처리 실패: {e}"
+                result.finished_at = utc_now()
+                return result
+
+            if not processed:
+                result.success = True
+                result.finished_at = utc_now()
+                return result
+
+            input_count = len(processed)
+
+            # Step 2: branch_reviews.sentiment
+            t0 = time.monotonic()
+            try:
+                s2 = await self.review_updater.update(session, processed)
+                result.add_step(PipelineStepResultDTO(
+                    step_name="review_updater", success=True,
+                    input_count=input_count, output_count=s2,
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+                logger.info(f"Step 2 완료: {s2}개 sentiment 업데이트")
+                if progress_callback:
+                    await progress_callback(60, "감정 업데이트 완료")
+            except Exception as e:
+                logger.error(f"Step 2(review_updater) 실패: {e}")
+                result.add_step(PipelineStepResultDTO(
+                    step_name="review_updater", success=False,
+                    input_count=input_count, output_count=0,
+                    error_message=str(e),
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+
+            # Step 3: (제거됨 -- monthly_stats Step 8에서 monthly_sentiment_stats 처리)
+
+            # Step 4: tags + branch_tags
+            t0 = time.monotonic()
+            try:
+                s4 = await self.tag_aggregator.aggregate(session, processed)
+                result.add_step(PipelineStepResultDTO(
+                    step_name="tag_aggregator", success=True,
+                    input_count=input_count, output_count=s4 if isinstance(s4, int) else 0,
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+                logger.info(f"Step 4 완료: {s4}")
+                if progress_callback:
+                    await progress_callback(80, "태그 집계 완료")
+            except Exception as e:
+                logger.error(f"Step 4(tag_aggregator) 실패: {e}")
+                result.add_step(PipelineStepResultDTO(
+                    step_name="tag_aggregator", success=False,
+                    input_count=input_count, output_count=0,
+                    error_message=str(e),
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+
+            # Step 5: car_models_master + branch_car_models
+            t0 = time.monotonic()
+            try:
+                s5 = await self.car_model_tags.aggregate(session, processed)
+                result.add_step(PipelineStepResultDTO(
+                    step_name="car_model_master", success=True,
+                    input_count=input_count, output_count=s5 if isinstance(s5, int) else 0,
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+                logger.info(f"Step 5 완료: {s5}")
+                if progress_callback:
+                    await progress_callback(85, "차량 마스터/관계 갱신 완료")
+            except Exception as e:
+                logger.error(f"Step 5(car_model_master) 실패: {e}")
+                result.add_step(PipelineStepResultDTO(
+                    step_name="car_model_master", success=False,
+                    input_count=input_count, output_count=0,
+                    error_message=str(e),
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+
+            # Step 6: branch_keywords
+            t0 = time.monotonic()
+            try:
+                s6 = await self.keyword_manager.update(session, processed)
+                result.add_step(PipelineStepResultDTO(
+                    step_name="keyword_manager", success=True,
+                    input_count=input_count, output_count=s6,
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+                logger.info(f"Step 6 완료: {s6}개 지점 키워드 갱신")
+                if progress_callback:
+                    await progress_callback(90, "키워드 갱신 완료")
+            except Exception as e:
+                logger.error(f"Step 6(keyword_manager) 실패: {e}")
+                result.add_step(PipelineStepResultDTO(
+                    step_name="keyword_manager", success=False,
+                    input_count=input_count, output_count=0,
+                    error_message=str(e),
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+
+            # Step 7: review_tag_mappings
+            t0 = time.monotonic()
+            try:
+                s7 = await self.review_tag_mapper.save(session, processed)
+                result.add_step(PipelineStepResultDTO(
+                    step_name="review_tag_mapper", success=True,
+                    input_count=input_count, output_count=s7,
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+                logger.info(f"Step 7 완료: {s7}개 review_tag_mappings 저장")
+                if progress_callback:
+                    await progress_callback(92, "리뷰 태그 매핑 완료")
+            except Exception as e:
+                logger.error(f"Step 7(review_tag_mapper) 실패: {e}")
+                result.add_step(PipelineStepResultDTO(
+                    step_name="review_tag_mapper", success=False,
+                    input_count=input_count, output_count=0,
+                    error_message=str(e),
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+
+            # Step 8: monthly_rating/sentiment/tag_stats
+            t0 = time.monotonic()
+            try:
+                s8 = await self.monthly_stats.update(session, processed)
+                total_monthly = sum(s8.values()) if isinstance(s8, dict) else 0
+                result.add_step(PipelineStepResultDTO(
+                    step_name="monthly_stats", success=True,
+                    input_count=input_count, output_count=total_monthly,
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+                logger.info(f"Step 8 완료: {s8}")
+                if progress_callback:
+                    await progress_callback(95, "월별 통계 완료")
+            except Exception as e:
+                logger.error(f"Step 8(monthly_stats) 실패: {e}")
+                result.add_step(PipelineStepResultDTO(
+                    step_name="monthly_stats", success=False,
+                    input_count=input_count, output_count=0,
+                    error_message=str(e),
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+
+            # Step 9: monthly_car_model_tag_stats
+            t0 = time.monotonic()
+            try:
+                s9 = await self.monthly_car_model_stats.update(session, processed)
+                result.add_step(PipelineStepResultDTO(
+                    step_name="monthly_car_model_stats", success=True,
+                    input_count=input_count, output_count=s9,
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+                logger.info(f"Step 9 완료: {s9}개 monthly_car_model_tag_stats 저장")
+                if progress_callback:
+                    await progress_callback(98, "차량 월별 통계 완료")
+            except Exception as e:
+                logger.error(f"Step 9(monthly_car_model_stats) 실패: {e}")
+                result.add_step(PipelineStepResultDTO(
+                    step_name="monthly_car_model_stats", success=False,
+                    input_count=input_count, output_count=0,
+                    error_message=str(e),
+                    duration_seconds=round(time.monotonic() - t0, 3),
+                ))
+
+            # 실패 step이 있으면 rollback, 없으면 commit
+            if result.failed_steps:
+                await session.rollback()
+                logger.warning(f"실패 단계 존재 — rollback: {result.failed_steps}")
+            else:
+                await session.commit()
+
         except Exception as e:
-            logger.error(f"Step 1(preprocessor) 실패: {e}")
-            result.add_step(PipelineStepResultDTO(
-                step_name="preprocessor", success=False,
-                input_count=len(reviews), output_count=0,
-                error_message=str(e),
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-            result.error_message = f"전처리 실패: {e}"
+            await session.rollback()
+            logger.error(f"파이프라인 트랜잭션 실패: {e}")
+            result.error_message = str(e)
             result.finished_at = utc_now()
             return result
-
-        if not processed:
-            result.success = True
-            result.finished_at = utc_now()
-            return result
-
-        input_count = len(processed)
-
-        # Step 2: branch_reviews.sentiment
-        t0 = time.monotonic()
-        try:
-            s2 = await self.review_updater.update(client, processed)
-            result.add_step(PipelineStepResultDTO(
-                step_name="review_updater", success=True,
-                input_count=input_count, output_count=s2,
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-            logger.info(f"Step 2 완료: {s2}개 sentiment 업데이트")
-            if progress_callback:
-                await progress_callback(60, "감정 업데이트 완료")
-        except Exception as e:
-            logger.error(f"Step 2(review_updater) 실패: {e}")
-            result.add_step(PipelineStepResultDTO(
-                step_name="review_updater", success=False,
-                input_count=input_count, output_count=0,
-                error_message=str(e),
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-
-        # Step 3: (제거됨 — monthly_stats Step 8에서 monthly_sentiment_stats 처리)
-
-        # Step 4: tags + branch_tags
-        t0 = time.monotonic()
-        try:
-            s4 = await self.tag_aggregator.aggregate(client, processed)
-            result.add_step(PipelineStepResultDTO(
-                step_name="tag_aggregator", success=True,
-                input_count=input_count, output_count=s4 if isinstance(s4, int) else 0,
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-            logger.info(f"Step 4 완료: {s4}")
-            if progress_callback:
-                await progress_callback(80, "태그 집계 완료")
-        except Exception as e:
-            logger.error(f"Step 4(tag_aggregator) 실패: {e}")
-            result.add_step(PipelineStepResultDTO(
-                step_name="tag_aggregator", success=False,
-                input_count=input_count, output_count=0,
-                error_message=str(e),
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-
-        # Step 5: car_models_master + branch_car_models
-        t0 = time.monotonic()
-        try:
-            s5 = await self.car_model_tags.aggregate(client, processed)
-            result.add_step(PipelineStepResultDTO(
-                step_name="car_model_master", success=True,
-                input_count=input_count, output_count=s5 if isinstance(s5, int) else 0,
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-            logger.info(f"Step 5 완료: {s5}")
-            if progress_callback:
-                await progress_callback(85, "차량 마스터/관계 갱신 완료")
-        except Exception as e:
-            logger.error(f"Step 5(car_model_master) 실패: {e}")
-            result.add_step(PipelineStepResultDTO(
-                step_name="car_model_master", success=False,
-                input_count=input_count, output_count=0,
-                error_message=str(e),
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-
-        # Step 6: branch_keywords
-        t0 = time.monotonic()
-        try:
-            s6 = await self.keyword_manager.update(client, processed)
-            result.add_step(PipelineStepResultDTO(
-                step_name="keyword_manager", success=True,
-                input_count=input_count, output_count=s6,
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-            logger.info(f"Step 6 완료: {s6}개 지점 키워드 갱신")
-            if progress_callback:
-                await progress_callback(90, "키워드 갱신 완료")
-        except Exception as e:
-            logger.error(f"Step 6(keyword_manager) 실패: {e}")
-            result.add_step(PipelineStepResultDTO(
-                step_name="keyword_manager", success=False,
-                input_count=input_count, output_count=0,
-                error_message=str(e),
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-
-        # Step 7: review_tag_mappings
-        t0 = time.monotonic()
-        try:
-            s7 = await self.review_tag_mapper.save(client, processed)
-            result.add_step(PipelineStepResultDTO(
-                step_name="review_tag_mapper", success=True,
-                input_count=input_count, output_count=s7,
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-            logger.info(f"Step 7 완료: {s7}개 review_tag_mappings 저장")
-            if progress_callback:
-                await progress_callback(92, "리뷰 태그 매핑 완료")
-        except Exception as e:
-            logger.error(f"Step 7(review_tag_mapper) 실패: {e}")
-            result.add_step(PipelineStepResultDTO(
-                step_name="review_tag_mapper", success=False,
-                input_count=input_count, output_count=0,
-                error_message=str(e),
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-
-        # Step 8: monthly_rating/sentiment/tag_stats
-        t0 = time.monotonic()
-        try:
-            s8 = await self.monthly_stats.update(client, processed)
-            total_monthly = sum(s8.values()) if isinstance(s8, dict) else 0
-            result.add_step(PipelineStepResultDTO(
-                step_name="monthly_stats", success=True,
-                input_count=input_count, output_count=total_monthly,
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-            logger.info(f"Step 8 완료: {s8}")
-            if progress_callback:
-                await progress_callback(95, "월별 통계 완료")
-        except Exception as e:
-            logger.error(f"Step 8(monthly_stats) 실패: {e}")
-            result.add_step(PipelineStepResultDTO(
-                step_name="monthly_stats", success=False,
-                input_count=input_count, output_count=0,
-                error_message=str(e),
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-
-        # Step 9: monthly_car_model_tag_stats
-        t0 = time.monotonic()
-        try:
-            s9 = await self.monthly_car_model_stats.update(client, processed)
-            result.add_step(PipelineStepResultDTO(
-                step_name="monthly_car_model_stats", success=True,
-                input_count=input_count, output_count=s9,
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
-            logger.info(f"Step 9 완료: {s9}개 monthly_car_model_tag_stats 저장")
-            if progress_callback:
-                await progress_callback(98, "차량 월별 통계 완료")
-        except Exception as e:
-            logger.error(f"Step 9(monthly_car_model_stats) 실패: {e}")
-            result.add_step(PipelineStepResultDTO(
-                step_name="monthly_car_model_stats", success=False,
-                input_count=input_count, output_count=0,
-                error_message=str(e),
-                duration_seconds=round(time.monotonic() - t0, 3),
-            ))
+        finally:
+            await session.close()
 
         # 최종 결과
         elapsed = (utc_now() - started_at).total_seconds()
