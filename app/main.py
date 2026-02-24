@@ -69,8 +69,7 @@ async def lifespan(app: FastAPI):
 
     # ML 모델 사전 로드 (첫 요청 시 OOM 방지)
     import asyncio
-    from services.tag_service import _get_classifier, _get_extractor
-    await asyncio.to_thread(_get_extractor)
+    from services.tag_service import _get_classifier
     await asyncio.to_thread(_get_classifier)
     print("[Startup] ML 모델 사전 로드 완료")
 
