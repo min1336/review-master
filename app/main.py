@@ -67,12 +67,6 @@ async def lifespan(app: FastAPI):
     # 고아 작업 복구 (서버 재시작 시 processing 상태로 방치된 작업 정리)
     await _recover_stale_report_jobs()
 
-    # ML 모델 사전 로드 (첫 요청 시 OOM 방지)
-    import asyncio
-    from services.tag_service import _get_classifier
-    await asyncio.to_thread(_get_classifier)
-    print("[Startup] ML 모델 사전 로드 완료")
-
     yield
 
 
