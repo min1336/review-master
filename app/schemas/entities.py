@@ -6,9 +6,8 @@ Repository에서 반환되는 타입으로 사용
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Summary(BaseModel):
@@ -19,23 +18,22 @@ class Summary(BaseModel):
     branch_name: str | None = None
     region: str | None = None
     status: str | None = None
-    review_count: int | None = 0
+    review_count: int = 0
     avg_rating: float | None = None
-    keywords: list[str] | None = None
-    keyword_1: str | None = None
-    keyword_2: str | None = None
-    keyword_3: str | None = None
+    keywords: list[str] = []
+    keyword_1: str | None = Field(None, deprecated=True)
+    keyword_2: str | None = Field(None, deprecated=True)
+    keyword_3: str | None = Field(None, deprecated=True)
     summary_all: str | None = None
     summary_1y: str | None = None
     summary_6m: str | None = None
     summary_3m: str | None = None
     summary_1m: str | None = None
-    pending_summaries: dict[str, Any] | None = None  # AI 생성 대기 중인 요약
+    pending_summaries: dict[str, str] | None = None  # AI 생성 대기 중인 요약
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class Category(BaseModel):
@@ -43,15 +41,14 @@ class Category(BaseModel):
 
     id: int | None = None
     name: str
-    description: str | None = ""
+    description: str | None = None
     color: str | None = "#667eea"
     display_order: int | None = 0
     is_active: bool = True
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class Tag(BaseModel):
@@ -69,8 +66,7 @@ class Tag(BaseModel):
     # 조인 데이터
     categories: Category | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class KeywordMapping(BaseModel):
@@ -85,8 +81,7 @@ class KeywordMapping(BaseModel):
     # 조인 데이터
     tags: Tag | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BranchTag(BaseModel):
@@ -103,8 +98,7 @@ class BranchTag(BaseModel):
     # 조인 데이터
     tags: Tag | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class Review(BaseModel):
@@ -116,12 +110,11 @@ class Review(BaseModel):
     content: str | None = None
     rating: float | None = None
     sentiment: str | None = None
-    keywords: list[str] | None = None
+    keywords: list[str] = []
     review_date: datetime | None = None
     created_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SentimentStats(BaseModel):
@@ -139,8 +132,7 @@ class SentimentStats(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class Affiliate(BaseModel):
@@ -156,5 +148,4 @@ class Affiliate(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

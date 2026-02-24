@@ -60,6 +60,18 @@ class CronValidateRequest(BaseModel):
     expression: str
 
 
+class GroupCreateRequest(BaseModel):
+    group_name: str
+    cron_expression: str = "0 6 * * *"
+    branch_ids: list[int] = []
+
+
+class GroupUpdateRequest(BaseModel):
+    group_name: str | None = None
+    cron_expression: str | None = None
+    branch_ids: list[int] | None = None
+
+
 # ── 내부 헬퍼 ──────────────────────────────────────────
 
 
@@ -353,3 +365,247 @@ async def validate_cron(body: CronValidateRequest) -> dict[str, Any]:
         "description": _describe_cron(expr),
         "next_runs": _next_runs(expr, 5),
     })
+
+
+# ── Supabase 헬퍼 ─────────────────────────────────────
+
+
+async def _get_supabase():
+    from repository.session import get_client
+
+    return await get_client()
+
+
+# ── 지점 목록 조회 ────────────────────────────────────
+
+
+@router.get("/branches")
+async def list_available_branches() -> dict[str, Any]:
+    """선택 가능한 전체 지점 목록 (branch_summaries 테이블)"""
+    try:
+        client = await _get_supabase()
+        result = (
+            await client.table("branch_summaries")
+            .select("branch_id, branch_name, region, review_count")
+            .order("branch_name")
+            .execute()
+        )
+        return api_response(result.data or [])
+    except Exception as e:
+        logger.error("branches fetch failed: %s", e)
+        raise HTTPException(
+            status_code=502, detail="지점 목록 조회 실패"
+        ) from e
+
+
+# ── 스케줄 그룹 관리 엔드포인트 ───────────────────────
+
+
+async def _resolve_branch_names(
+    client: Any, branch_ids: list[int],
+) -> dict[int, str]:
+    """branch_id → branch_name 매핑을 반환한다."""
+    if not branch_ids:
+        return {}
+    result = (
+        await client.table("branch_summaries")
+        .select("branch_id, branch_name")
+        .in_("branch_id", branch_ids)
+        .execute()
+    )
+    return {
+        r["branch_id"]: r.get("branch_name", "")
+        for r in (result.data or [])
+    }
+
+
+async def _upsert_group_targets(
+    client: Any, group_id: int, workflow_id: str, branch_ids: list[int],
+) -> int:
+    """그룹의 대상 지점을 교체한다. 삽입된 행 수를 반환."""
+    await (
+        client.table("scheduler_targets")
+        .delete()
+        .eq("group_id", group_id)
+        .execute()
+    )
+    if not branch_ids:
+        return 0
+    name_map = await _resolve_branch_names(client, branch_ids)
+    rows = [
+        {
+            "workflow_id": workflow_id,
+            "group_id": group_id,
+            "branch_id": bid,
+            "branch_name": name_map.get(bid, ""),
+        }
+        for bid in branch_ids
+    ]
+    await client.table("scheduler_targets").insert(rows).execute()
+    return len(rows)
+
+
+@router.get("/groups/{workflow_id}")
+async def list_groups(workflow_id: str) -> dict[str, Any]:
+    """워크플로의 스케줄 그룹 목록 + 각 그룹의 대상 지점 조회"""
+    _validate_workflow_id(workflow_id)
+
+    try:
+        client = await _get_supabase()
+
+        # 그룹 목록
+        groups_result = (
+            await client.table("schedule_groups")
+            .select("*")
+            .eq("workflow_id", workflow_id)
+            .order("created_at")
+            .execute()
+        )
+        groups = groups_result.data or []
+
+        # 전체 대상 지점
+        targets_result = (
+            await client.table("scheduler_targets")
+            .select("group_id, branch_id, branch_name")
+            .eq("workflow_id", workflow_id)
+            .execute()
+        )
+        targets_by_group: dict[int, list[dict[str, Any]]] = {}
+        for t in (targets_result.data or []):
+            gid = t["group_id"]
+            targets_by_group.setdefault(gid, []).append({
+                "branch_id": t["branch_id"],
+                "branch_name": t["branch_name"],
+            })
+
+        # 그룹에 대상 정보 첨부
+        for g in groups:
+            gid = g["id"]
+            g["targets"] = targets_by_group.get(gid, [])
+            g["target_count"] = len(g["targets"])
+            g["cron_description"] = _describe_cron(g.get("cron_expression", ""))
+            g["next_runs"] = _next_runs(g.get("cron_expression", ""), 3)
+
+        return api_response(groups)
+    except Exception as e:
+        logger.error("groups fetch failed: %s", e)
+        raise HTTPException(
+            status_code=502, detail="스케줄 그룹 조회 실패"
+        ) from e
+
+
+@router.post("/groups/{workflow_id}")
+async def create_group(
+    workflow_id: str, body: GroupCreateRequest,
+) -> dict[str, Any]:
+    """새 스케줄 그룹 생성"""
+    _validate_workflow_id(workflow_id)
+
+    try:
+        client = await _get_supabase()
+
+        # 그룹 생성
+        group_result = (
+            await client.table("schedule_groups")
+            .insert({
+                "workflow_id": workflow_id,
+                "group_name": body.group_name,
+                "cron_expression": body.cron_expression,
+            })
+            .execute()
+        )
+        group = group_result.data[0]
+
+        # 대상 지점 설정
+        count = await _upsert_group_targets(
+            client, group["id"], workflow_id, body.branch_ids,
+        )
+
+        return api_response({
+            "message": f"'{body.group_name}' 그룹이 생성되었습니다 ({count}개 지점)",
+            "group": group,
+        })
+    except Exception as e:
+        logger.error("group create failed: %s", e)
+        raise HTTPException(
+            status_code=502, detail="스케줄 그룹 생성 실패"
+        ) from e
+
+
+@router.put("/groups/{group_id}")
+async def update_group(
+    group_id: int, body: GroupUpdateRequest,
+) -> dict[str, Any]:
+    """스케줄 그룹 수정 (이름, 크론, 대상 지점)"""
+    try:
+        client = await _get_supabase()
+
+        # 기존 그룹 확인
+        existing = (
+            await client.table("schedule_groups")
+            .select("*")
+            .eq("id", group_id)
+            .execute()
+        )
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
+
+        group = existing.data[0]
+
+        # 그룹 메타데이터 업데이트
+        updates: dict[str, Any] = {"updated_at": "now()"}
+        if body.group_name is not None:
+            updates["group_name"] = body.group_name
+        if body.cron_expression is not None:
+            updates["cron_expression"] = body.cron_expression
+
+        await (
+            client.table("schedule_groups")
+            .update(updates)
+            .eq("id", group_id)
+            .execute()
+        )
+
+        # 대상 지점 업데이트
+        target_count = None
+        if body.branch_ids is not None:
+            target_count = await _upsert_group_targets(
+                client, group_id, group["workflow_id"], body.branch_ids,
+            )
+
+        msg = "그룹이 수정되었습니다"
+        if target_count is not None:
+            msg += f" ({target_count}개 지점)"
+
+        return api_response({"message": msg})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("group update failed: %s", e)
+        raise HTTPException(
+            status_code=502, detail="스케줄 그룹 수정 실패"
+        ) from e
+
+
+@router.delete("/groups/{group_id}")
+async def delete_group(group_id: int) -> dict[str, Any]:
+    """스케줄 그룹 삭제 (CASCADE로 대상 지점도 삭제)"""
+    try:
+        client = await _get_supabase()
+        result = (
+            await client.table("schedule_groups")
+            .delete()
+            .eq("id", group_id)
+            .execute()
+        )
+        if not result.data:
+            raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
+
+        return api_response({"message": "그룹이 삭제되었습니다"})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("group delete failed: %s", e)
+        raise HTTPException(
+            status_code=502, detail="스케줄 그룹 삭제 실패"
+        ) from e

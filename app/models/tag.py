@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class Category(BaseModel):
@@ -17,8 +17,7 @@ class Category(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class Tag(BaseModel):
@@ -36,8 +35,7 @@ class Tag(BaseModel):
     # 조인 데이터
     categories: Category | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class KeywordMapping(BaseModel):
@@ -52,8 +50,7 @@ class KeywordMapping(BaseModel):
     # 조인 데이터
     tags: Tag | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BranchTag(BaseModel):
@@ -73,5 +70,4 @@ class BranchTag(BaseModel):
     # 조인 데이터
     tags: Tag | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

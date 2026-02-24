@@ -274,6 +274,213 @@
         .cron-validation.valid { color: var(--success); }
         .cron-validation.invalid { color: var(--error); }
 
+        /* ── Schedule Groups ──────────────────── */
+        .groups-section {
+            margin-bottom: 16px;
+        }
+
+        .groups-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .groups-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--grey-2);
+        }
+
+        .btn-add-group {
+            padding: 5px 14px;
+            border-radius: var(--radius-sm);
+            border: 1px dashed var(--primary);
+            background: rgba(13, 111, 252, 0.04);
+            color: var(--primary);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-add-group:hover { background: rgba(13, 111, 252, 0.1); }
+
+        .group-card {
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+
+        .group-card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            background: var(--grey-9);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .group-card-header:hover { background: var(--grey-8); }
+
+        .group-name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--grey-2);
+        }
+
+        .group-meta {
+            font-size: 11px;
+            color: var(--grey-5);
+        }
+
+        .group-badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: white;
+            border: 1px solid var(--grey-7);
+            color: var(--grey-5);
+        }
+
+        .group-badge.has-targets { color: var(--primary); border-color: var(--primary); }
+
+        .group-body { display: none; padding: 14px; border-top: 1px solid var(--grey-7); }
+        .group-body.open { display: block; }
+
+        .group-name-input {
+            width: 100%;
+            padding: 6px 10px;
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            margin-bottom: 10px;
+            outline: none;
+        }
+
+        .group-name-input:focus { border-color: var(--primary); }
+
+        .group-cron-section {
+            margin-bottom: 12px;
+            padding: 10px;
+            background: var(--grey-9);
+            border-radius: var(--radius-sm);
+        }
+
+        .group-cron-section .freq-tabs { margin-bottom: 10px; }
+        .group-cron-section .time-row { margin-bottom: 10px; }
+        .group-cron-section .cron-result { margin-top: 8px; }
+
+        .group-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .btn-save-group {
+            padding: 6px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 500;
+            border: none;
+            background: var(--primary);
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-save-group:hover { background: var(--primary-hover); }
+        .btn-save-group:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-delete-group {
+            padding: 6px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 500;
+            border: 1px solid var(--error);
+            background: white;
+            color: var(--error);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-delete-group:hover { background: var(--error); color: white; }
+
+        /* Branch list (reused in groups) */
+        .targets-toolbar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .targets-search {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            outline: none;
+        }
+
+        .targets-search:focus { border-color: var(--primary); }
+
+        .targets-sort {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .sort-btn {
+            padding: 4px 10px;
+            border-radius: 14px;
+            border: 1px solid var(--grey-7);
+            background: white;
+            font-size: 11px;
+            color: var(--grey-4);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .sort-btn:hover { border-color: var(--grey-5); }
+        .sort-btn.active { background: var(--grey-2); color: white; border-color: var(--grey-2); }
+
+        .targets-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--grey-7);
+            border-radius: var(--radius-sm);
+            margin-bottom: 8px;
+        }
+
+        .target-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 10px;
+            font-size: 12px;
+            border-bottom: 1px solid var(--grey-8);
+            cursor: pointer;
+        }
+
+        .target-item:last-child { border-bottom: none; }
+        .target-item:hover { background: var(--grey-9); }
+        .target-item input[type="checkbox"] { accent-color: var(--primary); cursor: pointer; }
+        .target-name { flex: 1; color: var(--grey-2); }
+        .target-meta { font-size: 11px; color: var(--grey-5); white-space: nowrap; }
+
+        .groups-empty {
+            text-align: center;
+            padding: 20px;
+            color: var(--grey-5);
+            font-size: 13px;
+            border: 1px dashed var(--grey-7);
+            border-radius: var(--radius-sm);
+        }
+
         /* Actions */
         .wf-actions {
             display: flex;
@@ -358,6 +565,7 @@
     <script>
         const API_PREFIX = '{{ api_prefix }}';
         const BASE_PATH = API_PREFIX.replace('/api', '');
+        const SUMMARY_WF_ID = 'xQTiHwJTH8JTFcn3';
 
         const QUICK_PRESETS = [
             { label: '매일 6시', cron: '0 6 * * *' },
@@ -409,13 +617,12 @@
             } catch (e) {
                 var container = document.getElementById('content');
                 container.textContent = '';
-                var banner = el('div', { className: 'error-banner' },
-                    ['워크플로 정보를 불러올 수 없습니다: ' + (e.message || '알 수 없는 오류')]);
-                container.appendChild(banner);
+                container.appendChild(el('div', { className: 'error-banner' },
+                    ['워크플로 정보를 불러올 수 없습니다: ' + (e.message || '알 수 없는 오류')]));
             }
         }
 
-        // ── 렌더링 (DOM 메서드 사용) ──────────────────────
+        // ── 렌더링 ──────────────────────────────
 
         function renderWorkflows(workflows) {
             var container = document.getElementById('content');
@@ -436,55 +643,54 @@
             var statusClass = wf.active === true ? 'active' : wf.active === false ? 'inactive' : 'unknown';
             var statusText = wf.active === true ? '활성' : wf.active === false ? '비활성' : '알 수 없음';
 
-            // Badge
             var badge = el('span', { className: 'status-badge ' + statusClass }, [
-                el('span', { className: 'status-dot' }),
-                statusText
+                el('span', { className: 'status-dot' }), statusText
             ]);
 
-            // Header
             var header = el('div', { className: 'wf-card-header' }, [
-                el('span', { className: 'wf-name', textContent: wf.name }),
-                badge
+                el('span', { className: 'wf-name', textContent: wf.name }), badge
             ]);
 
-            // Desc
             var desc = el('div', { className: 'wf-desc', textContent: wf.description || '' });
 
-            // Schedule Info
-            var scheduleInfo = el('div', { className: 'schedule-info' }, [
-                el('div', { className: 'schedule-label', textContent: '현재 스케줄' }),
-                el('div', { className: 'schedule-value', textContent: wf.cron_description || '스케줄 없음' }),
-                el('div', { className: 'schedule-cron', textContent: wf.cron_expression || '-' })
-            ]);
-
-            if (wf.next_runs && wf.next_runs.length > 0) {
-                var ul = el('ul', { className: 'next-runs' });
-                wf.next_runs.forEach(function (r) {
-                    ul.appendChild(el('li', { textContent: r }));
-                });
-                scheduleInfo.appendChild(ul);
-            }
-
-            // Visual Cron Editor
-            var editor = buildCronEditor(wf);
-
-            // Actions
+            // Actions (공통)
             var toggleBtnClass = wf.active ? 'btn-toggle-inactive' : 'btn-toggle-active';
             var toggleBtnText = wf.active ? '비활성화' : '활성화';
-
-            var btnSave = el('button', { className: 'btn-schedule btn-save', id: 'btn-save-' + wf.id, textContent: '스케줄 저장' });
             var btnToggle = el('button', { className: 'btn-schedule ' + toggleBtnClass, id: 'btn-toggle-' + wf.id, textContent: toggleBtnText });
             btnToggle.dataset.active = String(wf.active);
             var btnTrigger = el('button', { className: 'btn-schedule btn-trigger', id: 'btn-trigger-' + wf.id, textContent: '지금 실행' });
 
-            var actions = el('div', { className: 'wf-actions' }, [
-                btnSave, btnToggle, el('span', { className: 'spacer' }), btnTrigger
-            ]);
+            var cardChildren = [header, desc];
 
-            return el('div', { className: 'wf-card', id: 'card-' + wf.id }, [
-                header, desc, scheduleInfo, editor, actions
-            ]);
+            if (wf.id === SUMMARY_WF_ID) {
+                // Summary Job: 그룹별 스케줄 관리 → 워크플로 레벨 스케줄 에디터 불필요
+                var groupsContainer = el('div', { className: 'groups-section', id: 'groups-' + wf.id });
+                cardChildren.push(groupsContainer);
+                var actions = el('div', { className: 'wf-actions' }, [
+                    btnToggle, el('span', { className: 'spacer' }), btnTrigger
+                ]);
+            } else {
+                // Review Sync Job: 현재 스케줄 + 크론 에디터 표시
+                var scheduleInfo = el('div', { className: 'schedule-info' }, [
+                    el('div', { className: 'schedule-label', textContent: '현재 스케줄' }),
+                    el('div', { className: 'schedule-value', textContent: wf.cron_description || '스케줄 없음' }),
+                    el('div', { className: 'schedule-cron', textContent: wf.cron_expression || '-' })
+                ]);
+                if (wf.next_runs && wf.next_runs.length > 0) {
+                    var ul = el('ul', { className: 'next-runs' });
+                    wf.next_runs.forEach(function (r) { ul.appendChild(el('li', { textContent: r })); });
+                    scheduleInfo.appendChild(ul);
+                }
+                var editor = buildCronEditor(wf);
+                var btnSave = el('button', { className: 'btn-schedule btn-save', id: 'btn-save-' + wf.id, textContent: '스케줄 저장' });
+                cardChildren.push(scheduleInfo, editor);
+                var actions = el('div', { className: 'wf-actions' }, [
+                    btnSave, btnToggle, el('span', { className: 'spacer' }), btnTrigger
+                ]);
+            }
+
+            cardChildren.push(actions);
+            return el('div', { className: 'wf-card', id: 'card-' + wf.id }, cardChildren);
         }
 
         // ── 시각적 크론 에디터 빌더 ────────────────────────
@@ -507,7 +713,6 @@
             return m + ' ' + h + ' * * *';
         }
 
-        // 각 카드의 상태를 저장
         var editorStates = {};
 
         function buildCronEditor(wf) {
@@ -515,8 +720,6 @@
             editorStates[wf.id] = state;
 
             var wrap = el('div', { className: 'cron-editor', id: 'editor-' + wf.id });
-
-            // Title
             wrap.appendChild(el('div', { className: 'cron-editor-title', textContent: '스케줄 변경' }));
 
             // Quick Presets
@@ -539,7 +742,7 @@
                 });
             wrap.appendChild(tabs);
 
-            // Day-of-week row (hidden unless weekly)
+            // Day-of-week
             var dowRow = el('div', { className: 'dow-row', id: 'dow-row-' + wf.id });
             if (state.freq !== FREQ_WEEKLY) dowRow.style.display = 'none';
             DOW_LABELS.forEach(function (label, i) {
@@ -549,7 +752,7 @@
             });
             wrap.appendChild(dowRow);
 
-            // Day-of-month row (hidden unless monthly)
+            // Day-of-month
             var domSelect = el('select', { className: 'dom-select', id: 'dom-select-' + wf.id });
             for (var d = 1; d <= 31; d++) {
                 var opt = el('option', { value: String(d), textContent: d + '일' });
@@ -557,8 +760,7 @@
                 domSelect.appendChild(opt);
             }
             var domRow = el('div', { className: 'dom-row', id: 'dom-row-' + wf.id }, [
-                el('span', { className: 'dom-label', textContent: '매월' }),
-                domSelect,
+                el('span', { className: 'dom-label', textContent: '매월' }), domSelect,
                 el('span', { className: 'dom-label', textContent: '에 실행' })
             ]);
             if (state.freq !== FREQ_MONTHLY) domRow.style.display = 'none';
@@ -580,22 +782,16 @@
                 if (m === state.minute) mOpt.selected = true;
                 minSel.appendChild(mOpt);
             });
-            var timeRow = el('div', { className: 'time-row' }, [
+            wrap.appendChild(el('div', { className: 'time-row' }, [
                 el('span', { className: 'time-label', textContent: '실행 시각' }),
-                hourSel,
-                el('span', { className: 'time-colon', textContent: ':' }),
-                minSel
-            ]);
-            wrap.appendChild(timeRow);
-
-            // Cron result display
-            var cronCode = el('code', { id: 'cron-display-' + wf.id, textContent: uiToCron(state) });
-            wrap.appendChild(el('div', { className: 'cron-result' }, [
-                el('span', { textContent: '크론 표현식:' }),
-                cronCode
+                hourSel, el('span', { className: 'time-colon', textContent: ':' }), minSel
             ]));
 
-            // Validation
+            // Cron result
+            wrap.appendChild(el('div', { className: 'cron-result' }, [
+                el('span', { textContent: '크론 표현식:' }),
+                el('code', { id: 'cron-display-' + wf.id, textContent: uiToCron(state) })
+            ]));
             wrap.appendChild(el('div', { className: 'cron-validation', id: 'cron-validation-' + wf.id }));
 
             return wrap;
@@ -606,47 +802,48 @@
             var expr = uiToCron(state);
             var display = document.getElementById('cron-display-' + wfId);
             if (display) display.textContent = expr;
-
-            // Highlight matching preset
             var presets = document.querySelectorAll('#presets-' + wfId + ' .preset-chip');
-            presets.forEach(function (chip) {
-                chip.classList.toggle('active', chip.dataset.cron === expr);
-            });
-
+            presets.forEach(function (chip) { chip.classList.toggle('active', chip.dataset.cron === expr); });
             validateCron(wfId, expr);
         }
 
         // ── 이벤트 바인딩 ────────────────────────────────
 
         function bindCardEvents(wf) {
-            var btnSave = document.getElementById('btn-save-' + wf.id);
             var btnToggle = document.getElementById('btn-toggle-' + wf.id);
             var btnTrigger = document.getElementById('btn-trigger-' + wf.id);
+            btnToggle.addEventListener('click', function () { toggleWorkflow(wf.id); });
+            btnTrigger.addEventListener('click', function () { triggerWorkflow(wf.id); });
 
-            // Quick presets
+            if (wf.id === SUMMARY_WF_ID) {
+                // Summary Job: 그룹만 로드
+                loadGroups(wf.id);
+                return;
+            }
+
+            // Review Sync Job: 크론 에디터 이벤트 바인딩
+            var btnSave = document.getElementById('btn-save-' + wf.id);
+            btnSave.addEventListener('click', function () { updateSchedule(wf.id); });
+
             document.querySelectorAll('#presets-' + wf.id + ' .preset-chip').forEach(function (chip) {
                 chip.addEventListener('click', function () {
-                    var parsed = parseCronToUI(chip.dataset.cron);
-                    editorStates[wf.id] = parsed;
+                    editorStates[wf.id] = parseCronToUI(chip.dataset.cron);
                     syncUIFromState(wf.id);
                     refreshCronDisplay(wf.id);
                 });
             });
 
-            // Frequency tabs
             document.querySelectorAll('#freq-tabs-' + wf.id + ' .freq-tab').forEach(function (tab) {
                 tab.addEventListener('click', function () {
                     document.querySelectorAll('#freq-tabs-' + wf.id + ' .freq-tab').forEach(function (t) { t.classList.remove('selected'); });
                     tab.classList.add('selected');
                     editorStates[wf.id].freq = tab.dataset.freq;
-
                     document.getElementById('dow-row-' + wf.id).style.display = tab.dataset.freq === FREQ_WEEKLY ? 'flex' : 'none';
                     document.getElementById('dom-row-' + wf.id).style.display = tab.dataset.freq === FREQ_MONTHLY ? 'flex' : 'none';
                     refreshCronDisplay(wf.id);
                 });
             });
 
-            // Day-of-week buttons
             document.querySelectorAll('#dow-row-' + wf.id + ' .dow-btn').forEach(function (btn) {
                 btn.addEventListener('click', function () {
                     document.querySelectorAll('#dow-row-' + wf.id + ' .dow-btn').forEach(function (b) { b.classList.remove('selected'); });
@@ -656,16 +853,12 @@
                 });
             });
 
-            // Day-of-month
             var domSelect = document.getElementById('dom-select-' + wf.id);
-            if (domSelect) {
-                domSelect.addEventListener('change', function () {
-                    editorStates[wf.id].dom = parseInt(domSelect.value);
-                    refreshCronDisplay(wf.id);
-                });
-            }
+            if (domSelect) domSelect.addEventListener('change', function () {
+                editorStates[wf.id].dom = parseInt(domSelect.value);
+                refreshCronDisplay(wf.id);
+            });
 
-            // Hour & Minute
             var hourSel = document.getElementById('hour-sel-' + wf.id);
             var minSel = document.getElementById('min-sel-' + wf.id);
             hourSel.addEventListener('change', function () {
@@ -676,34 +869,425 @@
                 editorStates[wf.id].minute = parseInt(minSel.value);
                 refreshCronDisplay(wf.id);
             });
-
-            btnSave.addEventListener('click', function () { updateSchedule(wf.id); });
-            btnToggle.addEventListener('click', function () { toggleWorkflow(wf.id); });
-            btnTrigger.addEventListener('click', function () { triggerWorkflow(wf.id); });
         }
 
         function syncUIFromState(wfId) {
             var state = editorStates[wfId];
-
-            // Freq tabs
             document.querySelectorAll('#freq-tabs-' + wfId + ' .freq-tab').forEach(function (t) {
                 t.classList.toggle('selected', t.dataset.freq === state.freq);
             });
             document.getElementById('dow-row-' + wfId).style.display = state.freq === FREQ_WEEKLY ? 'flex' : 'none';
             document.getElementById('dom-row-' + wfId).style.display = state.freq === FREQ_MONTHLY ? 'flex' : 'none';
-
-            // DOW
             document.querySelectorAll('#dow-row-' + wfId + ' .dow-btn').forEach(function (b) {
                 b.classList.toggle('selected', parseInt(b.dataset.dow) === state.dow);
             });
-
-            // DOM
             var domSel = document.getElementById('dom-select-' + wfId);
             if (domSel) domSel.value = String(state.dom);
-
-            // Time
             document.getElementById('hour-sel-' + wfId).value = String(state.hour);
             document.getElementById('min-sel-' + wfId).value = String(state.minute);
+        }
+
+        // ── 스케줄 그룹 관리 ──────────────────────────────
+
+        var allBranches = [];
+        var groupTargets = {};  // groupId → Set of branch_ids
+        var groupSorts = {};    // groupId → sort mode
+
+        async function ensureBranches() {
+            if (allBranches.length > 0) return;
+            try {
+                var result = await apiRequest(API_PREFIX + '/n8n/scheduler/branches');
+                allBranches = result.data || [];
+            } catch (e) {
+                console.error('branches load failed', e);
+            }
+        }
+
+        async function loadGroups(wfId) {
+            var container = document.getElementById('groups-' + wfId);
+            if (!container) return;
+
+            await ensureBranches();
+
+            try {
+                var result = await apiRequest(API_PREFIX + '/n8n/scheduler/groups/' + wfId);
+                renderGroups(wfId, result.data || []);
+            } catch (e) {
+                container.textContent = '';
+                container.appendChild(el('div', { className: 'error-banner' }, ['그룹 로드 실패']));
+            }
+        }
+
+        function renderGroups(wfId, groups) {
+            var container = document.getElementById('groups-' + wfId);
+            container.textContent = '';
+
+            // Header
+            var addBtn = el('button', { className: 'btn-add-group', textContent: '+ 그룹 추가' });
+            addBtn.addEventListener('click', function () { createGroup(wfId); });
+
+            container.appendChild(el('div', { className: 'groups-header' }, [
+                el('span', { className: 'groups-title', textContent: '스케줄 그룹' }),
+                addBtn
+            ]));
+
+            if (groups.length === 0) {
+                container.appendChild(el('div', { className: 'groups-empty' },
+                    ['아직 스케줄 그룹이 없습니다. "그룹 추가"를 눌러 지점별 스케줄을 설정하세요.']));
+                return;
+            }
+
+            groups.forEach(function (group) {
+                // 그룹별 타겟 상태 초기화
+                var targetIds = (group.targets || []).map(function (t) { return t.branch_id; });
+                groupTargets[group.id] = new Set(targetIds);
+                groupSorts[group.id] = 'reviews';
+
+                container.appendChild(buildGroupCard(group, wfId));
+            });
+        }
+
+        function buildGroupCard(group, wfId) {
+            var gid = group.id;
+            var targetCount = group.target_count || 0;
+
+            // Header
+            var badge = el('span', {
+                className: 'group-badge' + (targetCount > 0 ? ' has-targets' : ''),
+                id: 'gbadge-' + gid,
+                textContent: targetCount > 0 ? targetCount + '개 지점' : '미설정'
+            });
+
+            var headerEl = el('div', { className: 'group-card-header', id: 'gheader-' + gid }, [
+                el('span', { className: 'group-name', textContent: group.group_name }),
+                el('span', { className: 'group-meta', textContent: group.cron_description || '' }),
+                badge
+            ]);
+
+            // Body
+            var nameInput = el('input', {
+                type: 'text', className: 'group-name-input', id: 'gname-' + gid,
+                value: group.group_name, placeholder: '그룹 이름'
+            });
+
+            // Mini cron editor for the group
+            var cronSection = buildGroupCronEditor(gid, group.cron_expression || '0 6 * * *');
+
+            // Branch list
+            var searchInput = el('input', {
+                type: 'text', className: 'targets-search', id: 'gsearch-' + gid,
+                placeholder: '지점명 또는 지역으로 검색...'
+            });
+            var toolbar = el('div', { className: 'targets-toolbar' }, [searchInput]);
+
+            var sortRow = el('div', { className: 'targets-sort', id: 'gsort-' + gid });
+            [{ key: 'reviews', label: '리뷰 많은순' }, { key: 'selected', label: '선택순' }, { key: 'name', label: '이름순' }]
+                .forEach(function (s) {
+                    var btn = el('button', { className: 'sort-btn' + (s.key === 'reviews' ? ' active' : ''), textContent: s.label });
+                    btn.dataset.sort = s.key;
+                    sortRow.appendChild(btn);
+                });
+
+            var listContainer = el('div', { className: 'targets-list', id: 'glist-' + gid });
+
+            // Actions
+            var saveBtn = el('button', { className: 'btn-save-group', id: 'gsave-' + gid, textContent: '그룹 저장' });
+            var deleteBtn = el('button', { className: 'btn-delete-group', id: 'gdel-' + gid, textContent: '삭제' });
+            var actionsRow = el('div', { className: 'group-actions' }, [saveBtn, deleteBtn]);
+
+            var body = el('div', { className: 'group-body', id: 'gbody-' + gid }, [
+                nameInput, cronSection, toolbar, sortRow, listContainer, actionsRow
+            ]);
+
+            var card = el('div', { className: 'group-card', id: 'gcard-' + gid }, [headerEl, body]);
+
+            // Bind events after DOM insertion using setTimeout
+            setTimeout(function () { bindGroupCardEvents(gid, wfId); }, 0);
+
+            return card;
+        }
+
+        // ── 그룹별 미니 크론 에디터 ──────────────────────
+
+        var groupCronStates = {};
+
+        function buildGroupCronEditor(gid, cronExpr) {
+            var state = parseCronToUI(cronExpr);
+            groupCronStates[gid] = state;
+
+            var section = el('div', { className: 'group-cron-section' });
+
+            // Freq tabs
+            var tabs = el('div', { className: 'freq-tabs', id: 'gfreq-' + gid });
+            [{ key: FREQ_DAILY, label: '매일' }, { key: FREQ_WEEKLY, label: '매주' }, { key: FREQ_MONTHLY, label: '매월' }]
+                .forEach(function (f) {
+                    var tab = el('button', { className: 'freq-tab' + (state.freq === f.key ? ' selected' : ''), textContent: f.label });
+                    tab.dataset.freq = f.key;
+                    tabs.appendChild(tab);
+                });
+            section.appendChild(tabs);
+
+            // DOW
+            var dowRow = el('div', { className: 'dow-row', id: 'gdow-' + gid });
+            if (state.freq !== FREQ_WEEKLY) dowRow.style.display = 'none';
+            DOW_LABELS.forEach(function (label, i) {
+                var btn = el('button', { className: 'dow-btn' + (state.dow === i ? ' selected' : ''), textContent: label });
+                btn.dataset.dow = String(i);
+                dowRow.appendChild(btn);
+            });
+            section.appendChild(dowRow);
+
+            // DOM
+            var domSelect = el('select', { className: 'dom-select', id: 'gdom-' + gid });
+            for (var d = 1; d <= 31; d++) {
+                var opt = el('option', { value: String(d), textContent: d + '일' });
+                if (d === state.dom) opt.selected = true;
+                domSelect.appendChild(opt);
+            }
+            var domRow = el('div', { className: 'dom-row', id: 'gdomrow-' + gid }, [
+                el('span', { className: 'dom-label', textContent: '매월' }), domSelect,
+                el('span', { className: 'dom-label', textContent: '에 실행' })
+            ]);
+            if (state.freq !== FREQ_MONTHLY) domRow.style.display = 'none';
+            section.appendChild(domRow);
+
+            // Time
+            var hourSel = el('select', { className: 'time-select', id: 'ghour-' + gid });
+            for (var h = 0; h < 24; h++) {
+                var hOpt = el('option', { value: String(h), textContent: String(h).padStart(2, '0') });
+                if (h === state.hour) hOpt.selected = true;
+                hourSel.appendChild(hOpt);
+            }
+            var minSel = el('select', { className: 'time-select', id: 'gmin-' + gid });
+            [0, 5, 10, 15, 20, 30, 45].forEach(function (m) {
+                var mOpt = el('option', { value: String(m), textContent: String(m).padStart(2, '0') });
+                if (m === state.minute) mOpt.selected = true;
+                minSel.appendChild(mOpt);
+            });
+            section.appendChild(el('div', { className: 'time-row' }, [
+                el('span', { className: 'time-label', textContent: '실행 시각' }),
+                hourSel, el('span', { className: 'time-colon', textContent: ':' }), minSel
+            ]));
+
+            // Cron display
+            section.appendChild(el('div', { className: 'cron-result' }, [
+                el('span', { textContent: '크론:' }),
+                el('code', { id: 'gcron-' + gid, textContent: uiToCron(state) })
+            ]));
+
+            return section;
+        }
+
+        function refreshGroupCron(gid) {
+            var state = groupCronStates[gid];
+            var expr = uiToCron(state);
+            var display = document.getElementById('gcron-' + gid);
+            if (display) display.textContent = expr;
+        }
+
+        // ── 그룹 카드 이벤트 ──────────────────────────────
+
+        function bindGroupCardEvents(gid, wfId) {
+            // Toggle
+            var header = document.getElementById('gheader-' + gid);
+            var body = document.getElementById('gbody-' + gid);
+            if (header) header.addEventListener('click', function () { body.classList.toggle('open'); });
+
+            // Group cron editor events
+            document.querySelectorAll('#gfreq-' + gid + ' .freq-tab').forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    document.querySelectorAll('#gfreq-' + gid + ' .freq-tab').forEach(function (t) { t.classList.remove('selected'); });
+                    tab.classList.add('selected');
+                    groupCronStates[gid].freq = tab.dataset.freq;
+                    var gdow = document.getElementById('gdow-' + gid);
+                    var gdomrow = document.getElementById('gdomrow-' + gid);
+                    if (gdow) gdow.style.display = tab.dataset.freq === FREQ_WEEKLY ? 'flex' : 'none';
+                    if (gdomrow) gdomrow.style.display = tab.dataset.freq === FREQ_MONTHLY ? 'flex' : 'none';
+                    refreshGroupCron(gid);
+                });
+            });
+
+            document.querySelectorAll('#gdow-' + gid + ' .dow-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    document.querySelectorAll('#gdow-' + gid + ' .dow-btn').forEach(function (b) { b.classList.remove('selected'); });
+                    btn.classList.add('selected');
+                    groupCronStates[gid].dow = parseInt(btn.dataset.dow);
+                    refreshGroupCron(gid);
+                });
+            });
+
+            var gdom = document.getElementById('gdom-' + gid);
+            if (gdom) gdom.addEventListener('change', function () {
+                groupCronStates[gid].dom = parseInt(gdom.value);
+                refreshGroupCron(gid);
+            });
+
+            var ghour = document.getElementById('ghour-' + gid);
+            var gmin = document.getElementById('gmin-' + gid);
+            if (ghour) ghour.addEventListener('change', function () {
+                groupCronStates[gid].hour = parseInt(ghour.value);
+                refreshGroupCron(gid);
+            });
+            if (gmin) gmin.addEventListener('change', function () {
+                groupCronStates[gid].minute = parseInt(gmin.value);
+                refreshGroupCron(gid);
+            });
+
+            // Sort buttons
+            document.querySelectorAll('#gsort-' + gid + ' .sort-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    document.querySelectorAll('#gsort-' + gid + ' .sort-btn').forEach(function (b) { b.classList.remove('active'); });
+                    btn.classList.add('active');
+                    groupSorts[gid] = btn.dataset.sort;
+                    var search = document.getElementById('gsearch-' + gid);
+                    renderGroupBranchList(gid, search ? search.value : '');
+                });
+            });
+
+            // Search
+            var searchInput = document.getElementById('gsearch-' + gid);
+            if (searchInput) searchInput.addEventListener('input', debounce(function () {
+                renderGroupBranchList(gid, searchInput.value);
+            }, 250));
+
+            // Save / Delete
+            var saveBtn = document.getElementById('gsave-' + gid);
+            if (saveBtn) saveBtn.addEventListener('click', function () { saveGroup(gid, wfId); });
+
+            var delBtn = document.getElementById('gdel-' + gid);
+            if (delBtn) delBtn.addEventListener('click', function () { deleteGroup(gid, wfId); });
+
+            // Render initial branch list
+            renderGroupBranchList(gid, '');
+        }
+
+        function renderGroupBranchList(gid, filter) {
+            var container = document.getElementById('glist-' + gid);
+            if (!container) return;
+            container.textContent = '';
+
+            var selected = groupTargets[gid] || new Set();
+            var q = (filter || '').toLowerCase();
+
+            var filtered = allBranches.filter(function (b) {
+                if (!q) return true;
+                return (b.branch_name || '').toLowerCase().indexOf(q) !== -1
+                    || (b.region || '').toLowerCase().indexOf(q) !== -1;
+            });
+
+            if (filtered.length === 0) {
+                container.appendChild(el('div', { style: { padding: '12px', textAlign: 'center', color: '#999', fontSize: '13px' }, textContent: '검색 결과 없음' }));
+                return;
+            }
+
+            var mode = groupSorts[gid] || 'reviews';
+            filtered.sort(function (a, b) {
+                if (mode === 'selected') {
+                    var ac = selected.has(a.branch_id) ? 0 : 1;
+                    var bc = selected.has(b.branch_id) ? 0 : 1;
+                    if (ac !== bc) return ac - bc;
+                    return (b.review_count || 0) - (a.review_count || 0);
+                }
+                if (mode === 'reviews') return (b.review_count || 0) - (a.review_count || 0);
+                return (a.branch_name || '').localeCompare(b.branch_name || '');
+            });
+
+            var toRender = filtered.slice(0, 200);
+            toRender.forEach(function (b) {
+                var cb = el('input', { type: 'checkbox' });
+                cb.checked = selected.has(b.branch_id);
+                cb.dataset.bid = String(b.branch_id);
+
+                var item = el('div', { className: 'target-item' }, [
+                    cb,
+                    el('span', { className: 'target-name', textContent: b.branch_name || '(이름 없음)' }),
+                    el('span', { className: 'target-meta', textContent: (b.region || '') + ' · ' + (b.review_count || 0) + '건' })
+                ]);
+
+                item.addEventListener('click', function (e) {
+                    if (e.target === cb) return;
+                    cb.checked = !cb.checked;
+                    cb.dispatchEvent(new Event('change'));
+                });
+
+                cb.addEventListener('change', function () {
+                    if (cb.checked) selected.add(b.branch_id);
+                    else selected.delete(b.branch_id);
+                    updateGroupBadge(gid);
+                });
+
+                container.appendChild(item);
+            });
+
+            if (filtered.length > 200) {
+                container.appendChild(el('div', { style: { padding: '8px', textAlign: 'center', color: '#999', fontSize: '11px' },
+                    textContent: '검색어를 입력하여 범위를 좁혀주세요 (' + filtered.length + '개 중 200개 표시)' }));
+            }
+        }
+
+        function updateGroupBadge(gid) {
+            var badge = document.getElementById('gbadge-' + gid);
+            if (!badge) return;
+            var count = (groupTargets[gid] || new Set()).size;
+            badge.textContent = count > 0 ? count + '개 지점' : '미설정';
+            badge.className = 'group-badge' + (count > 0 ? ' has-targets' : '');
+        }
+
+        // ── 그룹 CRUD ──────────────────────────────────
+
+        async function createGroup(wfId) {
+            try {
+                await apiRequest(API_PREFIX + '/n8n/scheduler/groups/' + wfId, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ group_name: '새 그룹', cron_expression: '0 6 * * *', branch_ids: [] }),
+                });
+                showToast('그룹이 추가되었습니다', 'success');
+                await loadGroups(wfId);
+            } catch (e) {
+                showToast('그룹 추가 실패: ' + (e.message || ''), 'error');
+            }
+        }
+
+        async function saveGroup(gid, wfId) {
+            var btn = document.getElementById('gsave-' + gid);
+            btn.disabled = true;
+            btn.textContent = '저장 중...';
+
+            try {
+                var nameInput = document.getElementById('gname-' + gid);
+                var cronState = groupCronStates[gid];
+                var ids = Array.from(groupTargets[gid] || new Set());
+
+                await apiRequest(API_PREFIX + '/n8n/scheduler/groups/' + gid, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        group_name: nameInput ? nameInput.value : null,
+                        cron_expression: cronState ? uiToCron(cronState) : null,
+                        branch_ids: ids,
+                    }),
+                });
+                showToast('그룹이 저장되었습니다', 'success');
+                await loadGroups(wfId);
+            } catch (e) {
+                showToast('그룹 저장 실패: ' + (e.message || ''), 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '그룹 저장';
+            }
+        }
+
+        async function deleteGroup(gid, wfId) {
+            if (!confirm('이 스케줄 그룹을 삭제하시겠습니까?')) return;
+
+            try {
+                await apiRequest(API_PREFIX + '/n8n/scheduler/groups/' + gid, { method: 'DELETE' });
+                showToast('그룹이 삭제되었습니다', 'success');
+                await loadGroups(wfId);
+            } catch (e) {
+                showToast('그룹 삭제 실패: ' + (e.message || ''), 'error');
+            }
         }
 
         // ── API 호출 함수들 ──────────────────────────────
@@ -741,10 +1325,8 @@
         async function updateSchedule(wfId) {
             var btn = document.getElementById('btn-save-' + wfId);
             var expr = uiToCron(editorStates[wfId]);
-
             btn.disabled = true;
             btn.textContent = '저장 중...';
-
             try {
                 var result = await apiRequest(API_PREFIX + '/n8n/scheduler/schedule', {
                     method: 'POST',
@@ -765,12 +1347,9 @@
             var btn = document.getElementById('btn-toggle-' + wfId);
             var currentlyActive = btn.dataset.active === 'true';
             var newActive = !currentlyActive;
-
             var action = newActive ? '활성화' : '비활성화';
             if (!confirm('이 워크플로를 ' + action + '하시겠습니까?')) return;
-
             btn.disabled = true;
-
             try {
                 var result = await apiRequest(API_PREFIX + '/n8n/scheduler/toggle', {
                     method: 'POST',
@@ -788,13 +1367,10 @@
 
         async function triggerWorkflow(wfId) {
             var btn = document.getElementById('btn-trigger-' + wfId);
-
             if (!confirm('이 워크플로를 지금 수동 실행하시겠습니까?')) return;
-
             btn.disabled = true;
             var originalText = btn.textContent;
             btn.textContent = '실행 중...';
-
             try {
                 var result = await apiRequest(API_PREFIX + '/n8n/scheduler/trigger', {
                     method: 'POST',

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -105,3 +105,30 @@ class CleanupRequest(BaseModel):
 
     days: int = 30
     max_per_branch: int = 30
+
+
+T = TypeVar("T")
+
+
+class ApiResponseModel(BaseModel, Generic[T]):
+    """단건 응답 Envelope — response_model 전용"""
+
+    success: bool = True
+    data: T
+
+
+class ApiListResponseModel(BaseModel, Generic[T]):
+    """목록 응답 Envelope — response_model 전용"""
+
+    success: bool = True
+    data: list[T]
+    count: int
+    total: int | None = None
+    has_next: bool | None = None
+
+
+class ApiErrorResponseModel(BaseModel):
+    """에러 응답 — response_model 전용"""
+
+    success: bool = False
+    detail: str
