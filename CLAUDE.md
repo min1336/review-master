@@ -49,7 +49,7 @@ SIMILARITY_THRESHOLD = 0.3       # 태그 분류 최소 유사도
 - `app/repository/` — DB 접근 레이어 (테이블 구조는 각 Repository 파일 참조)
 - `app/models/` — Pydantic DB 모델
 - `app/schemas/` — API 요청/응답 DTO
-- `app/templates/` — HTML 대시보드 (dashboard_v2, analysis, tag_tester)
+- `app/templates/` — HTML 대시보드 (dashboard_v2, analysis)
 - `app/static/js/shared-utils.js` — 공통 JS (escapeHtml, escapeAttr, showToast, apiRequest 등)
 - `app/static/css/shared-theme.css` — 공통 CSS 변수, 리셋, toast 애니메이션
 

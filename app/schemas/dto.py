@@ -695,76 +695,6 @@ class BranchReviewsDTO:
 # ==============================================================================
 
 
-@dataclass
-class KeywordSentimentDTO:
-    """키워드 감정 분석 결과 DTO"""
-
-    keyword: str
-    sentiment: str
-
-    def to_dict(self) -> dict[str, str]:
-        return {
-            "keyword": self.keyword,
-            "sentiment": self.sentiment,
-        }
-
-
-@dataclass
-class TagDetailDTO:
-    """세분화 태그 DTO (카테고리 내 52개 태그)"""
-
-    positive: list[str] = field(default_factory=list)
-    negative: list[str] = field(default_factory=list)
-    neutral: list[str] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, list[str]]:
-        return {
-            "positive": self.positive,
-            "negative": self.negative,
-            "neutral": self.neutral,
-        }
-
-
-@dataclass
-class TagGroupDTO:
-    """태그 그룹 DTO (카테고리 레벨)"""
-
-    positive: list[str] = field(default_factory=list)
-    negative: list[str] = field(default_factory=list)
-    neutral: list[str] = field(default_factory=list)
-    tags: dict[str, TagDetailDTO] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {
-            "positive": self.positive,
-            "negative": self.negative,
-            "neutral": self.neutral,
-        }
-        if self.tags:
-            result["tags"] = {
-                name: detail.to_dict() for name, detail in self.tags.items()
-            }
-        return result
-
-
-@dataclass
-class TagAnalysisResultDTO:
-    """
-    태그 분석 결과 DTO
-    """
-
-    keywords: list[KeywordSentimentDTO]
-    tag_groups: dict[str, TagGroupDTO]
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "keywords": [k.to_dict() for k in self.keywords],
-            "tag_groups": {
-                name: group.to_dict() for name, group in self.tag_groups.items()
-            },
-        }
-
-
 # ==============================================================================
 # Sentiment (감정분석) Service DTO
 # ==============================================================================
@@ -1103,11 +1033,6 @@ __all__ = [
     "SummariesOutputDTO",
     "BranchDetailDTO",
     "BranchReviewsDTO",
-    # Tag Service
-    "KeywordSentimentDTO",
-    "TagDetailDTO",
-    "TagGroupDTO",
-    "TagAnalysisResultDTO",
     # Sentiment Service
     "SentimentStatsDTO",
     "ReviewSearchResultDTO",

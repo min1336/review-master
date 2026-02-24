@@ -1722,7 +1722,6 @@
             <button class="btn btn-outline" id="btn-review-detail"
                 style="border-color: #10b981; color: #10b981;">리뷰 상세 테스트</button>
             <button class="btn btn-primary" id="btn-analysis">분석</button>
-            <button class="btn btn-secondary" id="btn-tag-tester">태그 분석 테스트</button>
         </div>
     </header>
 
@@ -2814,16 +2813,10 @@
             function bindEvents() {
                 // 헤더 네비게이션 버튼
                 const btnAnalysis = document.getElementById('btn-analysis');
-                const btnTagTester = document.getElementById('btn-tag-tester');
 
                 if (btnAnalysis) {
                     btnAnalysis.addEventListener('click', () => {
                         window.location.href = `${BASE_PATH}/analysis`;
-                    });
-                }
-                if (btnTagTester) {
-                    btnTagTester.addEventListener('click', () => {
-                        window.location.href = `${BASE_PATH}/tag-tester`;
                     });
                 }
                 const btnReviewDetail = document.getElementById('btn-review-detail');

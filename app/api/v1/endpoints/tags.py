@@ -7,7 +7,6 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from schemas.common import api_list_response, api_response
 from schemas.tag import (
     CategoryCreate,
-    TagAnalysisRequest,
     TagCreate,
     TagUpdate,
 )
@@ -17,17 +16,6 @@ from .deps import get_tag_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["tags"])
-
-@router.post("/analyze-tags")
-async def api_analyze_tags(
-    data: TagAnalysisRequest, service: TagService = Depends(get_tag_service)
-) -> dict[str, Any]:
-    """리뷰 텍스트의 태그 분석 테스트"""
-    try:
-        result = await service.analyze_tags(data.review)
-        return api_response(result.to_dict())
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/categories")
 async def api_categories(

@@ -3,7 +3,6 @@
 
 역할:
 - 대시보드 메인 페이지 (/)
-- 태그 테스터 페이지 (/tag-tester)
 """
 
 from __future__ import annotations
@@ -38,16 +37,6 @@ async def index(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="dashboard_v2.html",
-        context=_page_context(),
-    )
-
-
-@router.get("/tag-tester", response_class=HTMLResponse)
-async def tag_tester(request: Request):
-    """태그 분석 테스트 페이지"""
-    return templates.TemplateResponse(
-        request=request,
-        name="tag_tester.html",
         context=_page_context(),
     )
 

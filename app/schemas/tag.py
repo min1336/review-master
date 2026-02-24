@@ -54,9 +54,3 @@ class BulkMappingRequest(BaseModel):
     """매핑 일괄 생성"""
 
     mappings: list[KeywordMappingCreate]
-
-
-class TagAnalysisRequest(BaseModel):
-    """태그 분석 요청"""
-
-    review: str = Field(..., min_length=1)
