@@ -703,18 +703,33 @@ class RichSummaryPromptBuilder:
         "operational": "",
         "marketing": "\n\n<perspective>\n마케팅 관점에서 분석하세요. 고객 유치와 브랜드 이미지 강화에 도움이 되는 인사이트를 중심으로 서술하세요.\n</perspective>",
         "executive": "\n\n<perspective>\n경영진 보고 관점에서 분석하세요. 핵심 KPI와 비즈니스 임팩트를 중심으로 간결하게 서술하세요.\n</perspective>",
+        "customer_service": "\n\n<perspective>\nCS 품질 개선 관점에서 분석하세요. 고객 불만 원인, 응대 품질, CS 개선을 위한 구체적 액션을 중심으로 서술하세요.\n</perspective>",
+        "investor": "\n\n<perspective>\n사업 성과 관점에서 분석하세요. 수익성, 성장 지표, 시장 경쟁력을 중심으로 서술하세요.\n</perspective>",
+        "comparative": "\n\n<perspective>\n비교 분석 관점에서 분석하세요. 벤치마크 데이터를 활용하여 상대적 위치와 경쟁 우위를 중심으로 서술하세요.\n</perspective>",
     }
 
     TONE_MAP = {
         "analytical": "",
         "friendly": "친근하고 이해하기 쉬운 톤",
         "formal": "격식체의 정중하고 체계적인 톤",
+        "concise": "핵심만 압축한 간결한 톤",
+        "data_driven": "수치와 통계를 적극 인용하는 데이터 중심 톤",
+        "narrative": "스토리텔링 방식의 자연스러운 서술 톤",
     }
 
     PERSPECTIVE_REPLACE_MAP = {
         "operational": "",
         "marketing": "마케팅 관점에서 고객 유치와 브랜드 강화 중심의 인사이트 제공",
         "executive": "경영진 보고 관점에서 핵심 KPI와 비즈니스 임팩트 중심의 인사이트 제공",
+        "customer_service": "CS 품질 개선 관점에서 고객 불만 원인과 응대 품질 중심의 인사이트 제공",
+        "investor": "사업 성과 관점에서 수익성과 성장 지표 중심의 인사이트 제공",
+        "comparative": "비교 분석 관점에서 벤치마크와 상대적 위치 중심의 인사이트 제공",
+    }
+
+    DETAIL_LEVEL_MAP = {
+        "brief": {"summary": (150, 250), "eval": (100, 150)},
+        "standard": {"summary": (400, 600), "eval": (150, 250)},
+        "detailed": {"summary": (600, 1000), "eval": (250, 400)},
     }
 
     @classmethod
@@ -726,6 +741,8 @@ class RichSummaryPromptBuilder:
         perspective: str = "operational",
         tone: str = "analytical",
         max_length: int | None = None,
+        detail_level: str = "standard",
+        focus_areas: list[str] | None = None,
     ) -> tuple[str, str]:
         """리포트 커스텀 설정을 프롬프트에 적용
 
@@ -733,15 +750,19 @@ class RichSummaryPromptBuilder:
             system_prompt: 기존 시스템 프롬프트
             user_prompt: 기존 유저 프롬프트
             custom_instruction: 사용자 커스텀 지시사항
-            perspective: 분석 관점 (operational/marketing/executive)
-            tone: 톤 (analytical/friendly/formal)
-            max_length: 출력 최대 글자 수
+            perspective: 분석 관점
+            tone: 톤
+            max_length: 출력 최대 글자 수 (명시 시 detail_level보다 우선)
+            detail_level: 상세 수준 (brief/standard/detailed)
+            focus_areas: 강조할 카테고리 목록
 
         Returns:
             tuple: (수정된 system_prompt, 수정된 user_prompt)
         """
+        import logging
         import re
 
+        _logger = logging.getLogger(__name__)
         _TONE_ANCHOR = "객관적이고 분석적인 톤"
         _PERSPECTIVE_ANCHOR = "운영자 관점에서 실용적인 인사이트 제공"
 
@@ -749,7 +770,7 @@ class RichSummaryPromptBuilder:
         tone_replace = cls.TONE_MAP.get(tone, "")
         if tone_replace:
             if _TONE_ANCHOR not in system_prompt:
-                logger.warning("톤 교체 대상 문자열이 시스템 프롬프트에 없음")
+                _logger.warning("톤 교체 대상 문자열이 시스템 프롬프트에 없음")
             system_prompt = system_prompt.replace(_TONE_ANCHOR, tone_replace)
 
         # perspective 적용: <writing_style> 내 하드코딩된 관점을 교체 + 추가 지시
@@ -763,6 +784,11 @@ class RichSummaryPromptBuilder:
             if perspective_append:
                 system_prompt += perspective_append
 
+        # detail_level → max_length 기본값 결정 (명시적 max_length가 우선)
+        if not max_length and detail_level in cls.DETAIL_LEVEL_MAP:
+            level_config = cls.DETAIL_LEVEL_MAP[detail_level]
+            max_length = level_config["summary"][1]
+
         # max_length 동적 교체
         if max_length:
             system_prompt = re.sub(
@@ -775,6 +801,11 @@ class RichSummaryPromptBuilder:
                 f"{max_length}자 분량",
                 system_prompt,
             )
+
+        # focus_areas: 강조 카테고리 섹션 추가
+        if focus_areas:
+            areas_text = ", ".join(focus_areas)
+            system_prompt += f"\n\n<focus>\n다음 카테고리를 특히 심층적으로 분석하세요: {areas_text}\n해당 카테고리의 긍정/부정 비율, 구체적 피드백, 개선 제안을 우선적으로 서술하세요.\n</focus>"
 
         # custom_instruction: 시스템 프롬프트에 추가 (우선순위 높음)
         if custom_instruction.strip():

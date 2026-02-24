@@ -177,6 +177,8 @@ class ReportAIGenerator:
                     perspective=report_config.prompt.analysis_perspective,
                     tone=report_config.prompt.tone,
                     max_length=report_config.output.eval_max_length,
+                    detail_level=report_config.prompt.detail_level,
+                    focus_areas=report_config.prompt.focus_areas,
                 )
                 temperature = report_config.prompt.temperature
                 max_tokens = report_config.output.eval_max_length // 2 + 50
@@ -294,6 +296,8 @@ class ReportAIGenerator:
                     perspective=report_config.prompt.analysis_perspective,
                     tone=report_config.prompt.tone,
                     max_length=report_config.output.summary_max_length,
+                    detail_level=report_config.prompt.detail_level,
+                    focus_areas=report_config.prompt.focus_areas,
                 )
                 temperature = report_config.prompt.temperature
                 max_tokens = report_config.output.summary_max_length // 2 + 50

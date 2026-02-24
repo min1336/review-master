@@ -6,6 +6,7 @@ from .endpoints import (
     analysis,
     n8n,
     n8n_scheduler,
+    presets,
     realtime,
     report,
     report_generate,
@@ -32,6 +33,9 @@ api_router.include_router(analysis.router, prefix="/analysis")
 # --- Reports ---
 api_router.include_router(report.router, prefix="/reports")
 api_router.include_router(report_generate.router, prefix="/reports")
+
+# --- Presets ---
+api_router.include_router(presets.router, prefix="/presets")
 
 # --- Sync & Processing ---
 api_router.include_router(sync.router, prefix="/sync")

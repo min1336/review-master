@@ -969,6 +969,53 @@
             margin-top: 4px;
         }
 
+        /* Preset Section */
+        .preset-section {
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            background: var(--grey-9, #f9fafb);
+            border-radius: var(--radius-sm, 6px);
+            border: 1px solid var(--grey-7, #e5e7eb);
+        }
+        .preset-section select {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--grey-7, #e5e7eb);
+            border-radius: var(--radius-sm, 6px);
+            font-size: 13px;
+            background: #fff;
+            margin-top: 6px;
+        }
+        .preset-recommended-badge {
+            display: inline-block;
+            font-size: 10px;
+            background: var(--primary, #6366f1);
+            color: #fff;
+            padding: 1px 6px;
+            border-radius: 9px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+
+        /* Focus Areas */
+        .settings-focus-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .settings-focus-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--grey-3, #374151);
+            cursor: pointer;
+        }
+        .settings-focus-item input[type="checkbox"] {
+            accent-color: var(--primary, #6366f1);
+        }
+
         /* Review Count Info */
         .period-count-badge {
             font-size: 11px;
@@ -3554,10 +3601,14 @@
                         custom_instruction: '',
                         analysis_perspective: 'operational',
                         tone: 'analytical',
+                        detail_level: 'standard',
+                        focus_areas: [],
                         temperature: 0.5,
+                        preset_id: null,
                     },
                 },
             };
+            let presetCache = null;
             let reviewCountCache = null;
 
             async function openReportModal(branchId, branchName, affiliateName) {
@@ -3579,7 +3630,8 @@
                     },
                     prompt: {
                         custom_instruction: '', analysis_perspective: 'operational',
-                        tone: 'analytical', temperature: 0.5,
+                        tone: 'analytical', detail_level: 'standard',
+                        focus_areas: [], temperature: 0.5, preset_id: null,
                     },
                 };
 
@@ -3902,6 +3954,9 @@
                 infoBar.textContent = '리뷰 수 확인 중...';
                 container.appendChild(infoBar);
 
+                // 프리셋 선택 (고급 설정 위에 표시)
+                buildPresetSelector(container);
+
                 // 고급 설정 토글
                 const toggleBtn = document.createElement('button');
                 toggleBtn.className = 'settings-toggle';
@@ -4047,6 +4102,102 @@
                 panel.appendChild(section);
             }
 
+            const DETAIL_LEVEL_DEFAULTS = {
+                brief:    { summary: 250, eval: 150 },
+                standard: { summary: 600, eval: 250 },
+                detailed: { summary: 1000, eval: 400 },
+            };
+
+            const AIRPORT_KEYWORDS = ['공항', '인천공항', '김포공항', '제주공항', '김해공항', '대구공항'];
+            const TOURIST_KEYWORDS = ['제주', '부산', '강릉', '속초', '여수', '경주', '전주'];
+
+            function detectBranchType(branchName) {
+                if (!branchName) return null;
+                const lower = branchName.toLowerCase();
+                for (const kw of AIRPORT_KEYWORDS) { if (lower.includes(kw)) return 'airport'; }
+                for (const kw of TOURIST_KEYWORDS) { if (lower.includes(kw)) return 'tourist'; }
+                return 'city';
+            }
+
+            async function fetchPresets(branchType) {
+                try {
+                    const qs = branchType ? '?branch_type=' + encodeURIComponent(branchType) : '';
+                    const resp = await fetch(API_PREFIX + '/presets' + qs);
+                    const json = await resp.json();
+                    if (json.success) { presetCache = json.data; return json.data; }
+                } catch (e) { console.error('Preset fetch error:', e); }
+                return [];
+            }
+
+            function applyPreset(preset) {
+                if (!preset) return;
+                const p = reportState.config.prompt;
+                p.analysis_perspective = preset.analysis_perspective || 'operational';
+                p.tone = preset.tone || 'analytical';
+                p.detail_level = preset.detail_level || 'standard';
+                p.focus_areas = Array.isArray(preset.focus_areas) ? [...preset.focus_areas] : [];
+                p.custom_instruction = preset.custom_instruction || '';
+                p.temperature = typeof preset.temperature === 'number' ? preset.temperature : 0.5;
+                p.preset_id = preset.id || null;
+
+                const dl = DETAIL_LEVEL_DEFAULTS[p.detail_level] || DETAIL_LEVEL_DEFAULTS.standard;
+                reportState.config.output.summary_max_length = preset.summary_max_length || dl.summary;
+                reportState.config.output.eval_max_length = preset.eval_max_length || dl.eval;
+            }
+
+            function buildPresetSelector(panel) {
+                const section = document.createElement('div');
+                section.className = 'preset-section';
+                const label = document.createElement('div');
+                label.style.cssText = 'font-size: 13px; font-weight: 500; margin-bottom: 2px;';
+                label.textContent = '프리셋 선택';
+                section.appendChild(label);
+
+                const sel = document.createElement('select');
+                sel.id = 'preset-selector';
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = '';
+                defaultOpt.textContent = '직접 설정';
+                sel.appendChild(defaultOpt);
+                section.appendChild(sel);
+
+                const detectedType = detectBranchType(reportState.branchName);
+                fetchPresets(detectedType).then(presets => {
+                    presets.forEach(p => {
+                        const o = document.createElement('option');
+                        o.value = String(p.id);
+                        let text = p.name;
+                        if (p.branch_type && p.branch_type === detectedType) {
+                            text += ' [추천]';
+                        }
+                        o.textContent = text;
+                        sel.appendChild(o);
+                    });
+                });
+
+                sel.addEventListener('change', () => {
+                    const selectedId = parseInt(sel.value, 10);
+                    if (!selectedId || !presetCache) {
+                        reportState.config.prompt.preset_id = null;
+                        return;
+                    }
+                    const preset = presetCache.find(p => p.id === selectedId);
+                    if (preset) {
+                        applyPreset(preset);
+                        // 설정 패널 UI 새로고침
+                        const settingsPanel = document.getElementById('report-settings-panel');
+                        if (settingsPanel) {
+                            settingsPanel.textContent = '';
+                            buildOutputSettings(settingsPanel);
+                            buildDataSettings(settingsPanel);
+                            buildPromptSettings(settingsPanel);
+                        }
+                    }
+                });
+
+                panel.appendChild(section);
+            }
+
             function buildPromptSettings(panel) {
                 const section = document.createElement('div');
                 section.className = 'settings-section';
@@ -4059,12 +4210,92 @@
                     { value: 'operational', label: '운영 관점' },
                     { value: 'marketing', label: '마케팅 관점' },
                     { value: 'executive', label: '경영진 보고' },
+                    { value: 'customer_service', label: 'CS 품질 개선' },
+                    { value: 'investor', label: '투자/사업성과' },
+                    { value: 'comparative', label: '비교 분석' },
                 ]);
                 buildSettingsSelect(section, '톤', 'prompt', 'tone', [
                     { value: 'analytical', label: '분석적' },
                     { value: 'friendly', label: '친근한' },
                     { value: 'formal', label: '격식체' },
+                    { value: 'concise', label: '간결한' },
+                    { value: 'data_driven', label: '데이터 중심' },
+                    { value: 'narrative', label: '서술형' },
                 ]);
+
+                // detail_level 셀렉트
+                const dlRow = document.createElement('div');
+                dlRow.className = 'settings-select-row';
+                const dlLabel = document.createElement('span');
+                dlLabel.textContent = '상세 수준';
+                dlLabel.style.minWidth = '90px';
+                const dlSel = document.createElement('select');
+                [
+                    { value: 'brief', label: '간략 (150~250자)' },
+                    { value: 'standard', label: '표준 (400~600자)' },
+                    { value: 'detailed', label: '상세 (600~1000자)' },
+                ].forEach(opt => {
+                    const o = document.createElement('option');
+                    o.value = opt.value;
+                    o.textContent = opt.label;
+                    if (opt.value === reportState.config.prompt.detail_level) o.selected = true;
+                    dlSel.appendChild(o);
+                });
+                dlSel.addEventListener('change', () => {
+                    reportState.config.prompt.detail_level = dlSel.value;
+                    const defaults = DETAIL_LEVEL_DEFAULTS[dlSel.value];
+                    if (defaults) {
+                        reportState.config.output.summary_max_length = defaults.summary;
+                        reportState.config.output.eval_max_length = defaults.eval;
+                        // 슬라이더 업데이트
+                        const settingsPanel = document.getElementById('report-settings-panel');
+                        if (settingsPanel) {
+                            settingsPanel.textContent = '';
+                            buildOutputSettings(settingsPanel);
+                            buildDataSettings(settingsPanel);
+                            buildPromptSettings(settingsPanel);
+                        }
+                    }
+                });
+                dlRow.appendChild(dlLabel);
+                dlRow.appendChild(dlSel);
+                section.appendChild(dlRow);
+
+                // focus_areas 멀티 체크박스
+                const faLabel = document.createElement('div');
+                faLabel.style.cssText = 'font-size: 13px; margin-top: 10px; margin-bottom: 4px;';
+                faLabel.textContent = '집중 분석 카테고리';
+                section.appendChild(faLabel);
+
+                const faGrid = document.createElement('div');
+                faGrid.className = 'settings-focus-grid';
+                const FOCUS_AREAS = [
+                    '직원이 친절함', '차량외관이 좋음', '가격이 저렴함', '차량이 청결함',
+                    '사고 처리를 잘해줌', '주유비 부담 없음', '배달 서비스가 우수함',
+                ];
+                FOCUS_AREAS.forEach(area => {
+                    const item = document.createElement('label');
+                    item.className = 'settings-focus-item';
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.checked = reportState.config.prompt.focus_areas.includes(area);
+                    cb.addEventListener('change', () => {
+                        const arr = reportState.config.prompt.focus_areas;
+                        if (cb.checked) {
+                            if (!arr.includes(area)) arr.push(area);
+                        } else {
+                            const idx = arr.indexOf(area);
+                            if (idx !== -1) arr.splice(idx, 1);
+                        }
+                    });
+                    const span = document.createElement('span');
+                    span.textContent = area;
+                    item.appendChild(cb);
+                    item.appendChild(span);
+                    faGrid.appendChild(item);
+                });
+                section.appendChild(faGrid);
+
                 buildSettingsSlider(section, 'Temperature', 'prompt', 'temperature', 0.0, 1.0, 0.1, '');
 
                 // 커스텀 지시사항 textarea

@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from repository.affiliate_repository import AffiliateRepository
     from repository.branch_tag_repository import BranchTagRepository
     from repository.new_review_repository import NewReviewRepository
+    from repository.preset_repository import PresetRepository
     from repository.report_job_repository import ReportJobRepository
     from repository.report_repository import ReportRepository
     from repository.review_repository import BranchReviewRepository
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
     from repository.tag_repository import CategoryRepository, MappingRepository, TagRepository
     from services.analysis_service import AnalysisService
     from services.carmore_service import CarmoreService
+    from services.preset_service import PresetService
     from services.report_job_service import ReportJobService
     from services.report_service import ReportService
     from services.sentiment_service import SentimentService
@@ -126,6 +128,14 @@ async def get_report_repo(
     from repository.report_repository import ReportRepository
 
     return ReportRepository(client)
+
+
+async def get_preset_repo(
+    client: AsyncClient = Depends(get_db_client),
+) -> PresetRepository:
+    from repository.preset_repository import PresetRepository
+
+    return PresetRepository(client)
 
 
 async def get_report_job_repo(
@@ -265,6 +275,14 @@ async def get_report_service(
         PDFGenerator(), VehicleAnalyzer(),
         cache_service, tag_calculator, ai_generator,
     )
+
+
+async def get_preset_service(
+    preset_repo: PresetRepository = Depends(get_preset_repo),
+) -> PresetService:
+    from services.preset_service import PresetService
+
+    return PresetService(preset_repo)
 
 
 async def get_report_job_service(

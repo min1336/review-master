@@ -34,18 +34,39 @@ class ReportDataConfig(BaseModel):
     sample_review_count: int = Field(10, ge=5, le=20)
 
 
+VALID_FOCUS_AREAS = [
+    "직원이 친절함", "차량외관이 좋음", "가격이 저렴함", "차량이 청결함",
+    "사고 처리를 잘해줌", "주유비 부담 없음", "배달 서비스가 우수함",
+]
+
+
 class ReportPromptConfig(BaseModel):
     """프롬프트 커스터마이징"""
     custom_instruction: str = Field("", max_length=500)
-    analysis_perspective: Literal["operational", "marketing", "executive"] = "operational"
-    tone: Literal["analytical", "friendly", "formal"] = "analytical"
+    analysis_perspective: Literal[
+        "operational", "marketing", "executive",
+        "customer_service", "investor", "comparative",
+    ] = "operational"
+    tone: Literal[
+        "analytical", "friendly", "formal",
+        "concise", "data_driven", "narrative",
+    ] = "analytical"
+    detail_level: Literal["brief", "standard", "detailed"] = "standard"
+    focus_areas: list[str] = Field(default_factory=list)
     temperature: float = Field(0.5, ge=0.0, le=1.0)
+    preset_id: int | None = None
 
     @field_validator("custom_instruction")
     @classmethod
     def sanitize_instruction(cls, v: str) -> str:
         """제어 문자 제거"""
         return v.strip()
+
+    @field_validator("focus_areas")
+    @classmethod
+    def filter_focus_areas(cls, v: list[str]) -> list[str]:
+        """유효한 카테고리만 허용"""
+        return [area for area in v if area in VALID_FOCUS_AREAS]
 
 
 class ResolvedReportConfig(BaseModel):
@@ -62,6 +83,95 @@ class ResolvedReportConfig(BaseModel):
         if self.output.include_vehicle_eval and not self.data.include_vehicles:
             self.data.include_vehicles = True
         return self
+
+
+# ============================================================
+# API 요청 DTO
+# ============================================================
+
+
+# ============================================================
+# 프리셋 DTO
+# ============================================================
+
+
+class PromptPresetCreate(BaseModel):
+    """프리셋 생성 요청"""
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = ""
+    branch_type: Literal["airport", "tourist", "city"] | None = None
+    analysis_perspective: Literal[
+        "operational", "marketing", "executive",
+        "customer_service", "investor", "comparative",
+    ] = "operational"
+    tone: Literal[
+        "analytical", "friendly", "formal",
+        "concise", "data_driven", "narrative",
+    ] = "analytical"
+    detail_level: Literal["brief", "standard", "detailed"] = "standard"
+    focus_areas: list[str] = Field(default_factory=list)
+    custom_instruction: str = Field("", max_length=500)
+    temperature: float = Field(0.5, ge=0.0, le=1.0)
+    summary_max_length: int = Field(600, ge=150, le=1000)
+    eval_max_length: int = Field(250, ge=100, le=400)
+    is_default: bool = False
+    display_order: int = 0
+
+    @field_validator("focus_areas")
+    @classmethod
+    def filter_focus_areas(cls, v: list[str]) -> list[str]:
+        return [area for area in v if area in VALID_FOCUS_AREAS]
+
+
+class PromptPresetUpdate(BaseModel):
+    """프리셋 수정 요청"""
+    name: str | None = Field(None, min_length=1, max_length=100)
+    description: str | None = None
+    branch_type: Literal["airport", "tourist", "city"] | None = None
+    analysis_perspective: Literal[
+        "operational", "marketing", "executive",
+        "customer_service", "investor", "comparative",
+    ] | None = None
+    tone: Literal[
+        "analytical", "friendly", "formal",
+        "concise", "data_driven", "narrative",
+    ] | None = None
+    detail_level: Literal["brief", "standard", "detailed"] | None = None
+    focus_areas: list[str] | None = None
+    custom_instruction: str | None = Field(None, max_length=500)
+    temperature: float | None = Field(None, ge=0.0, le=1.0)
+    summary_max_length: int | None = Field(None, ge=150, le=1000)
+    eval_max_length: int | None = Field(None, ge=100, le=400)
+    is_default: bool | None = None
+    display_order: int | None = None
+
+    @field_validator("focus_areas")
+    @classmethod
+    def filter_focus_areas(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return v
+        return [area for area in v if area in VALID_FOCUS_AREAS]
+
+
+class PromptPresetResponse(BaseModel):
+    """프리셋 응답"""
+    id: int
+    name: str
+    description: str = ""
+    branch_type: str | None = None
+    analysis_perspective: str = "operational"
+    tone: str = "analytical"
+    detail_level: str = "standard"
+    focus_areas: list[str] = Field(default_factory=list)
+    custom_instruction: str = ""
+    temperature: float = 0.5
+    summary_max_length: int = 600
+    eval_max_length: int = 250
+    is_default: bool = False
+    is_active: bool = True
+    display_order: int = 0
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 # ============================================================
