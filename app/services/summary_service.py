@@ -4,7 +4,17 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from core.timezone import utc_now
+from repository.orm_models import (
+    BranchReviewORM,
+    CategoryORM,
+    MonthlyTagStatsORM,
+    TagORM,
+)
 
 from schemas.dto import (
     BranchCarModelsDTO,
@@ -307,7 +317,7 @@ class SummaryService:
             OperationalSummaryPromptBuilder,
             SummaryPromptBuilder,
         )
-        from repository.session import get_client
+        from repository.database import get_session_factory
 
         # 1. 지점 기본 정보 조회
         summary = await self.summary_repo.get_by_branch_id(branch_id)
@@ -322,59 +332,65 @@ class SummaryService:
         branch_name = summary_data.get("branch_name", f"지점 {branch_id}")
 
         # 2. 기간별 리뷰 수 확인 및 적절한 기간 선택
-        client = await get_client()
-        end_date = utc_now()
-        selected_period = None
-        review_count = 0
-        start_date = None
+        session = get_session_factory()()
+        try:
+            end_date = utc_now()
+            selected_period = None
+            review_count = 0
+            start_date = None
 
-        for period_config in self.PERIOD_CONFIGS:
-            months = period_config["months"]
-            start_date = end_date - timedelta(days=months * 30)
+            for period_config in self.PERIOD_CONFIGS:
+                months = period_config["months"]
+                start_date = end_date - timedelta(days=months * 30)
 
-            count_result = await (
-                client.table("branch_reviews")
-                .select("id", count="exact")
-                .eq("branch_id", branch_id)
-                .gte("review_date", start_date.isoformat())
-                .execute()
-            )
-            review_count = count_result.count or 0
-
-            if review_count >= self.MIN_REVIEWS_FOR_SUMMARY:
-                selected_period = period_config
-                break
-
-        # 3. 어떤 기간도 30개 이상이 아닌 경우 → 전체 기간으로 폴백
-        if not selected_period:
-            # 전체 리뷰 수 확인
-            total_result = await (
-                client.table("branch_reviews")
-                .select("id", count="exact")
-                .eq("branch_id", branch_id)
-                .execute()
-            )
-            total_count = total_result.count or 0
-
-            if total_count == 0:
-                # 리뷰가 아예 없는 경우만 실패
-                insufficient_msg = SummaryPromptBuilder.get_insufficient_reviews_message(
-                    branch_name, 0
+                count_result = await session.execute(
+                    select(func.count())
+                    .select_from(BranchReviewORM)
+                    .where(BranchReviewORM.branch_id == branch_id)
+                    .where(BranchReviewORM.review_date >= start_date.isoformat())
                 )
-                return {
-                    "success": False,
-                    "summary": insufficient_msg,
-                    "period": None,
-                    "period_label": None,
-                    "review_count": 0,
-                    "mode": mode,
-                    "error": "리뷰가 없습니다",
-                }
+                review_count = count_result.scalar_one() or 0
 
-            # 리뷰가 있으면 전체 기간으로 진행
-            selected_period = {"key": "all", "field": "summary_all", "months": None, "label": "전체 기간"}
-            review_count = total_count
-            start_date = None  # 전체 기간이므로 시작일 없음
+                if review_count >= self.MIN_REVIEWS_FOR_SUMMARY:
+                    selected_period = period_config
+                    break
+
+            # 3. 어떤 기간도 30개 이상이 아닌 경우 → 전체 기간으로 폴백
+            if not selected_period:
+                # 전체 리뷰 수 확인
+                total_result = await session.execute(
+                    select(func.count())
+                    .select_from(BranchReviewORM)
+                    .where(BranchReviewORM.branch_id == branch_id)
+                )
+                total_count = total_result.scalar_one() or 0
+
+                if total_count <= self.MIN_REVIEWS_FOR_SUMMARY:
+                    # 전체 리뷰가 기준(30개) 이하인 경우 생성하지 않음
+                    insufficient_msg = SummaryPromptBuilder.get_insufficient_reviews_message(
+                        branch_name, total_count
+                    )
+                    return {
+                        "success": False,
+                        "summary": insufficient_msg,
+                        "period": None,
+                        "period_label": None,
+                        "review_count": total_count,
+                        "mode": mode,
+                        "error": "리뷰가 부족합니다",
+                    }
+
+                # 리뷰가 있으면 전체 기간으로 진행
+                selected_period = {"key": "all", "field": "summary_all", "months": None, "label": "전체 기간"}
+                review_count = total_count
+                start_date = None  # 전체 기간이므로 시작일 없음
+
+            # 6. 감정별 리뷰 샘플링 (다양성 확보)
+            representative_reviews = await self._fetch_representative_reviews(
+                session, branch_id, start_date, mode
+            )
+        finally:
+            await session.close()
 
         period_key = selected_period["key"]
         period_field = selected_period["field"]
@@ -398,11 +414,6 @@ class SummaryService:
                 }
             except Exception as e:
                 logger.warning(f"감정 통계 조회 실패 (branch_id={branch_id}): {e}")
-
-        # 6. 감정별 리뷰 샘플링 (다양성 확보)
-        representative_reviews = await self._fetch_representative_reviews(
-            client, branch_id, start_date, mode
-        )
 
         # 7. 프롬프트 생성 (모드별 분기)
         if mode == "operational":
@@ -523,51 +534,60 @@ class SummaryService:
         self, branch_id: int, period_key: str
     ) -> list[dict]:
         """monthly_tag_stats에서 기간 집계 → 카테고리 그룹핑"""
-        from repository.session import get_client
+        from repository.database import get_session_factory
 
         months_map = {"1m": 1, "3m": 3, "6m": 6, "1y": 12}
         months = months_map.get(period_key, 6)
         now = utc_now()
         start_period = (now - timedelta(days=months * 30)).strftime("%Y-%m")
 
-        client = await get_client()
-        result = await (
-            client.table("monthly_tag_stats")
-            .select("tag_id, positive_count, negative_count, neutral_count")
-            .eq("branch_id", branch_id)
-            .gte("period", start_period)
-            .execute()
-        )
+        session = get_session_factory()()
+        try:
+            stmt = (
+                select(
+                    MonthlyTagStatsORM.tag_id,
+                    MonthlyTagStatsORM.positive_count,
+                    MonthlyTagStatsORM.negative_count,
+                    MonthlyTagStatsORM.neutral_count,
+                )
+                .where(MonthlyTagStatsORM.branch_id == branch_id)
+                .where(MonthlyTagStatsORM.period >= start_period)
+            )
+            result = await session.execute(stmt)
+            rows = result.all()
 
-        if not result.data:
-            return []
+            if not rows:
+                return []
 
-        # tag_id별 집계
-        tag_agg: dict[int, dict[str, int]] = {}
-        for row in result.data:
-            tid = row["tag_id"]
-            if tid not in tag_agg:
-                tag_agg[tid] = {"positive": 0, "negative": 0, "neutral": 0}
-            tag_agg[tid]["positive"] += row.get("positive_count", 0) or 0
-            tag_agg[tid]["negative"] += row.get("negative_count", 0) or 0
-            tag_agg[tid]["neutral"] += row.get("neutral_count", 0) or 0
+            # tag_id별 집계
+            tag_agg: dict[int, dict[str, int]] = {}
+            for row in rows:
+                tid = row.tag_id
+                if tid not in tag_agg:
+                    tag_agg[tid] = {"positive": 0, "negative": 0, "neutral": 0}
+                tag_agg[tid]["positive"] += row.positive_count or 0
+                tag_agg[tid]["negative"] += row.negative_count or 0
+                tag_agg[tid]["neutral"] += row.neutral_count or 0
 
-        if len(tag_agg) < 3:
-            return []
+            if len(tag_agg) < 3:
+                return []
 
-        # tag 정보 조회 (name, category)
-        tag_ids = list(tag_agg.keys())
-        tags_result = await (
-            client.table("tags")
-            .select("id, name, categories(name)")
-            .in_("id", tag_ids)
-            .execute()
-        )
+            # tag 정보 조회 (name, category)
+            tag_ids = list(tag_agg.keys())
+            tags_stmt = (
+                select(TagORM)
+                .options(selectinload(TagORM.category))
+                .where(TagORM.id.in_(tag_ids))
+            )
+            tags_result = await session.execute(tags_stmt)
+            tag_rows = tags_result.scalars().all()
 
-        tag_info: dict[int, tuple[str, str]] = {}
-        for row in tags_result.data:
-            cat = row.get("categories") or {}
-            tag_info[row["id"]] = (row["name"], cat.get("name", "기타"))
+            tag_info: dict[int, tuple[str, str]] = {}
+            for t in tag_rows:
+                cat_name = t.category.name if t.category else "기타"
+                tag_info[t.id] = (t.name, cat_name)
+        finally:
+            await session.close()
 
         # 카테고리별 그룹핑
         from collections import defaultdict
@@ -636,7 +656,7 @@ class SummaryService:
 
     async def _fetch_representative_reviews(
         self,
-        client,
+        session: AsyncSession,
         branch_id: int,
         start_date,
         mode: str,
@@ -664,43 +684,45 @@ class SummaryService:
             except Exception as e:
                 logger.warning(f"Athena 리뷰 샘플링 실패, Supabase 폴백: {e}")
 
-        # Supabase 폴백
+        # Supabase 폴백 → SQLAlchemy
         try:
-            pos_query = (
-                client.table("branch_reviews")
-                .select("content")
-                .eq("branch_id", branch_id)
-                .eq("sentiment", "positive")
+            pos_stmt = (
+                select(BranchReviewORM.content)
+                .where(BranchReviewORM.branch_id == branch_id)
+                .where(BranchReviewORM.sentiment == "positive")
             )
             if start_date is not None:
-                pos_query = pos_query.gte("review_date", start_date.isoformat())
-            pos_result = await (
-                pos_query
-                .order("review_date", desc=True)
+                pos_stmt = pos_stmt.where(
+                    BranchReviewORM.review_date >= start_date.isoformat()
+                )
+            pos_stmt = (
+                pos_stmt
+                .order_by(BranchReviewORM.review_date.desc())
                 .limit(30)
-                .execute()
             )
+            pos_result = await session.execute(pos_stmt)
             pos_reviews = [
-                r["content"][:250] for r in pos_result.data if r.get("content")
+                row.content[:250] for row in pos_result.all() if row.content
             ]
             result["positive"] = self._sample_evenly(pos_reviews, pos_limit)
 
-            neg_query = (
-                client.table("branch_reviews")
-                .select("content")
-                .eq("branch_id", branch_id)
-                .eq("sentiment", "negative")
+            neg_stmt = (
+                select(BranchReviewORM.content)
+                .where(BranchReviewORM.branch_id == branch_id)
+                .where(BranchReviewORM.sentiment == "negative")
             )
             if start_date is not None:
-                neg_query = neg_query.gte("review_date", start_date.isoformat())
-            neg_result = await (
-                neg_query
-                .order("review_date", desc=True)
+                neg_stmt = neg_stmt.where(
+                    BranchReviewORM.review_date >= start_date.isoformat()
+                )
+            neg_stmt = (
+                neg_stmt
+                .order_by(BranchReviewORM.review_date.desc())
                 .limit(30)
-                .execute()
             )
+            neg_result = await session.execute(neg_stmt)
             neg_reviews = [
-                r["content"][:250] for r in neg_result.data if r.get("content")
+                row.content[:250] for row in neg_result.all() if row.content
             ]
             result["negative"] = self._sample_evenly(neg_reviews, neg_limit)
 
@@ -1102,50 +1124,52 @@ class SummaryService:
             BranchCarModelsDTO: 차량별 태그 통계
         """
         from repository.car_model_repository import CarModelRepository
-        from repository.session import get_client
+        from repository.database import get_session_factory
 
-        client = await get_client()
-        repo = CarModelRepository(client)
-
+        session = get_session_factory()()
         try:
-            rows = await repo.get_car_model_tags(branch_id, car_model)
-        except Exception as e:
-            logger.warning(f"차량 태그 조회 실패 (branch_id={branch_id}): {e}")
-            return BranchCarModelsDTO(branch_id=branch_id, car_models=[])
+            repo = CarModelRepository(session)
 
-        if not rows:
-            return BranchCarModelsDTO(branch_id=branch_id, car_models=[])
-
-        # 차량별로 그룹화
-        car_data: dict[str, dict] = {}
-        for row in rows:
-            car = row["car_model"]
-            tag_name = row.get("tag_name", "기타")
-
-            if car not in car_data:
-                car_data[car] = {"name": car, "tags": {}, "review_count": 0}
-
-            car_data[car]["tags"][tag_name] = {
-                "name": tag_name,
-                "positive": row.get("positive_count", 0),
-                "negative": row.get("negative_count", 0),
-                "neutral": row.get("neutral_count", 0),
-                "total": row.get("total_count", 0),
-            }
-
-        # 리뷰 수 조회 (branch_reviews 테이블)
-        for car in car_data:
             try:
-                count_result = (
-                    await client.table("branch_reviews")
-                    .select("id", count="exact")
-                    .eq("branch_id", branch_id)
-                    .eq("car_model", car)
-                    .execute()
-                )
-                car_data[car]["review_count"] = count_result.count or 0
-            except Exception:
-                car_data[car]["review_count"] = 0
+                rows = await repo.get_car_model_tags(branch_id, car_model)
+            except Exception as e:
+                logger.warning(f"차량 태그 조회 실패 (branch_id={branch_id}): {e}")
+                return BranchCarModelsDTO(branch_id=branch_id, car_models=[])
+
+            if not rows:
+                return BranchCarModelsDTO(branch_id=branch_id, car_models=[])
+
+            # 차량별로 그룹화
+            car_data: dict[str, dict] = {}
+            for row in rows:
+                car = row["car_model"]
+                tag_name = row.get("tag_name", "기타")
+
+                if car not in car_data:
+                    car_data[car] = {"name": car, "tags": {}, "review_count": 0}
+
+                car_data[car]["tags"][tag_name] = {
+                    "name": tag_name,
+                    "positive": row.get("positive_count", 0),
+                    "negative": row.get("negative_count", 0),
+                    "neutral": row.get("neutral_count", 0),
+                    "total": row.get("total_count", 0),
+                }
+
+            # 리뷰 수 조회 (branch_reviews 테이블)
+            for car in car_data:
+                try:
+                    count_result = await session.execute(
+                        select(func.count())
+                        .select_from(BranchReviewORM)
+                        .where(BranchReviewORM.branch_id == branch_id)
+                        .where(BranchReviewORM.car_model == car)
+                    )
+                    car_data[car]["review_count"] = count_result.scalar_one() or 0
+                except Exception:
+                    car_data[car]["review_count"] = 0
+        finally:
+            await session.close()
 
         # DTO로 변환
         car_models_dto: list[CarModelDTO] = []

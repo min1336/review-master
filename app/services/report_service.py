@@ -122,6 +122,31 @@ class ReportService:
         """미조회 리포트 개수 조회"""
         return await self.report_repo.get_unviewed_count(branch_id)
 
+    async def resolve_recommended_period(self, branch_id: int) -> str:
+        """리뷰 수 기반 최적 기간 프리셋 자동 결정
+
+        1m→3m→6m→12m 순서로 REVIEW_CHANGE_THRESHOLD 이상인 최단 기간을 반환합니다.
+        어느 기간도 충족하지 못하면 "all"을 반환합니다.
+        """
+        now = utc_now()
+        today = datetime(now.year, now.month, now.day, tzinfo=now.tzinfo)
+        period_defs = [("1m", 1), ("3m", 3), ("6m", 6), ("12m", 12)]
+
+        coros = [
+            self.review_repo.count_by_branch(
+                branch_id,
+                review_date_from=today - relativedelta(months=months),
+                review_date_to=now,
+            )
+            for _label, months in period_defs
+        ]
+        results = await asyncio.gather(*coros)
+
+        for i, (label, _) in enumerate(period_defs):
+            if results[i] >= REVIEW_CHANGE_THRESHOLD:
+                return label
+        return "all"
+
     async def get_review_count_summary(
         self,
         branch_id: int,
@@ -169,7 +194,7 @@ class ReportService:
             if period_counts[label] >= REVIEW_CHANGE_THRESHOLD:
                 recommended_period = label
                 break
-        if recommended_period is None:
+        if recommended_period is None and period_counts["all"] > REVIEW_CHANGE_THRESHOLD:
             recommended_period = "all"
 
         return {
@@ -177,6 +202,7 @@ class ReportService:
             "period_counts": period_counts,
             "threshold": REVIEW_CHANGE_THRESHOLD,
             "recommended_period": recommended_period,
+            "sufficient": recommended_period is not None,
         }
 
     @staticmethod
@@ -688,8 +714,8 @@ class ReportService:
         collected = await self._step_collect(branch_id, start_date, end_date, cfg)
         await update_progress(20)
 
-        # 리뷰가 없는 경우 빈 리포트 반환
-        if collected["total_reviews"] == 0:
+        # 리뷰가 부족한 경우 (30건 이하) 빈 리포트 반환
+        if collected["total_reviews"] <= REVIEW_CHANGE_THRESHOLD:
             await update_progress(100)
             return ReportData(
                 branch_id=branch_id,
@@ -697,7 +723,7 @@ class ReportService:
                 affiliate_name=collected["affiliate_name"],
                 period_start=start_date.strftime("%Y-%m-%d"),
                 period_end=end_date.strftime("%Y-%m-%d"),
-                total_reviews=0,
+                total_reviews=collected["total_reviews"],
                 generated_at=to_kst(utc_now()).strftime("%Y-%m-%d %H:%M"),
             )
 

@@ -67,9 +67,14 @@ async def api_get_report(
 ) -> dict[str, Any]:
     """저장된 리포트 조회 (없으면 신규 생성)
 
-    period 또는 start_date+end_date 중 하나를 반드시 지정해야 합니다.
+    period, start_date+end_date 모두 미지정 시 리뷰 수 기반 최적 기간을 자동 선택합니다.
     둘 다 지정하면 period가 우선합니다.
     """
+    auto_detected = False
+    if not period and not (start_date and end_date):
+        period = await service.resolve_recommended_period(branch_id)
+        auto_detected = True
+
     parsed_start, parsed_end = resolve_period_or_dates(period, start_date, end_date)
 
     try:
@@ -80,6 +85,8 @@ async def api_get_report(
         )
         report_data = report.model_dump()
         report_data["is_new"] = is_new
+        report_data["resolved_period"] = period
+        report_data["auto_detected"] = auto_detected
         return api_response(report_data)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -139,10 +146,13 @@ async def api_download_report_pdf(
 ) -> Response:
     """AI 리포트 PDF 다운로드
 
-    period 또는 start_date+end_date 중 하나를 반드시 지정해야 합니다.
+    period, start_date+end_date 모두 미지정 시 리뷰 수 기반 최적 기간을 자동 선택합니다.
     둘 다 지정하면 period가 우선합니다.
     """
     import urllib.parse
+
+    if not period and not (start_date and end_date):
+        period = await service.resolve_recommended_period(branch_id)
 
     parsed_start, parsed_end = resolve_period_or_dates(
         period, start_date, end_date, error_status=422,
