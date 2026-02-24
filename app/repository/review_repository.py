@@ -170,6 +170,14 @@ class BranchReviewRepository(BaseRepository[Review]):
         result = await self._client.rpc("get_review_stats_by_branch").execute()
         return result.data or []
 
+    async def get_branch_company_map(self) -> dict[int, str]:
+        """지점별 업체명 매핑 (경량 조회)"""
+        result = await self._client.rpc("get_branch_company_map").execute()
+        return {
+            row["branch_id"]: row["company_name"]
+            for row in (result.data or [])
+        }
+
     async def search_with_filters(
         self,
         branch_ids: list[int] | None = None,

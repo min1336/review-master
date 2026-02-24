@@ -100,9 +100,9 @@ class AnalysisService:
             # 지역-지점 매핑 생성
             region_map = {s.branch_id: s.region for s in summaries if s.region}
 
-            # 업체-지점 정보 조회 (branch_reviews)
+            # 업체-지점 정보 조회 (경량 RPC + summaries 재활용)
             companies, branches = await self._get_company_and_branch_options_with_region(
-                region_map
+                region_map, summaries
             )
 
             # 지역 목록 (branches에 있는 지역만)
@@ -454,41 +454,40 @@ class AnalysisService:
         return output, filename
 
     async def _get_company_and_branch_options_with_region(
-        self, region_map: dict[int, str]
+        self, region_map: dict[int, str], summaries: list
     ) -> tuple[list[str], list[BranchOptionDTO]]:
         """업체명과 지점 목록 조회 (region 포함)"""
-        stats = await self.review_repo.get_stats()
+        # 경량 RPC: branch_id → company_name 매핑만 조회
+        company_map = await self.review_repo.get_branch_company_map()
 
         companies = set()
         branches_dict: dict[int, BranchOptionDTO] = {}
 
-        for s in stats:
-            if s.get("company_name"):
-                companies.add(s["company_name"])
-            if s.get("branch_id") and s.get("branch_name"):
-                bid = s["branch_id"]
+        for s in summaries:
+            bid = s.branch_id
+            company = company_map.get(bid, "")
+            if company:
+                companies.add(company)
+            if bid and s.branch_name:
                 branches_dict[bid] = BranchOptionDTO(
                     branch_id=bid,
-                    branch_name=s["branch_name"],
-                    company_name=s.get("company_name") or "",
+                    branch_name=s.branch_name,
+                    company_name=company,
                     region=region_map.get(bid) or "",
                 )
 
-        # 정렬된 목록 반환
         sorted_companies = sorted(companies)
         sorted_branches = sorted(
             branches_dict.values(), key=lambda x: x.branch_name
         )
-
         return sorted_companies, sorted_branches
 
     async def _get_branch_ids_by_companies(self, companies: list[str]) -> set[int]:
         """업체명에 해당하는 branch_id 목록 조회 (성능 최적화용)"""
-        stats = await self.review_repo.get_stats()
+        company_map = await self.review_repo.get_branch_company_map()
         return {
-            s["branch_id"]
-            for s in stats
-            if s.get("company_name") in companies and s.get("branch_id")
+            bid for bid, company in company_map.items()
+            if company in companies
         }
 
     def _merge_all_branch_ids(
