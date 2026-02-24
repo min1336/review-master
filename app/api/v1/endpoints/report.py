@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from core.timezone import date_to_utc
-from schemas.common import api_response, validate_date_range_d
+from schemas.common import ApiResponseModel, api_response, validate_date_range_d
 from services.report_service import ReportService
 
 from ._common import resolve_period_or_dates
@@ -30,7 +30,7 @@ router = APIRouter(tags=["report"])
 # ================================================================
 
 
-@router.get("/{branch_id}/review-count")
+@router.get("/{branch_id}/review-count", response_model=ApiResponseModel[dict])
 async def api_get_review_count(
     branch_id: int,
     start_date: date = Query(..., description="시작일 (YYYY-MM-DD)"),
@@ -57,7 +57,7 @@ async def api_get_review_count(
         raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
-@router.get("/{branch_id}")
+@router.get("/{branch_id}", response_model=ApiResponseModel[dict])
 async def api_get_report(
     branch_id: int,
     period: str | None = Query(None, pattern=r"^(all|1y|12m|6m|3m|1m)$", description="기간 프리셋 (1m/3m/6m/12m/1y/all)"),
@@ -88,7 +88,7 @@ async def api_get_report(
         raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
-@router.get("/{branch_id}/list")
+@router.get("/{branch_id}/list", response_model=ApiResponseModel[dict])
 async def api_get_report_list(
     branch_id: int,
     limit: int = Query(default=10, le=50),
@@ -103,7 +103,7 @@ async def api_get_report_list(
         raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
-@router.delete("/{branch_id}")
+@router.delete("/{branch_id}", response_model=ApiResponseModel[dict])
 async def api_delete_report(
     branch_id: int,
     start_date: date = Query(..., description="시작일 (YYYY-MM-DD)"),

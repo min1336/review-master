@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from schemas.common import api_list_response, api_response
+from schemas.common import ApiListResponseModel, ApiResponseModel, api_list_response, api_response
 from schemas.tag import (
     CategoryCreate,
     TagCreate,
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["tags"])
 
-@router.get("/categories")
+@router.get("/categories", response_model=ApiListResponseModel[dict])
 async def api_categories(
     is_active: bool = Query(True), service: TagService = Depends(get_tag_service)
 ) -> dict[str, Any]:
@@ -30,7 +30,7 @@ async def api_categories(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/categories", status_code=201)
+@router.post("/categories", status_code=201, response_model=ApiResponseModel[dict])
 async def api_create_category(
     data: CategoryCreate, service: TagService = Depends(get_tag_service)
 ) -> dict[str, Any]:
@@ -41,7 +41,7 @@ async def api_create_category(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-@router.get("/list")
+@router.get("/list", response_model=ApiListResponseModel[dict])
 async def api_tags(
     group_name: str | None = Query(None),
     category_id: int | None = Query(None),
@@ -66,7 +66,7 @@ async def api_tags(
         logger.exception("태그 목록 조회 오류")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-@router.post("/batch")
+@router.post("/batch", response_model=ApiResponseModel[dict])
 async def api_tags_batch(
     branch_ids: list[int] = Body(..., embed=True),
     period: str = Body("all", embed=True),
@@ -79,7 +79,7 @@ async def api_tags_batch(
     tags = await service.get_batch_tags(branch_ids, period_type=period)
     return api_response(tags)
 
-@router.post("/", status_code=201)
+@router.post("/", status_code=201, response_model=ApiResponseModel[dict])
 async def api_create_tag(
     data: TagCreate, service: TagService = Depends(get_tag_service)
 ) -> dict[str, Any]:
@@ -91,7 +91,7 @@ async def api_create_tag(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.put("/{tag_id}")
+@router.put("/{tag_id}", response_model=ApiResponseModel[dict])
 async def api_update_tag(
     tag_id: int, data: TagUpdate, service: TagService = Depends(get_tag_service)
 ) -> dict[str, Any]:
@@ -105,7 +105,7 @@ async def api_update_tag(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.delete("/{tag_id}")
+@router.delete("/{tag_id}", response_model=ApiResponseModel[dict])
 async def api_delete_tag(
     tag_id: int, service: TagService = Depends(get_tag_service)
 ) -> dict[str, Any]:

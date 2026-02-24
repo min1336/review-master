@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from core.timezone import date_to_utc
-from schemas.common import api_response, validate_date_range_d
+from schemas.common import ApiResponseModel, api_response, validate_date_range_d
 from services.report_service import ReportService
 
 from .deps import get_report_service, require_public_api_key
@@ -24,7 +24,7 @@ router = APIRouter(tags=["public-report"])
 DEFAULT_VEHICLE_TOP_N = 5
 
 
-@router.get("/{branch_id}")
+@router.get("/{branch_id}", response_model=ApiResponseModel[dict])
 async def api_get_public_report(
     branch_id: int,
     start_date: date = Query(..., description="시작일 (YYYY-MM-DD)"),

@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from schemas.common import api_response
+from schemas.common import ApiResponseModel, api_response
 from schemas.sync import (
     MarkReadRequest,
 )
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["sync"])
 
 
-@router.post("/reviews", status_code=202)
+@router.post("/reviews", status_code=202, response_model=ApiResponseModel[dict])
 async def api_sync_reviews(
     service=Depends(get_sync_job_service),
 ) -> dict[str, Any]:
@@ -24,7 +24,7 @@ async def api_sync_reviews(
     return api_response(result.model_dump(mode="json"))
 
 
-@router.get("/jobs/{job_id}")
+@router.get("/jobs/{job_id}", response_model=ApiResponseModel[dict])
 async def api_get_sync_job_status(
     job_id: str,
     service=Depends(get_sync_job_service),
@@ -38,7 +38,7 @@ async def api_get_sync_job_status(
     return api_response(result.model_dump(mode="json"))
 
 
-@router.delete("/jobs/{job_id}")
+@router.delete("/jobs/{job_id}", response_model=ApiResponseModel[dict])
 async def api_cancel_sync_job(
     job_id: str,
     service=Depends(get_sync_job_service),
@@ -52,7 +52,7 @@ async def api_cancel_sync_job(
     return api_response({"message": "작업이 취소되었습니다"})
 
 
-@router.post("/reviews/read")
+@router.post("/reviews/read", response_model=ApiResponseModel[dict])
 async def api_mark_reviews_as_read(
     request: MarkReadRequest,
     sync_service=Depends(get_sync_service),

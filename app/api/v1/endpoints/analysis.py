@@ -15,7 +15,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from schemas.analysis import ReviewFilterParams
-from schemas.common import api_response
+from schemas.common import ApiResponseModel, api_response
+from schemas.dto import AnalysisReviewListDTO, FilterOptionsDTO
 from services.analysis_service import AnalysisService
 
 from .deps import get_analysis_service
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analysis"])
 
 
-@router.get("/filters")
+@router.get("/filters", response_model=ApiResponseModel[FilterOptionsDTO])
 async def api_get_filter_options(
     service: AnalysisService = Depends(get_analysis_service),
 ) -> dict[str, Any]:
@@ -42,7 +43,7 @@ async def api_get_filter_options(
         )
 
 
-@router.get("/reviews")
+@router.get("/reviews", response_model=ApiResponseModel[AnalysisReviewListDTO])
 async def api_get_reviews(
     filters: ReviewFilterParams = Depends(),
     limit: int = Query(20, ge=1, le=100, description="조회 개수 (기본 20, 최대 100)"),

@@ -15,7 +15,7 @@ import httpx
 from croniter import croniter
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from schemas.common import api_response
+from schemas.common import ApiResponseModel, api_response
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["n8n-scheduler"])
@@ -173,7 +173,7 @@ def _validate_workflow_id(workflow_id: str) -> None:
 # ── API 엔드포인트 ─────────────────────────────────────
 
 
-@router.get("/workflows")
+@router.get("/workflows", response_model=ApiResponseModel[list])
 async def list_scheduler_workflows() -> dict[str, Any]:
     """관리 대상 워크플로 목록 + 현재 스케줄 조회"""
     results: list[dict[str, Any]] = []
@@ -217,7 +217,7 @@ async def list_scheduler_workflows() -> dict[str, Any]:
     return api_response(results)
 
 
-@router.post("/schedule")
+@router.post("/schedule", response_model=ApiResponseModel[dict])
 async def update_schedule(body: ScheduleRequest) -> dict[str, Any]:
     """워크플로의 크론 스케줄을 변경한다 (read-modify-write)."""
     _validate_workflow_id(body.workflow_id)
@@ -291,7 +291,7 @@ async def update_schedule(body: ScheduleRequest) -> dict[str, Any]:
     })
 
 
-@router.post("/toggle")
+@router.post("/toggle", response_model=ApiResponseModel[dict])
 async def toggle_workflow(body: ToggleRequest) -> dict[str, Any]:
     """워크플로 활성/비활성 토글 (n8n 전용 엔드포인트 사용)"""
     _validate_workflow_id(body.workflow_id)
@@ -318,7 +318,7 @@ async def toggle_workflow(body: ToggleRequest) -> dict[str, Any]:
     })
 
 
-@router.post("/trigger")
+@router.post("/trigger", response_model=ApiResponseModel[dict])
 async def trigger_workflow(body: TriggerRequest) -> dict[str, Any]:
     """웹훅을 통해 워크플로를 수동 실행한다."""
     _validate_workflow_id(body.workflow_id)
@@ -344,7 +344,7 @@ async def trigger_workflow(body: TriggerRequest) -> dict[str, Any]:
         ) from e
 
 
-@router.post("/cron/validate")
+@router.post("/cron/validate", response_model=ApiResponseModel[dict])
 async def validate_cron(body: CronValidateRequest) -> dict[str, Any]:
     """크론 표현식을 검증하고 다음 실행 시각을 반환한다."""
     expr = body.expression.strip()
@@ -379,7 +379,7 @@ async def _get_supabase():
 # ── 지점 목록 조회 ────────────────────────────────────
 
 
-@router.get("/branches")
+@router.get("/branches", response_model=ApiResponseModel[list])
 async def list_available_branches() -> dict[str, Any]:
     """선택 가능한 전체 지점 목록 (branch_summaries 테이블)"""
     try:
@@ -445,7 +445,7 @@ async def _upsert_group_targets(
     return len(rows)
 
 
-@router.get("/groups/{workflow_id}")
+@router.get("/groups/{workflow_id}", response_model=ApiResponseModel[list])
 async def list_groups(workflow_id: str) -> dict[str, Any]:
     """워크플로의 스케줄 그룹 목록 + 각 그룹의 대상 지점 조회"""
     _validate_workflow_id(workflow_id)
@@ -494,7 +494,7 @@ async def list_groups(workflow_id: str) -> dict[str, Any]:
         ) from e
 
 
-@router.post("/groups/{workflow_id}")
+@router.post("/groups/{workflow_id}", response_model=ApiResponseModel[dict])
 async def create_group(
     workflow_id: str, body: GroupCreateRequest,
 ) -> dict[str, Any]:
@@ -532,7 +532,7 @@ async def create_group(
         ) from e
 
 
-@router.put("/groups/{group_id}")
+@router.put("/groups/{group_id}", response_model=ApiResponseModel[dict])
 async def update_group(
     group_id: int, body: GroupUpdateRequest,
 ) -> dict[str, Any]:
@@ -587,7 +587,7 @@ async def update_group(
         ) from e
 
 
-@router.delete("/groups/{group_id}")
+@router.delete("/groups/{group_id}", response_model=ApiResponseModel[dict])
 async def delete_group(group_id: int) -> dict[str, Any]:
     """스케줄 그룹 삭제 (CASCADE로 대상 지점도 삭제)"""
     try:

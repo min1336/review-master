@@ -10,7 +10,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from schemas.common import api_response
+from schemas.common import ApiResponseModel, api_response
 from schemas.realtime import ReviewInput
 
 from .deps import get_realtime_pipeline
@@ -19,7 +19,7 @@ router = APIRouter(tags=["realtime"])
 logger = logging.getLogger(__name__)
 
 
-@router.post("/process")
+@router.post("/process", response_model=ApiResponseModel[dict])
 async def api_process_review(
     review: ReviewInput,
     pipeline=Depends(get_realtime_pipeline),

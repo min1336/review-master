@@ -104,7 +104,7 @@ async def api_summary_detail(
     raise HTTPException(status_code=404, detail="Not found")
 
 
-@router.patch("/{branch_id}")
+@router.patch("/{branch_id}", response_model=ApiResponseModel[dict])
 async def api_update_summary(
     branch_id: int,
     data: SummaryUpdate,
@@ -116,7 +116,7 @@ async def api_update_summary(
     return api_response(result)
 
 
-@router.post("/{branch_id}/apply-pending")
+@router.post("/{branch_id}/apply-pending", response_model=ApiResponseModel[PendingSummaryResultDTO])
 async def api_apply_pending_summary(
     branch_id: int,
     data: RegenerateRequest = None,
@@ -134,7 +134,7 @@ async def api_apply_pending_summary(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/{branch_id}/discard-pending")
+@router.post("/{branch_id}/discard-pending", response_model=ApiResponseModel[PendingSummaryResultDTO])
 async def api_discard_pending_summary(
     branch_id: int,
     data: RegenerateRequest = None,

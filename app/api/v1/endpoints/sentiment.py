@@ -11,7 +11,8 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from schemas.common import api_list_response, api_response
+from schemas.common import ApiListResponseModel, ApiResponseModel, api_list_response, api_response
+from schemas.dto import SentimentStatsDTO
 from services.sentiment_service import SentimentService
 
 from .deps import get_sentiment_service
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["sentiment"])
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=ApiResponseModel[SentimentStatsDTO])
 async def api_sentiment_stats(
     branch_id: int | None = Query(None),
     service: SentimentService = Depends(get_sentiment_service),
@@ -35,7 +36,7 @@ async def api_sentiment_stats(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/stats/all")
+@router.get("/stats/all", response_model=ApiListResponseModel[dict])
 async def api_all_sentiment_stats(
     service: SentimentService = Depends(get_sentiment_service),
 ) -> dict[str, Any]:

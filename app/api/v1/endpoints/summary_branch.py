@@ -10,7 +10,8 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from schemas.common import api_response, parse_date
+from schemas.common import ApiResponseModel, api_response, parse_date
+from schemas.dto import BranchCarModelsDTO, BranchReviewsDTO
 from services.summary_service import SummaryService
 
 from .deps import get_summary_service
@@ -18,7 +19,7 @@ from .deps import get_summary_service
 router = APIRouter(tags=["summaries"])
 
 
-@router.post("/{branch_id}/regenerate")
+@router.post("/{branch_id}/regenerate", response_model=ApiResponseModel[dict])
 async def api_regenerate_summary(
     branch_id: int,
     mode: str = Query("marketing", pattern="^(marketing|operational)$"),
@@ -50,7 +51,7 @@ async def api_regenerate_summary(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/{branch_id}/reviews")
+@router.get("/{branch_id}/reviews", response_model=ApiResponseModel[BranchReviewsDTO])
 async def api_branch_reviews(
     branch_id: int,
     car_model: str | None = Query(None, description="차량 모델 필터"),
@@ -90,7 +91,7 @@ async def api_branch_reviews(
     return api_response(result.model_dump(by_alias=True))
 
 
-@router.get("/{branch_id}/car-models")
+@router.get("/{branch_id}/car-models", response_model=ApiResponseModel[BranchCarModelsDTO])
 async def api_car_model_tags(
     branch_id: int,
     car_model: str | None = Query(None, description="특정 차량 모델만 조회"),

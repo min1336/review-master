@@ -13,7 +13,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 from core.timezone import date_to_utc
-from schemas.common import api_response, validate_date_range_d
+from schemas.common import ApiResponseModel, api_response, validate_date_range_d
 from schemas.report import ReportRequest
 from services.report_job_service import ReportJobService
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["report"])
 
 
-@router.post("/{branch_id}/generate/async", status_code=202)
+@router.post("/{branch_id}/generate/async", status_code=202, response_model=ApiResponseModel[dict])
 async def api_generate_report_async(
     branch_id: int,
     data: ReportRequest,
@@ -55,7 +55,7 @@ async def api_generate_report_async(
         raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
-@router.get("/{branch_id}/job/{job_id}")
+@router.get("/{branch_id}/job/{job_id}", response_model=ApiResponseModel[dict])
 async def api_get_job_status(
     branch_id: int,
     job_id: UUID = Path(..., description="작업 UUID"),
@@ -70,7 +70,7 @@ async def api_get_job_status(
     return api_response(job_status)
 
 
-@router.delete("/{branch_id}/job/{job_id}")
+@router.delete("/{branch_id}/job/{job_id}", response_model=ApiResponseModel[dict])
 async def api_cancel_job(
     branch_id: int,
     job_id: UUID = Path(..., description="작업 UUID"),

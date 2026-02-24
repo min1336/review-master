@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from schemas.common import api_response
+from schemas.common import ApiResponseModel, api_response
 from services.summary_service import SummaryService
 
 from .deps import get_summary_service, require_public_api_key
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["public-summary"])
 
 
-@router.get("/{branch_id}")
+@router.get("/{branch_id}", response_model=ApiResponseModel[dict])
 async def api_get_public_summary(
     branch_id: int,
     _: None = Depends(require_public_api_key),
