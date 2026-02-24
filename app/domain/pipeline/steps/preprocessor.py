@@ -5,12 +5,11 @@ from __future__ import annotations
 import logging
 import re
 
+from core.constants import NEGATIVE_RATING_THRESHOLD
 from core.stopwords import LexiconConfig
 from schemas.dto import ProcessedReviewDTO, ReviewDTO
 
 logger = logging.getLogger(__name__)
-
-NEGATIVE_RATING_THRESHOLD = 3.0
 
 
 class ReviewPreprocessor:
@@ -135,10 +134,10 @@ class ReviewPreprocessor:
             for r in [rating_service, rating_car, rating_convenience]
             if r is not None
         ]
-        if ratings and any(r <= NEGATIVE_RATING_THRESHOLD for r in ratings):
+        if ratings and any(r < NEGATIVE_RATING_THRESHOLD for r in ratings):
             return "negative", confidence
         if content_sentiment == "negative" and ratings and all(
-            r > NEGATIVE_RATING_THRESHOLD for r in ratings
+            r >= NEGATIVE_RATING_THRESHOLD for r in ratings
         ):
             return "neutral", confidence
 

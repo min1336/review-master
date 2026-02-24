@@ -170,10 +170,13 @@ class RealtimePipeline(BasePipeline):
 
             tags.append({"name": tag_name, "sentiment": tag_sentiment})
 
-        # 4. 전체 감정 결정 (내용 분석 + 별점 결합)
-        content_sentiment, _ = self.analyze_sentiment(text, keywords)
-        final_sentiment = self._combine_sentiment_with_rating(
-            content_sentiment, ratings
+        # 4. 전체 감정 결정 (BasePipeline 통합 분석 — 배치와 동일 경로)
+        final_sentiment, _ = self.analyze_sentiment_with_ratings(
+            text=text,
+            keywords=keywords,
+            rating_service=ratings.get("service"),
+            rating_car=ratings.get("car"),
+            rating_convenience=ratings.get("convenience"),
         )
 
         return final_sentiment, tags
@@ -215,20 +218,20 @@ class RealtimePipeline(BasePipeline):
         2. 내용 negative + 별점 높음 → neutral
         3. 그 외 → 내용 분석 결과 유지
         """
-        LOW_RATING_THRESHOLD = 3.0
+        from core.constants import NEGATIVE_RATING_THRESHOLD
 
         valid_ratings = [
             r for r in [ratings.get("service"), ratings.get("car"), ratings.get("convenience")]
             if r is not None
         ]
 
-        # 별점 하나라도 낮으면 negative
-        if valid_ratings and any(r <= LOW_RATING_THRESHOLD for r in valid_ratings):
+        # 별점 하나라도 낮으면 negative (3.0 미만)
+        if valid_ratings and any(r < NEGATIVE_RATING_THRESHOLD for r in valid_ratings):
             return "negative"
 
         # 내용은 부정인데 별점이 다 높으면 neutral
         if content_sentiment == "negative" and valid_ratings:
-            if all(r > LOW_RATING_THRESHOLD for r in valid_ratings):
+            if all(r >= NEGATIVE_RATING_THRESHOLD for r in valid_ratings):
                 return "neutral"
 
         return content_sentiment

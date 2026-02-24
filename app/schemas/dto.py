@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
+from core.constants import NEGATIVE_RATING_THRESHOLD
 from core.timezone import utc_now
 
 # ==============================================================================
@@ -963,11 +964,9 @@ class AnalysisReviewDTO:
         2. 내용 분석이 부정인데 평점이 모두 높으면 → 중립
         3. 평점 높고 내용도 긍정/중립 → 기존 감정 유지
         """
-        LOW_RATING_THRESHOLD = 3.0
-
-        # 평점 검사: 유효한 평점만 확인
+        # 평점 검사: 유효한 평점만 확인 (3.0 미만이면 부정)
         ratings = [r for r in [rating_service, rating_car, rating_convenience] if r is not None]
-        is_any_rating_low = any(r <= LOW_RATING_THRESHOLD for r in ratings) if ratings else False
+        is_any_rating_low = any(r < NEGATIVE_RATING_THRESHOLD for r in ratings) if ratings else False
 
         # 내용 기반 감정 (기본값: neutral)
         is_content_negative = content_sentiment == "negative"

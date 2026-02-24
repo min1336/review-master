@@ -12,6 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from core.constants import HIGH_RATING_THRESHOLD, NEGATIVE_RATING_THRESHOLD
+
 SentimentType = Literal["positive", "neutral", "negative"]
 
 
@@ -55,9 +57,9 @@ class UnifiedSentimentAnalyzer:
     WEIGHT_HYBRID = 0.4
     WEIGHT_RATING = 0.3
 
-    # 평점 임계값
-    LOW_RATING_THRESHOLD = 3.0
-    HIGH_RATING_THRESHOLD = 4.0
+    # 평점 임계값 (core.constants에서 관리)
+    LOW_RATING_THRESHOLD = NEGATIVE_RATING_THRESHOLD
+    HIGH_RATING_THRESHOLD = HIGH_RATING_THRESHOLD
 
     def __init__(self, lazy_load: bool = True):
         self._absa = None
@@ -231,22 +233,14 @@ class UnifiedSentimentAnalyzer:
             combined_confidence = max(rule_confidence, hybrid_confidence)
             return rule_sentiment, combined_confidence, "consensus"
 
-        # 불일치 시: 신뢰도 높은 쪽 선택
+        # 불일치 시: 가중 점수 승자 선택 (신뢰도 감쇄)
         rule_weighted = rule_confidence * self.WEIGHT_RULE_BASED
         hybrid_weighted = hybrid_confidence * self.WEIGHT_HYBRID
 
         if rule_weighted >= hybrid_weighted:
-            # Rule-based가 더 확실한 경우 (패턴 매칭 성공)
-            if rule_confidence >= 0.8:
-                return rule_sentiment, rule_confidence * 0.9, "rule_based_override"
-            else:
-                return hybrid_sentiment, hybrid_confidence * 0.8, "hybrid_preferred"
+            return rule_sentiment, rule_confidence * 0.85, "rule_based_override"
         else:
-            # Hybrid가 더 확실한 경우
-            if hybrid_confidence >= 0.7:
-                return hybrid_sentiment, hybrid_confidence * 0.9, "hybrid_override"
-            else:
-                return rule_sentiment, rule_confidence * 0.8, "rule_based_fallback"
+            return hybrid_sentiment, hybrid_confidence * 0.85, "hybrid_override"
 
     def _analyze_ratings(
         self, ratings: list[float]
@@ -255,8 +249,8 @@ class UnifiedSentimentAnalyzer:
         avg_rating = sum(ratings) / len(ratings)
         min_rating = min(ratings)
 
-        # 최저 평점이 낮으면 부정
-        if min_rating <= self.LOW_RATING_THRESHOLD:
+        # 최저 평점이 낮으면 부정 (3.0 미만)
+        if min_rating < self.LOW_RATING_THRESHOLD:
             confidence = 0.9 - (min_rating / 5) * 0.3
             return "negative", confidence
 
@@ -280,8 +274,8 @@ class UnifiedSentimentAnalyzer:
         min_rating = min(ratings)
         avg_rating = sum(ratings) / len(ratings)
 
-        # 규칙 1: 평점이 매우 낮으면 (3점 이하) 무조건 부정
-        if min_rating <= self.LOW_RATING_THRESHOLD:
+        # 규칙 1: 평점이 매우 낮으면 (3점 미만) 무조건 부정
+        if min_rating < self.LOW_RATING_THRESHOLD:
             return "negative", 0.95, "low_rating_override"
 
         # 규칙 2: 텍스트와 평점이 일치하면 높은 신뢰도
@@ -294,7 +288,7 @@ class UnifiedSentimentAnalyzer:
             return "neutral", 0.7, "rating_tempered_negative"
 
         # 규칙 4: 텍스트는 긍정인데 평점이 낮으면 → 중립
-        if text_sentiment == "positive" and avg_rating < 3.5:
+        if text_sentiment == "positive" and avg_rating < self.LOW_RATING_THRESHOLD + 0.5:
             return "neutral", 0.6, "rating_tempered_positive"
 
         # 그 외: 텍스트 분석 결과 유지
@@ -316,13 +310,11 @@ def calculate_comprehensive_sentiment(
 
     새 코드에서는 UnifiedSentimentAnalyzer.analyze_with_ratings() 사용 권장
     """
-    LOW_RATING_THRESHOLD = 3.0
-
     ratings = [
         r for r in [rating_service, rating_car, rating_convenience] if r is not None
     ]
     is_any_rating_low = (
-        any(r <= LOW_RATING_THRESHOLD for r in ratings) if ratings else False
+        any(r < NEGATIVE_RATING_THRESHOLD for r in ratings) if ratings else False
     )
 
     is_content_negative = content_sentiment == "negative"

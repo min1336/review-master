@@ -10,6 +10,10 @@ EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 SIMILARITY_THRESHOLD = 0.35
 CONTEXT_WINDOW_SIZE = 50
 
+# -- 평점 임계값 --
+NEGATIVE_RATING_THRESHOLD = 3.0   # 미만(exclusive)이면 부정 판정
+HIGH_RATING_THRESHOLD = 4.0       # 이상이면 긍정 판정
+
 # -- 리포트 임계값 --
 STRENGTH_POSITIVE_RATIO = 60     # 카테고리 긍정률 >= 60% -> 현상유지
 IMPROVEMENT_NEGATIVE_RATIO = 20  # 카테고리 부정률 >= 20% -> 보완필요

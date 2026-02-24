@@ -275,11 +275,11 @@ class RuleBasedABSA:
         # 5. 일반 패턴 매칭
         positive_matches, negative_matches = count_sentiment_matches(text)
 
-        # "없" 특수 처리 - 앞 단어에 따라 판단
+        # "없" 특수 처리 - 부정 키워드 + 없 → 긍정 전환 (이중부정)
         if "없" in text:
             neg_keywords = ["불편", "불만", "문제", "걱정", "아쉬", "냄새", "흠"]
             for nk in neg_keywords:
-                if nk in text and "없" in text[text.find(nk) : text.find(nk) + 10]:
+                if nk in text and re.search(rf"{nk}.{{0,15}}없", text):
                     positive_matches += 1
                     negative_matches = max(0, negative_matches - 1)
 

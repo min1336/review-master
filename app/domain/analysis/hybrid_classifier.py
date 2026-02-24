@@ -32,6 +32,7 @@ import numpy as np
 
 from .absa import RuleBasedABSA
 from core.constants import (
+    CONTEXT_WINDOW_SIZE,
     EMBEDDING_MODEL,
     SIMILARITY_THRESHOLD,
 )
@@ -143,7 +144,7 @@ class HybridClassifier:
 
     @staticmethod
     def _detect_sentiment_with_context(
-        keyword: str, context: str, window_size: int = 20
+        keyword: str, context: str, window_size: int = CONTEXT_WINDOW_SIZE
     ) -> str:
         """문맥을 고려한 키워드 감정 판단"""
         return detect_keyword_sentiment_with_context(keyword, context, window_size)
