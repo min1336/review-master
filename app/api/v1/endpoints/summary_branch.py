@@ -22,6 +22,7 @@ router = APIRouter(tags=["summaries"])
 async def api_regenerate_summary(
     branch_id: int,
     mode: str = Query("marketing", pattern="^(marketing|operational)$"),
+    pending: bool = Query(True, description="True=승인 대기, False=즉시 적용"),
     service: SummaryService = Depends(get_summary_service),
 ) -> dict[str, Any]:
     """
@@ -34,11 +35,14 @@ async def api_regenerate_summary(
     - 6개월 리뷰 < 30개 -> 1년으로 확장
     - 1년 리뷰 < 30개 -> 리뷰 부족 메시지
 
-    생성된 요약은 pending_summaries에 저장됩니다 (승인 대기 상태).
-    운영자가 '변경' 버튼으로 승인해야 실제 요약에 반영됩니다.
+    pending=true: pending_summaries에 저장 (대시보드 승인 대기)
+    pending=false: 즉시 적용 (n8n 등 외부 호출용)
     """
     try:
-        result = await service.generate_pending_summary(branch_id)
+        if pending:
+            result = await service.generate_pending_summary(branch_id)
+        else:
+            result = await service.generate_summary_with_data(branch_id)
         return api_response(result)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

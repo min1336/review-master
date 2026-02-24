@@ -1034,9 +1034,11 @@ class SummaryService:
 
         if use_athena:
             try:
-                return await self._get_branch_reviews_via_athena(
+                result = await self._get_branch_reviews_via_athena(
                     branch_id, review_date_from, review_date_to, limit, offset
                 )
+                result.car_models = await self.review_repo.get_distinct_car_models(branch_id)
+                return result
             except Exception as e:
                 logger.warning(f"Athena 리뷰 조회 실패, Supabase 폴백: {e}")
 

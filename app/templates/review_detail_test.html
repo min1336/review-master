@@ -858,7 +858,7 @@
             if (kws.length === 0) { section.style.display = 'none'; return; }
             section.style.display = '';
 
-            section.appendChild(el('div', { className: 'eval-title' }, '키워드'));
+            section.appendChild(el('div', { className: 'eval-title' }, '카테고리'));
             var list = el('div', { className: 'tag-list' });
             for (var i = 0; i < kws.length; i++) {
                 list.appendChild(el('div', { className: 'tag-chip neutral' }, kws[i]));
