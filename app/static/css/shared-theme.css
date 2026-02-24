@@ -176,6 +176,19 @@ body {
 }
 .btn-danger:hover { background: #dc2626; }
 
+.btn-header-nav {
+    background: white;
+    color: var(--primary);
+    font-weight: 600;
+    border: none;
+    padding: 8px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.btn-header-nav:hover { background: var(--primary-light); }
+
 .btn-group {
     display: flex;
     gap: 8px;

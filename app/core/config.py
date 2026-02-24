@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # Database 설정 (SQLAlchemy + asyncpg)
     database_url: str = ""  # postgresql+asyncpg://user:pass@host:port/dbname
     database_user: str = ""
-    database_password: str = ""
+    database_password: SecretStr = SecretStr("")
     database_host: str = ""
     database_port: str = "5432"
     database_name: str = "postgres"
@@ -49,8 +49,9 @@ class Settings(BaseSettings):
         if self.database_url:
             return self.database_url
         if self.database_host and self.database_user:
+            password = self.database_password.get_secret_value()
             return (
-                f"postgresql+asyncpg://{self.database_user}:{self.database_password}"
+                f"postgresql+asyncpg://{self.database_user}:{password}"
                 f"@{self.database_host}:{self.database_port}/{self.database_name}"
             )
         return ""
@@ -87,6 +88,9 @@ class Settings(BaseSettings):
     # 로컬(기본): /webhook-test (동기 응답), Docker/실서버: N8N_TEST_MODE=false → /webhook
     n8n_test_mode: bool = True
     n8n_api_key: SecretStr = SecretStr("")
+
+    # Carmore 관리자 URL (로컬: dev-admin, 실서버: admin)
+    carmore_admin_url: str = "https://dev-admin.carmore.kr"
 
     # 스케줄러 설정
     sync_hour: int = 6  # 동기화 실행 시간 (시)

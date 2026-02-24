@@ -40,11 +40,6 @@
             color: var(--grey-1);
         }
 
-        .wf-desc {
-            font-size: 13px;
-            color: var(--grey-5);
-            margin-bottom: 16px;
-        }
 
         /* Status Badge */
         .status-badge {
@@ -72,34 +67,6 @@
         .status-badge.inactive .status-dot { background: var(--error); }
         .status-badge.unknown .status-dot { background: var(--grey-5); }
 
-        /* Schedule Info */
-        .schedule-info {
-            background: var(--grey-9);
-            border-radius: var(--radius-sm);
-            padding: 16px;
-            margin-bottom: 16px;
-        }
-
-        .schedule-label {
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--grey-5);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 4px;
-        }
-
-        .schedule-value { font-size: 15px; font-weight: 600; color: var(--grey-1); }
-
-        .schedule-cron {
-            font-size: 13px;
-            color: var(--grey-3);
-            font-family: 'SF Mono', 'Fira Code', monospace;
-            margin-top: 2px;
-        }
-
-        .next-runs { margin-top: 8px; font-size: 12px; color: var(--grey-5); }
-        .next-runs li { margin-left: 16px; padding: 2px 0; }
 
         /* Cron Editor - Visual Time Picker */
         .cron-editor { margin-bottom: 16px; }
@@ -251,24 +218,6 @@
         .preset-chip:hover { border-color: var(--primary); color: var(--primary); background: rgba(13, 111, 252, 0.05); }
         .preset-chip.active { border-color: var(--primary); color: var(--primary); background: rgba(13, 111, 252, 0.08); font-weight: 600; }
 
-        /* Generated cron display */
-        .cron-result {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: var(--grey-9);
-            border-radius: var(--radius-sm);
-            font-size: 12px;
-            color: var(--grey-5);
-        }
-
-        .cron-result code {
-            font-family: 'SF Mono', 'Fira Code', monospace;
-            font-size: 13px;
-            color: var(--grey-2);
-            font-weight: 600;
-        }
 
         .cron-validation { font-size: 12px; margin-top: 6px; min-height: 18px; }
         .cron-validation.valid { color: var(--success); }
@@ -372,7 +321,6 @@
 
         .group-cron-section .freq-tabs { margin-bottom: 10px; }
         .group-cron-section .time-row { margin-bottom: 10px; }
-        .group-cron-section .cron-result { margin-top: 8px; }
 
         .group-actions {
             display: flex;
@@ -510,9 +458,6 @@
         .btn-toggle-active:hover:not(:disabled) { background: #059669; }
         .btn-toggle-inactive { background: var(--error); color: white; }
         .btn-toggle-inactive:hover:not(:disabled) { background: #dc2626; }
-        .btn-trigger { background: var(--warning); color: #1a1a1a; }
-        .btn-trigger:hover:not(:disabled) { background: #d97706; }
-        .spacer { flex: 1; }
 
         /* Loading */
         .loading-container { text-align: center; padding: 60px 0; color: var(--grey-5); }
@@ -545,8 +490,7 @@
     <header class="header">
         <h1>n8n 스케줄러 관리</h1>
         <div class="header-actions">
-            <button class="btn btn-outline" id="btn-back"
-                style="border-color: rgba(255,255,255,0.5); color: white;">대시보드</button>
+            <button class="btn btn-header-nav" id="btn-back">대시보드</button>
         </div>
     </header>
 
@@ -566,6 +510,10 @@
         const API_PREFIX = '{{ api_prefix }}';
         const BASE_PATH = API_PREFIX.replace('/api', '');
         const SUMMARY_WF_ID = 'xQTiHwJTH8JTFcn3';
+        const WF_NAME_KO = {
+            [SUMMARY_WF_ID]: '요약 리포트 생성',
+        };
+        const DEFAULT_WF_NAME = '리뷰 동기화';
 
         const QUICK_PRESETS = [
             { label: '매일 6시', cron: '0 6 * * *' },
@@ -647,45 +595,33 @@
                 el('span', { className: 'status-dot' }), statusText
             ]);
 
+            var koName = WF_NAME_KO[wf.id] || DEFAULT_WF_NAME;
             var header = el('div', { className: 'wf-card-header' }, [
-                el('span', { className: 'wf-name', textContent: wf.name }), badge
+                el('span', { className: 'wf-name', textContent: koName }), badge
             ]);
-
-            var desc = el('div', { className: 'wf-desc', textContent: wf.description || '' });
 
             // Actions (공통)
             var toggleBtnClass = wf.active ? 'btn-toggle-inactive' : 'btn-toggle-active';
             var toggleBtnText = wf.active ? '비활성화' : '활성화';
             var btnToggle = el('button', { className: 'btn-schedule ' + toggleBtnClass, id: 'btn-toggle-' + wf.id, textContent: toggleBtnText });
             btnToggle.dataset.active = String(wf.active);
-            var btnTrigger = el('button', { className: 'btn-schedule btn-trigger', id: 'btn-trigger-' + wf.id, textContent: '지금 실행' });
 
-            var cardChildren = [header, desc];
+            var cardChildren = [header];
 
             if (wf.id === SUMMARY_WF_ID) {
                 // Summary Job: 그룹별 스케줄 관리 → 워크플로 레벨 스케줄 에디터 불필요
                 var groupsContainer = el('div', { className: 'groups-section', id: 'groups-' + wf.id });
                 cardChildren.push(groupsContainer);
                 var actions = el('div', { className: 'wf-actions' }, [
-                    btnToggle, el('span', { className: 'spacer' }), btnTrigger
+                    btnToggle
                 ]);
             } else {
-                // Review Sync Job: 현재 스케줄 + 크론 에디터 표시
-                var scheduleInfo = el('div', { className: 'schedule-info' }, [
-                    el('div', { className: 'schedule-label', textContent: '현재 스케줄' }),
-                    el('div', { className: 'schedule-value', textContent: wf.cron_description || '스케줄 없음' }),
-                    el('div', { className: 'schedule-cron', textContent: wf.cron_expression || '-' })
-                ]);
-                if (wf.next_runs && wf.next_runs.length > 0) {
-                    var ul = el('ul', { className: 'next-runs' });
-                    wf.next_runs.forEach(function (r) { ul.appendChild(el('li', { textContent: r })); });
-                    scheduleInfo.appendChild(ul);
-                }
+                // Review Sync Job: 크론 에디터 표시
                 var editor = buildCronEditor(wf);
                 var btnSave = el('button', { className: 'btn-schedule btn-save', id: 'btn-save-' + wf.id, textContent: '스케줄 저장' });
-                cardChildren.push(scheduleInfo, editor);
+                cardChildren.push(editor);
                 var actions = el('div', { className: 'wf-actions' }, [
-                    btnSave, btnToggle, el('span', { className: 'spacer' }), btnTrigger
+                    btnSave, btnToggle
                 ]);
             }
 
@@ -787,11 +723,6 @@
                 hourSel, el('span', { className: 'time-colon', textContent: ':' }), minSel
             ]));
 
-            // Cron result
-            wrap.appendChild(el('div', { className: 'cron-result' }, [
-                el('span', { textContent: '크론 표현식:' }),
-                el('code', { id: 'cron-display-' + wf.id, textContent: uiToCron(state) })
-            ]));
             wrap.appendChild(el('div', { className: 'cron-validation', id: 'cron-validation-' + wf.id }));
 
             return wrap;
@@ -811,9 +742,7 @@
 
         function bindCardEvents(wf) {
             var btnToggle = document.getElementById('btn-toggle-' + wf.id);
-            var btnTrigger = document.getElementById('btn-trigger-' + wf.id);
             btnToggle.addEventListener('click', function () { toggleWorkflow(wf.id); });
-            btnTrigger.addEventListener('click', function () { triggerWorkflow(wf.id); });
 
             if (wf.id === SUMMARY_WF_ID) {
                 // Summary Job: 그룹만 로드
@@ -1067,12 +996,6 @@
             section.appendChild(el('div', { className: 'time-row' }, [
                 el('span', { className: 'time-label', textContent: '실행 시각' }),
                 hourSel, el('span', { className: 'time-colon', textContent: ':' }), minSel
-            ]));
-
-            // Cron display
-            section.appendChild(el('div', { className: 'cron-result' }, [
-                el('span', { textContent: '크론:' }),
-                el('code', { id: 'gcron-' + gid, textContent: uiToCron(state) })
             ]));
 
             return section;
@@ -1365,26 +1288,6 @@
             }
         }
 
-        async function triggerWorkflow(wfId) {
-            var btn = document.getElementById('btn-trigger-' + wfId);
-            if (!confirm('이 워크플로를 지금 수동 실행하시겠습니까?')) return;
-            btn.disabled = true;
-            var originalText = btn.textContent;
-            btn.textContent = '실행 중...';
-            try {
-                var result = await apiRequest(API_PREFIX + '/n8n/scheduler/trigger', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ workflow_id: wfId }),
-                });
-                showToast(result.data.message, 'success');
-            } catch (e) {
-                showToast('실행 실패: ' + (e.message || ''), 'error');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = originalText;
-            }
-        }
     </script>
 </body>
 

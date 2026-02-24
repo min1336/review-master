@@ -1766,11 +1766,9 @@
     <header class="header">
         <h1>Review Summary AI - 운영팀 대시보드</h1>
         <div class="header-actions">
-            <button class="btn btn-outline" id="btn-review-detail"
-                style="border-color: #10b981; color: #10b981;">리뷰 상세 테스트</button>
-            <button class="btn btn-outline" id="btn-scheduler"
-                style="border-color: #f59e0b; color: #f59e0b;">스케줄러</button>
-            <button class="btn btn-primary" id="btn-analysis">분석</button>
+            <button class="btn btn-header-nav" id="btn-review-detail">카모아 예시</button>
+            <button class="btn btn-header-nav" id="btn-scheduler">스케줄러</button>
+            <button class="btn btn-header-nav" id="btn-analysis">리뷰 관리</button>
         </div>
     </header>
 
@@ -1947,10 +1945,11 @@
             // 페이지 경로용 base path (로컬: '', 프로덕션: '/review')
             const BASE_PATH = API_PREFIX.replace('/api', '');
 
+            const CARMORE_ADMIN_URL = '{{ carmore_admin_url }}';
             const CONFIG = Object.freeze({
                 API_PREFIX: API_PREFIX,
                 EXTERNAL_URLS: {
-                    CARMORE_REVIEW_BASE: 'https://dev-admin.carmore.kr/partners/Reviewmanage'
+                    CARMORE_REVIEW_BASE: CARMORE_ADMIN_URL + '/partners/Reviewmanage'
                 },
                 PAGINATION: {
                     DEFAULT_PAGE_SIZE: 30,

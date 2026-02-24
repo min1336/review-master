@@ -27,6 +27,7 @@ def _page_context() -> dict:
     return {
         "api_prefix": settings.api_prefix,
         "base_path": settings.api_prefix.replace("/api", ""),
+        "carmore_admin_url": settings.carmore_admin_url,
     }
 
 

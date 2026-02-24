@@ -817,7 +817,7 @@
                 수동 동기화
             </button>
 
-            <button class="btn btn-secondary" id="btn-back">대시보드로 돌아가기</button>
+            <button class="btn btn-header-nav" id="btn-back">대시보드</button>
         </div>
     </header>
 
@@ -1839,7 +1839,7 @@
         // 운영툴에서 예약 보기 + 해당 리뷰 읽음 처리
         async function openReservation(reviewId, reviewDate, dbId, isNewSection = false) {
             if (reviewId && reviewId !== '-') {
-                let url = `https://dev-admin.carmore.kr/partners/Reviewmanage?sp=reservation_idx&sv=${reviewId}`;
+                let url = `{{ carmore_admin_url }}/partners/Reviewmanage?sp=reservation_idx&sv=${reviewId}`;
                 window.open(url, '_blank');
 
                 // 해당 리뷰 읽음 처리 (DB ID가 있는 경우)

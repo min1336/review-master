@@ -160,14 +160,21 @@ jobs:
           API_PREFIX: ${{ secrets.API_PREFIX }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           ATHENA_DATABASE: ${{ secrets.ATHENA_DATABASE }}
           ATHENA_OUTPUT_BUCKET: ${{ secrets.ATHENA_OUTPUT_BUCKET }}
-          PUBLIC_API_KEY: ${{ secrets.PUBLIC_API_KEY }}
+          DATABASE_USER: ${{ secrets.DATABASE_USER }}
+          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+          DATABASE_HOST: ${{ secrets.DATABASE_HOST }}
+          DATABASE_PORT: ${{ secrets.DATABASE_PORT }}
+          DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
+          N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
+          CARMORE_ADMIN_URL: ${{ secrets.CARMORE_ADMIN_URL }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          GITHUB_ACTOR: ${{ github.actor }}
         with:
           host: ${{ secrets.PROD_SERVER_HOST }}
           username: ${{ secrets.PROD_SERVER_USER }}
@@ -179,7 +186,7 @@ jobs:
           proxy_port: ${{ secrets.AWS_TM2_BASTION_PORT }}
           debug: true
           script_stop: true
-          envs: API_PREFIX,OPENAI_API_KEY,LLM_PROVIDER,SUPABASE_URL,SUPABASE_KEY,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,ATHENA_DATABASE,ATHENA_OUTPUT_BUCKET,PUBLIC_API_KEY
+          envs: API_PREFIX,OPENAI_API_KEY,LLM_PROVIDER,DATABASE_URL,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,ATHENA_DATABASE,ATHENA_OUTPUT_BUCKET,DATABASE_USER,DATABASE_PASSWORD,DATABASE_HOST,DATABASE_PORT,DATABASE_NAME,N8N_API_KEY,GHCR_PAT,GITHUB_ACTOR,CARMORE_ADMIN_URL
           script: |
             echo "🚀 배포 시작..."
             
@@ -198,18 +205,23 @@ jobs:
             printf 'API_PREFIX=%s\n' "$API_PREFIX" >> .env
             printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY" >> .env
             printf 'LLM_PROVIDER=%s\n' "$LLM_PROVIDER" >> .env
-            printf 'SUPABASE_URL=%s\n' "$SUPABASE_URL" >> .env
-            printf 'SUPABASE_KEY=%s\n' "$SUPABASE_KEY" >> .env
             printf 'AWS_ACCESS_KEY_ID=%s\n' "$AWS_ACCESS_KEY_ID" >> .env
             printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$AWS_SECRET_ACCESS_KEY" >> .env
             printf 'AWS_REGION=%s\n' "$AWS_REGION" >> .env
             printf 'ATHENA_DATABASE=%s\n' "$ATHENA_DATABASE" >> .env
             printf 'ATHENA_OUTPUT_BUCKET=%s\n' "$ATHENA_OUTPUT_BUCKET" >> .env
-            printf 'PUBLIC_API_KEY=%s\n' "$PUBLIC_API_KEY" >> .env
+            printf 'DATABASE_USER=%s\n' "$DATABASE_USER" >> .env
+            printf 'DATABASE_PASSWORD=%s\n' "$DATABASE_PASSWORD" >> .env
+            printf 'DATABASE_HOST=%s\n' "$DATABASE_HOST" >> .env
+            printf 'DATABASE_PORT=%s\n' "$DATABASE_PORT" >> .env
+            printf 'DATABASE_NAME=%s\n' "$DATABASE_NAME" >> .env
+            printf 'N8N_API_KEY=%s\n' "$N8N_API_KEY" >> .env
+            printf 'N8N_TEST_MODE=false\n' >> .env
+            printf 'CARMORE_ADMIN_URL=%s\n' "$CARMORE_ADMIN_URL" >> .env
             echo "✅ .env created"
             
             # GitHub Container Registry 로그인
-            if ! echo ${{ secrets.GHCR_PAT }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin; then
+            if ! printf '%s' "$GHCR_PAT" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin; then
               echo "❌ GHCR login failed! Check GHCR_PAT secret."
               exit 1
             fi
