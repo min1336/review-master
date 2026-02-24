@@ -58,7 +58,14 @@ async def api_mark_reviews_as_read(
     sync_service=Depends(get_sync_service),
 ) -> dict[str, Any]:
     """리뷰 읽음 처리"""
-    marked_count = await sync_service.mark_reviews_as_read(request.review_ids)
+    try:
+        marked_count = await sync_service.mark_reviews_as_read(request.review_ids)
+    except Exception as e:
+        logger.error(f"리뷰 읽음 처리 실패: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=502,
+            detail=f"리뷰 읽음 처리 중 DB 오류가 발생했습니다: {type(e).__name__}",
+        )
     return api_response({
         "marked_count": marked_count,
     })
