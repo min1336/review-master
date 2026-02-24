@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
+
 from core.constants import NEGATIVE_RATING_THRESHOLD
 from core.timezone import utc_now
 
@@ -471,8 +473,7 @@ class PipelineResultDTO:
 # ==============================================================================
 
 
-@dataclass
-class SummaryStatsDTO:
+class SummaryStatsDTO(BaseModel):
     """
     요약 통계 DTO
 
@@ -482,15 +483,8 @@ class SummaryStatsDTO:
     total: int
     total_reviews: int
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "total": self.total,
-            "total_reviews": self.total_reviews,
-        }
 
-
-@dataclass
-class RegionStatsDTO:
+class RegionStatsDTO(BaseModel):
     """
     지역별 통계 DTO
     """
@@ -500,33 +494,17 @@ class RegionStatsDTO:
     avg_rating: float
     total_reviews: int
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "region": self.region,
-            "count": self.count,
-            "avg_rating": self.avg_rating,
-            "total_reviews": self.total_reviews,
-        }
 
-
-@dataclass
-class RatingDistributionDTO:
+class RatingDistributionDTO(BaseModel):
     """평점 분포 DTO"""
 
-    range_4_5_to_5_0: int = 0
-    range_4_0_to_4_5: int = 0
-    range_3_5_to_4_0: int = 0
-    range_3_0_to_3_5: int = 0
-    range_below_3_0: int = 0
+    model_config = ConfigDict(populate_by_name=True)
 
-    def to_dict(self) -> dict[str, int]:
-        return {
-            "4.5-5.0": self.range_4_5_to_5_0,
-            "4.0-4.5": self.range_4_0_to_4_5,
-            "3.5-4.0": self.range_3_5_to_4_0,
-            "3.0-3.5": self.range_3_0_to_3_5,
-            "<3.0": self.range_below_3_0,
-        }
+    range_4_5_to_5_0: int = Field(0, serialization_alias="4.5-5.0")
+    range_4_0_to_4_5: int = Field(0, serialization_alias="4.0-4.5")
+    range_3_5_to_4_0: int = Field(0, serialization_alias="3.5-4.0")
+    range_3_0_to_3_5: int = Field(0, serialization_alias="3.0-3.5")
+    range_below_3_0: int = Field(0, serialization_alias="<3.0")
 
 
 @dataclass
@@ -567,8 +545,7 @@ class SummaryWithTagsDTO:
         }
 
 
-@dataclass
-class PendingSummaryResultDTO:
+class PendingSummaryResultDTO(BaseModel):
     """
     대기 중인 요약 적용/취소 결과 DTO
     """
@@ -577,8 +554,9 @@ class PendingSummaryResultDTO:
     applied: str | None = None
     discarded: str | None = None
 
-    def to_dict(self) -> dict[str, Any]:
-        result = {"period": self.period}
+    @model_serializer
+    def _serialize(self) -> dict[str, Any]:
+        result: dict[str, Any] = {"period": self.period}
         if self.applied is not None:
             result["applied"] = self.applied
         if self.discarded is not None:
@@ -586,27 +564,17 @@ class PendingSummaryResultDTO:
         return result
 
 
-@dataclass
-class TagSentimentCountDTO:
+class TagSentimentCountDTO(BaseModel):
     """태그별 감정 카운트 DTO"""
 
     name: str
     total: int
     positive: int
     negative: int
-    neutral: int = 0
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "total": self.total,
-            "positive": self.positive,
-            "negative": self.negative,
-        }
+    neutral: int = Field(0, exclude=True)
 
 
-@dataclass
-class ReviewOutputDTO:
+class ReviewOutputDTO(BaseModel):
     """리뷰 출력 DTO"""
 
     id: str | None
@@ -615,7 +583,8 @@ class ReviewOutputDTO:
     keywords: list[str]
     tag_sentiments: str
 
-    def to_dict(self) -> dict[str, Any]:
+    @model_serializer
+    def _serialize(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "date": (
@@ -627,24 +596,16 @@ class ReviewOutputDTO:
         }
 
 
-@dataclass
-class SummariesOutputDTO:
+class SummariesOutputDTO(BaseModel):
     """기간별 요약 출력 DTO"""
 
-    summary_1m: str = ""
-    summary_3m: str = ""
-    summary_6m: str = ""
-    summary_1y: str = ""
-    summary_all: str = ""
+    model_config = ConfigDict(populate_by_name=True)
 
-    def to_dict(self) -> dict[str, str]:
-        return {
-            "1m": self.summary_1m,
-            "3m": self.summary_3m,
-            "6m": self.summary_6m,
-            "1y": self.summary_1y,
-            "all": self.summary_all,
-        }
+    summary_1m: str = Field("", serialization_alias="1m")
+    summary_3m: str = Field("", serialization_alias="3m")
+    summary_6m: str = Field("", serialization_alias="6m")
+    summary_1y: str = Field("", serialization_alias="1y")
+    summary_all: str = Field("", serialization_alias="all")
 
 
 @dataclass
@@ -673,22 +634,14 @@ class BranchDetailDTO:
         }
 
 
-@dataclass
-class BranchReviewsDTO:
+class BranchReviewsDTO(BaseModel):
     """
     지점별 리뷰 목록 DTO
     """
 
     reviews: list[dict[str, Any]]
     total: int
-    car_models: list[str] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "reviews": self.reviews,
-            "total": self.total,
-            "car_models": self.car_models,
-        }
+    car_models: list[str] = Field(default_factory=list)
 
 
 # ==============================================================================
@@ -701,8 +654,7 @@ class BranchReviewsDTO:
 # ==============================================================================
 
 
-@dataclass
-class SentimentStatsDTO:
+class SentimentStatsDTO(BaseModel):
     """
     감정 통계 DTO
     """
@@ -713,16 +665,6 @@ class SentimentStatsDTO:
     total: int
     positive_ratio: float
     negative_ratio: float
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "positive": self.positive,
-            "negative": self.negative,
-            "neutral": self.neutral,
-            "total": self.total,
-            "positive_ratio": self.positive_ratio,
-            "negative_ratio": self.negative_ratio,
-        }
 
 
 @dataclass
@@ -768,8 +710,7 @@ class CleanupResultDTO:
 # ==============================================================================
 
 
-@dataclass
-class CarModelTagDTO:
+class CarModelTagDTO(BaseModel):
     """차량별 태그 감정 통계 DTO"""
 
     name: str
@@ -778,44 +719,27 @@ class CarModelTagDTO:
     neutral: int = 0
     total: int = 0
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "positive": self.positive,
-            "negative": self.negative,
-            "neutral": self.neutral,
-            "total": self.total,
-        }
 
-
-@dataclass
-class CarModelDTO:
+class CarModelDTO(BaseModel):
     """차량 모델별 태그 분석 DTO"""
 
     name: str
     review_count: int = 0
-    tags: list[CarModelTagDTO] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "review_count": self.review_count,
-            "tags": [t.to_dict() for t in self.tags],
-        }
+    tags: list[CarModelTagDTO] = Field(default_factory=list)
 
 
-@dataclass
-class BranchCarModelsDTO:
+class BranchCarModelsDTO(BaseModel):
     """지점별 차량 모델 태그 분석 DTO"""
 
     branch_id: int
-    car_models: list[CarModelDTO] = field(default_factory=list)
+    car_models: list[CarModelDTO] = Field(default_factory=list)
     error: str | None = None
 
-    def to_dict(self) -> dict[str, Any]:
-        result = {
+    @model_serializer
+    def _serialize(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
             "branch_id": self.branch_id,
-            "car_models": [cm.to_dict() for cm in self.car_models],
+            "car_models": [cm.model_dump() for cm in self.car_models],
         }
         if self.error:
             result["error"] = self.error
@@ -827,8 +751,7 @@ class BranchCarModelsDTO:
 # ==============================================================================
 
 
-@dataclass
-class BranchOptionDTO:
+class BranchOptionDTO(BaseModel):
     """
     지점 옵션 DTO
 
@@ -840,17 +763,8 @@ class BranchOptionDTO:
     company_name: str = ""
     region: str = ""
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "branch_id": self.branch_id,
-            "branch_name": self.branch_name,
-            "company_name": self.company_name,
-            "region": self.region,
-        }
 
-
-@dataclass
-class FilterOptionsDTO:
+class FilterOptionsDTO(BaseModel):
     """
     필터 옵션 DTO (계층형 필터 지원)
 
@@ -858,20 +772,12 @@ class FilterOptionsDTO:
     branches에 region, company_name이 포함되어 계층형 필터링 가능.
     """
 
-    regions: list[str] = field(default_factory=list)
-    companies: list[str] = field(default_factory=list)
-    branches: list[BranchOptionDTO] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "regions": self.regions,
-            "companies": self.companies,
-            "branches": [b.to_dict() for b in self.branches],
-        }
+    regions: list[str] = Field(default_factory=list)
+    companies: list[str] = Field(default_factory=list)
+    branches: list[BranchOptionDTO] = Field(default_factory=list)
 
 
-@dataclass
-class AnalysisReviewDTO:
+class AnalysisReviewDTO(BaseModel):
     """
     분석 페이지용 리뷰 DTO
     """
@@ -889,23 +795,6 @@ class AnalysisReviewDTO:
     rating_convenience: float | None
     car_model: str | None = None
     is_new: bool = False
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "id": self.id,
-            "review_id": self.review_id,
-            "branch_id": self.branch_id,
-            "branch_name": self.branch_name,
-            "company_name": self.company_name,
-            "content": self.content,
-            "sentiment": self.sentiment,
-            "review_date": self.review_date,
-            "rating_service": self.rating_service,
-            "rating_car": self.rating_car,
-            "rating_convenience": self.rating_convenience,
-            "car_model": self.car_model,
-            "is_new": self.is_new,
-        }
 
     @classmethod
     def from_db_row(cls, row: dict[str, Any]) -> "AnalysisReviewDTO":
@@ -983,22 +872,13 @@ class AnalysisReviewDTO:
             return content_sentiment or "neutral"
 
 
-
-
-@dataclass
-class AnalysisReviewListDTO:
+class AnalysisReviewListDTO(BaseModel):
     """
     분석 페이지 리뷰 목록 결과 DTO
     """
 
     reviews: list[AnalysisReviewDTO]
     total: int
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "reviews": [r.to_dict() for r in self.reviews],
-            "total": self.total,
-        }
 
 
 # ==============================================================================

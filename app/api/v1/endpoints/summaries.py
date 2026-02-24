@@ -14,7 +14,9 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from schemas.common import api_list_response, api_response, parse_date
+from schemas.common import ApiListResponseModel, ApiResponseModel, api_list_response, api_response, parse_date
+from schemas.dto import PendingSummaryResultDTO, RegionStatsDTO, SummaryStatsDTO
+from schemas.entities import Summary
 from schemas.summary import RegenerateRequest, SummaryUpdate
 from services.summary_service import SummaryService
 
@@ -23,7 +25,7 @@ from .deps import get_summary_service
 router = APIRouter(tags=["summaries"])
 
 
-@router.get("")
+@router.get("", response_model=ApiListResponseModel[Summary])
 async def api_summaries(
     region: str | None = Query(None, description="지역 필터"),
     keyword: str | None = Query(None, description="키워드/업체명 검색"),
@@ -68,22 +70,22 @@ async def api_summaries(
     return api_list_response(summaries)
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=ApiResponseModel[SummaryStatsDTO])
 async def api_stats(
     service: SummaryService = Depends(get_summary_service),
 ) -> dict[str, Any]:
     """요약 통계"""
     result = await service.get_stats()
-    return api_response(result.to_dict())
+    return api_response(result.model_dump(by_alias=True))
 
 
-@router.get("/stats/region")
+@router.get("/stats/region", response_model=ApiListResponseModel[RegionStatsDTO])
 async def api_region_stats(
     service: SummaryService = Depends(get_summary_service),
 ) -> dict[str, Any]:
     """지역별 통계"""
     result = await service.get_region_stats()
-    return api_list_response([r.to_dict() for r in result])
+    return api_list_response([r.model_dump(by_alias=True) for r in result])
 
 
 # ================================================================
@@ -91,7 +93,7 @@ async def api_region_stats(
 # ================================================================
 
 
-@router.get("/{branch_id}")
+@router.get("/{branch_id}", response_model=ApiResponseModel[dict])
 async def api_summary_detail(
     branch_id: int, service: SummaryService = Depends(get_summary_service)
 ) -> dict[str, Any]:
@@ -125,7 +127,7 @@ async def api_apply_pending_summary(
 
     try:
         result = await service.apply_pending_summary(branch_id, period)
-        return api_response(result.to_dict())
+        return api_response(result.model_dump(by_alias=True))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
@@ -143,6 +145,6 @@ async def api_discard_pending_summary(
 
     try:
         result = await service.discard_pending_summary(branch_id, period)
-        return api_response(result.to_dict())
+        return api_response(result.model_dump(by_alias=True))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

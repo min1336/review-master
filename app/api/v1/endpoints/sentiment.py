@@ -29,7 +29,7 @@ async def api_sentiment_stats(
     """지점별 감정태그 통계"""
     try:
         result = await service.get_stats(branch_id)
-        return api_response(result.to_dict())
+        return api_response(result.model_dump(by_alias=True))
     except Exception as e:
         logger.exception("감정태그 통계 조회 오류")
         raise HTTPException(status_code=500, detail=str(e)) from e

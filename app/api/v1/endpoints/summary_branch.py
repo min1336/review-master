@@ -87,7 +87,7 @@ async def api_branch_reviews(
         limit=limit,
         offset=offset,
     )
-    return api_response(result.to_dict())
+    return api_response(result.model_dump(by_alias=True))
 
 
 @router.get("/{branch_id}/car-models")
@@ -105,4 +105,4 @@ async def api_car_model_tags(
         branch_id=branch_id,
         car_model=car_model,
     )
-    return api_response(result.to_dict())
+    return api_response(result.model_dump(by_alias=True))

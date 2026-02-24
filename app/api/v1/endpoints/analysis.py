@@ -32,7 +32,7 @@ async def api_get_filter_options(
     """필터 옵션 조회 (지역, 업체명, 지점 목록)"""
     try:
         result = await service.get_filter_options()
-        return api_response(result.to_dict())
+        return api_response(result.model_dump(by_alias=True))
 
     except Exception as e:
         logger.error(f"Failed to get filter options: {e}")
@@ -64,7 +64,7 @@ async def api_get_reviews(
             offset=offset,
             is_new=is_new,
         )
-        return api_response(result.to_dict())
+        return api_response(result.model_dump(by_alias=True))
 
     except Exception as e:
         logger.error(f"Failed to get filtered reviews: {e}")

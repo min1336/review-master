@@ -128,12 +128,21 @@ GET  /api/sync/jobs/{id}               # 동기화 작업 상태
 POST /api/realtime/process             # 단건 리뷰 실시간 처리
 ```
 
-### Scheduler
+### n8n Webhooks & Scheduler
 
 ```
-GET  /api/scheduler/monthly/status     # 월간 스케줄러 상태
-POST /api/scheduler/monthly/start      # 스케줄러 시작
-POST /api/scheduler/monthly/stop       # 스케줄러 중지
+POST /api/n8n/review-sync              # n8n 리뷰 동기화 웹훅
+POST /api/n8n/generate-summary         # n8n 요약 생성 웹훅
+GET  /api/n8n/scheduler/workflows      # 스케줄러 워크플로우 목록
+POST /api/n8n/scheduler/schedule       # 크론 스케줄 변경
+POST /api/n8n/scheduler/toggle         # 워크플로우 활성화/비활성화
+POST /api/n8n/scheduler/trigger        # 수동 실행
+POST /api/n8n/scheduler/cron/validate  # 크론 표현식 검증
+GET  /api/n8n/scheduler/branches       # 스케줄 대상 지점 목록
+GET  /api/n8n/scheduler/groups/{id}    # 그룹별 지점 스케줄 조회
+POST /api/n8n/scheduler/groups/{id}    # 그룹 생성
+PUT  /api/n8n/scheduler/groups/{id}    # 그룹 수정
+DELETE /api/n8n/scheduler/groups/{id}  # 그룹 삭제
 ```
 
 ### Public API (X-API-Key 인증)
@@ -168,15 +177,18 @@ app/
 ├── main.py                          # FastAPI 진입점, lifespan
 ├── api/v1/
 │   ├── api.py                       # 라우터 등록
-│   └── endpoints/                   # API 엔드포인트 (12개 모듈)
+│   └── endpoints/                   # API 엔드포인트 (14개 모듈)
 │       ├── summaries.py             # 요약 CRUD, 승인 워크플로우
-│       ├── report.py                # AI 리포트 생성, PDF
+│       ├── summary_branch.py        # 지점별 요약, 리뷰, 차량 태그
+│       ├── report.py                # AI 리포트 조회, PDF, 히스토리
+│       ├── report_generate.py       # AI 리포트 비동기 생성
 │       ├── tags.py                  # 태그 관리
 │       ├── sentiment.py             # 감정 통계
 │       ├── analysis.py              # 리뷰 분석, 필터링
 │       ├── sync.py                  # 리뷰 동기화
 │       ├── realtime.py              # 실시간 처리
-│       ├── monthly_scheduler.py     # 월간 스케줄러
+│       ├── n8n.py                   # n8n 웹훅 (동기화, 요약 생성)
+│       ├── n8n_scheduler.py         # n8n 스케줄러 관리, 그룹 관리
 │       ├── pages.py                 # HTML 페이지 라우트
 │       ├── public_report.py         # Public API (리포트)
 │       ├── public_summary.py        # Public API (요약)
@@ -239,7 +251,7 @@ app/
 
 ```python
 OPENAI_RPM = 3500                          # API Rate Limit
-EMBEDDING_MODEL = "intfloat/multilingual-e5-small"  # 임베딩 모델
+EMBEDDING_MODEL = "intfloat/multilingual-e5-large"  # 임베딩 모델
 SIMILARITY_THRESHOLD = 0.3                 # 태그 분류 최소 유사도
 ```
 
