@@ -842,26 +842,38 @@
             card.appendChild(meta);
         }
 
+        var _cachedCategories = null;
+
         function renderKeywords(data) {
             var section = document.getElementById('section-tags');
             clearEl(section);
 
-            var kws = [];
-            if (data.keywords && data.keywords.length > 0) {
-                kws = data.keywords;
-            } else {
-                if (data.keyword_1) kws.push(data.keyword_1);
-                if (data.keyword_2) kws.push(data.keyword_2);
-                if (data.keyword_3) kws.push(data.keyword_3);
+            // 카테고리명을 캐시 또는 API에서 조회하여 표시
+            if (_cachedCategories) {
+                _renderCategoryChips(section, _cachedCategories);
+                return;
             }
+            fetch(API_PREFIX + '/tags/categories')
+                .then(function (res) { return res.json(); })
+                .then(function (json) {
+                    _cachedCategories = (json && json.data) || [];
+                    _renderCategoryChips(section, _cachedCategories);
+                })
+                .catch(function () {
+                    section.style.display = 'none';
+                });
+        }
 
-            if (kws.length === 0) { section.style.display = 'none'; return; }
+        function _renderCategoryChips(section, cats) {
+            if (cats.length === 0) { section.style.display = 'none'; return; }
             section.style.display = '';
-
             section.appendChild(el('div', { className: 'eval-title' }, '카테고리'));
             var list = el('div', { className: 'tag-list' });
-            for (var i = 0; i < kws.length; i++) {
-                list.appendChild(el('div', { className: 'tag-chip neutral' }, kws[i]));
+            for (var i = 0; i < cats.length; i++) {
+                var name = cats[i].name || '';
+                if (name) {
+                    list.appendChild(el('div', { className: 'tag-chip neutral' }, name));
+                }
             }
             section.appendChild(list);
         }

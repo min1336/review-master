@@ -34,8 +34,9 @@ Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
 
 ```python
 OPENAI_RPM = 3500                # API Rate Limit
-EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
-SIMILARITY_THRESHOLD = 0.3       # 태그 분류 최소 유사도
+EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+SIMILARITY_THRESHOLD = 0.35      # 태그 분류 최소 유사도
+CONTEXT_WINDOW_SIZE = 50         # 감정 분석 문맥 윈도우 (글자)
 ```
 
 ## Project Structure
@@ -82,7 +83,7 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 ## 태그 시스템
 
 - 7개 카테고리, 52개 세분화 태그 (상세: `app/domain/analysis/patterns.py` RULE_BASED_TAG_MAPPING)
-- 감정 판단: 규칙 패턴 매칭 + 문맥 분석, 이중부정 처리, 문맥 윈도우 20자
+- 감정 판단: 규칙 패턴 매칭 + 문맥 분석, 이중부정 처리, 문맥 윈도우 50자
 - API Envelope: `{"success": true, "data": ..., "count": N}`
 
 ## Testing

@@ -121,27 +121,18 @@ class ReviewPreprocessor:
         rating_car: float | None,
         rating_convenience: float | None,
     ) -> tuple[str, float]:
-        """텍스트 분석 + 별점 결합"""
+        """텍스트 분석 + 별점 결합 — UnifiedSentimentAnalyzer에 위임"""
         if not text or len(text.strip()) < 5:
             return self._analyze_by_rating(rating_service, rating_car, rating_convenience)
 
-        result = self._sentiment_analyzer.analyze(text, keywords)
-        content_sentiment = result.sentiment
-        confidence = result.confidence
-
-        ratings = [
-            r
-            for r in [rating_service, rating_car, rating_convenience]
-            if r is not None
-        ]
-        if ratings and any(r < NEGATIVE_RATING_THRESHOLD for r in ratings):
-            return "negative", confidence
-        if content_sentiment == "negative" and ratings and all(
-            r >= NEGATIVE_RATING_THRESHOLD for r in ratings
-        ):
-            return "neutral", confidence
-
-        return content_sentiment, confidence
+        result = self._sentiment_analyzer.analyze_with_ratings(
+            text=text,
+            keywords=keywords,
+            rating_service=rating_service,
+            rating_car=rating_car,
+            rating_convenience=rating_convenience,
+        )
+        return result.sentiment, result.confidence
 
     def _analyze_by_rating(
         self,
@@ -156,9 +147,18 @@ class ReviewPreprocessor:
         if not valid_ratings:
             return "neutral", 0.5
 
+        # 개별 차원 하한 검증: 하나라도 3.0 미만이면 positive 불가
+        if any(r < NEGATIVE_RATING_THRESHOLD for r in valid_ratings):
+            avg_rating = sum(valid_ratings) / len(valid_ratings)
+            if avg_rating >= 3.5:
+                return "neutral", 0.5
+            return "negative", 0.8
+
         avg_rating = sum(valid_ratings) / len(valid_ratings)
         if avg_rating >= 4.0:
             return "positive", 0.8
+        elif avg_rating >= 3.5:
+            return "positive", 0.65
         elif avg_rating >= NEGATIVE_RATING_THRESHOLD:
             return "neutral", 0.5
         else:

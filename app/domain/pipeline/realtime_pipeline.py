@@ -194,7 +194,8 @@ class RealtimePipeline(BasePipeline):
         내용 없을 때: 별점만으로 감정 판단
 
         규칙:
-        - 평균 별점 >= 4.0 -> positive
+        - 개별 별점 3.0 미만 존재 시 positive 불가
+        - 평균 별점 >= 3.5 -> positive
         - 평균 별점 >= 3.0 -> neutral
         - 평균 별점 < 3.0 -> negative
         """
@@ -206,43 +207,23 @@ class RealtimePipeline(BasePipeline):
         if not valid_ratings:
             return "neutral"
 
+        from core.constants import NEGATIVE_RATING_THRESHOLD
+
+        # 개별 차원 하한 검증: 하나라도 3.0 미만이면 positive 불가
+        if any(r < NEGATIVE_RATING_THRESHOLD for r in valid_ratings):
+            avg_rating = sum(valid_ratings) / len(valid_ratings)
+            if avg_rating >= 3.5:
+                return "neutral"
+            return "negative"
+
         avg_rating = sum(valid_ratings) / len(valid_ratings)
 
-        if avg_rating >= 4.0:
+        if avg_rating >= 3.5:
             return "positive"
-        elif avg_rating >= 3.0:
+        elif avg_rating >= NEGATIVE_RATING_THRESHOLD:
             return "neutral"
         else:
             return "negative"
-
-    def _combine_sentiment_with_rating(
-        self, content_sentiment: str, ratings: dict
-    ) -> str:
-        """
-        내용 분석 결과와 별점을 결합하여 최종 감정 결정
-
-        규칙:
-        1. 별점 3점 이하 1개라도 있으면 -> negative
-        2. 내용 negative + 별점 높음 -> neutral
-        3. 그 외 -> 내용 분석 결과 유지
-        """
-        from core.constants import NEGATIVE_RATING_THRESHOLD
-
-        valid_ratings = [
-            r for r in [ratings.get("service"), ratings.get("car"), ratings.get("convenience")]
-            if r is not None
-        ]
-
-        # 별점 하나라도 낮으면 negative (3.0 미만)
-        if valid_ratings and any(r < NEGATIVE_RATING_THRESHOLD for r in valid_ratings):
-            return "negative"
-
-        # 내용은 부정인데 별점이 다 높으면 neutral
-        if content_sentiment == "negative" and valid_ratings:
-            if all(r >= NEGATIVE_RATING_THRESHOLD for r in valid_ratings):
-                return "neutral"
-
-        return content_sentiment
 
     async def _save_results(
         self,

@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.decay import compute_decay
 from core.timezone import utc_now
-from repository.orm_models import BranchTagORM, KeywordMappingORM, TagORM
+from repository.orm_models import BranchTagORM, CategoryORM, KeywordMappingORM, TagORM
 from schemas.dto import ProcessedReviewDTO
 
 if TYPE_CHECKING:
@@ -84,14 +84,65 @@ class TagAggregator:
 
             # 캐시에 없는 태그만 개별 upsert
             missing_tags = all_tag_names - set(tag_id_cache.keys())
+
+            # tag_name → (category_name, group) 매핑 빌드 (circular import 방지: 함수 내 import)
+            from domain.analysis.patterns import TAG_REGISTRY
+
+            tag_to_category_name: dict[str, str] = {}
+            tag_to_group: dict[str, str] = {}
+            for cat_name, cat_meta in TAG_REGISTRY.items():
+                # 카테고리 이름 자체도 태그로 쓰일 수 있음 (ABSA 경로)
+                tag_to_category_name[cat_name] = cat_name
+                tag_to_group[cat_name] = cat_meta.group
+                # 세분화 서브태그
+                for sub_tag_name in cat_meta.tags:
+                    tag_to_category_name[sub_tag_name] = cat_name
+                    tag_to_group[sub_tag_name] = cat_meta.group
+
+            # categories 테이블에서 category_name → category_id 조회
+            category_name_to_id: dict[str, int] = {}
+            needed_cat_names = {
+                tag_to_category_name[t]
+                for t in missing_tags
+                if t in tag_to_category_name
+            }
+            if needed_cat_names:
+                try:
+                    cat_result = await session.execute(
+                        select(CategoryORM.id, CategoryORM.name).where(
+                            CategoryORM.name.in_(list(needed_cat_names))
+                        )
+                    )
+                    for cat_row in cat_result.all():
+                        category_name_to_id[cat_row.name] = cat_row.id
+                except Exception as e:
+                    logger.warning(f"categories 조회 실패: {e}")
+
+            GROUP_TO_TAG_TYPE = {"affiliate": "company", "vehicle": "vehicle"}
+
             for tag_name in missing_tags:
                 try:
+                    cat_name = tag_to_category_name.get(tag_name)
+                    cat_id = category_name_to_id.get(cat_name) if cat_name else None
+                    group = tag_to_group.get(tag_name)
+                    tag_type = GROUP_TO_TAG_TYPE.get(group)
+
+                    insert_values: dict = {"name": tag_name, "is_active": True}
+                    update_set: dict = {"is_active": True}
+                    if cat_id is not None:
+                        insert_values["category_id"] = cat_id
+                        # on_conflict: category_id가 NULL이면 덮어쓰기
+                        update_set["category_id"] = cat_id
+                    if tag_type is not None:
+                        insert_values["tag_type"] = tag_type
+                        update_set["tag_type"] = tag_type
+
                     stmt = (
                         pg_insert(TagORM.__table__)
-                        .values(name=tag_name, is_active=True)
+                        .values(**insert_values)
                         .on_conflict_do_update(
                             index_elements=["name"],
-                            set_={"is_active": True},
+                            set_=update_set,
                         )
                         .returning(TagORM.__table__.c.id)
                     )
