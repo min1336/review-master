@@ -132,18 +132,14 @@ class ReportService:
         today = datetime(now.year, now.month, now.day, tzinfo=now.tzinfo)
         period_defs = [("1m", 1), ("3m", 3), ("6m", 6), ("12m", 12)]
 
-        coros = [
-            self.review_repo.count_by_branch(
+        # AsyncSession은 동시 쿼리를 지원하지 않으므로 순차 실행
+        for label, months in period_defs:
+            count = await self.review_repo.count_by_branch(
                 branch_id,
                 review_date_from=today - relativedelta(months=months),
                 review_date_to=now,
             )
-            for _label, months in period_defs
-        ]
-        results = await asyncio.gather(*coros)
-
-        for i, (label, _) in enumerate(period_defs):
-            if results[i] >= REVIEW_CHANGE_THRESHOLD:
+            if count >= REVIEW_CHANGE_THRESHOLD:
                 return label
         return "all"
 
@@ -166,27 +162,18 @@ class ReportService:
             ("1m", 1), ("3m", 3), ("6m", 6), ("12m", 12),
         ]
 
-        # 모든 쿼리를 병렬로 실행
-        selected_coro = self.review_repo.count_by_branch(
+        # AsyncSession은 동시 쿼리를 지원하지 않으므로 순차 실행
+        selected_count = await self.review_repo.count_by_branch(
             branch_id, review_date_from=start_date, review_date_to=end_date,
         )
-        period_coros = [
-            self.review_repo.count_by_branch(
+        period_counts: dict[str, int] = {}
+        for label, months in period_defs:
+            period_counts[label] = await self.review_repo.count_by_branch(
                 branch_id,
                 review_date_from=today_date - relativedelta(months=months),
                 review_date_to=today,
             )
-            for _label, months in period_defs
-        ]
-        all_coro = self.review_repo.count_by_branch(branch_id)
-
-        results = await asyncio.gather(selected_coro, *period_coros, all_coro)
-
-        selected_count = results[0]
-        period_counts: dict[str, int] = {
-            label: results[i + 1] for i, (label, _) in enumerate(period_defs)
-        }
-        period_counts["all"] = results[-1]
+        period_counts["all"] = await self.review_repo.count_by_branch(branch_id)
 
         # 추천 기간: threshold 이상인 최단 기간
         recommended_period = None
@@ -769,21 +756,18 @@ class ReportService:
             "top_disliked_vehicles": [v.model_dump() for v in top_disliked],
         }
 
-        # Step 3 + Step 2.5 병렬 실행
+        # Step 3 + Step 2.5 순차 실행 (AsyncSession 동시 사용 불가)
         need_insights = (
             cfg.output.include_trend_comparison
             or cfg.output.include_benchmark
             or cfg.output.include_priority_actions
         )
 
-        async def _empty_insights() -> dict:
-            return {}
+        insights = {}
+        if need_insights:
+            insights = await self._step_insights(branch_id, start_date, end_date, tags)
 
-        ai_result, insights = await asyncio.gather(
-            self._step_ai(ai_data, cfg),
-            self._step_insights(branch_id, start_date, end_date, tags) if need_insights else _empty_insights(),
-        )
-        ai = ai_result
+        ai = await self._step_ai(ai_data, cfg)
         await update_progress(85)
 
         # Step 4: 리포트 조립 및 저장 (85-100%)

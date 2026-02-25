@@ -271,8 +271,8 @@ class VehicleAnalyzer:
                 stmt = (
                     select(BranchReviewORM.car_model, BranchReviewORM.sentiment)
                     .where(BranchReviewORM.branch_id == branch_id)
-                    .where(BranchReviewORM.review_date >= start_date.isoformat())
-                    .where(BranchReviewORM.review_date < next_day.isoformat())
+                    .where(BranchReviewORM.review_date >= start_date)
+                    .where(BranchReviewORM.review_date < next_day)
                     .offset(offset)
                     .limit(batch_size)
                 )

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Callable, Awaitable
 from uuid import UUID
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
     from repository.report_job_repository import ReportJobRepository
     from schemas.report import ResolvedReportConfig
     from services.report_service import ReportService
@@ -74,6 +75,9 @@ class ReportJobService:
 
         job_id = str(job["id"])
 
+        # 백그라운드 태스크가 독립 세션으로 작업을 조회할 수 있도록 즉시 커밋
+        await self.job_repo._session.commit()
+
         # 백그라운드 태스크로 리포트 생성 시작
         task = asyncio.create_task(
             self._run_job(job_id, branch_id, start_date, end_date, report_config)
@@ -125,49 +129,84 @@ class ReportJobService:
         """
         백그라운드에서 리포트 생성 실행
 
-        Args:
-            job_id: 작업 UUID
-            branch_id: 지점 ID
-            start_date: 시작일
-            end_date: 종료일
+        요청 세션과 독립된 별도 DB 세션을 사용합니다.
+        요청 종료 시 세션이 닫히면서 발생하는 ISCE 오류를 방지합니다.
         """
-        try:
-            # 상태를 processing으로 변경
-            await self.job_repo.update_status(job_id, "processing", progress=0)
+        from repository.database import get_session_factory
 
-            # 진행률 콜백 함수
-            async def progress_callback(progress: int) -> None:
-                await self.job_repo.update_progress(job_id, progress)
+        factory = get_session_factory()
+        async with factory() as session:
+            try:
+                job_repo = self._create_job_repo(session)
+                report_service = self._create_report_service(session)
 
-            # 리포트 생성 (진행률 콜백 포함)
-            report = await self.report_service.generate_report_with_progress(
-                branch_id=branch_id,
-                start_date=start_date,
-                end_date=end_date,
-                progress_callback=progress_callback,
-                report_config=report_config,
-            )
+                await job_repo.update_status(job_id, "processing", progress=0)
 
-            # 완료 상태로 변경 (report_id는 별도 저장하지 않음)
-            await self.job_repo.update_status(
-                job_id,
-                "completed",
-                progress=100,
-            )
+                async def progress_callback(progress: int) -> None:
+                    await job_repo.update_progress(job_id, progress)
 
-            logger.info(f"리포트 작업 완료: {job_id}")
+                await report_service.generate_report_with_progress(
+                    branch_id=branch_id,
+                    start_date=start_date,
+                    end_date=end_date,
+                    progress_callback=progress_callback,
+                    report_config=report_config,
+                )
 
-        except Exception as e:
-            # 내부 오류 상세는 로그에만 기록, 사용자에게는 일반 메시지 노출
-            logger.exception(f"리포트 작업 실패: {job_id}")
-            await self.job_repo.update_status(
-                job_id,
-                "failed",
-                error_message="리포트 생성 중 오류가 발생했습니다. 다시 시도해주세요.",
-            )
-        finally:
-            # 완료된 태스크 제거
-            self._running_jobs.pop(job_id, None)
+                await job_repo.update_status(job_id, "completed", progress=100)
+                await session.commit()
+                logger.info(f"리포트 작업 완료: {job_id}")
+
+            except Exception:
+                logger.exception(f"리포트 작업 실패: {job_id}")
+                try:
+                    await session.rollback()
+                    job_repo = self._create_job_repo(session)
+                    await job_repo.update_status(
+                        job_id,
+                        "failed",
+                        error_message="리포트 생성 중 오류가 발생했습니다. 다시 시도해주세요.",
+                    )
+                    await session.commit()
+                except Exception:
+                    pass
+            finally:
+                self._running_jobs.pop(job_id, None)
+
+    @staticmethod
+    def _create_job_repo(session: "AsyncSession") -> "ReportJobRepository":
+        from repository.report_job_repository import ReportJobRepository
+        return ReportJobRepository(session)
+
+    @staticmethod
+    def _create_report_service(session: "AsyncSession") -> "ReportService":
+        """백그라운드 태스크용 독립 ReportService 생성"""
+        from repository.summary_repository import SummaryRepository
+        from repository.review_repository import BranchReviewRepository
+        from repository.branch_tag_repository import BranchTagRepository
+        from repository.report_repository import ReportRepository
+        from services.report_service import ReportService
+        from services.report_cache_service import ReportCacheService
+        from services.tag_stats_calculator import TagStatsCalculator
+        from services.report_ai_generator import ReportAIGenerator
+        from services.vehicle_analyzer import VehicleAnalyzer
+        from infrastructure.pdf.generator import PDFGenerator
+
+        summary_repo = SummaryRepository(session)
+        review_repo = BranchReviewRepository(session)
+        branch_tag_repo = BranchTagRepository(session)
+        report_repo = ReportRepository(session)
+
+        cache_service = ReportCacheService(report_repo, review_repo, branch_tag_repo)
+        tag_calculator = TagStatsCalculator(branch_tag_repo)
+        ai_generator = ReportAIGenerator(summary_repo, review_repo)
+
+        return ReportService(
+            summary_repo, review_repo, branch_tag_repo,
+            report_repo, None,
+            PDFGenerator(), VehicleAnalyzer(),
+            cache_service, tag_calculator, ai_generator,
+        )
 
     def _cleanup_completed_tasks(self) -> None:
         """완료된 asyncio.Task 객체를 _running_jobs에서 제거"""

@@ -95,7 +95,7 @@ async def api_get_report(
         raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
-@router.get("/{branch_id}/list", response_model=ApiResponseModel[dict])
+@router.get("/{branch_id}/list", response_model=ApiResponseModel[list])
 async def api_get_report_list(
     branch_id: int,
     limit: int = Query(default=10, le=50),

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Summary(BaseModel):
@@ -24,6 +24,11 @@ class Summary(BaseModel):
     keyword_1: str | None = Field(None, deprecated=True)
     keyword_2: str | None = Field(None, deprecated=True)
     keyword_3: str | None = Field(None, deprecated=True)
+
+    @field_validator("keywords", mode="before")
+    @classmethod
+    def _keywords_none_to_list(cls, v: object) -> object:
+        return v if v is not None else []
     summary_all: str | None = None
     summary_1y: str | None = None
     summary_6m: str | None = None
@@ -113,6 +118,11 @@ class Review(BaseModel):
     keywords: list[str] = []
     review_date: datetime | None = None
     created_at: datetime | None = None
+
+    @field_validator("keywords", mode="before")
+    @classmethod
+    def _keywords_none_to_list(cls, v: object) -> object:
+        return v if v is not None else []
 
     model_config = ConfigDict(from_attributes=True)
 

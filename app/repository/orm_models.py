@@ -110,7 +110,7 @@ class BranchTagORM(Base):
     neutral_count: Mapped[int] = mapped_column(Integer, default=0)
     weighted_score: Mapped[float | None] = mapped_column(Float, default=0)
     rank: Mapped[int | None] = mapped_column(Integer)
-    created_at: Mapped[datetime | None] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
@@ -135,7 +135,6 @@ class BranchReviewORM(Base):
     rating_car: Mapped[float | None] = mapped_column(Float)
     rating_convenience: Mapped[float | None] = mapped_column(Float)
     sentiment: Mapped[str | None] = mapped_column(String(20))
-    keywords: Mapped[list | None] = mapped_column(JSONB)
     car_model: Mapped[str | None] = mapped_column(String(100))
     rent_type: Mapped[str | None] = mapped_column(String(50))
     review_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

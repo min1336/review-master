@@ -347,7 +347,7 @@ class SummaryService:
                     select(func.count())
                     .select_from(BranchReviewORM)
                     .where(BranchReviewORM.branch_id == branch_id)
-                    .where(BranchReviewORM.review_date >= start_date.isoformat())
+                    .where(BranchReviewORM.review_date >= start_date)
                 )
                 review_count = count_result.scalar_one() or 0
 
@@ -365,8 +365,8 @@ class SummaryService:
                 )
                 total_count = total_result.scalar_one() or 0
 
-                if total_count <= self.MIN_REVIEWS_FOR_SUMMARY:
-                    # 전체 리뷰가 기준(30개) 이하인 경우 생성하지 않음
+                if total_count < self.MIN_REVIEWS_FOR_SUMMARY:
+                    # 전체 리뷰가 기준(30개) 미만인 경우 생성하지 않음
                     insufficient_msg = SummaryPromptBuilder.get_insufficient_reviews_message(
                         branch_name, total_count
                     )
@@ -414,6 +414,10 @@ class SummaryService:
                 }
             except Exception as e:
                 logger.warning(f"감정 통계 조회 실패 (branch_id={branch_id}): {e}")
+                try:
+                    await self.sentiment_repo._session.rollback()
+                except Exception:
+                    pass
 
         # 7. 프롬프트 생성 (모드별 분기)
         if mode == "operational":
@@ -478,13 +482,15 @@ class SummaryService:
                 f"검증 실패 (branch_id={branch_id}, mode={mode}): {errors}"
             )
 
-        # 10. DB 저장 (자동 게시)
+        # 10. DB 저장 (자동 게시) — 선택된 기간만 남기고 나머지 클리어
         if save_to_db:
             try:
-                await self.summary_repo.upsert_by_branch_id({
-                    "branch_id": branch_id,
-                    period_field: generated_summary,
-                })
+                all_period_fields = ["summary_all", "summary_1y", "summary_6m", "summary_3m", "summary_1m"]
+                save_data = {"branch_id": branch_id, period_field: generated_summary}
+                for f in all_period_fields:
+                    if f != period_field:
+                        save_data[f] = None
+                await self.summary_repo.upsert_by_branch_id(save_data)
                 logger.info(
                     f"요약 저장 완료: branch_id={branch_id}, period={period_key}, mode={mode}"
                 )
@@ -528,6 +534,10 @@ class SummaryService:
             return self._group_tags_by_category(branch_tags)
         except Exception as e:
             logger.warning(f"태그 조회 실패 (branch_id={branch_id}): {e}")
+            try:
+                await self.branch_tag_repo._session.rollback()
+            except Exception:
+                pass
             return []
 
     async def _fetch_tags_from_monthly(
@@ -693,7 +703,7 @@ class SummaryService:
             )
             if start_date is not None:
                 pos_stmt = pos_stmt.where(
-                    BranchReviewORM.review_date >= start_date.isoformat()
+                    BranchReviewORM.review_date >= start_date
                 )
             pos_stmt = (
                 pos_stmt
@@ -713,7 +723,7 @@ class SummaryService:
             )
             if start_date is not None:
                 neg_stmt = neg_stmt.where(
-                    BranchReviewORM.review_date >= start_date.isoformat()
+                    BranchReviewORM.review_date >= start_date
                 )
             neg_stmt = (
                 neg_stmt

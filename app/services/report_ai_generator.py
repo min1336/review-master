@@ -107,9 +107,10 @@ class ReportAIGenerator:
             ))
             coro_keys.append("vehicle_ai_text")
 
-        # 병렬 실행
-        results = await asyncio.gather(*coros) if coros else []
-        result_map = dict(zip(coro_keys, results))
+        # 순차 실행 (AsyncSession 동시 사용 불가)
+        result_map = {}
+        for key, coro in zip(coro_keys, coros):
+            result_map[key] = await coro
 
         return {
             "period_summary": result_map.get("period_summary", ""),

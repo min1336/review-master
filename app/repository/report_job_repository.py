@@ -43,8 +43,8 @@ class ReportJobRepository:
         try:
             data = {
                 "branch_id": branch_id,
-                "period_start": period_start.strftime("%Y-%m-%d"),
-                "period_end": period_end.strftime("%Y-%m-%d"),
+                "period_start": period_start.date(),
+                "period_end": period_end.date(),
                 "status": "pending",
                 "progress": 0,
             }

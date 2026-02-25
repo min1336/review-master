@@ -19,18 +19,35 @@ from services.tag_stats_calculator import TagStatsCalculator, MIN_PERIOD_TAG_COU
 # ── Fixtures ──────────────────────────────────────────────
 
 def make_rpc_rows(count: int = 5) -> list[dict]:
-    """RPC 결과 행 팩토리"""
+    """RPC 결과 행 팩토리 (camelCase — 레거시 호환)"""
     base_tags = [
-        {"tagId": 1, "tagName": "직원이 친절함", "categoryName": "서비스", "categoryColor": "#FF0000",
+        {"tagId": 1, "tagName": "직원이 친절함", "categoryName": "직원이 친절함", "categoryColor": "#FF0000",
          "positiveCount": 10, "negativeCount": 2, "neutralCount": 1, "totalCount": 13},
-        {"tagId": 2, "tagName": "차량이 청결함", "categoryName": "차량 상태", "categoryColor": "#00FF00",
+        {"tagId": 2, "tagName": "차량이 청결함", "categoryName": "차량이 청결함", "categoryColor": "#00FF00",
          "positiveCount": 8, "negativeCount": 5, "neutralCount": 3, "totalCount": 16},
-        {"tagId": 3, "tagName": "가격이 저렴함", "categoryName": "가격", "categoryColor": "#0000FF",
+        {"tagId": 3, "tagName": "가격이 저렴함", "categoryName": "가격이 저렴함", "categoryColor": "#0000FF",
          "positiveCount": 6, "negativeCount": 1, "neutralCount": 2, "totalCount": 9},
-        {"tagId": 4, "tagName": "배달이 빠름", "categoryName": "서비스", "categoryColor": "#FF0000",
+        {"tagId": 4, "tagName": "배달이 빠름", "categoryName": "배달 서비스가 우수함", "categoryColor": "#FF0000",
          "positiveCount": 4, "negativeCount": 0, "neutralCount": 1, "totalCount": 5},
-        {"tagId": 5, "tagName": "차량외관이 좋음", "categoryName": "차량 상태", "categoryColor": "#00FF00",
+        {"tagId": 5, "tagName": "차량외관이 좋음", "categoryName": "차량외관이 좋음", "categoryColor": "#00FF00",
          "positiveCount": 3, "negativeCount": 7, "neutralCount": 0, "totalCount": 10},
+    ]
+    return base_tags[:count]
+
+
+def make_rpc_rows_snake(count: int = 5) -> list[dict]:
+    """RPC 결과 행 팩토리 (snake_case — 실제 DB 반환 형식)"""
+    base_tags = [
+        {"tag_id": 1, "tag_name": "직원이 친절함", "category_id": 1, "category_name": "직원이 친절함",
+         "positive_count": 10, "negative_count": 2, "neutral_count": 1, "total_count": 13},
+        {"tag_id": 2, "tag_name": "차량이 청결함", "category_id": 4, "category_name": "차량이 청결함",
+         "positive_count": 8, "negative_count": 5, "neutral_count": 3, "total_count": 16},
+        {"tag_id": 3, "tag_name": "가격이 저렴함", "category_id": 3, "category_name": "가격이 저렴함",
+         "positive_count": 6, "negative_count": 1, "neutral_count": 2, "total_count": 9},
+        {"tag_id": 4, "tag_name": "배달이 빠름", "category_id": 7, "category_name": "배달 서비스가 우수함",
+         "positive_count": 4, "negative_count": 0, "neutral_count": 1, "total_count": 5},
+        {"tag_id": 5, "tag_name": "차량외관이 좋음", "category_id": 2, "category_name": "차량외관이 좋음",
+         "positive_count": 3, "negative_count": 7, "neutral_count": 0, "total_count": 10},
     ]
     return base_tags[:count]
 
@@ -83,12 +100,12 @@ class TestComputeFromRpcRows:
         result = calc._compute_from_rpc_rows(rows)
 
         cat_stats = result["tag_by_category"]
-        # "서비스" 카테고리: 태그1(10p,2n) + 태그4(4p,0n)
-        assert cat_stats["서비스"]["positive"] == 14
-        assert cat_stats["서비스"]["negative"] == 2
-        # "차량 상태" 카테고리: 태그2(8p,5n) + 태그5(3p,7n)
-        assert cat_stats["차량 상태"]["positive"] == 11
-        assert cat_stats["차량 상태"]["negative"] == 12
+        # "직원이 친절함" 카테고리: 태그1(10p,2n)
+        assert cat_stats["직원이 친절함"]["positive"] == 10
+        assert cat_stats["직원이 친절함"]["negative"] == 2
+        # "차량이 청결함" 카테고리: 태그2(8p,5n)
+        assert cat_stats["차량이 청결함"]["positive"] == 8
+        assert cat_stats["차량이 청결함"]["negative"] == 5
 
     def test_builds_tag_details(self):
         """tag_details가 올바른 포맷으로 생성되는지"""
@@ -100,7 +117,7 @@ class TestComputeFromRpcRows:
         details = result["tag_details"]
         assert len(details) == 2
         assert details[0]["tag_name"] == "직원이 친절함"
-        assert details[0]["category_name"] == "서비스"
+        assert details[0]["category_name"] == "직원이 친절함"
 
     def test_empty_rows_returns_empty_dict(self):
         """빈 행이면 빈 dict 반환"""
@@ -217,4 +234,73 @@ class TestComputeWithPeriod:
         result = await calc.compute(1, start, end)
 
         assert len(result["tag_sentiments"]) == MIN_PERIOD_TAG_COUNT
+        mock_repo.get_by_branch.assert_not_awaited()
+
+
+# ── Test: snake_case RPC columns (실제 DB 반환 형식) ────
+
+class TestSnakeCaseRpcRows:
+    """DB가 snake_case 컬럼명을 반환할 때도 정상 동작하는지 검증"""
+
+    def test_snake_case_converts_tag_sentiments(self):
+        """snake_case 행이 올바르게 변환되는지"""
+        calc, _ = make_calculator()
+        rows = make_rpc_rows_snake(3)
+
+        result = calc._compute_from_rpc_rows(rows)
+
+        assert len(result["tag_sentiments"]) == 3
+        first = result["tag_sentiments"][0]
+        assert first["name"] == "직원이 친절함"
+        assert first["positive"] == 10
+        assert first["negative"] == 2
+
+    def test_snake_case_builds_category_stats(self):
+        """snake_case 행에서 카테고리 통계가 올바르게 생성되는지"""
+        calc, _ = make_calculator()
+        rows = make_rpc_rows_snake(5)
+
+        result = calc._compute_from_rpc_rows(rows)
+
+        cat_stats = result["tag_by_category"]
+        assert "직원이 친절함" in cat_stats
+        assert cat_stats["직원이 친절함"]["positive"] == 10
+        assert "차량이 청결함" in cat_stats
+        assert cat_stats["차량이 청결함"]["negative"] == 5
+
+    def test_snake_case_tag_details_have_category_name(self):
+        """snake_case 행에서 tag_details에 category_name이 포함되는지"""
+        calc, _ = make_calculator()
+        rows = make_rpc_rows_snake(2)
+
+        result = calc._compute_from_rpc_rows(rows)
+
+        details = result["tag_details"]
+        assert details[0]["category_name"] == "직원이 친절함"
+        assert details[1]["category_name"] == "차량이 청결함"
+
+    def test_snake_case_top_tags_match_affiliate_categories(self):
+        """snake_case 행에서 AFFILIATE_CATEGORIES 필터링이 정상 동작하는지"""
+        calc, _ = make_calculator()
+        rows = make_rpc_rows_snake(5)
+
+        result = calc._compute_from_rpc_rows(rows)
+
+        # top_positive_tags에 업체 카테고리 태그가 포함되어야 함
+        top_pos = result["top_positive_tags"]
+        assert len(top_pos) > 0
+        assert top_pos[0].tag_name == "직원이 친절함"
+
+    @pytest.mark.asyncio
+    async def test_compute_with_snake_case_rpc(self):
+        """compute()가 snake_case RPC 결과도 정상 처리하는지"""
+        calc, mock_repo = make_calculator()
+        mock_repo.get_tag_stats_by_period.return_value = make_rpc_rows_snake(5)
+
+        start = datetime(2025, 1, 1)
+        end = datetime(2025, 2, 1)
+        result = await calc.compute(1, start, end)
+
+        assert len(result["tag_sentiments"]) == 5
+        assert result["top_positive_tags"]  # 비어있지 않아야 함
         mock_repo.get_by_branch.assert_not_awaited()

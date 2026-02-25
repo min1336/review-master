@@ -91,6 +91,15 @@ class TagStatsCalculator:
             "tag_by_category": category_stats,
         }
 
+    @staticmethod
+    def _rpc_val(row: dict, *keys, default=None):
+        """RPC 행에서 값 조회 (camelCase/snake_case 모두 지원)"""
+        for key in keys:
+            val = row.get(key)
+            if val is not None:
+                return val
+        return default
+
     def _compute_from_rpc_rows(self, rows: list[dict]) -> dict:
         """RPC 결과 행 → 기존 compute() 반환 포맷 변환"""
         tag_sentiments: list[dict] = []
@@ -101,13 +110,13 @@ class TagStatsCalculator:
         total_neu = 0
 
         for row in rows:
-            name = row.get("tagName", "")
+            name = self._rpc_val(row, "tagName", "tag_name", default="")
             if not name:
                 continue
-            pos = row.get("positiveCount", 0) or 0
-            neg = row.get("negativeCount", 0) or 0
-            neu = row.get("neutralCount", 0) or 0
-            total = row.get("totalCount", 0) or 0
+            pos = self._rpc_val(row, "positiveCount", "positive_count", default=0) or 0
+            neg = self._rpc_val(row, "negativeCount", "negative_count", default=0) or 0
+            neu = self._rpc_val(row, "neutralCount", "neutral_count", default=0) or 0
+            total = self._rpc_val(row, "totalCount", "total_count", default=0) or 0
 
             tag_sentiments.append({
                 "name": name, "positive": pos, "negative": neg,
@@ -117,7 +126,7 @@ class TagStatsCalculator:
             total_neg += neg
             total_neu += neu
 
-            cat_name = row.get("categoryName", "") or ""
+            cat_name = self._rpc_val(row, "categoryName", "category_name", default="") or ""
             tag_details.append({
                 "tag_name": name, "category_name": cat_name,
                 "positive": pos, "negative": neg, "total": total,
