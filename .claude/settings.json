@@ -54,7 +54,6 @@
     "superpowers@claude-plugins-official": true,
     "pr-review-toolkit@claude-plugins-official": true,
     "explanatory-output-style@claude-plugins-official": true,
-    "hookify@claude-plugins-official": true,
     "bkit-claude-code@popup-studio-ai": true
   }
 }
