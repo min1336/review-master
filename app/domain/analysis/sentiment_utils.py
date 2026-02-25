@@ -52,10 +52,9 @@ class UnifiedSentimentAnalyzer:
         )
     """
 
-    # 분석 방식별 가중치 (합 = 1.0)
+    # 분석 방식별 가중치
     WEIGHT_RULE_BASED = 0.3
     WEIGHT_HYBRID = 0.4
-    WEIGHT_RATING = 0.3
 
     # 평점 임계값 (core.constants에서 관리)
     LOW_RATING_THRESHOLD = NEGATIVE_RATING_THRESHOLD
@@ -200,6 +199,15 @@ class UnifiedSentimentAnalyzer:
         overall = result.get("overall_sentiment", "neutral")
         pos_aspects = result.get("positive_aspects", [])
         neg_aspects = result.get("negative_aspects", [])
+
+        # "mixed" 등 비표준 감정값 → 다수결로 해소
+        if overall not in ("positive", "negative", "neutral"):
+            if len(pos_aspects) > len(neg_aspects):
+                overall = "positive"
+            elif len(neg_aspects) > len(pos_aspects):
+                overall = "negative"
+            else:
+                overall = "neutral"
 
         total = len(pos_aspects) + len(neg_aspects)
         if total == 0:

@@ -31,6 +31,7 @@ from .patterns import (
     NEGATIVE_REGEX,
     POSITIVE_EXCEPTION_REGEX,
     POSITIVE_REGEX,
+    STRONG_NEGATIVE_KEYWORDS,
 )
 from .sentiment_core import (
     _is_negation_prefixed_only,
@@ -219,13 +220,7 @@ class RuleBasedABSA:
                 return "negative", 0.85
 
         # 2. 명확한 부정 패턴 선체크 (불친절, 비싸 등 접두사형 부정)
-        strong_negative_patterns = [
-            "불친절", "불편하", "불쾌", "불량", "불만족",
-            "비싸", "비싼", "비쌌", "비싸요", "비쌉",
-            "최악", "실망", "후회",
-            "무례", "무시", "무성의", "무책임",
-        ]
-        strong_neg_count = sum(1 for p in strong_negative_patterns if p in text)
+        strong_neg_count = sum(1 for p in STRONG_NEGATIVE_KEYWORDS if p in text)
 
         # 명확한 부정이 있는 경우 → 부정 우선
         if strong_neg_count > 0:

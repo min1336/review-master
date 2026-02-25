@@ -158,16 +158,18 @@ def _is_negation_prefixed_only(keyword: str, context: str) -> bool:
 
 
 def _trim_window_by_adversative(window: str, kw_pos: int) -> str:
-    """역접 표현이 있으면 키워드와 같은 절만 반환"""
-    match = _ADVERSATIVE_PATTERN.search(window)
-    if not match:
+    """역접 표현이 있으면 키워드에 가장 가까운 역접 기준으로 절 분리"""
+    matches = list(_ADVERSATIVE_PATTERN.finditer(window))
+    if not matches:
         return window
 
-    adv_start = match.start()
+    # 키워드에 가장 가까운 역접 선택
+    closest = min(matches, key=lambda m: abs(m.start() - kw_pos))
+    adv_start = closest.start()
 
     if kw_pos < adv_start:
         # 키워드가 역접 앞 → 앞쪽 절만 사용
         return window[:adv_start]
     else:
         # 키워드가 역접 뒤 → 뒷쪽 절만 사용
-        return window[match.end():]
+        return window[closest.end():]
