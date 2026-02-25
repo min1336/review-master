@@ -11,6 +11,10 @@ import pytest
 # app 디렉토리를 sys.path에 추가
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
+# test_dto_snapshot.py가 stub 모듈을 sys.modules에 등록하기 전에
+# 실제 core 모듈을 먼저 import하여 stub 충돌 방지
+import core.constants  # noqa: E402
+
 
 # ============================================================
 # 공통 Mock 픽스처

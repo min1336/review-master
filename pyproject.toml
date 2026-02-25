@@ -93,6 +93,9 @@ ignore = [
     "B008",  # FastAPI Depends 패턴 허용
 ]
 
+[tool.pytest.ini_options]
+pythonpath = ["app"]
+
 [tool.ruff.lint.per-file-ignores]
 "app/main.py" = ["E402"]  # sys.path 설정 후 import 필요
 "app/infrastructure/llm/prompts.py" = ["E501"]  # 한국어 예시 텍스트
