@@ -21,3 +21,10 @@ services:
       - N8N_TEST_MODE=false
     cpus: "0.5"
     mem_limit: "512m"
+    networks:
+      - n8n_network
+
+networks:
+  n8n_network:
+    external: true
+    name: n8n-cloud-tm2-network
