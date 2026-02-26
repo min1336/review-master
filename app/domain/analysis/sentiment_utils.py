@@ -267,6 +267,11 @@ class UnifiedSentimentAnalyzer:
             confidence = 0.6 + (avg_rating - 4) * 0.3
             return "positive", min(0.95, confidence)
 
+        # 평균이 3.5 이상이면 약한 긍정
+        if avg_rating >= 3.5:
+            confidence = 0.55 + (avg_rating - 3.5) * 0.2
+            return "positive", min(0.75, confidence)
+
         # 중간
         return "neutral", 0.5
 
