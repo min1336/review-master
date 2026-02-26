@@ -178,18 +178,29 @@ async def favicon():
 # Main
 # ============================================================
 if __name__ == "__main__":
+    import os
+    import socket
     import uvicorn
     from core.config import get_settings
 
-    import os
+    # Iann : 할당되지 않은 포트 번호를 자동으로 할당해준다.
+    def _find_free_port(start: int = 8000, end: int = 8100) -> int:
+        for p in range(start, end):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                if s.connect_ex(("127.0.0.1", p)) != 0:
+                    return p
+        return start
 
     settings = get_settings()
-    port = int(os.environ.get("PORT", 8000))
+    env_port = int(os.environ.get("PORT", 0))
+    port = env_port if 1024 <= env_port <= 65535 else _find_free_port()
+    print(f"\n[Dev] Starting on port {port}")
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=port,
-        reload=settings.debug,
+        # reload=settings.debug,
+        reload=False, # Iann : 디버깅을 하기 위해 리로드 멈춤.
         reload_dirs=[str(APP_DIR)] if settings.debug else None,
         reload_includes=["*.py", "*.html", "*.js", "*.css"] if settings.debug else None,
     )
