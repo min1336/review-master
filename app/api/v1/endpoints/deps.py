@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from services.sync_job_service import SyncJobService
     from services.sync_service import SyncService
     from services.tag_service import TagService
+    from services.upload_job_service import UploadJobService
 
 
 # ============================================================
@@ -306,6 +307,12 @@ async def get_sync_job_service() -> "SyncJobService":
     from services.sync_job_service import SyncJobService
 
     return SyncJobService.get_instance()
+
+
+async def get_upload_job_service() -> "UploadJobService":
+    from services.upload_job_service import UploadJobService
+
+    return UploadJobService.get_instance()
 
 
 async def get_realtime_pipeline() -> "RealtimePipeline":

@@ -15,6 +15,7 @@ from .endpoints import (
     summary_branch,
     sync,
     tags,
+    upload,
 )
 
 api_router = APIRouter()
@@ -40,6 +41,7 @@ api_router.include_router(presets.router, prefix="/presets")
 # --- Sync & Processing ---
 api_router.include_router(sync.router, prefix="/sync")
 api_router.include_router(realtime.router, prefix="/realtime")
+api_router.include_router(upload.router, prefix="/upload")
 
 # --- n8n Webhooks ---
 api_router.include_router(n8n.router, prefix="/n8n")
