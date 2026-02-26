@@ -1973,7 +1973,7 @@
             // 프로그레스 오버레이 표시
             const overlay = createSyncProgressOverlay();
             document.body.appendChild(overlay);
-            updateSyncProgress(30, 'n8n 동기화 요청 중...');
+            updateSyncProgress(10, '동기화 준비 중...');
 
             syncAbortController = new AbortController();
 
@@ -1987,19 +1987,48 @@
             });
 
             try {
-                // n8n 웹훅 호출 (단일 요청, 서버 타임아웃 120초)
-                const res = await fetch(`${API_PREFIX}/n8n/review-sync`, {
+                // 1) 비동기 동기화 작업 제출
+                updateSyncProgress(20, '동기화 작업 제출 중...');
+                const submitRes = await fetch(`${API_PREFIX}/sync/reviews`, {
                     method: 'POST',
                     signal: syncAbortController.signal,
                 });
 
-                if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
-                    throw new Error(err.detail || `동기화 실패 (${res.status})`);
+                if (!submitRes.ok) {
+                    const err = await submitRes.json().catch(() => ({}));
+                    throw new Error(err.detail || `동기화 제출 실패 (${submitRes.status})`);
                 }
 
-                const body = await res.json().catch(() => null);
-                const result = body?.data;
+                const submitBody = await submitRes.json();
+                const jobId = submitBody?.data?.job_id;
+                if (!jobId) throw new Error('작업 ID를 받지 못했습니다.');
+
+                // 2) 폴링으로 작업 완료 대기 (2초 간격, 최대 60회)
+                updateSyncProgress(40, '동기화 진행 중...');
+                let result = null;
+                for (let i = 0; i < 60; i++) {
+                    await new Promise(r => setTimeout(r, 2000));
+
+                    const pollRes = await fetch(`${API_PREFIX}/sync/jobs/${jobId}`, {
+                        signal: syncAbortController.signal,
+                    });
+                    if (!pollRes.ok) continue;
+
+                    const pollBody = await pollRes.json();
+                    const job = pollBody?.data;
+                    if (!job) continue;
+
+                    const progress = Math.min(40 + Math.round(i * 50 / 60), 95);
+                    updateSyncProgress(progress, `동기화 진행 중... (${job.status})`);
+
+                    if (job.status === 'completed') {
+                        result = job.result;
+                        break;
+                    }
+                    if (job.status === 'failed') {
+                        throw new Error(job.error || '동기화 작업 실패');
+                    }
+                }
 
                 updateSyncProgress(100, '동기화 완료!');
                 await new Promise(r => setTimeout(r, 500));
