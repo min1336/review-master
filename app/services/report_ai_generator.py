@@ -169,8 +169,9 @@ class ReportAIGenerator:
             )
 
             # 커스텀 설정 적용
+            # 한국어 1글자 ≈ 2~3 토큰이므로 글자수 × 2 로 계산
             temperature = 0.5
-            max_tokens = 300
+            max_tokens = 600
             if report_config:
                 system_prompt, user_prompt = RichSummaryPromptBuilder.apply_custom_config(
                     system_prompt, user_prompt,
@@ -182,7 +183,7 @@ class ReportAIGenerator:
                     focus_areas=report_config.prompt.focus_areas,
                 )
                 temperature = report_config.prompt.temperature
-                max_tokens = report_config.output.eval_max_length // 2 + 50
+                max_tokens = report_config.output.eval_max_length * 2
 
             llm_provider = get_provider()
             response = await llm_provider.async_generate(
@@ -270,7 +271,8 @@ class ReportAIGenerator:
                 sample_reviews=sample_reviews or [],
                 vehicle_summary=vehicle_summary,
             )
-            max_tokens = 600
+            # 한국어 1글자 ≈ 2~3 토큰이므로 글자수 × 2 로 계산
+            max_tokens = 1200
         else:
             system_prompt, user_prompt = RichSummaryPromptBuilder.create_prompt(
                 branch_name=branch_name,
@@ -281,7 +283,7 @@ class ReportAIGenerator:
                 sentiment_stats=sentiment_stats_for_prompt,
                 sample_reviews=[],
             )
-            max_tokens = 200
+            max_tokens = 500
 
         try:
             llm_provider = get_provider()
@@ -301,7 +303,7 @@ class ReportAIGenerator:
                     focus_areas=report_config.prompt.focus_areas,
                 )
                 temperature = report_config.prompt.temperature
-                max_tokens = report_config.output.summary_max_length // 2 + 50
+                max_tokens = report_config.output.summary_max_length * 2
 
             response = await llm_provider.async_generate(
                 prompt=user_prompt,
