@@ -60,8 +60,9 @@ class ReportJobService:
         )
         if existing:
             job_id = str(existing["id"])
-            # 메모리에 없지만 pending 상태인 작업은 다시 시작
-            if existing["status"] == "pending" and job_id not in self._running_jobs:
+            # 메모리에 태스크가 없으면 (pending/processing 모두) 다시 시작
+            # processing 상태에서 태스크가 없는 경우 = 고아 작업 (에러 핸들러 실패 등)
+            if job_id not in self._running_jobs:
                 task = asyncio.create_task(
                     self._run_job(job_id, branch_id, start_date, end_date, report_config)
                 )
@@ -141,9 +142,14 @@ class ReportJobService:
                 report_service = self._create_report_service(session)
 
                 await job_repo.update_status(job_id, "processing", progress=0)
+                await session.commit()
 
+                # NOTE: progress commit은 현재 세션의 모든 pending write를 함께 commit합니다.
+                # _step_collect/_step_tags/_step_ai는 read-only이므로 현재 안전하지만,
+                # 이 단계들에 write가 추가되면 별도 세션 분리가 필요합니다.
                 async def progress_callback(progress: int) -> None:
                     await job_repo.update_progress(job_id, progress)
+                    await session.commit()
 
                 await report_service.generate_report_with_progress(
                     branch_id=branch_id,
