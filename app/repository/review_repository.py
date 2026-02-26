@@ -59,6 +59,25 @@ class BranchReviewRepository(BaseRepository[Review]):
         except (ValueError, TypeError):
             return None
 
+    async def count_existing_review_ids(self, review_ids: list[int]) -> int:
+        """주어진 review_id 목록 중 DB에 활성 상태로 존재하는 건수 반환
+
+        soft-deleted(deleted_at IS NOT NULL) 행은 제외한다.
+        upsert가 deleted_at=None으로 복원하므로, 복원 건은 신규로 카운트해야 한다.
+        """
+        if not review_ids:
+            return 0
+        stmt = (
+            select(func.count())
+            .select_from(BranchReviewORM)
+            .where(
+                BranchReviewORM.review_id.in_(review_ids),
+                BranchReviewORM.deleted_at.is_(None),
+            )
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar() or 0
+
     async def upsert_batch(self, reviews: list[dict], batch_size: int = 100) -> int:
         """원본 리뷰 일괄 저장 (SQLAlchemy ON CONFLICT upsert)"""
         success_count = 0
@@ -113,7 +132,6 @@ class BranchReviewRepository(BaseRepository[Review]):
                         "review_date": stmt.excluded.review_date,
                         "car_model": stmt.excluded.car_model,
                         "rent_type": stmt.excluded.rent_type,
-                        "is_new": stmt.excluded.is_new,
                         "updated_at": func.now(),
                         "deleted_at": None,
                     },

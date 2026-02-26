@@ -102,14 +102,30 @@ class SyncService:
                 await progress_callback(20, f"Athena 조회 완료: {len(reviews_to_process)}건")
 
             # 4. branch_reviews에 원본 저장 (is_new=true)
+            review_ids: list[int] = []
+            for r in reviews_to_process:
+                raw = r.get("review_id") or r.get("리뷰번호")
+                if raw is None:
+                    continue
+                try:
+                    review_ids.append(int(raw))
+                except (ValueError, TypeError):
+                    continue
+            existing_count = await self._review_repo.count_existing_review_ids(
+                review_ids
+            )
             save_data = [
                 {**row, "is_new": True} for row in reviews_to_process
             ]
             saved_count = await self._review_repo.upsert_batch(save_data)
+            new_count = max(saved_count - existing_count, 0)
             # upsert 커밋: 파이프라인이 별도 세션으로 같은 행을 UPDATE하므로
             # 행 잠금을 해제해야 데드락 방지 (upsert는 idempotent)
             await self._review_repo.commit()
-            logger.info(f"branch_reviews 저장 완료: {saved_count}개 (is_new=true)")
+            logger.info(
+                f"branch_reviews 저장 완료: {saved_count}개 upsert "
+                f"(신규 {new_count}개, 기존 {existing_count}개)"
+            )
 
             if progress_callback:
                 await progress_callback(35, f"{saved_count}건 저장 완료")
@@ -136,7 +152,7 @@ class SyncService:
                 success=True,
                 message=f"{saved_count}개 리뷰 저장 + {processed_count}개 분석 완료",
                 synced_count=saved_count,
-                new_reviews=saved_count,
+                new_reviews=new_count,
                 duration_seconds=duration,
             )
 
