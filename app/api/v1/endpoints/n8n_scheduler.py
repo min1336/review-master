@@ -83,7 +83,13 @@ class GroupUpdateRequest(BaseModel):
 def _get_api_key() -> str:
     from core.config import get_settings
 
-    return get_settings().n8n_api_key.get_secret_value()
+    key = get_settings().n8n_api_key.get_secret_value()
+    if not key:
+        raise HTTPException(
+            status_code=503,
+            detail="N8N_API_KEY 환경변수가 설정되지 않았습니다",
+        )
+    return key
 
 
 def _api_headers() -> dict[str, str]:

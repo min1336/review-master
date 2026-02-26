@@ -79,16 +79,19 @@ async def api_branch_reviews(
     parsed_date_from = parse_date(review_date_from)
     parsed_date_to = parse_date(review_date_to, end_of_day=True)
 
-    result = await service.get_branch_reviews(
-        branch_id=branch_id,
-        car_model=car_model,
-        sentiment=sentiment,
-        review_date_from=parsed_date_from,
-        review_date_to=parsed_date_to,
-        limit=limit,
-        offset=offset,
-    )
-    return api_response(result.model_dump(by_alias=True))
+    try:
+        result = await service.get_branch_reviews(
+            branch_id=branch_id,
+            car_model=car_model,
+            sentiment=sentiment,
+            review_date_from=parsed_date_from,
+            review_date_to=parsed_date_to,
+            limit=limit,
+            offset=offset,
+        )
+        return api_response(result.model_dump(by_alias=True))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/{branch_id}/car-models", response_model=ApiResponseModel[BranchCarModelsDTO])
