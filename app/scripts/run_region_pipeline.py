@@ -47,6 +47,22 @@ PIPELINE_CHUNK = 500
 ATHENA_PAGE_SIZE = 50000
 
 
+async def fetch_all_branch_ids(session) -> list[int]:
+    """branch_summaries에서 전체 branch_id 목록 조회"""
+    from sqlalchemy import select
+
+    from repository.orm_models import BranchSummaryORM
+
+    logger.info("전체 지점 조회")
+
+    result = await session.execute(
+        select(BranchSummaryORM.branch_id).order_by(BranchSummaryORM.branch_id)
+    )
+    branch_ids = list(result.scalars().all())
+    logger.info("  대상 지점: %d개", len(branch_ids))
+    return branch_ids
+
+
 async def fetch_region_branch_ids(session, region: str) -> list[int]:
     """branch_summaries.region 기준으로 branch_id 목록 조회"""
     from sqlalchemy import select
@@ -98,6 +114,7 @@ def fetch_reviews_from_athena(branch_ids: list[int]) -> list[dict]:
 async def main() -> None:
     parser = argparse.ArgumentParser(description="지역별 파이프라인 실행")
     parser.add_argument("--region", default="제주", help="대상 지역 (기본: 제주)")
+    parser.add_argument("--all", action="store_true", help="전체 지점 대상 실행")
     parser.add_argument("--chunk", type=int, default=PIPELINE_CHUNK, help="청크 사이즈 (기본: 500)")
     args = parser.parse_args()
 
@@ -110,15 +127,20 @@ async def main() -> None:
     factory = get_session_factory()
 
     start = time.time()
+    run_all = getattr(args, "all")
     region = args.region
     chunk_size = args.chunk
 
-    logger.info("=== 지역 파이프라인 시작: %s ===", region)
+    label = "전체 지점" if run_all else region
+    logger.info("=== 파이프라인 시작: %s ===", label)
 
     # 1. branch_summaries에서 대상 지점 조회
     session = factory()
     try:
-        branch_ids = await fetch_region_branch_ids(session, region)
+        if run_all:
+            branch_ids = await fetch_all_branch_ids(session)
+        else:
+            branch_ids = await fetch_region_branch_ids(session, region)
     finally:
         await session.close()
 
@@ -172,8 +194,8 @@ async def main() -> None:
     elapsed = time.time() - start
     logger.info("=== 완료 ===")
     logger.info(
-        "지역: %s | 총 리뷰: %d | 처리: %d | 지점: %d | 소요: %.1fs",
-        region, total, total_processed, len(total_branches), elapsed,
+        "대상: %s | 총 리뷰: %d | 처리: %d | 지점: %d | 소요: %.1fs",
+        label, total, total_processed, len(total_branches), elapsed,
     )
 
 
