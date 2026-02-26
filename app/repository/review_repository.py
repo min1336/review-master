@@ -283,15 +283,14 @@ class BranchReviewRepository(BaseRepository[Review]):
         if is_new is not None:
             conditions.append(BranchReviewORM.is_new == is_new)  # noqa: E712
 
-        # 날짜 범위 필터
+        # 날짜 범위 필터 (asyncpg는 DateTime 컬럼에 문자열 바인딩 불가)
         if date_from:
-            conditions.append(BranchReviewORM.review_date >= date_from)
+            dt_from = datetime.strptime(date_from, "%Y-%m-%d")
+            conditions.append(BranchReviewORM.review_date >= dt_from)
         if date_to:
             # 종료일 전체를 포함하기 위해 다음날 00:00:00 미만으로 비교
-            next_day = (
-                datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
-            ).strftime("%Y-%m-%d")
-            conditions.append(BranchReviewORM.review_date < next_day)
+            dt_to = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+            conditions.append(BranchReviewORM.review_date < dt_to)
 
         # 정렬
         sort_config = {
