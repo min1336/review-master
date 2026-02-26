@@ -55,12 +55,12 @@ class TestNegPatternLocation:
 class TestMissingDoubleNegation:
     """현재 커버되지 않는 이중부정 패턴 확인"""
 
-    def test_그다지_좋지않_now_covered(self):
-        """수정 후: '그다지 좋지 않았다' → 이중부정 매칭 (긍정)"""
+    def test_그다지_좋지않_is_NOT_double_negation(self):
+        """'그다지 좋지 않았다' → 부정 극성 부사(강조), 이중부정 아님"""
         from domain.analysis.sentiment_core import check_double_negation
 
         result = check_double_negation("그다지 좋지 않았다")
-        assert result is True, "'그다지...않' 패턴 추가됨"
+        assert result is False, "'그다지 좋지 않다'는 부정 강조이지 이중부정이 아님"
 
     def test_그다지_나쁘지않_covered_via_existing(self):
         """'그다지 나쁘지 않았다' → '나쁘지.{0,5}않'으로 이미 매칭"""

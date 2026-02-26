@@ -287,9 +287,12 @@ class UnifiedSentimentAnalyzer:
         min_rating = min(ratings)
         avg_rating = sum(ratings) / len(ratings)
 
-        # 규칙 1: 평점이 매우 낮으면 (3점 미만) 무조건 부정
+        # 규칙 1: 평점이 매우 낮으면 (3점 미만)
         if min_rating < self.LOW_RATING_THRESHOLD:
-            return "negative", 0.95, "low_rating_override"
+            if avg_rating < 3.5:
+                return "negative", 0.95, "low_rating_override"
+            # 하나만 낮고 평균은 괜찮으면 → 중립 (텍스트 무시하지 않음)
+            return "neutral", 0.7, "low_rating_tempered"
 
         # 규칙 2: 텍스트와 평점이 일치하면 높은 신뢰도
         if text_sentiment == rating_sentiment:

@@ -121,8 +121,8 @@ class TestPreprocessorNeutralOverride:
 
         assert sentiment == "positive"
 
-    def test_any_low_rating_forces_negative(self):
-        """별점 하나라도 3.0 미만 → 무조건 negative"""
+    def test_any_low_rating_with_high_avg_becomes_neutral(self):
+        """별점 하나 3.0 미만이지만 평균 >= 3.5 → neutral (텍스트 무시하지 않음)"""
         pp = self._make_preprocessor_with_text_sentiment("positive", 0.9)
 
         sentiment, _ = pp._analyze_sentiment_with_ratings(
@@ -133,7 +133,7 @@ class TestPreprocessorNeutralOverride:
             rating_convenience=4.0,
         )
 
-        assert sentiment == "negative"
+        assert sentiment == "neutral"
 
 
 # ============================================================

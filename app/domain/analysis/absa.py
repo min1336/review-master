@@ -272,9 +272,13 @@ class RuleBasedABSA:
 
         # "없" 특수 처리 - 부정 키워드 + 없 → 긍정 전환 (이중부정)
         if "없" in text:
-            neg_keywords = ["불편", "불만", "문제", "걱정", "아쉬", "냄새", "흠"]
+            neg_keywords = [
+                "불편", "불만", "문제", "걱정", "아쉬", "냄새", "흠",
+                "나쁜", "부담", "탈", "고장", "실망", "불안", "위험",
+                "부족", "어려", "힘들",
+            ]
             for nk in neg_keywords:
-                if nk in text and re.search(rf"{nk}.{{0,15}}없", text):
+                if nk in text and re.search(rf"{nk}.{{0,10}}없", text):
                     positive_matches += 1
                     negative_matches = max(0, negative_matches - 1)
 

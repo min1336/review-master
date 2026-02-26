@@ -49,9 +49,9 @@ class TestCheckDoubleNegation:
         """'없지 않은 서비스' → 이중부정 → True"""
         assert check_double_negation("없지 않은 서비스") is True
 
-    def test_그다지_좋지않_is_double_negation(self):
-        """'그다지 좋지 않았다' → 이중부정 → True"""
-        assert check_double_negation("그다지 좋지 않았다") is True
+    def test_그다지_좋지않_is_NOT_double_negation(self):
+        """'그다지 좋지 않았다' → 부정 극성 부사(강조) → False"""
+        assert check_double_negation("그다지 좋지 않았다") is False
 
     def test_기다리지않았다_is_double_negation(self):
         """'기다리지 않았다' → 배차/시간 이중부정 → True"""
