@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Date,
     DateTime,
@@ -57,13 +58,16 @@ class TagORM(Base):
     __tablename__ = "tags"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(100))
-    group_name: Mapped[str | None] = mapped_column(String(100))
+    name: Mapped[str] = mapped_column(String(50))
+    group_name: Mapped[str | None] = mapped_column(String(50))
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"))
-    color: Mapped[str | None] = mapped_column(String(20), default="#667eea")
-    sentiment: Mapped[str] = mapped_column(String(20), default="positive")
-    tag_type: Mapped[str | None] = mapped_column(String(20))
+    color: Mapped[str | None] = mapped_column(String(7), default="#667eea")
+    sentiment: Mapped[str] = mapped_column(String(10), default="positive")
+    tag_type: Mapped[str | None] = mapped_column(String(10))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    usage_count: Mapped[int] = mapped_column(Integer, default=0)
+    sentiment_type: Mapped[str | None] = mapped_column(Text, default="positive")
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -81,15 +85,15 @@ class KeywordMappingORM(Base):
     __tablename__ = "keyword_mappings"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    keyword: Mapped[str] = mapped_column(String(200), unique=True)
-    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id"))
+    keyword: Mapped[str] = mapped_column(Text, unique=True)
+    tag_id: Mapped[int | None] = mapped_column(ForeignKey("tags.id"))
     is_auto: Mapped[bool] = mapped_column(Boolean, default=True)
     confidence: Mapped[float] = mapped_column(Float, default=1.0)
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
-    tag: Mapped[TagORM] = relationship(back_populates="keyword_mappings")
+    tag: Mapped[TagORM | None] = relationship(back_populates="keyword_mappings")
 
 
 # ============================================================
@@ -102,7 +106,7 @@ class BranchTagORM(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     branch_id: Mapped[int] = mapped_column(Integer)
-    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id"))
+    tag_id: Mapped[int | None] = mapped_column(ForeignKey("tags.id"))
     period_type: Mapped[str] = mapped_column(String(10), default="all")
     count: Mapped[int] = mapped_column(Integer, default=0)
     positive_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -114,7 +118,7 @@ class BranchTagORM(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    tag: Mapped[TagORM] = relationship()
+    tag: Mapped[TagORM | None] = relationship()
 
 
 # ============================================================
@@ -125,18 +129,18 @@ class BranchTagORM(Base):
 class BranchReviewORM(Base):
     __tablename__ = "branch_reviews"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     review_id: Mapped[int | None] = mapped_column(Integer)
     branch_id: Mapped[int] = mapped_column(Integer, index=True)
-    branch_name: Mapped[str | None] = mapped_column(String(200))
-    company_name: Mapped[str | None] = mapped_column(String(200))
+    branch_name: Mapped[str | None] = mapped_column(String(100))
+    company_name: Mapped[str | None] = mapped_column(String(100))
     content: Mapped[str | None] = mapped_column(Text)
     rating_service: Mapped[float | None] = mapped_column(Float)
     rating_car: Mapped[float | None] = mapped_column(Float)
     rating_convenience: Mapped[float | None] = mapped_column(Float)
     sentiment: Mapped[str | None] = mapped_column(String(20))
     car_model: Mapped[str | None] = mapped_column(String(100))
-    rent_type: Mapped[str | None] = mapped_column(String(50))
+    rent_type: Mapped[str | None] = mapped_column(String(20))
     review_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_new: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime | None] = mapped_column(
@@ -153,13 +157,13 @@ class BranchReviewORM(Base):
 class ReviewTagMappingORM(Base):
     __tablename__ = "review_tag_mappings"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     review_id: Mapped[int] = mapped_column(Integer, index=True)
     tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id"))
-    sentiment: Mapped[str | None] = mapped_column(String(20))
+    sentiment: Mapped[str] = mapped_column(String(10))
     confidence: Mapped[float | None] = mapped_column(Float)
-    source: Mapped[str | None] = mapped_column(String(50))
-    matched_keyword: Mapped[str | None] = mapped_column(String(200))
+    source: Mapped[str] = mapped_column(String(20))
+    matched_keyword: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -175,15 +179,15 @@ class BranchSummaryORM(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     branch_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
-    branch_name: Mapped[str | None] = mapped_column(String(200))
+    branch_name: Mapped[str | None] = mapped_column(String(100))
     region: Mapped[str | None] = mapped_column(String(100))
-    status: Mapped[str | None] = mapped_column(String(50))
+    status: Mapped[str | None] = mapped_column(String(20))
     review_count: Mapped[int | None] = mapped_column(Integer, default=0)
     avg_rating: Mapped[float | None] = mapped_column(Float)
     keywords: Mapped[list | None] = mapped_column(JSONB)
-    keyword_1: Mapped[str | None] = mapped_column(String(100))
-    keyword_2: Mapped[str | None] = mapped_column(String(100))
-    keyword_3: Mapped[str | None] = mapped_column(String(100))
+    keyword_1: Mapped[str | None] = mapped_column(String(50))
+    keyword_2: Mapped[str | None] = mapped_column(String(50))
+    keyword_3: Mapped[str | None] = mapped_column(String(50))
     summary_all: Mapped[str | None] = mapped_column(Text)
     summary_1y: Mapped[str | None] = mapped_column(Text)
     summary_6m: Mapped[str | None] = mapped_column(Text)
@@ -191,6 +195,9 @@ class BranchSummaryORM(Base):
     summary_1m: Mapped[str | None] = mapped_column(Text)
     pending_summaries: Mapped[dict | None] = mapped_column(JSONB)
     ai_report_data: Mapped[dict | None] = mapped_column(JSONB)
+    ai_report_generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -226,17 +233,18 @@ class BranchSummaryHistoryORM(Base):
 class BranchReportORM(Base):
     __tablename__ = "branch_reports"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    branch_id: Mapped[int] = mapped_column(Integer, index=True)
-    branch_name: Mapped[str | None] = mapped_column(String(200))
-    affiliate_name: Mapped[str | None] = mapped_column(String(200))
-    period_start: Mapped[date | None] = mapped_column(Date)
-    period_end: Mapped[date | None] = mapped_column(Date)
-    total_reviews: Mapped[int | None] = mapped_column(Integer)
-    report_data: Mapped[dict | None] = mapped_column(JSONB)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    branch_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    branch_name: Mapped[str] = mapped_column(Text)
+    affiliate_name: Mapped[str | None] = mapped_column(Text)
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date)
+    total_reviews: Mapped[int | None] = mapped_column(Integer, default=0)
+    report_data: Mapped[dict] = mapped_column(JSONB)
     version: Mapped[int] = mapped_column(Integer, default=1)
     is_viewed: Mapped[bool] = mapped_column(Boolean, default=False)
     viewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    pdf_storage_path: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -252,8 +260,8 @@ class ReportJobORM(Base):
         UUID(as_uuid=False), primary_key=True, server_default=func.gen_random_uuid()
     )
     branch_id: Mapped[int] = mapped_column(Integer)
-    period_start: Mapped[date | None] = mapped_column(Date)
-    period_end: Mapped[date | None] = mapped_column(Date)
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     progress: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[str | None] = mapped_column(Text)
@@ -274,16 +282,13 @@ class ReportJobORM(Base):
 class MonthlySentimentStatsORM(Base):
     __tablename__ = "monthly_sentiment_stats"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     branch_id: Mapped[int] = mapped_column(Integer, index=True)
-    period: Mapped[str] = mapped_column(String(7))  # "YYYY-MM"
+    period: Mapped[str] = mapped_column(String(7))
     positive_count: Mapped[int] = mapped_column(Integer, default=0)
     negative_count: Mapped[int] = mapped_column(Integer, default=0)
     neutral_count: Mapped[int] = mapped_column(Integer, default=0)
     review_count: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -292,7 +297,7 @@ class MonthlySentimentStatsORM(Base):
 class MonthlyRatingStatsORM(Base):
     __tablename__ = "monthly_rating_stats"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     branch_id: Mapped[int] = mapped_column(Integer, index=True)
     period: Mapped[str] = mapped_column(String(7))
     avg_rating_service: Mapped[float | None] = mapped_column(Float)
@@ -300,9 +305,6 @@ class MonthlyRatingStatsORM(Base):
     avg_rating_convenience: Mapped[float | None] = mapped_column(Float)
     avg_rating_total: Mapped[float | None] = mapped_column(Float)
     review_count: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -311,16 +313,13 @@ class MonthlyRatingStatsORM(Base):
 class MonthlyTagStatsORM(Base):
     __tablename__ = "monthly_tag_stats"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     branch_id: Mapped[int] = mapped_column(Integer, index=True)
     period: Mapped[str] = mapped_column(String(7))
     tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id"))
     positive_count: Mapped[int] = mapped_column(Integer, default=0)
     negative_count: Mapped[int] = mapped_column(Integer, default=0)
     neutral_count: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -335,7 +334,7 @@ class AffiliateORM(Base):
     __tablename__ = "affiliates"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    affiliate_index: Mapped[int | None] = mapped_column(Integer, unique=True)
+    affiliate_index: Mapped[int] = mapped_column(Integer, unique=True)
     name: Mapped[str | None] = mapped_column(String(200))
     location_type: Mapped[str | None] = mapped_column(String(50))
     address: Mapped[str | None] = mapped_column(Text)
@@ -379,10 +378,13 @@ class CarModelsMasterORM(Base):
     __tablename__ = "car_models_master"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    model_name: Mapped[str] = mapped_column(String(200))
-    category: Mapped[str | None] = mapped_column(String(100))
-    manufacturer: Mapped[str | None] = mapped_column(String(100))
+    model_name: Mapped[str] = mapped_column(String(100))
+    category: Mapped[str | None] = mapped_column(String(30))
+    manufacturer: Mapped[str | None] = mapped_column(String(50))
     created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
@@ -404,7 +406,7 @@ class BranchCarModelORM(Base):
 class MonthlyCarModelTagStatsORM(Base):
     __tablename__ = "monthly_car_model_tag_stats"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     car_model_id: Mapped[int] = mapped_column(
         ForeignKey("car_models_master.id"), index=True
     )
@@ -413,9 +415,6 @@ class MonthlyCarModelTagStatsORM(Base):
     positive_count: Mapped[int] = mapped_column(Integer, default=0)
     negative_count: Mapped[int] = mapped_column(Integer, default=0)
     neutral_count: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -437,6 +436,9 @@ class SyncMetadataORM(Base):
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class BranchKeywordORM(Base):
@@ -444,7 +446,7 @@ class BranchKeywordORM(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     branch_id: Mapped[int] = mapped_column(Integer, index=True)
-    keyword: Mapped[str] = mapped_column(String(200))
+    keyword: Mapped[str] = mapped_column(String(50))
     raw_count: Mapped[int] = mapped_column(Integer, default=0)
     count: Mapped[int] = mapped_column(Integer, default=0)
     weighted_score: Mapped[float] = mapped_column(Float, default=0)
@@ -452,22 +454,24 @@ class BranchKeywordORM(Base):
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class BranchSchedulerSettingsORM(Base):
     __tablename__ = "branch_scheduler_settings"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    branch_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
-    summary_cycle: Mapped[str | None] = mapped_column(String(50))
-    min_reviews: Mapped[int | None] = mapped_column(Integer)
+    branch_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    summary_cycle: Mapped[str] = mapped_column(String(20), default="monthly")
+    min_reviews: Mapped[int] = mapped_column(Integer, default=30)
     auto_approve: Mapped[bool] = mapped_column(Boolean, default=False)
     last_summary_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     next_summary_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime | None] = mapped_column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
@@ -481,13 +485,20 @@ class PromptPresetORM(Base):
     __tablename__ = "prompt_presets"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(200))
-    description: Mapped[str | None] = mapped_column(Text)
-    system_prompt: Mapped[str | None] = mapped_column(Text)
-    user_prompt_template: Mapped[str | None] = mapped_column(Text)
-    branch_type: Mapped[str | None] = mapped_column(String(50))
-    display_order: Mapped[int | None] = mapped_column(Integer, default=0)
+    name: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str | None] = mapped_column(Text, default="")
+    branch_type: Mapped[str | None] = mapped_column(String(20))
+    analysis_perspective: Mapped[str] = mapped_column(String(30), default="operational")
+    tone: Mapped[str] = mapped_column(String(30), default="analytical")
+    detail_level: Mapped[str] = mapped_column(String(20), default="standard")
+    focus_areas: Mapped[list | None] = mapped_column(JSONB, default=[])
+    custom_instruction: Mapped[str | None] = mapped_column(Text, default="")
+    temperature: Mapped[float] = mapped_column(Float, default=0.5)
+    summary_max_length: Mapped[int] = mapped_column(Integer, default=600)
+    eval_max_length: Mapped[int] = mapped_column(Integer, default=250)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    display_order: Mapped[int | None] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
