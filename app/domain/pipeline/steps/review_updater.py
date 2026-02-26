@@ -40,7 +40,7 @@ class ReviewSentimentUpdater:
             try:
                 await session.execute(
                     update(BranchReviewORM)
-                    .where(BranchReviewORM.id.in_(review_ids))
+                    .where(BranchReviewORM.review_id.in_(review_ids))
                     .values(sentiment=sentiment)
                 )
                 updated += len(review_ids)
