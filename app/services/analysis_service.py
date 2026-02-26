@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # 상수 정의
 DEFAULT_PAGE_SIZE = 20
-MAX_PAGE_SIZE = 100
+MAX_PAGE_SIZE = 1000
 FILTER_QUERY_LIMIT = 10000  # 필터 옵션 조회 시 최대 개수
 
 
