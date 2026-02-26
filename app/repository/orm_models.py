@@ -142,25 +142,11 @@ class BranchReviewORM(Base):
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-
-
-class NewReviewORM(Base):
-    __tablename__ = "new_reviews"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    review_id: Mapped[int | None] = mapped_column(Integer)
-    branch_id: Mapped[int | None] = mapped_column(Integer, index=True)
-    branch_name: Mapped[str | None] = mapped_column(String(200))
-    company_name: Mapped[str | None] = mapped_column(String(200))
-    content: Mapped[str | None] = mapped_column(Text)
-    rating_service: Mapped[float | None] = mapped_column(Float)
-    rating_car: Mapped[float | None] = mapped_column(Float)
-    rating_convenience: Mapped[float | None] = mapped_column(Float)
-    review_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    car_model: Mapped[str | None] = mapped_column(String(100))
-    rent_type: Mapped[str | None] = mapped_column(String(50))
-    created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 
@@ -295,9 +281,6 @@ class MonthlySentimentStatsORM(Base):
     negative_count: Mapped[int] = mapped_column(Integer, default=0)
     neutral_count: Mapped[int] = mapped_column(Integer, default=0)
     review_count: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -314,9 +297,6 @@ class MonthlyRatingStatsORM(Base):
     avg_rating_convenience: Mapped[float | None] = mapped_column(Float)
     avg_rating_total: Mapped[float | None] = mapped_column(Float)
     review_count: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

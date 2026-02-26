@@ -243,11 +243,10 @@ async def get_analysis_service(
 
 async def get_sync_service(
     review_repo: BranchReviewRepository = Depends(get_review_repo),
-    new_review_repo: NewReviewRepository = Depends(get_new_review_repo),
 ) -> SyncService:
     from services.sync_service import SyncService
 
-    return SyncService(review_repo, _get_athena_client(), new_review_repo=new_review_repo)
+    return SyncService(review_repo, _get_athena_client())
 
 
 # ============================================================

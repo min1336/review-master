@@ -11,7 +11,6 @@ from core.timezone import utc_now
 from domain.pipeline.unified_pipeline import UnifiedPipeline
 from infrastructure.athena import AthenaClient
 from repository.database import get_session_factory
-from repository.new_review_repository import NewReviewRepository
 from repository.review_repository import BranchReviewRepository
 from repository.sync_metadata_repository import SyncMetadataRepository
 from schemas.sync import SyncResultResponse
@@ -29,12 +28,10 @@ class SyncService:
         review_repo: BranchReviewRepository,
         athena_client: AthenaClient | None = None,
         pipeline: UnifiedPipeline | None = None,
-        new_review_repo: NewReviewRepository | None = None,
     ) -> None:
         self._review_repo = review_repo
         self._athena_client = athena_client
         self._pipeline = pipeline or UnifiedPipeline()
-        self._new_review_repo = new_review_repo
 
     async def sync_reviews(
         self,
@@ -109,12 +106,10 @@ class SyncService:
                 {**row, "is_new": True} for row in reviews_to_process
             ]
             saved_count = await self._review_repo.upsert_batch(save_data)
+            # upsert 커밋: 파이프라인이 별도 세션으로 같은 행을 UPDATE하므로
+            # 행 잠금을 해제해야 데드락 방지 (upsert는 idempotent)
+            await self._review_repo._session.commit()
             logger.info(f"branch_reviews 저장 완료: {saved_count}개 (is_new=true)")
-
-            # 4-1. new_reviews에 content 포함 임시 저장
-            if self._new_review_repo:
-                new_saved = await self._new_review_repo.upsert_batch(reviews_to_process)
-                logger.info(f"new_reviews 저장 완료: {new_saved}개 (content 포함)")
 
             if progress_callback:
                 await progress_callback(35, f"{saved_count}건 저장 완료")
