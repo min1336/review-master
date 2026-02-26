@@ -1,7 +1,8 @@
-.PHONY: run local local-prod stop logs build clean
+.PHONY: run local local-prod local-prod-stop local-prod-logs build clean
 
-# 한 번에 빌드, 실행, 로그 확인
-run: local-prod
+# 한 번에 빌드, 실행, 로그 확인 (Ctrl+C로 로그만 종료, 컨테이너 유지)
+run: build
+	API_IMAGE=review-api:local docker compose -f docker-compose.prod.yml up -d
 	docker logs -f review-api
 
 # Docker 이미지 빌드
@@ -12,9 +13,9 @@ build:
 local:
 	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# Docker 컨테이너 실행 (build 후 실행)
+# Docker 컨테이너 실행 (build 후 백그라운드 실행)
 local-prod: build
-	docker compose -f docker-compose.prod.yml up
+	API_IMAGE=review-api:local docker compose -f docker-compose.prod.yml up -d
 
 # Docker 컨테이너 중지 및 삭제
 local-prod-stop:
