@@ -1051,6 +1051,7 @@
         };
         let dateFrom = null;
         let dateTo = null;
+        let datePickerInstance = null;
 
         // Search state
         let hasSearched = false;
@@ -1072,7 +1073,7 @@
             await checkSyncStatus();
 
             // Initialize date picker
-            flatpickr('#dateRangeFilter', {
+            datePickerInstance = flatpickr('#dateRangeFilter', {
                 mode: 'range',
                 dateFormat: 'Y-m-d',
                 locale: 'ko',
@@ -1352,7 +1353,7 @@
 
             document.getElementById('sentimentFilter').value = '';
             document.getElementById('sortSelect').value = 'latest';
-            flatpickr('#dateRangeFilter').clear();
+            datePickerInstance.clear();
 
             renderChips('regionChips', [], () => { });
             renderBranchChips();
