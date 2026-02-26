@@ -14,20 +14,17 @@ local:
 
 # Docker 컨테이너 실행 (build 후 실행)
 local-prod: build
-	docker stop review-api || true
-	docker rm review-api || true
-	docker run -d --name review-api -p 8000:8000 --cpus="0.5" --memory="512m" --env-file .env -e PYTHONUNBUFFERED=1 review-api:local
+	docker compose -f docker-compose.prod.yml up
 
 # Docker 컨테이너 중지 및 삭제
 local-prod-stop:
-	docker stop review-api && docker rm review-api
+	docker compose -f docker-compose.prod.yml down
 
 # Docker 로그 확인
 local-prod-logs:
-	docker logs -f review-api
+	docker compose -f docker-compose.prod.yml logs -f
 
 # Docker 이미지 및 컨테이너 정리
 clean:
-	docker stop review-api || true
-	docker rm review-api || true
+	docker compose -f docker-compose.prod.yml down
 	docker rmi review-api:local || true

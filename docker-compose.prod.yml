@@ -23,6 +23,7 @@ services:
       - PUBLIC_API_KEY
       - N8N_API_KEY
       - N8N_TEST_MODE=false
+      - CARMORE_ADMIN_URL
     cpus: "0.5"
     mem_limit: "512m"
     networks:
