@@ -146,8 +146,8 @@ class BranchTagRepository(BaseRepository[BranchTag]):
             text('SELECT * FROM "getTagStatsByPeriod"(:branchId, :startDate, :endDate)'),
             {
                 "branchId": branch_id,
-                "startDate": start_date,
-                "endDate": end_date,
+                "startDate": start_date.strftime("%Y-%m-%d %H:%M:%S"),
+                "endDate": end_date.strftime("%Y-%m-%d %H:%M:%S"),
             },
         )
         return [dict(row) for row in result.mappings().all()]
