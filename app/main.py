@@ -181,11 +181,14 @@ if __name__ == "__main__":
     import uvicorn
     from core.config import get_settings
 
+    import os
+
     settings = get_settings()
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=settings.debug,
         reload_dirs=[str(APP_DIR)] if settings.debug else None,
         reload_includes=["*.py", "*.html", "*.js", "*.css"] if settings.debug else None,
