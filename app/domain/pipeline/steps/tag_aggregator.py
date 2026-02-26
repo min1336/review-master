@@ -74,16 +74,20 @@ class TagAggregator:
         if all_tag_names:
             try:
                 result = await session.execute(
-                    select(TagORM.id, TagORM.name)
+                    select(TagORM.id, TagORM.name, TagORM.category_id)
                     .where(TagORM.name.in_(list(all_tag_names)))
                 )
+                null_category_tags: set[str] = set()
                 for row in result.all():
                     tag_id_cache[row.name] = row.id
+                    if row.category_id is None:
+                        null_category_tags.add(row.name)
             except Exception as e:
                 logger.warning(f"tags 배치 조회 실패: {e}")
+                null_category_tags = set()
 
-            # 캐시에 없는 태그만 개별 upsert
-            missing_tags = all_tag_names - set(tag_id_cache.keys())
+            # 캐시에 없는 태그 + category_id가 NULL인 기존 태그 → upsert 대상
+            missing_tags = (all_tag_names - set(tag_id_cache.keys())) | null_category_tags
 
             # tag_name → (category_name, group) 매핑 빌드 (circular import 방지: 함수 내 import)
             from domain.analysis.patterns import TAG_REGISTRY
