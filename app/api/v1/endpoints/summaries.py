@@ -104,6 +104,19 @@ async def api_summary_detail(
     raise HTTPException(status_code=404, detail="Not found")
 
 
+@router.get("/{branch_id}/text", response_model=ApiResponseModel[dict])
+async def api_summary_text(
+    branch_id: int,
+    service: SummaryService = Depends(get_summary_service),
+) -> dict[str, Any]:
+    """외부 제공용 — 요약 텍스트만 반환"""
+    summary = await service.get_summary_by_branch_id(branch_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Not found")
+    text = SummaryService.pick_latest_summary(summary)
+    return api_response({"summary": text or "요약이 아직 생성되지 않았습니다."})
+
+
 @router.patch("/{branch_id}", response_model=ApiResponseModel[dict])
 async def api_update_summary(
     branch_id: int,
