@@ -60,9 +60,9 @@ class UnifiedSentimentAnalyzer:
     LOW_RATING_THRESHOLD = NEGATIVE_RATING_THRESHOLD
     HIGH_RATING_THRESHOLD = HIGH_RATING_THRESHOLD
 
-    def __init__(self, lazy_load: bool = True):
+    def __init__(self, lazy_load: bool = True, hybrid_classifier=None):
         self._absa = None
-        self._hybrid = None
+        self._hybrid = hybrid_classifier
         self._lazy_load = lazy_load
 
         if not lazy_load:

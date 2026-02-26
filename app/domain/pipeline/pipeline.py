@@ -166,11 +166,14 @@ class BasePipeline(ABC):
         if not text:
             return "neutral", 0.5
 
-        # UnifiedSentimentAnalyzer 지연 로딩
+        # UnifiedSentimentAnalyzer 지연 로딩 (HybridClassifier 인스턴스 공유)
         if self._sentiment_analyzer is None:
             from ..analysis import UnifiedSentimentAnalyzer
 
-            self._sentiment_analyzer = UnifiedSentimentAnalyzer(lazy_load=True)
+            self._sentiment_analyzer = UnifiedSentimentAnalyzer(
+                lazy_load=True,
+                hybrid_classifier=self._hybrid_classifier,
+            )
 
         result = self._sentiment_analyzer.analyze(text, keywords)
         return result.sentiment, result.confidence
@@ -199,11 +202,14 @@ class BasePipeline(ABC):
         if not text:
             return "neutral", 0.5
 
-        # UnifiedSentimentAnalyzer 지연 로딩
+        # UnifiedSentimentAnalyzer 지연 로딩 (HybridClassifier 인스턴스 공유)
         if self._sentiment_analyzer is None:
             from ..analysis import UnifiedSentimentAnalyzer
 
-            self._sentiment_analyzer = UnifiedSentimentAnalyzer(lazy_load=True)
+            self._sentiment_analyzer = UnifiedSentimentAnalyzer(
+                lazy_load=True,
+                hybrid_classifier=self._hybrid_classifier,
+            )
 
         result = self._sentiment_analyzer.analyze_with_ratings(
             text=text,
