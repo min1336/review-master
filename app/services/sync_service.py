@@ -108,7 +108,7 @@ class SyncService:
             saved_count = await self._review_repo.upsert_batch(save_data)
             # upsert 커밋: 파이프라인이 별도 세션으로 같은 행을 UPDATE하므로
             # 행 잠금을 해제해야 데드락 방지 (upsert는 idempotent)
-            await self._review_repo._session.commit()
+            await self._review_repo.commit()
             logger.info(f"branch_reviews 저장 완료: {saved_count}개 (is_new=true)")
 
             if progress_callback:

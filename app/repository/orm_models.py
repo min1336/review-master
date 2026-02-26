@@ -281,6 +281,9 @@ class MonthlySentimentStatsORM(Base):
     negative_count: Mapped[int] = mapped_column(Integer, default=0)
     neutral_count: Mapped[int] = mapped_column(Integer, default=0)
     review_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -297,6 +300,9 @@ class MonthlyRatingStatsORM(Base):
     avg_rating_convenience: Mapped[float | None] = mapped_column(Float)
     avg_rating_total: Mapped[float | None] = mapped_column(Float)
     review_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

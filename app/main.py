@@ -199,8 +199,7 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=port,
-        # reload=settings.debug,
-        reload=False, # Iann : 디버깅을 하기 위해 리로드 멈춤.
+        reload=settings.debug,
         reload_dirs=[str(APP_DIR)] if settings.debug else None,
         reload_includes=["*.py", "*.html", "*.js", "*.css"] if settings.debug else None,
     )
