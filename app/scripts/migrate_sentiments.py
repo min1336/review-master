@@ -37,7 +37,7 @@ async def migrate_sentiments(
     from sqlalchemy import select, update
 
     from core.config import get_settings
-    from domain.analysis import HybridClassifier
+    from domain.analysis import UnifiedSentimentAnalyzer
     from repository.database import get_session_factory, init_db
     from repository.orm_models import BranchReviewORM
 
@@ -45,7 +45,7 @@ async def migrate_sentiments(
     init_db(settings.get_database_url())
     factory = get_session_factory()
 
-    classifier = HybridClassifier(lazy_load=True)
+    analyzer = UnifiedSentimentAnalyzer(lazy_load=True)
 
     session = factory()
     try:
@@ -74,8 +74,8 @@ async def migrate_sentiments(
                 continue
 
             # 감정 분석
-            analysis = classifier.get_review_summary(content)
-            sentiment = analysis.get("overall_sentiment", "neutral")
+            result = analyzer.analyze(content)
+            sentiment = result.sentiment
 
             try:
                 await session.execute(
