@@ -112,7 +112,7 @@ class MonthlyCarModelStatsUpdater:
             if missing:
                 await self._ensure_subtag_entries(session, missing, tag_id_cache)
 
-        # 4. 기존 데이터 SELECT -> 증분 합산 -> UPSERT
+        # 4. 기존 데이터 SELECT -> 증분 합산 -> UPSERT (개별 savepoint)
         saved = 0
         for (car_model, period, tag_name), counts in groups.items():
             car_model_id = model_id_cache.get(car_model)
@@ -121,45 +121,46 @@ class MonthlyCarModelStatsUpdater:
                 continue
 
             try:
-                result = await session.execute(
-                    select(MonthlyCarModelTagStatsORM)
-                    .where(MonthlyCarModelTagStatsORM.car_model_id == car_model_id)
-                    .where(MonthlyCarModelTagStatsORM.period == period)
-                    .where(MonthlyCarModelTagStatsORM.tag_id == tag_id)
-                )
-                existing_row = result.scalar_one_or_none()
-                old: dict = {}
-                if existing_row:
-                    old = {
-                        c.key: getattr(existing_row, c.key)
-                        for c in MonthlyCarModelTagStatsORM.__table__.columns
-                    }
-
-                new_pos = (old.get("positive_count", 0) or 0) + counts["positive"]
-                new_neg = (old.get("negative_count", 0) or 0) + counts["negative"]
-                new_neu = (old.get("neutral_count", 0) or 0) + counts["neutral"]
-
-                values = {
-                    "car_model_id": car_model_id,
-                    "period": period,
-                    "tag_id": tag_id,
-                    "positive_count": new_pos,
-                    "negative_count": new_neg,
-                    "neutral_count": new_neu,
-                }
-                stmt = (
-                    pg_insert(MonthlyCarModelTagStatsORM.__table__)
-                    .values(**values)
-                    .on_conflict_do_update(
-                        index_elements=["car_model_id", "period", "tag_id"],
-                        set_={
-                            "positive_count": values["positive_count"],
-                            "negative_count": values["negative_count"],
-                            "neutral_count": values["neutral_count"],
-                        },
+                async with session.begin_nested():
+                    result = await session.execute(
+                        select(MonthlyCarModelTagStatsORM)
+                        .where(MonthlyCarModelTagStatsORM.car_model_id == car_model_id)
+                        .where(MonthlyCarModelTagStatsORM.period == period)
+                        .where(MonthlyCarModelTagStatsORM.tag_id == tag_id)
                     )
-                )
-                await session.execute(stmt)
+                    existing_row = result.scalar_one_or_none()
+                    old: dict = {}
+                    if existing_row:
+                        old = {
+                            c.key: getattr(existing_row, c.key)
+                            for c in MonthlyCarModelTagStatsORM.__table__.columns
+                        }
+
+                    new_pos = (old.get("positive_count", 0) or 0) + counts["positive"]
+                    new_neg = (old.get("negative_count", 0) or 0) + counts["negative"]
+                    new_neu = (old.get("neutral_count", 0) or 0) + counts["neutral"]
+
+                    values = {
+                        "car_model_id": car_model_id,
+                        "period": period,
+                        "tag_id": tag_id,
+                        "positive_count": new_pos,
+                        "negative_count": new_neg,
+                        "neutral_count": new_neu,
+                    }
+                    stmt = (
+                        pg_insert(MonthlyCarModelTagStatsORM.__table__)
+                        .values(**values)
+                        .on_conflict_do_update(
+                            index_elements=["car_model_id", "period", "tag_id"],
+                            set_={
+                                "positive_count": values["positive_count"],
+                                "negative_count": values["negative_count"],
+                                "neutral_count": values["neutral_count"],
+                            },
+                        )
+                    )
+                    await session.execute(stmt)
                 saved += 1
             except Exception as e:
                 logger.warning(
@@ -238,24 +239,25 @@ class MonthlyCarModelStatsUpdater:
             cat_name = subtag_to_cat.get(name)
             cat_id = cat_name_to_id.get(cat_name) if cat_name else None
             try:
-                insert_vals: dict = {"name": name, "is_active": True}
-                update_set: dict = {"is_active": True}
-                if cat_id is not None:
-                    insert_vals["category_id"] = cat_id
-                    update_set["category_id"] = cat_id
+                async with session.begin_nested():
+                    insert_vals: dict = {"name": name, "is_active": True}
+                    update_set: dict = {"is_active": True}
+                    if cat_id is not None:
+                        insert_vals["category_id"] = cat_id
+                        update_set["category_id"] = cat_id
 
-                stmt = (
-                    pg_insert(TagORM.__table__)
-                    .values(**insert_vals)
-                    .on_conflict_do_update(
-                        index_elements=["name"],
-                        set_=update_set,
+                    stmt = (
+                        pg_insert(TagORM.__table__)
+                        .values(**insert_vals)
+                        .on_conflict_do_update(
+                            index_elements=["name"],
+                            set_=update_set,
+                        )
+                        .returning(TagORM.__table__.c.id)
                     )
-                    .returning(TagORM.__table__.c.id)
-                )
-                result = await session.execute(stmt)
-                row = result.scalar_one_or_none()
-                if row is not None:
-                    tag_id_cache[name] = row
+                    result = await session.execute(stmt)
+                    row = result.scalar_one_or_none()
+                    if row is not None:
+                        tag_id_cache[name] = row
             except Exception as e:
                 logger.warning(f"서브태그 생성 실패 (name={name}): {e}")

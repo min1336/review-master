@@ -100,7 +100,8 @@ class UnifiedPipeline:
             # Step 2: branch_reviews.sentiment
             t0 = time.monotonic()
             try:
-                s2 = await self.review_updater.update(session, processed)
+                async with session.begin_nested():
+                    s2 = await self.review_updater.update(session, processed)
                 result.add_step(PipelineStepResultDTO(
                     step_name="review_updater", success=True,
                     input_count=input_count, output_count=s2,
@@ -123,7 +124,8 @@ class UnifiedPipeline:
             # Step 4: tags + branch_tags
             t0 = time.monotonic()
             try:
-                s4 = await self.tag_aggregator.aggregate(session, processed)
+                async with session.begin_nested():
+                    s4 = await self.tag_aggregator.aggregate(session, processed)
                 result.add_step(PipelineStepResultDTO(
                     step_name="tag_aggregator", success=True,
                     input_count=input_count, output_count=s4 if isinstance(s4, int) else 0,
@@ -144,7 +146,8 @@ class UnifiedPipeline:
             # Step 5: car_models_master + branch_car_models
             t0 = time.monotonic()
             try:
-                s5 = await self.car_model_tags.aggregate(session, processed)
+                async with session.begin_nested():
+                    s5 = await self.car_model_tags.aggregate(session, processed)
                 result.add_step(PipelineStepResultDTO(
                     step_name="car_model_master", success=True,
                     input_count=input_count, output_count=s5 if isinstance(s5, int) else 0,
@@ -165,7 +168,8 @@ class UnifiedPipeline:
             # Step 6: branch_keywords
             t0 = time.monotonic()
             try:
-                s6 = await self.keyword_manager.update(session, processed)
+                async with session.begin_nested():
+                    s6 = await self.keyword_manager.update(session, processed)
                 result.add_step(PipelineStepResultDTO(
                     step_name="keyword_manager", success=True,
                     input_count=input_count, output_count=s6,
@@ -186,7 +190,8 @@ class UnifiedPipeline:
             # Step 7: review_tag_mappings
             t0 = time.monotonic()
             try:
-                s7 = await self.review_tag_mapper.save(session, processed)
+                async with session.begin_nested():
+                    s7 = await self.review_tag_mapper.save(session, processed)
                 result.add_step(PipelineStepResultDTO(
                     step_name="review_tag_mapper", success=True,
                     input_count=input_count, output_count=s7,
@@ -207,7 +212,8 @@ class UnifiedPipeline:
             # Step 8: monthly_rating/sentiment/tag_stats
             t0 = time.monotonic()
             try:
-                s8 = await self.monthly_stats.update(session, processed)
+                async with session.begin_nested():
+                    s8 = await self.monthly_stats.update(session, processed)
                 total_monthly = sum(s8.values()) if isinstance(s8, dict) else 0
                 result.add_step(PipelineStepResultDTO(
                     step_name="monthly_stats", success=True,
@@ -229,7 +235,8 @@ class UnifiedPipeline:
             # Step 9: monthly_car_model_tag_stats
             t0 = time.monotonic()
             try:
-                s9 = await self.monthly_car_model_stats.update(session, processed)
+                async with session.begin_nested():
+                    s9 = await self.monthly_car_model_stats.update(session, processed)
                 result.add_step(PipelineStepResultDTO(
                     step_name="monthly_car_model_stats", success=True,
                     input_count=input_count, output_count=s9,
@@ -247,12 +254,10 @@ class UnifiedPipeline:
                     duration_seconds=round(time.monotonic() - t0, 3),
                 ))
 
-            # 실패 step이 있으면 rollback, 없으면 commit
+            # 성공한 step은 커밋 (실패한 step은 savepoint에서 이미 rollback됨)
+            await session.commit()
             if result.failed_steps:
-                await session.rollback()
-                logger.warning(f"실패 단계 존재 — rollback: {result.failed_steps}")
-            else:
-                await session.commit()
+                logger.warning(f"일부 단계 실패 (savepoint rollback): {result.failed_steps}")
 
         except Exception as e:
             await session.rollback()
