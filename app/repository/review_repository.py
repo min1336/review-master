@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timedelta
 
 from sqlalchemy import delete, func, select, text, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from models.review import Review
 from schemas.dto import BranchReviewsDTO
@@ -25,8 +26,41 @@ class BranchReviewRepository(BaseRepository[Review]):
     def table_name(self) -> str:
         return "branch_reviews"
 
+    @staticmethod
+    def _safe_int(val: str | int | None) -> int | None:
+        """asyncpg strict typing 대응: 문자열 → int 변환"""
+        if val is None:
+            return None
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _safe_float(val: str | float | None) -> float | None:
+        """asyncpg strict typing 대응: 문자열 → float 변환"""
+        if val is None:
+            return None
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _safe_datetime(val: str | datetime | None) -> datetime | None:
+        """asyncpg strict typing 대응: 문자열 → datetime 변환"""
+        if val is None:
+            return None
+        if isinstance(val, datetime):
+            return val
+        try:
+            from dateutil.parser import parse
+            return parse(val)
+        except (ValueError, TypeError):
+            return None
+
     async def upsert_batch(self, reviews: list[dict], batch_size: int = 100) -> int:
-        """원본 리뷰 일괄 저장 (DB 함수 upsert_reviews 사용)"""
+        """원본 리뷰 일괄 저장 (SQLAlchemy ON CONFLICT upsert)"""
         success_count = 0
         total = len(reviews)
 
@@ -42,33 +76,50 @@ class BranchReviewRepository(BaseRepository[Review]):
                         "인수/반납편의성"
                     )
                     data = {
-                        "review_id": r.get("review_id") or r.get("리뷰번호"),
-                        "branch_id": r.get("branch_id") or r.get("지점번호"),
+                        "review_id": self._safe_int(
+                            r.get("review_id") or r.get("리뷰번호")
+                        ),
+                        "branch_id": self._safe_int(
+                            r.get("branch_id") or r.get("지점번호")
+                        ),
                         "branch_name": r.get("branch_name") or r.get("예약_지점명"),
                         "company_name": r.get("company_name")
                         or r.get("예약_업체명"),
                         "content": r.get("content") or r.get("리뷰내용"),
-                        "rating_service": rating_svc,
-                        "rating_car": r.get("rating_car") or r.get("차량평점"),
-                        "rating_convenience": rating_conv,
-                        "review_date": r.get("review_date") or r.get("등록일시"),
+                        "rating_service": self._safe_float(rating_svc),
+                        "rating_car": self._safe_float(
+                            r.get("rating_car") or r.get("차량평점")
+                        ),
+                        "rating_convenience": self._safe_float(rating_conv),
+                        "review_date": self._safe_datetime(
+                            r.get("review_date") or r.get("등록일시")
+                        ),
                         "car_model": r.get("car_model") or r.get("차량모델"),
                         "rent_type": r.get("rent_type") or r.get("렌트타입"),
                         "is_new": r.get("is_new", False),
                     }
                     insert_data.append(data)
 
-                # json.dumps->loads로 datetime 직렬화 후 list로 전달
-                safe_data = json.loads(json.dumps(insert_data, default=str))
-                result = await self._session.execute(
-                    text("SELECT upsert_reviews(cast(:p_reviews as jsonb))"),
-                    {"p_reviews": json.dumps(safe_data)},
+                stmt = pg_insert(BranchReviewORM).values(insert_data)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["review_id"],
+                    set_={
+                        "branch_name": stmt.excluded.branch_name,
+                        "company_name": stmt.excluded.company_name,
+                        "content": stmt.excluded.content,
+                        "rating_service": stmt.excluded.rating_service,
+                        "rating_car": stmt.excluded.rating_car,
+                        "rating_convenience": stmt.excluded.rating_convenience,
+                        "review_date": stmt.excluded.review_date,
+                        "car_model": stmt.excluded.car_model,
+                        "rent_type": stmt.excluded.rent_type,
+                        "is_new": stmt.excluded.is_new,
+                        "updated_at": func.now(),
+                        "deleted_at": None,
+                    },
                 )
-
-                count = result.scalar()
-                if not isinstance(count, int):
-                    count = len(batch)
-                success_count += count
+                await self._session.execute(stmt)
+                success_count += len(batch)
             except Exception as e:
                 logger.warning(f"Failed to upsert branch reviews batch: {e}")
 
