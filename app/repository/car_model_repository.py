@@ -62,16 +62,28 @@ class CarModelRepository:
         return id_to_name, name_to_id
 
     async def _fetch_tag_stats_rows(
-        self, car_model_ids: list[int], batch_size: int = 100,
+        self,
+        car_model_ids: list[int],
+        batch_size: int = 100,
+        period_from: str | None = None,
+        period_to: str | None = None,
     ) -> list[MonthlyCarModelTagStatsORM]:
-        """monthly_car_model_tag_stats에서 태그 통계 행 일괄 조회"""
+        """monthly_car_model_tag_stats에서 태그 통계 행 일괄 조회
+
+        Args:
+            period_from: 시작 기간 (YYYY-MM). None이면 제한 없음.
+            period_to: 종료 기간 (YYYY-MM). None이면 제한 없음.
+        """
         all_rows: list[MonthlyCarModelTagStatsORM] = []
         for i in range(0, len(car_model_ids), batch_size):
             batch_ids = car_model_ids[i : i + batch_size]
+            conditions = [MonthlyCarModelTagStatsORM.car_model_id.in_(batch_ids)]
+            if period_from:
+                conditions.append(MonthlyCarModelTagStatsORM.period >= period_from)
+            if period_to:
+                conditions.append(MonthlyCarModelTagStatsORM.period <= period_to)
             result = await self._session.execute(
-                select(MonthlyCarModelTagStatsORM).where(
-                    MonthlyCarModelTagStatsORM.car_model_id.in_(batch_ids)
-                )
+                select(MonthlyCarModelTagStatsORM).where(*conditions)
             )
             all_rows.extend(result.scalars().all())
         return all_rows
@@ -126,8 +138,17 @@ class CarModelRepository:
 
         return results
 
-    async def get_vehicle_tags_raw(self, branch_id: int) -> dict:
+    async def get_vehicle_tags_raw(
+        self,
+        branch_id: int,
+        period_from: str | None = None,
+        period_to: str | None = None,
+    ) -> dict:
         """차량별 태그 raw 데이터 (카테고리 포함, VehicleRankItem용)
+
+        Args:
+            period_from: 시작 기간 (YYYY-MM). None이면 전 기간.
+            period_to: 종료 기간 (YYYY-MM). None이면 전 기간.
 
         Returns:
             {car_model: {"total_positive": N, "total_negative": N, "total_count": N,
@@ -138,7 +159,9 @@ class CarModelRepository:
             return {}
 
         car_model_ids = list(id_to_name.keys())
-        all_rows = await self._fetch_tag_stats_rows(car_model_ids)
+        all_rows = await self._fetch_tag_stats_rows(
+            car_model_ids, period_from=period_from, period_to=period_to
+        )
         if not all_rows:
             return {}
 

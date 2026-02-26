@@ -111,10 +111,19 @@ class VehicleAnalyzer:
         finally:
             await session.close()
 
-    async def get_vehicle_tags_raw(self, branch_id: int) -> dict:
+    async def get_vehicle_tags_raw(
+        self,
+        branch_id: int,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> dict:
         """monthly_car_model_tag_stats에서 차량별 태그 데이터 조회 (VehicleRankItem용)
 
         카테고리 정보를 포함하여 차량 카테고리 태그만 필터링합니다.
+
+        Args:
+            start_date: 시작일. None이면 전 기간.
+            end_date: 종료일. None이면 전 기간.
 
         Returns:
             dict: {car_model: {"total_positive": N, "total_negative": N, "total_count": N,
@@ -123,10 +132,15 @@ class VehicleAnalyzer:
         from repository.car_model_repository import CarModelRepository
         from repository.database import get_session_factory
 
+        period_from = start_date.strftime("%Y-%m") if start_date else None
+        period_to = end_date.strftime("%Y-%m") if end_date else None
+
         session = get_session_factory()()
         try:
             repo = CarModelRepository(session)
-            return await repo.get_vehicle_tags_raw(branch_id)
+            return await repo.get_vehicle_tags_raw(
+                branch_id, period_from=period_from, period_to=period_to
+            )
         except Exception as e:
             logger.warning(f"차량 태그 raw 조회 실패 (branch_id={branch_id}): {e}")
             return {}
@@ -168,22 +182,28 @@ class VehicleAnalyzer:
                 and ts.get("total", 0) > 0
             ]
 
-            pos_sorted = sorted(veh_tags, key=lambda x: x[1]["positive"], reverse=True)
-            pos_tags = [
-                f"{n}({ts['positive']}건)"
-                for n, ts in pos_sorted[:3]
-                if ts["positive"] > 0
+            # 서브태그 우선: name != category_name인 항목이 서브태그
+            subtag_entries = [
+                (n, ts) for n, ts in veh_tags
+                if n != ts.get("category_name")
             ]
+            display_tags = subtag_entries if subtag_entries else veh_tags
 
-            neg_sorted = sorted(veh_tags, key=lambda x: x[1]["negative"], reverse=True)
-            neg_tags = [
-                f"{n}({ts['negative']}건)"
-                for n, ts in neg_sorted[:3]
-                if ts["negative"] > 0
-            ]
+            # 태그별 건수 정렬 후 Top 2만 표시
+            pos_sorted = sorted(
+                [(name, ts["positive"]) for name, ts in display_tags if ts["positive"] > 0],
+                key=lambda x: x[1], reverse=True,
+            )
+            neg_sorted = sorted(
+                [(name, ts["negative"]) for name, ts in display_tags if ts["negative"] > 0],
+                key=lambda x: x[1], reverse=True,
+            )
 
-            total_pos_tags = sum(ts["positive"] for _, ts in veh_tags)
-            total_neg_tags = sum(ts["negative"] for _, ts in veh_tags)
+            pos_tags = [f"{name}({cnt}건)" for name, cnt in pos_sorted[:2]]
+            neg_tags = [f"{name}({cnt}건)" for name, cnt in neg_sorted[:2]]
+
+            total_pos_tags = sum(cnt for _, cnt in pos_sorted)
+            total_neg_tags = sum(cnt for _, cnt in neg_sorted)
 
             items.append(
                 {

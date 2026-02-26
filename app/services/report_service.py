@@ -336,7 +336,7 @@ class ReportService:
         include_vehicles = report_config.data.include_vehicles if report_config else True
         if include_vehicles:
             vehicle_analysis = await self.vehicle_analyzer.get_vehicle_analysis(branch_id, start_date, end_date)
-            vehicle_tags_raw = await self.vehicle_analyzer.get_vehicle_tags_raw(branch_id)
+            vehicle_tags_raw = await self.vehicle_analyzer.get_vehicle_tags_raw(branch_id, start_date, end_date)
 
         return {
             "branch_id": branch_id,
