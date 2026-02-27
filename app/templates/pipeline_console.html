@@ -157,6 +157,31 @@
             color: var(--grey-1);
             font-family: 'SF Mono', 'Consolas', monospace;
         }
+        .config-value.editable {
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 3px;
+            transition: background 0.15s;
+        }
+        .config-value.editable:hover {
+            background: var(--grey-7);
+        }
+        .config-value-input {
+            font-size: 12px;
+            font-weight: 600;
+            font-family: 'SF Mono', 'Consolas', monospace;
+            color: var(--grey-1);
+            background: var(--grey-8);
+            border: 1px solid var(--primary);
+            border-radius: 3px;
+            padding: 2px 6px;
+            width: 80px;
+            text-align: right;
+            outline: none;
+        }
+        .config-value-readonly {
+            color: var(--grey-4);
+        }
 
         /* Hidden file input */
         .file-input-hidden {
@@ -244,7 +269,7 @@
         <div class="section">
             <div class="section-title">
                 Configuration
-                <span class="badge badge-warning">Read-only</span>
+                <span class="badge badge-success">Live</span>
             </div>
             <div class="card">
                 <div class="config-grid" id="config-grid">
