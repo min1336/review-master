@@ -185,6 +185,64 @@
             pointer-events: none;
         }
 
+        /* Searchable Branch Select */
+        .branch-search-container::after {
+            display: none;
+        }
+
+        .branch-search-input {
+            padding-right: 10px;
+            cursor: text;
+        }
+
+        .branch-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 280px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid var(--grey-7);
+            border-top: none;
+            border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 100;
+            display: none;
+        }
+
+        .branch-dropdown.open {
+            display: block;
+        }
+
+        .branch-dropdown .group-label {
+            padding: 6px 10px 4px;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--grey-5);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: var(--grey-8);
+        }
+
+        .branch-dropdown .branch-option {
+            padding: 6px 10px 6px 18px;
+            font-size: 12px;
+            cursor: pointer;
+            color: var(--grey-2);
+        }
+
+        .branch-dropdown .branch-option:hover {
+            background: var(--grey-8);
+        }
+
+        .branch-dropdown .no-result {
+            padding: 10px;
+            font-size: 12px;
+            color: var(--grey-5);
+            text-align: center;
+        }
+
         .filter-input {
             padding: 6px 10px;
             border: 1px solid var(--grey-7);
@@ -908,10 +966,9 @@
                             업체·지점
                             <span class="count-badge" id="branchCount">0</span>
                         </label>
-                        <div class="filter-select-wrapper">
-                            <select class="filter-select" id="branchSelect" onchange="onBranchChange()">
-                                <option value="">업체·지점 선택...</option>
-                            </select>
+                        <div class="filter-select-wrapper branch-search-container">
+                            <input type="text" class="filter-select branch-search-input" id="branchSearchInput" placeholder="업체·지점 검색..." autocomplete="off">
+                            <div class="branch-dropdown" id="branchDropdown"></div>
                         </div>
                         <div class="selected-chips" id="branchChips"></div>
                     </div>
@@ -1093,6 +1150,19 @@
             // Load filter options
             await loadFilterOptions();
 
+            // Searchable branch dropdown event listeners
+            const branchSearchInput = document.getElementById('branchSearchInput');
+            branchSearchInput.addEventListener('focus', () => openBranchDropdown());
+            branchSearchInput.addEventListener('input', function () {
+                filterBranchDropdown(this.value);
+            });
+            document.addEventListener('click', (e) => {
+                const container = document.querySelector('.branch-search-container');
+                if (container && !container.contains(e.target)) {
+                    closeBranchDropdown();
+                }
+            });
+
             // Load new reviews (auto-load)
             await loadNewReviews();
         });
@@ -1177,13 +1247,9 @@
             });
         }
 
-        // Update branch dropdown (업체별 optgroup으로 표시)
+        // Update branch dropdown (업체별 그룹으로 표시)
         function updateBranchSelect() {
-            const select = document.getElementById('branchSelect');
-            const placeholder = document.createElement('option');
-            placeholder.value = '';
-            placeholder.textContent = '업체·지점 선택...';
-            select.replaceChildren(placeholder);
+            const dropdown = document.getElementById('branchDropdown');
 
             // 지역 필터 적용
             availableBranches = allBranches.filter(b => {
@@ -1204,22 +1270,87 @@
                 grouped[company].push(b);
             });
 
-            // 업체명 정렬 후 optgroup으로 렌더링
+            dropdown.replaceChildren();
+
+            // 업체명 정렬 후 그룹 헤더 + 지점 옵션으로 렌더링
             Object.keys(grouped).sort().forEach(company => {
-                const optgroup = document.createElement('optgroup');
-                optgroup.label = company;
+                const groupHeader = document.createElement('div');
+                groupHeader.className = 'group-label';
+                groupHeader.textContent = company;
+                dropdown.appendChild(groupHeader);
 
                 grouped[company].sort((a, b) => (a.branch_name || '').localeCompare(b.branch_name || '')).forEach(branch => {
-                    const option = document.createElement('option');
-                    option.value = branch.branch_id;
-                    option.textContent = branch.branch_name;
-                    optgroup.appendChild(option);
+                    const item = document.createElement('div');
+                    item.className = 'branch-option';
+                    item.textContent = branch.branch_name;
+                    item.dataset.branchId = branch.branch_id;
+                    item.dataset.companyName = branch.company_name || '';
+                    item.addEventListener('click', () => selectBranch(branch.branch_id));
+                    dropdown.appendChild(item);
                 });
-
-                select.appendChild(optgroup);
             });
 
             document.getElementById('branchCount').textContent = availableBranches.length;
+        }
+
+        function openBranchDropdown() {
+            const dropdown = document.getElementById('branchDropdown');
+            dropdown.classList.add('open');
+        }
+
+        function closeBranchDropdown() {
+            const dropdown = document.getElementById('branchDropdown');
+            dropdown.classList.remove('open');
+        }
+
+        function filterBranchDropdown(query) {
+            const dropdown = document.getElementById('branchDropdown');
+            const q = query.toLowerCase();
+            const headers = dropdown.querySelectorAll('.group-label');
+
+            if (!dropdown.classList.contains('open')) {
+                openBranchDropdown();
+            }
+
+            let anyVisible = false;
+
+            // 각 그룹 헤더와 그 아래 옵션들을 처리
+            headers.forEach(header => {
+                let groupVisible = false;
+                let sibling = header.nextElementSibling;
+                while (sibling && sibling.classList.contains('branch-option')) {
+                    const branchName = (sibling.textContent || '').toLowerCase();
+                    const companyName = (sibling.dataset.companyName || '').toLowerCase();
+                    const match = !q || branchName.includes(q) || companyName.includes(q);
+                    sibling.style.display = match ? '' : 'none';
+                    if (match) groupVisible = true;
+                    sibling = sibling.nextElementSibling;
+                }
+                header.style.display = groupVisible ? '' : 'none';
+                if (groupVisible) anyVisible = true;
+            });
+
+            // 기존 no-result 제거
+            const existing = dropdown.querySelector('.no-result');
+            if (existing) existing.remove();
+
+            if (!anyVisible && q) {
+                const noResult = document.createElement('div');
+                noResult.className = 'no-result';
+                noResult.textContent = '검색 결과 없음';
+                dropdown.appendChild(noResult);
+            }
+        }
+
+        function selectBranch(branchId) {
+            const id = parseInt(branchId);
+            if (!selectedBranches.includes(id)) {
+                selectedBranches.push(id);
+                renderBranchChips();
+            }
+            document.getElementById('branchSearchInput').value = '';
+            closeBranchDropdown();
+            updateBranchSelect();
         }
 
         // Region selection handler
@@ -1247,20 +1378,6 @@
 
             select.value = '';
             updateRegionSelect();
-            updateBranchSelect();
-        }
-
-        // Branch selection handler
-        function onBranchChange() {
-            const select = document.getElementById('branchSelect');
-            const value = parseInt(select.value);
-
-            if (value && !selectedBranches.includes(value)) {
-                selectedBranches.push(value);
-                renderBranchChips();
-            }
-
-            select.value = '';
             updateBranchSelect();
         }
 
