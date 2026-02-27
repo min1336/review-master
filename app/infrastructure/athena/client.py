@@ -457,13 +457,17 @@ class AthenaClient:
         ]
 
     def fetch_reviews_since(
-        self, since: datetime, limit: int | None = None
+        self,
+        since: datetime,
+        until: datetime | None = None,
+        limit: int | None = None,
     ) -> list[dict]:
         """
-        특정 시점 이후의 리뷰 조회
+        특정 시점 이후(~이전)의 리뷰 조회
 
         Args:
             since: 이 시점 이후 리뷰만 조회
+            until: 이 시점 이전 리뷰만 조회 (None이면 제한 없음)
             limit: 최대 조회 개수
 
         Returns:
@@ -472,10 +476,18 @@ class AthenaClient:
         safe_since = since.strftime("%Y-%m-%d %H:%M:%S")
         query = REVIEW_QUERY.format(since=safe_since)
 
+        if until:
+            safe_until = until.strftime("%Y-%m-%d %H:%M:%S")
+            # ORDER BY 앞에 조건 삽입 (ORDER BY 뒤에 AND를 넣으면 SQL 에러)
+            query = query.replace(
+                "ORDER BY nrl.register_date DESC",
+                f"AND nrl.register_date <= TIMESTAMP '{safe_until}'\nORDER BY nrl.register_date DESC",
+            )
+
         if limit:
             query += f"\nLIMIT {int(limit)}"
 
-        logger.info(f"Athena 쿼리 실행: since={since}")
+        logger.info(f"Athena 쿼리 실행: since={since}, until={until}")
         print(f"[DEBUG] Athena 쿼리:\n{query[:500]}...")
 
         try:

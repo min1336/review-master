@@ -18,6 +18,13 @@ class SyncResultResponse(BaseModel):
     error: str | None = None
 
 
+class SyncRequest(BaseModel):
+    """동기화 요청 (날짜 범위 지정 가능)"""
+
+    date_from: str | None = None  # YYYY-MM-DD, None이면 last_sync_at 사용
+    date_to: str | None = None    # YYYY-MM-DD, None이면 제한 없음
+
+
 class MarkReadRequest(BaseModel):
     """읽음 처리 요청"""
 

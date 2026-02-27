@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from schemas.common import ApiResponseModel, api_response
 from schemas.sync import (
     MarkReadRequest,
+    SyncRequest,
 )
 
 from .deps import get_sync_job_service, get_sync_service
@@ -17,10 +18,16 @@ router = APIRouter(tags=["sync"])
 
 @router.post("/reviews", status_code=202, response_model=ApiResponseModel[dict])
 async def api_sync_reviews(
+    body: SyncRequest | None = None,
     service=Depends(get_sync_job_service),
 ) -> dict[str, Any]:
-    """비동기 리뷰 동기화 작업 제출"""
-    result = await service.submit_job()
+    """비동기 리뷰 동기화 작업 제출 (날짜 범위 지정 가능)"""
+    if body is None:
+        body = SyncRequest()
+    result = await service.submit_job(
+        date_from=body.date_from,
+        date_to=body.date_to,
+    )
     return api_response(result.model_dump(mode="json"))
 
 

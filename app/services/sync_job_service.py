@@ -48,10 +48,18 @@ class SyncJobService:
             cls._instance = cls()
         return cls._instance
 
-    async def submit_job(self) -> SyncJobStatusResponse:
+    async def submit_job(
+        self,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> SyncJobStatusResponse:
         """비동기 동기화 작업 제출
 
         이미 활성 작업이 있으면 기존 job_id를 반환한다.
+
+        Args:
+            date_from: 시작일 (YYYY-MM-DD). None이면 last_sync_at 기준.
+            date_to: 종료일 (YYYY-MM-DD). None이면 제한 없음.
         """
         # 이미 실행 중인 작업이 있는 경우
         for job in self._jobs.values():
@@ -64,7 +72,7 @@ class SyncJobService:
         state = SyncJobState(job_id=job_id)
         self._jobs[job_id] = state
 
-        task = asyncio.create_task(self._run_job(state))
+        task = asyncio.create_task(self._run_job(state, date_from, date_to))
         state.task = task
 
         return self._to_response(state)
@@ -103,7 +111,12 @@ class SyncJobService:
         for s in done[: len(done) - self._MAX_COMPLETED_JOBS]:
             self._jobs.pop(s.job_id, None)
 
-    async def _run_job(self, state: SyncJobState) -> None:
+    async def _run_job(
+        self,
+        state: SyncJobState,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> None:
         """백그라운드에서 동기화 실행"""
         try:
             state.status = "processing"
@@ -136,7 +149,11 @@ class SyncJobService:
 
                 sync_service = SyncService(review_repo, athena_client)
 
-                result = await sync_service.sync_reviews(progress_callback=progress_callback)
+                result = await sync_service.sync_reviews(
+                    progress_callback=progress_callback,
+                    date_from=date_from,
+                    date_to=date_to,
+                )
                 await session.commit()
             except Exception:
                 await session.rollback()

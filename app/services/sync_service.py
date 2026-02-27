@@ -36,14 +36,18 @@ class SyncService:
     async def sync_reviews(
         self,
         progress_callback: Callable[[int, str], Awaitable[None]] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
     ) -> SyncResultResponse:
         """
         Athena에서 리뷰 조회 → branch_reviews 저장 → UnifiedPipeline 실행
 
         Args:
             progress_callback: 진행률 콜백 (progress%, message). None이면 무시.
+            date_from: 시작일 (YYYY-MM-DD). None이면 last_sync_at 사용.
+            date_to: 종료일 (YYYY-MM-DD). None이면 제한 없음.
 
-        1. last_sync_at 이후 신규 리뷰 조회
+        1. date_from/date_to 또는 last_sync_at 기준으로 리뷰 조회
         2. branch_reviews에 is_new=true로 원본 저장 (upsert)
         3. UnifiedPipeline 실행 (감정/태그 통계 저장)
         4. last_sync_at 업데이트
@@ -61,19 +65,27 @@ class SyncService:
         try:
             metadata_repo = SyncMetadataRepository(session)
 
-            # 1. 마지막 동기화 시간 조회
-            last_sync_at = await metadata_repo.get_last_sync_at(SYNC_TYPE)
-            if not last_sync_at:
-                last_sync_at = utc_now() - timedelta(days=7)
+            # 1. 조회 기간 결정: 명시적 date_from이 있으면 사용, 없으면 last_sync_at
+            if date_from:
+                since = datetime.strptime(date_from, "%Y-%m-%d")
+            else:
+                since = await metadata_repo.get_last_sync_at(SYNC_TYPE)
+                if not since:
+                    since = utc_now() - timedelta(days=7)
 
-            logger.info(f"동기화 시작: {last_sync_at} 이후 리뷰 조회")
-            print(f"[DailyPipeline] 시작: {last_sync_at} 이후 리뷰 조회")
+            until = None
+            if date_to:
+                until = datetime.strptime(date_to + " 23:59:59", "%Y-%m-%d %H:%M:%S")
+
+            range_desc = f"{since.strftime('%Y-%m-%d')}~{date_to or '현재'}"
+            logger.info(f"동기화 시작: {range_desc} 리뷰 조회")
+            print(f"[DailyPipeline] 시작: {range_desc} 리뷰 조회")
 
             if progress_callback:
-                await progress_callback(5, "동기화 시작")
+                await progress_callback(5, f"동기화 시작 ({range_desc})")
 
             # 2. Athena에서 리뷰 조회
-            athena_reviews = self._athena_client.fetch_reviews_since(last_sync_at)
+            athena_reviews = self._athena_client.fetch_reviews_since(since, until=until)
 
             if not athena_reviews:
                 await metadata_repo.update_last_sync_at(SYNC_TYPE)
