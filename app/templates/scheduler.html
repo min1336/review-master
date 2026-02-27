@@ -376,6 +376,37 @@
 
         .targets-search:focus { border-color: var(--primary); }
 
+        .btn-select-all {
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--grey-7);
+            background: white;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--grey-3);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s;
+        }
+
+        .btn-select-all:hover { border-color: var(--primary); color: var(--primary); }
+
+        .btn-filter {
+            padding: 5px 12px;
+            border-radius: 16px;
+            border: 1px solid var(--grey-7);
+            background: white;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--grey-3);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s;
+        }
+
+        .btn-filter:hover { border-color: var(--primary); color: var(--primary); }
+        .btn-filter.active { border-color: var(--primary); color: var(--primary); background: rgba(13, 111, 252, 0.08); font-weight: 600; }
+
         .targets-sort {
             display: flex;
             gap: 4px;
@@ -821,6 +852,7 @@
         var allBranches = [];
         var groupTargets = {};  // groupId → Set of branch_ids
         var groupSorts = {};    // groupId → sort mode
+        var groupMinReviewFilter = {};  // groupId → boolean (30개 이상 필터)
 
         async function ensureBranches() {
             if (allBranches.length > 0) return;
@@ -907,10 +939,12 @@
                 type: 'text', className: 'targets-search', id: 'gsearch-' + gid,
                 placeholder: '지점명 또는 지역으로 검색...'
             });
-            var toolbar = el('div', { className: 'targets-toolbar' }, [searchInput]);
+            var minReviewBtn = el('button', { className: 'btn-filter', id: 'gminreview-' + gid, textContent: '30개 이상' });
+            var selectAllBtn = el('button', { className: 'btn-select-all', id: 'gselectall-' + gid, textContent: '전체 선택' });
+            var toolbar = el('div', { className: 'targets-toolbar' }, [searchInput, minReviewBtn, selectAllBtn]);
 
             var sortRow = el('div', { className: 'targets-sort', id: 'gsort-' + gid });
-            [{ key: 'reviews', label: '리뷰 많은순' }, { key: 'selected', label: '선택순' }, { key: 'name', label: '이름순' }]
+            [{ key: 'reviews', label: '리뷰 많은순' }, { key: 'name', label: '이름순' }]
                 .forEach(function (s) {
                     var btn = el('button', { className: 'sort-btn' + (s.key === 'reviews' ? ' active' : ''), textContent: s.label });
                     btn.dataset.sort = s.key;
@@ -1073,6 +1107,36 @@
                 renderGroupBranchList(gid, searchInput.value);
             }, 250));
 
+            // 30개 이상 필터
+            var minReviewBtn = document.getElementById('gminreview-' + gid);
+            if (minReviewBtn) minReviewBtn.addEventListener('click', function () {
+                groupMinReviewFilter[gid] = !groupMinReviewFilter[gid];
+                minReviewBtn.classList.toggle('active', groupMinReviewFilter[gid]);
+                var searchEl = document.getElementById('gsearch-' + gid);
+                renderGroupBranchList(gid, searchEl ? searchEl.value : '');
+            });
+
+            // Select All
+            var selectAllBtn = document.getElementById('gselectall-' + gid);
+            if (selectAllBtn) selectAllBtn.addEventListener('click', function () {
+                var selected = groupTargets[gid] || new Set();
+                var searchEl = document.getElementById('gsearch-' + gid);
+                var q = (searchEl ? searchEl.value : '').toLowerCase();
+                var filtered = allBranches.filter(function (b) {
+                    if (groupMinReviewFilter[gid] && (b.review_count || 0) < 30) return false;
+                    if (!q) return true;
+                    return (b.branch_name || '').toLowerCase().indexOf(q) !== -1
+                        || (b.region || '').toLowerCase().indexOf(q) !== -1;
+                });
+                var allSelected = filtered.length > 0 && filtered.every(function (b) { return selected.has(b.branch_id); });
+                filtered.forEach(function (b) {
+                    if (allSelected) selected.delete(b.branch_id);
+                    else selected.add(b.branch_id);
+                });
+                updateGroupBadge(gid);
+                renderGroupBranchList(gid, searchEl ? searchEl.value : '');
+            });
+
             // Save / Delete
             var saveBtn = document.getElementById('gsave-' + gid);
             if (saveBtn) saveBtn.addEventListener('click', function () { saveGroup(gid, wfId); });
@@ -1093,6 +1157,7 @@
             var q = (filter || '').toLowerCase();
 
             var filtered = allBranches.filter(function (b) {
+                if (groupMinReviewFilter[gid] && (b.review_count || 0) < 30) return false;
                 if (!q) return true;
                 return (b.branch_name || '').toLowerCase().indexOf(q) !== -1
                     || (b.region || '').toLowerCase().indexOf(q) !== -1;
@@ -1105,12 +1170,6 @@
 
             var mode = groupSorts[gid] || 'reviews';
             filtered.sort(function (a, b) {
-                if (mode === 'selected') {
-                    var ac = selected.has(a.branch_id) ? 0 : 1;
-                    var bc = selected.has(b.branch_id) ? 0 : 1;
-                    if (ac !== bc) return ac - bc;
-                    return (b.review_count || 0) - (a.review_count || 0);
-                }
                 if (mode === 'reviews') return (b.review_count || 0) - (a.review_count || 0);
                 return (a.branch_name || '').localeCompare(b.branch_name || '');
             });
@@ -1146,6 +1205,24 @@
                 container.appendChild(el('div', { style: { padding: '8px', textAlign: 'center', color: '#999', fontSize: '11px' },
                     textContent: '검색어를 입력하여 범위를 좁혀주세요 (' + filtered.length + '개 중 200개 표시)' }));
             }
+
+            updateSelectAllText(gid);
+        }
+
+        function updateSelectAllText(gid) {
+            var btn = document.getElementById('gselectall-' + gid);
+            if (!btn) return;
+            var selected = groupTargets[gid] || new Set();
+            var searchEl = document.getElementById('gsearch-' + gid);
+            var q = (searchEl ? searchEl.value : '').toLowerCase();
+            var filtered = allBranches.filter(function (b) {
+                if (groupMinReviewFilter[gid] && (b.review_count || 0) < 30) return false;
+                if (!q) return true;
+                return (b.branch_name || '').toLowerCase().indexOf(q) !== -1
+                    || (b.region || '').toLowerCase().indexOf(q) !== -1;
+            });
+            var allSelected = filtered.length > 0 && filtered.every(function (b) { return selected.has(b.branch_id); });
+            btn.textContent = allSelected ? '전체 해제' : '전체 선택';
         }
 
         function updateGroupBadge(gid) {
