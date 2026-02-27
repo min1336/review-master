@@ -871,11 +871,14 @@
             input.className = 'config-value-input';
             input.value = currentValue;
 
+            var saving = false;
             function saveEdit() {
+                if (saving) return;
+                saving = true;
                 var newValue = input.value.trim();
                 if (newValue === '' || newValue === currentValue) {
                     // 변경 없으면 원래 span 복원
-                    input.parentNode.replaceChild(span, input);
+                    if (input.parentNode) input.parentNode.replaceChild(span, input);
                     return;
                 }
                 submitConfigUpdate(group, key, newValue, span, input);
@@ -917,19 +920,19 @@
 
                 if (result.errors && result.errors.length > 0) {
                     showToast(result.errors[0], 'error');
-                    input.parentNode.replaceChild(span, input);
+                    if (input.parentNode) input.parentNode.replaceChild(span, input);
                     return;
                 }
 
                 // 성공: span에 새 값 반영
                 var savedValue = result.updated[group][key];
                 span.textContent = String(savedValue);
-                input.parentNode.replaceChild(span, input);
+                if (input.parentNode) input.parentNode.replaceChild(span, input);
                 showToast(group + '.' + key + ' = ' + savedValue, 'success');
 
             } catch (e) {
                 showToast(e.message, 'error');
-                input.parentNode.replaceChild(span, input);
+                if (input.parentNode) input.parentNode.replaceChild(span, input);
             }
         }
 

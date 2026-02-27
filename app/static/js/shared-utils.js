@@ -117,7 +117,7 @@ async function fetchRetry(url, options) {
     var maxRetries = 2;
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
         var response = await fetch(url, options);
-        if (response.status === 503 && attempt < maxRetries) {
+        if ((response.status === 502 || response.status === 503) && attempt < maxRetries) {
             await new Promise(function (r) { setTimeout(r, 300 * (attempt + 1)); });
             continue;
         }
