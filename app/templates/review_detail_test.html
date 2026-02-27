@@ -842,37 +842,48 @@
             card.appendChild(meta);
         }
 
-        var _cachedCategories = null;
-
         function renderKeywords(data) {
             var section = document.getElementById('section-tags');
             clearEl(section);
 
-            // 카테고리명을 캐시 또는 API에서 조회하여 표시
-            if (_cachedCategories) {
-                _renderCategoryChips(section, _cachedCategories);
+            // 1) 요약 데이터에 keywords가 있으면 우선 사용
+            if (Array.isArray(data.keywords) && data.keywords.length > 0) {
+                _renderTagChips(section, data.keywords.map(function (k) { return { name: k }; }));
                 return;
             }
-            fetch(API_PREFIX + '/tags/categories')
+
+            // 2) fallback: tags/batch API로 지점별 태그 조회
+            var branchId = parseInt(selectedBranchId);
+            if (!branchId) { section.style.display = 'none'; return; }
+
+            fetch(API_PREFIX + '/tags/batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ branch_ids: [branchId], period: currentPeriod })
+            })
                 .then(function (res) { return res.json(); })
                 .then(function (json) {
-                    _cachedCategories = (json && json.data) || [];
-                    _renderCategoryChips(section, _cachedCategories);
+                    var tagMap = (json && json.data) || {};
+                    var tags = tagMap[String(branchId)] || [];
+                    _renderTagChips(section, tags);
                 })
                 .catch(function () {
                     section.style.display = 'none';
                 });
         }
 
-        function _renderCategoryChips(section, cats) {
-            if (cats.length === 0) { section.style.display = 'none'; return; }
+        function _renderTagChips(section, tags) {
+            clearEl(section);
+            if (tags.length === 0) { section.style.display = 'none'; return; }
             section.style.display = '';
-            section.appendChild(el('div', { className: 'eval-title' }, '카테고리'));
+            section.appendChild(el('div', { className: 'eval-title' }, '주요 키워드'));
             var list = el('div', { className: 'tag-list' });
-            for (var i = 0; i < cats.length; i++) {
-                var name = cats[i].name || '';
+            for (var i = 0; i < tags.length; i++) {
+                var name = tags[i].name || '';
+                var count = tags[i].count || 0;
                 if (name) {
-                    list.appendChild(el('div', { className: 'tag-chip neutral' }, name));
+                    var label = count > 0 ? name + ' ' + count : name;
+                    list.appendChild(el('div', { className: 'tag-chip neutral' }, label));
                 }
             }
             section.appendChild(list);
@@ -930,6 +941,7 @@
 
                 if (cachedData) {
                     renderAISummaryCard(cachedData);
+                    renderKeywords(cachedData);
                 }
             });
 
