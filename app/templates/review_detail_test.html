@@ -859,7 +859,7 @@
             fetch(API_PREFIX + '/tags/batch', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ branch_ids: [branchId], period: currentPeriod })
+                body: JSON.stringify({ branch_ids: [branchId] })
             })
                 .then(function (res) { return res.json(); })
                 .then(function (json) {
@@ -880,10 +880,8 @@
             var list = el('div', { className: 'tag-list' });
             for (var i = 0; i < tags.length; i++) {
                 var name = tags[i].name || '';
-                var count = tags[i].count || 0;
                 if (name) {
-                    var label = count > 0 ? name + ' ' + count : name;
-                    list.appendChild(el('div', { className: 'tag-chip neutral' }, label));
+                    list.appendChild(el('div', { className: 'tag-chip neutral' }, name));
                 }
             }
             section.appendChild(list);
