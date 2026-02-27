@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
@@ -98,24 +99,26 @@ class SyncService:
                     duration_seconds=(utc_now() - start_time).total_seconds(),
                 )
 
-            # 3. 중복 제거
+            # 3. 중복 제거 (in-place: athena_reviews를 재활용)
             seen_ids: set[str] = set()
-            reviews_to_process: list[dict] = []
+            reviews: list[dict] = []
             for row in athena_reviews:
                 review_id = row.get("review_id")
                 if review_id in seen_ids:
                     continue
                 seen_ids.add(review_id)
-                reviews_to_process.append(row)
+                reviews.append(row)
+            del athena_reviews, seen_ids
+            gc.collect()
 
-            logger.info(f"Athena 조회 완료: {len(reviews_to_process)}개 (중복 제거 후)")
+            logger.info(f"Athena 조회 완료: {len(reviews)}개 (중복 제거 후)")
 
             if progress_callback:
-                await progress_callback(20, f"Athena 조회 완료: {len(reviews_to_process)}건")
+                await progress_callback(20, f"Athena 조회 완료: {len(reviews)}건")
 
-            # 4. branch_reviews에 원본 저장 (is_new=true)
+            # 4. branch_reviews에 원본 저장 (is_new=true, 복사 없이 in-place 추가)
             review_ids: list[int] = []
-            for r in reviews_to_process:
+            for r in reviews:
                 raw = r.get("review_id") or r.get("리뷰번호")
                 if raw is None:
                     continue
@@ -126,10 +129,9 @@ class SyncService:
             existing_count = await self._review_repo.count_existing_review_ids(
                 review_ids
             )
-            save_data = [
-                {**row, "is_new": True} for row in reviews_to_process
-            ]
-            saved_count = await self._review_repo.upsert_batch(save_data)
+            for row in reviews:
+                row["is_new"] = True
+            saved_count = await self._review_repo.upsert_batch(reviews)
             new_count = max(saved_count - existing_count, 0)
             # upsert 커밋: 파이프라인이 별도 세션으로 같은 행을 UPDATE하므로
             # 행 잠금을 해제해야 데드락 방지 (upsert는 idempotent)
@@ -143,9 +145,10 @@ class SyncService:
                 await progress_callback(35, f"{saved_count}건 저장 완료")
 
             # 5. UnifiedPipeline 실행 (감정/태그 통계 저장)
-            result = await self._pipeline.run(reviews_to_process, progress_callback)
+            total_reviews = len(reviews)
+            result = await self._pipeline.run(reviews, progress_callback)
             processed_count = result.processed_reviews
-            failed_count = len(reviews_to_process) - result.processed_reviews
+            failed_count = total_reviews - result.processed_reviews
 
             # 6. last_sync_at 업데이트
             if progress_callback:

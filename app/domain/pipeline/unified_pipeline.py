@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import logging
 import time
 from collections.abc import Awaitable, Callable
@@ -76,6 +77,9 @@ class UnifiedPipeline:
                     duration_seconds=round(time.monotonic() - t0, 3),
                 ))
                 logger.info(f"Step 1 완료: {len(processed)}/{len(reviews)}개 처리")
+                # 전처리 후 raw dict 리스트 해제 (ProcessedReviewDTO로 변환 완료)
+                reviews.clear()
+                gc.collect()
                 if progress_callback:
                     await progress_callback(50, "전처리 완료")
             except Exception as e:
