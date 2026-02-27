@@ -21,8 +21,8 @@ from .deps import get_upload_job_service
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["upload"])
 
-# 파일 크기 제한 (10MB)
-MAX_FILE_SIZE = 10 * 1024 * 1024
+# 파일 크기 제한 (100MB)
+MAX_FILE_SIZE = 100 * 1024 * 1024
 
 ALLOWED_EXTENSIONS = {".xlsx", ".csv"}
 
@@ -81,12 +81,13 @@ async def api_upload_reviews(
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="빈 파일입니다")
 
-    # 3. 파싱
+    # 3. 파싱 (파싱 후 content 해제로 메모리 절약)
     try:
         if ext == ".csv":
             raw_dicts = parse_csv_content(content)
         else:
             raw_dicts = parse_excel_content(content)
+        del content
     except Exception as e:
         logger.warning("파일 파싱 실패: %s (%s)", file.filename, e)
         raise HTTPException(
