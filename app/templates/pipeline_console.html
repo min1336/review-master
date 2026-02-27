@@ -267,6 +267,7 @@
             initFlatpickr();
             bindEvents();
             loadConfig();
+            checkActiveJobs();
         });
 
         function initFlatpickr() {
@@ -349,7 +350,7 @@
             if (text) text.textContent = msg || (pct + '%');
         }
 
-        // --- 증분 실행 (기존 sync API) ---
+        // --- 증분 실행 (Athena sync API + 날짜 범위) ---
         async function runIncrementalSync() {
             setAthenaButtonsDisabled(true);
             showAthenaProgress(true);
@@ -358,10 +359,24 @@
             athenaAbortController = new AbortController();
 
             try {
-                const submitRes = await fetch(API_PREFIX + '/sync/reviews', {
+                var dateFrom = document.getElementById('date-from').value || null;
+                var dateTo = document.getElementById('date-to').value || null;
+
+                var fetchOpts = {
                     method: 'POST',
                     signal: athenaAbortController.signal,
-                });
+                };
+
+                // 날짜가 있으면 JSON body로 전달
+                if (dateFrom || dateTo) {
+                    fetchOpts.headers = { 'Content-Type': 'application/json' };
+                    fetchOpts.body = JSON.stringify({
+                        date_from: dateFrom,
+                        date_to: dateTo,
+                    });
+                }
+
+                const submitRes = await fetch(API_PREFIX + '/sync/reviews', fetchOpts);
 
                 if (!submitRes.ok) {
                     const err = await submitRes.json().catch(function() { return {}; });
@@ -572,31 +587,7 @@
                 uploadJobId = jobId;
                 updateUploadProgress(15, '파일 처리 시작...');
 
-                // 폴링
-                let pollCount = 0;
-                while (pollCount < 60) {
-                    await sleep(2000);
-                    pollCount++;
-
-                    const res = await fetch(API_PREFIX + '/upload/jobs/' + encodeURIComponent(jobId), {
-                        signal: uploadAbortController.signal,
-                    });
-                    if (res.status === 404) break;
-                    if (!res.ok) continue;
-
-                    const body = await res.json();
-                    const job = body.data || body;
-                    updateUploadProgress(job.progress || 0, job.message || '처리 중...');
-
-                    if (job.status === 'completed') {
-                        updateUploadProgress(100, job.message || '완료');
-                        showToast('업로드 처리 완료', 'success');
-                        return;
-                    }
-                    if (job.status === 'failed') {
-                        throw new Error(job.error || '업로드 처리 실패');
-                    }
-                }
+                await pollUploadJob(jobId);
 
             } catch (e) {
                 if (e.name === 'AbortError') {
@@ -624,6 +615,88 @@
             }
             showUploadProgress(false);
             showToast('업로드가 취소되었습니다.', 'warning');
+        }
+
+        async function pollUploadJob(jobId) {
+            var pollCount = 0;
+            while (pollCount < 60) {
+                await sleep(2000);
+                pollCount++;
+
+                var res = await fetch(API_PREFIX + '/upload/jobs/' + encodeURIComponent(jobId), {
+                    signal: uploadAbortController.signal,
+                });
+                if (res.status === 404) break;
+                if (!res.ok) continue;
+
+                var body = await res.json();
+                var job = body.data || body;
+                updateUploadProgress(job.progress || 0, job.message || '처리 중...');
+
+                if (job.status === 'completed') {
+                    updateUploadProgress(100, job.message || '완료');
+                    showToast('업로드 처리 완료', 'success');
+                    return;
+                }
+                if (job.status === 'failed') {
+                    throw new Error(job.error || '업로드 처리 실패');
+                }
+            }
+        }
+
+        // =============================================
+        // 활성 작업 감지 (페이지 재진입 시 자동 복원)
+        // =============================================
+        async function checkActiveJobs() {
+            try {
+                var res = await fetch(API_PREFIX + '/pipeline/active-jobs');
+                if (!res.ok) return;
+                var data = await res.json();
+
+                // Athena 섹션: sync 또는 pipeline 작업 복원
+                if (data.sync) {
+                    athenaAbortController = new AbortController();
+                    athenaJobId = data.sync.job_id;
+                    setAthenaButtonsDisabled(true);
+                    showAthenaProgress(true);
+                    updateAthenaProgress(data.sync.progress || 0, data.sync.message || '동기화 진행 중...');
+                    pollSyncJob(data.sync.job_id).finally(function() {
+                        athenaAbortController = null;
+                        athenaJobId = null;
+                        setAthenaButtonsDisabled(false);
+                        setTimeout(function() { showAthenaProgress(false); }, 2000);
+                    });
+                } else if (data.pipeline) {
+                    athenaAbortController = new AbortController();
+                    athenaJobId = data.pipeline.job_id;
+                    setAthenaButtonsDisabled(true);
+                    showAthenaProgress(true);
+                    updateAthenaProgress(data.pipeline.progress || 0, data.pipeline.message || '전체 재처리 진행 중...');
+                    pollPipelineJob(data.pipeline.job_id).finally(function() {
+                        athenaAbortController = null;
+                        athenaJobId = null;
+                        setAthenaButtonsDisabled(false);
+                        setTimeout(function() { showAthenaProgress(false); }, 2000);
+                    });
+                }
+
+                // Upload 섹션: upload 작업 복원
+                if (data.upload) {
+                    uploadAbortController = new AbortController();
+                    uploadJobId = data.upload.job_id;
+                    showUploadProgress(true);
+                    updateUploadProgress(data.upload.progress || 0, data.upload.message || '업로드 처리 중...');
+                    pollUploadJob(data.upload.job_id).catch(function(e) {
+                        if (e.name !== 'AbortError') showToast(e.message, 'error');
+                    }).finally(function() {
+                        uploadAbortController = null;
+                        uploadJobId = null;
+                        setTimeout(function() { showUploadProgress(false); }, 2000);
+                    });
+                }
+            } catch (_) {
+                // 활성 작업 조회 실패 시 무시 (페이지 정상 동작에 영향 없음)
+            }
         }
 
         // =============================================

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from schemas.pipeline_console import FullPipelineRequest, PipelineJobStatusResponse
 
-from .deps import get_pipeline_job_service
+from .deps import get_pipeline_job_service, get_sync_job_service, get_upload_job_service
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,36 @@ _SAFE_SETTINGS = [
     "aws_region", "athena_database",
     "sync_hour", "sync_minute",
 ]
+
+
+@router.get("/active-jobs")
+async def get_active_jobs(
+    sync_svc=Depends(get_sync_job_service),
+    pipeline_svc=Depends(get_pipeline_job_service),
+    upload_svc=Depends(get_upload_job_service),
+) -> dict:
+    """활성 작업 조회 (페이지 재진입 시 진행률 복원용)"""
+    result: dict = {}
+
+    for job in sync_svc._jobs.values():
+        if job.status in ("pending", "processing"):
+            resp = sync_svc._to_response(job)
+            result["sync"] = resp.model_dump(mode="json")
+            break
+
+    for job in pipeline_svc._jobs.values():
+        if job.status in ("pending", "processing"):
+            resp = pipeline_svc._to_response(job)
+            result["pipeline"] = resp.model_dump(mode="json")
+            break
+
+    for job in upload_svc._jobs.values():
+        if job.status in ("pending", "processing"):
+            resp = upload_svc._to_response(job)
+            result["upload"] = resp.model_dump(mode="json")
+            break
+
+    return result
 
 
 @router.get("/config")
@@ -85,6 +115,80 @@ async def get_config() -> dict:
         },
         "pipeline": settings_dict,
     }
+
+
+# --- 수정 가능한 설정 매핑 ---
+# (group, key) -> (source, attr_name, type)
+# source: "constants" -> core.constants 모듈 변수, "settings" -> Settings 인스턴스 속성
+_EDITABLE_MAP: dict[tuple[str, str], tuple[str, str, type]] = {
+    # embedding
+    ("embedding", "similarity_threshold"): ("constants", "SIMILARITY_THRESHOLD", float),
+    ("embedding", "context_window_size"): ("constants", "CONTEXT_WINDOW_SIZE", int),
+    # rating
+    ("rating", "negative_threshold"): ("constants", "NEGATIVE_RATING_THRESHOLD", float),
+    ("rating", "high_threshold"): ("constants", "HIGH_RATING_THRESHOLD", float),
+    # report
+    ("report", "strength_positive_ratio"): ("constants", "STRENGTH_POSITIVE_RATIO", int),
+    ("report", "improvement_negative_ratio"): ("constants", "IMPROVEMENT_NEGATIVE_RATIO", int),
+    # cache
+    ("cache", "review_change_threshold"): ("constants", "REVIEW_CHANGE_THRESHOLD", int),
+    ("cache", "min_new_reviews"): ("constants", "CACHE_MIN_NEW_REVIEWS", int),
+    ("cache", "tag_count_ratio"): ("constants", "CACHE_TAG_COUNT_RATIO", float),
+    ("cache", "sentiment_drift"): ("constants", "CACHE_SENTIMENT_DRIFT", float),
+    # decay
+    ("decay", "lambda"): ("constants", "DECAY_LAMBDA", float),
+    # pipeline (settings)
+    ("pipeline", "openai_rpm"): ("settings", "openai_rpm", int),
+    ("pipeline", "sentiment_threshold"): ("settings", "sentiment_threshold", float),
+    ("pipeline", "batch_size"): ("settings", "batch_size", int),
+    ("pipeline", "n_jobs"): ("settings", "n_jobs", int),
+    ("pipeline", "sync_hour"): ("settings", "sync_hour", int),
+    ("pipeline", "sync_minute"): ("settings", "sync_minute", int),
+}
+
+
+@router.put("/config")
+async def update_config(body: dict) -> dict:
+    """설정값 런타임 수정 (서버 재시작 시 원래 값 복원)
+
+    body 형식: { "group": { "key": value, ... }, ... }
+    """
+    import core.constants as constants_module
+    from core.config import get_settings
+
+    settings = get_settings()
+    updated: dict[str, dict[str, object]] = {}
+    errors: list[str] = []
+
+    for group, fields in body.items():
+        if not isinstance(fields, dict):
+            continue
+        for key, value in fields.items():
+            mapping = _EDITABLE_MAP.get((group, key))
+            if mapping is None:
+                errors.append(f"{group}.{key}: 수정 불가능한 설정")
+                continue
+
+            source, attr_name, expected_type = mapping
+            try:
+                cast_value = expected_type(value)
+            except (ValueError, TypeError):
+                errors.append(f"{group}.{key}: {expected_type.__name__} 타입이어야 합니다")
+                continue
+
+            if source == "constants":
+                setattr(constants_module, attr_name, cast_value)
+            else:
+                setattr(settings, attr_name, cast_value)
+
+            updated.setdefault(group, {})[key] = cast_value
+
+    result: dict[str, object] = {"updated": updated}
+    if errors:
+        result["errors"] = errors
+
+    logger.info("설정 런타임 수정: %s", updated)
+    return result
 
 
 @router.post("/run-full", status_code=202)
