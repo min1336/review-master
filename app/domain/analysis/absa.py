@@ -13,8 +13,8 @@
     absa = RuleBasedABSA()
     results = absa.analyze("직원이 친절했지만 차량이 더러웠어요")
     # [
-    #   {'aspect': '직원이 친절함', 'sentiment': 'positive', ...},
-    #   {'aspect': '차량이 청결함', 'sentiment': 'negative', ...}
+    #   {'aspect': '직원친절', 'sentiment': 'positive', ...},
+    #   {'aspect': '청결', 'sentiment': 'negative', ...}
     # ]
 """
 
@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 class AspectOpinion:
     """Aspect-Opinion-Sentiment 결과"""
 
-    aspect: str  # 태그명 (직원이 친절함, 차량이 청결함 등)
+    aspect: str  # 태그명 (직원친절, 청결 등)
     opinion: str  # 원문에서 추출한 의견 표현
     sentiment: str  # positive, negative, neutral
     confidence: float  # 신뢰도 (0.0 ~ 1.0)
@@ -72,12 +72,12 @@ class RuleBasedABSA:
     # v4.0: 7개 문장형 태그로 재정의
     CONTEXT_REQUIRED_KEYWORDS = {
         "늦": (
-            "배달 서비스가 우수함",
+            "배달",
             ["배차", "차량", "픽업", "도착", "출발", "시간", "대기", "기다"],
         ),
-        "빨리": ("배달 서비스가 우수함", ["배차", "차량", "픽업", "처리", "배달", "대기", "응대"]),
-        "빠르": ("배달 서비스가 우수함", ["배차", "차량", "픽업", "처리", "배달", "대기", "응대"]),
-        "빨랐": ("배달 서비스가 우수함", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
+        "빨리": ("배달", ["배차", "차량", "픽업", "처리", "배달", "대기", "응대"]),
+        "빠르": ("배달", ["배차", "차량", "픽업", "처리", "배달", "대기", "응대"]),
+        "빨랐": ("배달", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
     }
 
     # 긍정 키워드 + 없다 → 부정
@@ -111,7 +111,7 @@ class RuleBasedABSA:
             review: 리뷰 텍스트
 
         Returns:
-            [{'aspect': '직원이 친절함', 'opinion': '직원이 친절했어요',
+            [{'aspect': '직원친절', 'opinion': '직원이 친절했어요',
               'sentiment': 'positive', 'confidence': 0.9, 'keywords': ['직원', '친절']}]
         """
         if not review or len(review.strip()) < 3:
@@ -439,8 +439,8 @@ class RuleBasedABSA:
 
         Returns:
             {
-                '직원이 친절함': {'positive': ['친절'], 'negative': [], 'neutral': []},
-                '차량이 청결함': {'positive': [], 'negative': ['더러운'], 'neutral': []}
+                '직원친절': {'positive': ['친절'], 'negative': [], 'neutral': []},
+                '청결': {'positive': [], 'negative': ['더러운'], 'neutral': []}
             }
         """
         from collections import defaultdict

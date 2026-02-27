@@ -518,7 +518,7 @@ class SummaryService:
         결과가 3개 미만이면 branch_tags "all"로 fallback합니다.
 
         Returns:
-            [{"category": "직원이 친절함", "tags": [{"name": "친절", "positive_ratio": 85, ...}]}]
+            [{"category": "직원친절", "tags": [{"name": "친절", "positive_ratio": 85, ...}]}]
         """
         try:
             # monthly_tag_stats에서 기간별 집계 시도

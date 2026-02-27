@@ -115,7 +115,7 @@ class TestTagRegistryMapping:
         )
 
     def test_known_vehicle_category_present(self):
-        """'차량외관이 좋음', '차량이 청결함' 카테고리 존재 확인"""
+        """'외관', '청결' 카테고리 존재 확인"""
         from domain.analysis.patterns import VEHICLE_CATEGORIES
 
         tag_to_cat, tag_to_group = self._build_mappings()

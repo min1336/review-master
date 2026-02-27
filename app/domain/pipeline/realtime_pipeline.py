@@ -44,7 +44,7 @@ class RealtimeResultDTO:
 
     branch_id: int
     sentiment: Literal["positive", "neutral", "negative"]
-    tags: list[dict]  # [{"name": "직원이 친절함", "sentiment": "positive"}, ...]
+    tags: list[dict]  # [{"name": "직원친절", "sentiment": "positive"}, ...]
     saved: bool
     error: str | None = None
 

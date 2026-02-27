@@ -17,8 +17,8 @@ ABSA + FastEmbed 임베딩을 결합하여 정확도 향상:
         keywords=['직원', '친절', '차량', '더러']
     )
     # {
-    #   '직원이 친절함': {'positive': ['직원', '친절'], 'negative': []},
-    #   '차량이 청결함': {'positive': [], 'negative': ['차량', '더러']}
+    #   '직원친절': {'positive': ['직원', '친절'], 'negative': []},
+    #   '청결': {'positive': [], 'negative': ['차량', '더러']}
     # }
 """
 
@@ -349,8 +349,8 @@ class HybridClassifier:
 
         Returns:
             {
-                '직원이 친절함': {'positive': ['친절'], 'negative': []},
-                '차량이 청결함': {'positive': [], 'negative': ['더러운']}
+                '직원친절': {'positive': ['친절'], 'negative': []},
+                '청결': {'positive': [], 'negative': ['더러운']}
             }
         """
         self._ensure_initialized()
@@ -423,10 +423,10 @@ class HybridClassifier:
 
         Returns:
             {
-                'aspects': ['직원이 친절함', '차량이 청결함'],
+                'aspects': ['직원친절', '청결'],
                 'overall_sentiment': 'mixed',
-                'positive_aspects': ['직원이 친절함'],
-                'negative_aspects': ['차량이 청결함'],
+                'positive_aspects': ['직원친절'],
+                'negative_aspects': ['청결'],
                 'details': {...}
             }
         """
@@ -464,7 +464,7 @@ class HybridClassifier:
     def format_tag_sentiment(
         self, result: dict[str, dict[str, list[str]]], hide_neutral: bool = True
     ) -> str:
-        """결과를 태그별감정 형식으로 포맷팅 (예: "직원이 친절함(+), 차량이 청결함(-)")"""
+        """결과를 태그별감정 형식으로 포맷팅 (예: "직원친절(+), 청결(-)")"""
         parts = []
 
         for tag, sentiments in result.items():

@@ -26,23 +26,23 @@ class TestBuildVehicleRankingsTagDisplay:
                 "tags": {
                     "외관": {
                         "positive": 5, "negative": 2, "total": 7,
-                        "category_name": "차량외관이 좋음",
+                        "category_name": "외관",
                     },
                     "차량외관": {
                         "positive": 3, "negative": 1, "total": 4,
-                        "category_name": "차량외관이 좋음",
+                        "category_name": "외관",
                     },
                     "신차": {
                         "positive": 2, "negative": 0, "total": 2,
-                        "category_name": "차량외관이 좋음",
+                        "category_name": "외관",
                     },
                     "청결": {
                         "positive": 4, "negative": 1, "total": 5,
-                        "category_name": "차량이 청결함",
+                        "category_name": "청결",
                     },
                     "실내": {
                         "positive": 1, "negative": 1, "total": 2,
-                        "category_name": "차량이 청결함",
+                        "category_name": "청결",
                     },
                 },
             },
@@ -89,7 +89,7 @@ class TestBuildVehicleRankingsTagDisplay:
 
         # 개별 태그명이어야 함
         for name in tag_names:
-            assert name not in ("차량외관이 좋음", "차량이 청결함"), (
+            assert name not in ("외관", "청결"), (
                 f"카테고리명이 아닌 태그명이어야 함: {k3.tags}"
             )
 
@@ -104,15 +104,15 @@ class TestBuildVehicleRankingsTagDisplay:
                 "tags": {
                     "외관": {
                         "positive": 5, "negative": 1, "total": 6,
-                        "category_name": "차량외관이 좋음",
+                        "category_name": "외관",
                     },
                     "친절": {
                         "positive": 4, "negative": 1, "total": 5,
-                        "category_name": "직원이 친절함",
+                        "category_name": "직원친절",
                     },
                     "가격": {
                         "positive": 1, "negative": 1, "total": 2,
-                        "category_name": "가격이 저렴함",
+                        "category_name": "가격",
                     },
                 },
             },
@@ -147,13 +147,13 @@ class TestBuildVehicleRankingsTagDisplay:
                 "total_negative": 3,
                 "total_count": 13,
                 "tags": {
-                    "차량외관이 좋음": {
+                    "외관": {
                         "positive": 6, "negative": 1, "total": 7,
-                        "category_name": "차량외관이 좋음",
+                        "category_name": "외관",
                     },
-                    "차량이 청결함": {
+                    "청결": {
                         "positive": 4, "negative": 2, "total": 6,
-                        "category_name": "차량이 청결함",
+                        "category_name": "청결",
                     },
                 },
             },
@@ -164,8 +164,8 @@ class TestBuildVehicleRankingsTagDisplay:
         assert len(top_liked) == 1
         sonata = top_liked[0]
         # name == category_name → 서브태그 없음 → 카테고리 fallback
-        assert "차량외관이 좋음(6건)" in sonata.tags
-        assert "차량이 청결함(4건)" in sonata.tags
+        assert "외관(6건)" in sonata.tags
+        assert "청결(4건)" in sonata.tags
 
     def test_subtags_preferred_over_categories_in_mixed_data(self):
         """카테고리+서브태그 혼합 시 서브태그만 표시해야 한다"""
@@ -176,17 +176,17 @@ class TestBuildVehicleRankingsTagDisplay:
                 "total_negative": 4,
                 "total_count": 16,
                 "tags": {
-                    "차량외관이 좋음": {
+                    "외관": {
                         "positive": 8, "negative": 2, "total": 10,
-                        "category_name": "차량외관이 좋음",
+                        "category_name": "외관",
                     },
                     "외관": {
                         "positive": 5, "negative": 1, "total": 6,
-                        "category_name": "차량외관이 좋음",
+                        "category_name": "외관",
                     },
                     "신차": {
                         "positive": 3, "negative": 1, "total": 4,
-                        "category_name": "차량외관이 좋음",
+                        "category_name": "외관",
                     },
                 },
             },
@@ -197,8 +197,8 @@ class TestBuildVehicleRankingsTagDisplay:
         granger = top_liked[0]
         tag_names = [t.split("(")[0] for t in granger.tags]
 
-        # 서브태그(외관, 신차)만 표시, 카테고리(차량외관이 좋음)는 제외
-        assert "차량외관이 좋음" not in tag_names, (
+        # 서브태그(외관, 신차)만 표시, 카테고리(외관)는 제외
+        assert "외관" not in tag_names, (
             f"서브태그 존재 시 카테고리는 제외해야 함: {granger.tags}"
         )
         assert "외관" in tag_names

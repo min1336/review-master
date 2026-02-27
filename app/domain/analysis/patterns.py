@@ -408,12 +408,14 @@ class CategoryMeta:
     color: str          # hex (UI용)
     default_tag: str    # 임베딩 miss시 fallback
     description: str    # 임베딩 계산용 설명문
+    positive_label: str  # 긍정 표시 문장 (예: "직원이 친절함")
+    negative_label: str  # 부정 표시 문장 (예: "직원이 불친절함")
     tags: dict[str, TagMeta]
 
 
 TAG_REGISTRY: dict[str, CategoryMeta] = {
-    # ── 직원이 친절함 (8 tags) ─────────────────────
-    "직원이 친절함": CategoryMeta(
+    # ── 직원친절 (8 tags) ───────────────────────────
+    "직원친절": CategoryMeta(
         group="affiliate",
         color="#10b981",
         default_tag="서비스",
@@ -423,6 +425,8 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
             "친절한 안내와 감동적인 서비스 직원의 따뜻한 배려 "
             "무례한 응대 불친절한 태도 퉁명스러운 말투 무관심한 직원"
         ),
+        positive_label="직원이 친절함",
+        negative_label="직원이 불친절함",
         tags={
             "친절": TagMeta(keywords=[
                 "친절", "불친절", "상냥", "배려", "미소", "배웅", "표정", "인사", "다정",
@@ -442,8 +446,8 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
             "예약": TagMeta(keywords=["예약"]),
         },
     ),
-    # ── 차량외관이 좋음 (9 tags) ───────────────────
-    "차량외관이 좋음": CategoryMeta(
+    # ── 외관 (9 tags) ─────────────────────────────
+    "외관": CategoryMeta(
         group="vehicle",
         color="#3b82f6",
         default_tag="차량외관",
@@ -454,6 +458,8 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
             "깨끗한 외관 신차급 상태 잘 관리된 차량 "
             "스크래치 많은 흠집투성이 파손된 낡은 외관"
         ),
+        positive_label="차량외관이 좋음",
+        negative_label="차량외관이 별로임",
         tags={
             "외관": TagMeta(keywords=[
                 "외관", "외부", "외형", "도색", "페인트", "광택", "깔끔한", "반짝",
@@ -473,8 +479,8 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
             "블랙박스": TagMeta(keywords=["블랙박스"]),
         },
     ),
-    # ── 가격이 저렴함 (8 tags) ─────────────────────
-    "가격이 저렴함": CategoryMeta(
+    # ── 가격 (8 tags) ─────────────────────────────
+    "가격": CategoryMeta(
         group="affiliate",
         color="#8b5cf6",
         default_tag="가격",
@@ -484,6 +490,8 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
             "착한 가격 가성비 좋은 부담없는 합리적인 요금 "
             "바가지 터무니없는 추가요금 비싼 렌트비"
         ),
+        positive_label="가격이 저렴함",
+        negative_label="가격이 비쌈",
         tags={
             "가격": TagMeta(keywords=[
                 "가격", "비싸", "비싼", "저렴", "싼", "합리", "돈", "비용", "금액",
@@ -502,8 +510,8 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
             "보험료": TagMeta(keywords=["보험료"]),
         },
     ),
-    # ── 차량이 청결함 (7 tags) ─────────────────────
-    "차량이 청결함": CategoryMeta(
+    # ── 청결 (7 tags) ─────────────────────────────
+    "청결": CategoryMeta(
         group="vehicle",
         color="#0ea5e9",
         default_tag="청결",
@@ -513,6 +521,8 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
             "새차처럼 깨끗한 쾌적한 실내 잘 청소된 "
             "담배냄새 곰팡이 지저분한 더러운 실내"
         ),
+        positive_label="차량이 청결함",
+        negative_label="차량이 더러움",
         tags={
             "청결": TagMeta(keywords=[
                 "청결", "청소", "깨끗", "지저분", "더럽", "더러", "드러", "드럽", "위생", "오염",
@@ -529,8 +539,8 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
             "트렁크": TagMeta(keywords=["트렁크", "쓰레기"]),
         },
     ),
-    # ── 사고 처리를 잘해줌 (7 tags) ────────────────
-    "사고 처리를 잘해줌": CategoryMeta(
+    # ── 사고 처리 (7 tags) ───────────────────────
+    "사고 처리": CategoryMeta(
         group="affiliate",
         color="#ef4444",
         default_tag="보험/보장",
@@ -540,6 +550,8 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
             "신속한 사고접수 안심보험 완전면책 "
             "사고 시 무응답 보험처리 늦음 사고대응 미흡"
         ),
+        positive_label="사고 처리를 잘해줌",
+        negative_label="사고 처리가 별로임",
         tags={
             "보험/보장": TagMeta(keywords=[
                 "보험", "보장", "완전자차", "자차", "대인", "대물", "대인대물",
@@ -554,8 +566,8 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
             "대차": TagMeta(keywords=["대차", "대체차량"]),
         },
     ),
-    # ── 주유비 부담 없음 (5 tags) ──────────────────
-    "주유비 부담 없음": CategoryMeta(
+    # ── 주유비 (5 tags) ──────────────────────────
+    "주유비": CategoryMeta(
         group="affiliate",
         color="#f59e0b",
         default_tag="주유",
@@ -565,6 +577,8 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
             "만땅반납 연비좋은 주유비 부담적은 "
             "연료비 부담 주유비 비싼 기름값 높은"
         ),
+        positive_label="주유비 부담 없음",
+        negative_label="주유비 부담 높음",
         tags={
             "주유": TagMeta(keywords=[
                 "주유", "주유소", "주유량", "연료", "기름", "기름값", "연료비",
@@ -576,8 +590,8 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
             "만탄": TagMeta(keywords=["만땅", "만탄"]),
         },
     ),
-    # ── 배달 서비스가 우수함 (8 tags) ──────────────
-    "배달 서비스가 우수함": CategoryMeta(
+    # ── 배달 (8 tags) ─────────────────────────────
+    "배달": CategoryMeta(
         group="affiliate",
         color="#06b6d4",
         default_tag="딜리버리",
@@ -588,6 +602,8 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
             "빠른배차 정시도착 간편한반납 원활한절차 "
             "지연 오래기다림 배차늦음 복잡한절차"
         ),
+        positive_label="배달 서비스가 우수함",
+        negative_label="배달 서비스가 별로임",
         tags={
             "딜리버리": TagMeta(keywords=["딜리버리", "배달", "배송"]),
             "반납/픽업": TagMeta(keywords=[
@@ -650,6 +666,14 @@ AFFILIATE_CATEGORIES: set[str] = {
 }
 VEHICLE_CATEGORIES: set[str] = {
     name for name, cat in TAG_REGISTRY.items() if cat.group == "vehicle"
+}
+
+# 7개 카테고리 → 긍정/부정 표시 문장
+CATEGORY_POSITIVE_LABELS: dict[str, str] = {
+    cat_name: cat.positive_label for cat_name, cat in TAG_REGISTRY.items()
+}
+CATEGORY_NEGATIVE_LABELS: dict[str, str] = {
+    cat_name: cat.negative_label for cat_name, cat in TAG_REGISTRY.items()
 }
 
 # =============================================================================

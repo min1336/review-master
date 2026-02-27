@@ -208,7 +208,7 @@ class TestAnalyze:
         assert absa.analyze("  ") == []
 
     def test_analyze_detects_positive_aspect(self, absa):
-        """'직원이 친절했어요' → 직원이 친절함 positive aspect 감지"""
+        """'직원이 친절했어요' → 직원친절 positive aspect 감지"""
         results = absa.analyze("직원이 친절했어요")
         aspects = [r["aspect"] for r in results]
         sentiments = {r["aspect"]: r["sentiment"] for r in results}
@@ -216,7 +216,7 @@ class TestAnalyze:
         assert any("친절" in asp for asp in aspects), f"aspects: {aspects}"
 
     def test_analyze_detects_negative_aspect(self, absa):
-        """'차가 더러웠어요' → 차량이 청결함 negative aspect 감지"""
+        """'차가 더러웠어요' → 청결 negative aspect 감지"""
         results = absa.analyze("차가 더러웠어요")
         assert len(results) > 0
         sentiments = [r["sentiment"] for r in results]
