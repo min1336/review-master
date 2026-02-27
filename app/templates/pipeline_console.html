@@ -711,6 +711,8 @@
                     uploadJobId = data.upload.job_id;
                     showUploadProgress(true);
                     updateUploadProgress(data.upload.progress || 0, data.upload.message || '업로드 처리 중...');
+                    // Athena 폴링과 1초 오프셋으로 동시 요청 방지
+                    await sleep(1000);
                     pollUploadJob(data.upload.job_id).catch(function(e) {
                         if (e.name !== 'AbortError') showToast(e.message, 'error');
                     }).finally(function() {

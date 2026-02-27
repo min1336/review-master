@@ -113,18 +113,27 @@ function showToast(message, type, duration) {
 
 async function apiRequest(url, options) {
     if (!options) options = {};
-    const response = await fetch(url, {
-        headers: {
-            'Content-Type': 'application/json',
-            ...options.headers
-        },
-        ...options
-    });
+    var maxRetries = 2;
 
-    if (!response.ok) {
-        const error = await response.json().catch(function () { return {}; });
-        throw new Error(error.error || error.detail || 'HTTP ' + response.status);
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+        var response = await fetch(url, {
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            },
+            ...options
+        });
+
+        if (response.status === 503 && attempt < maxRetries) {
+            await new Promise(function (r) { setTimeout(r, 300 * (attempt + 1)); });
+            continue;
+        }
+
+        if (!response.ok) {
+            var error = await response.json().catch(function () { return {}; });
+            throw new Error(error.error || error.detail || 'HTTP ' + response.status);
+        }
+
+        return response.json();
     }
-
-    return response.json();
 }

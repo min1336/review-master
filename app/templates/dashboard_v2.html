@@ -2788,13 +2788,14 @@
             // INDEX / MAIN CONTROLLER (index.js)
             // ============================================================
 
-            function init() {
+            async function init() {
                 bindEvents();
                 initDateRangePicker();
 
-                loadStats();
-                loadRegionStatsData();
-                loadSummaries();
+                // 순차 호출: uvicorn --limit-concurrency 2 제한 준수
+                await loadStats();
+                await loadRegionStatsData();
+                await loadSummaries();
 
                 registerGlobalHandlers();
 
