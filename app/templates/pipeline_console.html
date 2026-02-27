@@ -738,6 +738,56 @@
             pipeline: '파이프라인',
         };
 
+        // 설정 키 한글 레이블
+        const CONFIG_KEY_LABELS = {
+            // embedding
+            model: '임베딩 모델',
+            similarity_threshold: '유사도 임계값',
+            context_window_size: '문맥 윈도우 크기',
+            // rating
+            negative_threshold: '부정 판정 기준',
+            high_threshold: '긍정 판정 기준',
+            // report
+            strength_positive_ratio: '강점 긍정률 기준 (%)',
+            improvement_negative_ratio: '개선 부정률 기준 (%)',
+            // cache
+            review_change_threshold: '리뷰 변동 임계값',
+            min_new_reviews: '최소 신규 리뷰 수',
+            tag_count_ratio: '태그 비율 변동',
+            sentiment_drift: '감정 변동 허용치',
+            // decay
+            'lambda': '감쇠 계수 (λ)',
+            // pipeline (settings)
+            llm_provider: 'LLM 제공자',
+            openai_model: 'OpenAI 모델',
+            openai_rpm: 'OpenAI 분당 요청 제한',
+            sentiment_threshold: '감정 분석 임계값',
+            lexicon_confident_high: '사전 확신도 상한',
+            lexicon_confident_low: '사전 확신도 하한',
+            batch_size: '배치 크기',
+            n_jobs: '병렬 작업 수',
+            debug: '디버그 모드',
+            aws_region: 'AWS 리전',
+            athena_database: 'Athena DB',
+            sync_hour: '자동 동기화 시 (시)',
+            sync_minute: '자동 동기화 분 (분)',
+        };
+
+        // 수정 가능한 설정 키 (서버 _EDITABLE_MAP과 일치)
+        const EDITABLE_KEYS = {
+            embedding: ['similarity_threshold', 'context_window_size'],
+            rating: ['negative_threshold', 'high_threshold'],
+            report: ['strength_positive_ratio', 'improvement_negative_ratio'],
+            cache: ['review_change_threshold', 'min_new_reviews', 'tag_count_ratio', 'sentiment_drift'],
+            decay: ['lambda'],
+            pipeline: ['openai_rpm', 'sentiment_threshold', 'batch_size', 'n_jobs', 'sync_hour', 'sync_minute'],
+        };
+
+        function isEditable(group, key) {
+            var keys = EDITABLE_KEYS[group];
+            return keys ? keys.indexOf(key) !== -1 : false;
+        }
+
         async function loadConfig() {
             const grid = document.getElementById('config-grid');
             try {
@@ -753,13 +803,12 @@
         }
 
         function renderConfigGrid(container, data) {
-            // 기존 내용 제거
             while (container.firstChild) {
                 container.removeChild(container.firstChild);
             }
 
-            const groups = Object.keys(data);
-            for (let i = 0; i < groups.length; i++) {
+            var groups = Object.keys(data);
+            for (var i = 0; i < groups.length; i++) {
                 var groupKey = groups[i];
                 var groupData = data[groupKey];
                 var card = createConfigCard(groupKey, groupData);
@@ -780,17 +829,26 @@
             for (var i = 0; i < keys.length; i++) {
                 var key = keys[i];
                 var value = groupData[key];
+                var editable = isEditable(groupKey, key);
 
                 var item = document.createElement('div');
                 item.className = 'config-item';
 
                 var keyEl = document.createElement('span');
                 keyEl.className = 'config-key';
-                keyEl.textContent = key;
+                keyEl.textContent = CONFIG_KEY_LABELS[key] || key;
+                keyEl.title = key;
 
                 var valueEl = document.createElement('span');
-                valueEl.className = 'config-value';
+                valueEl.className = 'config-value' + (editable ? ' editable' : ' config-value-readonly');
                 valueEl.textContent = String(value);
+
+                if (editable) {
+                    valueEl.title = '클릭하여 수정';
+                    valueEl.setAttribute('data-group', groupKey);
+                    valueEl.setAttribute('data-key', key);
+                    valueEl.addEventListener('click', startInlineEdit);
+                }
 
                 item.appendChild(keyEl);
                 item.appendChild(valueEl);
@@ -798,6 +856,79 @@
             }
 
             return card;
+        }
+
+        function startInlineEdit(e) {
+            var span = e.currentTarget;
+            var group = span.getAttribute('data-group');
+            var key = span.getAttribute('data-key');
+            var currentValue = span.textContent;
+
+            var input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'config-value-input';
+            input.value = currentValue;
+
+            function saveEdit() {
+                var newValue = input.value.trim();
+                if (newValue === '' || newValue === currentValue) {
+                    // 변경 없으면 원래 span 복원
+                    input.parentNode.replaceChild(span, input);
+                    return;
+                }
+                submitConfigUpdate(group, key, newValue, span, input);
+            }
+
+            input.addEventListener('keydown', function(ev) {
+                if (ev.key === 'Enter') {
+                    ev.preventDefault();
+                    saveEdit();
+                } else if (ev.key === 'Escape') {
+                    input.parentNode.replaceChild(span, input);
+                }
+            });
+            input.addEventListener('blur', saveEdit);
+
+            span.parentNode.replaceChild(input, span);
+            input.focus();
+            input.select();
+        }
+
+        async function submitConfigUpdate(group, key, newValue, span, input) {
+            var payload = {};
+            payload[group] = {};
+            payload[group][key] = isNaN(Number(newValue)) ? newValue : Number(newValue);
+
+            try {
+                var res = await fetch(API_PREFIX + '/pipeline/config', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!res.ok) {
+                    var err = await res.json().catch(function() { return {}; });
+                    throw new Error(err.detail || '저장 실패 (' + res.status + ')');
+                }
+
+                var result = await res.json();
+
+                if (result.errors && result.errors.length > 0) {
+                    showToast(result.errors[0], 'error');
+                    input.parentNode.replaceChild(span, input);
+                    return;
+                }
+
+                // 성공: span에 새 값 반영
+                var savedValue = result.updated[group][key];
+                span.textContent = String(savedValue);
+                input.parentNode.replaceChild(span, input);
+                showToast(group + '.' + key + ' = ' + savedValue, 'success');
+
+            } catch (e) {
+                showToast(e.message, 'error');
+                input.parentNode.replaceChild(span, input);
+            }
         }
 
         // =============================================
