@@ -2,7 +2,7 @@
 SQLAlchemy Async 엔진/세션 팩토리
 
 PostgreSQL(asyncpg) 직접 TCP 연결 관리:
-- 커넥션 풀 (pool_size=10, max_overflow=20)
+- 커넥션 풀 (pool_size=3, max_overflow=2)
 - pool_pre_ping으로 끊어진 연결 자동 감지
 - 재시도 데코레이터 (asyncpg 연결 오류 대상)
 """
@@ -76,8 +76,9 @@ def init_db(database_url: str) -> None:
 
     _engine = create_async_engine(
         database_url,
-        pool_size=10,
-        max_overflow=20,
+        pool_size=3,
+        max_overflow=2,
+        pool_timeout=30,
         pool_pre_ping=True,
         pool_recycle=1800,
         echo=False,
@@ -91,7 +92,7 @@ def init_db(database_url: str) -> None:
 
     RETRYABLE_EXCEPTIONS = _load_retryable_exceptions()
 
-    logger.info("Database engine initialized: pool_size=10, max_overflow=20")
+    logger.info("Database engine initialized: pool_size=3, max_overflow=2")
 
 
 async def close_db() -> None:

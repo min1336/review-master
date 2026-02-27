@@ -7,6 +7,7 @@ SyncJobService 패턴을 재사용하되, DB 기반 리뷰 로드 + 청크 실�
 from __future__ import annotations
 
 import asyncio
+import gc
 import logging
 import time
 from dataclasses import dataclass, field
@@ -229,6 +230,7 @@ class PipelineJobService:
                     f"분석 중 ({chunk_idx + 1}/{total_chunks} 청크, "
                     f"{total_processed}/{total}건 처리)"
                 )
+                gc.collect()
 
             # --- 완료 ---
             duration = time.time() - start

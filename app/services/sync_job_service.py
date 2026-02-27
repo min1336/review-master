@@ -7,6 +7,7 @@ sync는 전역 싱글턴 작업이므로 DB 테이블 불필요.
 from __future__ import annotations
 
 import asyncio
+import gc
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -155,6 +156,7 @@ class SyncJobService:
                     date_to=date_to,
                 )
                 await session.commit()
+                gc.collect()
             except Exception:
                 await session.rollback()
                 raise

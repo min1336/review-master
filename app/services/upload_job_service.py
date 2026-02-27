@@ -2,13 +2,14 @@
 
 인메모리 싱글턴으로 upload 작업 상태를 추적한다.
 SyncJobService 패턴을 재사용하되, 파일 파싱 데이터는 state에 저장하지 않는다.
-(512MB 컨테이너 메모리 제약 대응)
+(500MB 컨테이너 메모리 제약 대응)
 """
 
 from __future__ import annotations
 
 import asyncio
 import csv
+import gc
 import io
 import logging
 import re
@@ -365,6 +366,7 @@ class UploadJobService:
                     f"분석 중 ({chunk_no}/{chunk_count} 청크, "
                     f"{total_processed}/{total}건 처리)"
                 )
+                gc.collect()
 
             # --- 완료 ---
             duration = time.time() - start
