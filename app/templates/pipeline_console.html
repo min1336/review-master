@@ -279,7 +279,7 @@
         </div>
     </div>
 
-    <script src="{{ base_path }}/static/js/shared-utils.js"></script>
+    <script>{{ shared_utils_js | safe }}</script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script>
         const API_PREFIX = '{{ api_prefix }}';

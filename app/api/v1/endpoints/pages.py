@@ -21,6 +21,10 @@ settings = get_settings()
 _templates_dir = Path(__file__).parent.parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_templates_dir))
 
+# shared-utils.js를 모듈 로드 시 읽어서 인라인 삽입 (리버스 프록시 503 우회)
+_static_dir = Path(__file__).parent.parent.parent.parent / "static"
+_shared_utils_js = (_static_dir / "js" / "shared-utils.js").read_text(encoding="utf-8")
+
 
 def _page_context() -> dict:
     """모든 페이지 라우트에 공통으로 전달되는 context"""
@@ -28,6 +32,7 @@ def _page_context() -> dict:
         "api_prefix": settings.api_prefix,
         "base_path": settings.api_prefix.replace("/api", ""),
         "carmore_admin_url": settings.carmore_admin_url,
+        "shared_utils_js": _shared_utils_js,
     }
 
 

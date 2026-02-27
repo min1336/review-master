@@ -1069,7 +1069,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
-    <script src="{{ base_path }}/static/js/shared-utils.js"></script>
+    <script>{{ shared_utils_js | safe }}</script>
     <script>
         // API Prefix
         const API_PREFIX = '{{ api_prefix }}';
