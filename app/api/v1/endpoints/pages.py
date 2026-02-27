@@ -69,3 +69,13 @@ async def scheduler(request: Request):
         name="scheduler.html",
         context=_page_context(),
     )
+
+
+@router.get("/pipeline-console", response_class=HTMLResponse)
+async def pipeline_console(request: Request):
+    """파이프라인 콘솔 페이지"""
+    return templates.TemplateResponse(
+        request=request,
+        name="pipeline_console.html",
+        context=_page_context(),
+    )

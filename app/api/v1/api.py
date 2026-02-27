@@ -6,6 +6,7 @@ from .endpoints import (
     analysis,
     n8n,
     n8n_scheduler,
+    pipeline_console,
     presets,
     realtime,
     report,
@@ -42,6 +43,9 @@ api_router.include_router(presets.router, prefix="/presets")
 api_router.include_router(sync.router, prefix="/sync")
 api_router.include_router(realtime.router, prefix="/realtime")
 api_router.include_router(upload.router, prefix="/upload")
+
+# --- Pipeline Console ---
+api_router.include_router(pipeline_console.router, prefix="/pipeline")
 
 # --- n8n Webhooks ---
 api_router.include_router(n8n.router, prefix="/n8n")

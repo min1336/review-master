@@ -1766,6 +1766,7 @@
     <header class="header">
         <h1>Review Summary AI - 운영팀 대시보드</h1>
         <div class="header-actions">
+            <button class="btn btn-header-nav" id="btn-pipeline-console">파이프라인</button>
             <button class="btn btn-header-nav" id="btn-review-detail">카모아 예시</button>
             <button class="btn btn-header-nav" id="btn-scheduler">스케줄러</button>
             <button class="btn btn-header-nav" id="btn-analysis">리뷰 관리</button>
@@ -2860,6 +2861,13 @@
 
             function bindEvents() {
                 // 헤더 네비게이션 버튼
+                const btnPipelineConsole = document.getElementById('btn-pipeline-console');
+                if (btnPipelineConsole) {
+                    btnPipelineConsole.addEventListener('click', () => {
+                        window.location.href = `${BASE_PATH}/pipeline-console`;
+                    });
+                }
+
                 const btnAnalysis = document.getElementById('btn-analysis');
 
                 if (btnAnalysis) {

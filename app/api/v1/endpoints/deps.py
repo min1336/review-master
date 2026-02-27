@@ -315,6 +315,12 @@ async def get_upload_job_service() -> "UploadJobService":
     return UploadJobService.get_instance()
 
 
+async def get_pipeline_job_service():
+    from services.pipeline_job_service import PipelineJobService
+
+    return PipelineJobService.get_instance()
+
+
 async def get_realtime_pipeline() -> "RealtimePipeline":
     from domain.pipeline import RealtimePipeline
 
