@@ -401,7 +401,7 @@
                     });
                 }
 
-                const submitRes = await fetch(API_PREFIX + '/sync/reviews', fetchOpts);
+                const submitRes = await fetchRetry(API_PREFIX + '/sync/reviews', fetchOpts);
 
                 if (!submitRes.ok) {
                     const err = await submitRes.json().catch(function() { return {}; });
@@ -437,7 +437,7 @@
                 await sleep(2000);
                 pollCount++;
 
-                const res = await fetch(API_PREFIX + '/sync/jobs/' + encodeURIComponent(jobId), {
+                const res = await fetchRetry(API_PREFIX + '/sync/jobs/' + encodeURIComponent(jobId), {
                     signal: athenaAbortController.signal,
                 });
                 if (res.status === 404) break;
@@ -477,7 +477,7 @@
                     chunk_size: chunkSize,
                 };
 
-                const submitRes = await fetch(API_PREFIX + '/pipeline/run-full', {
+                const submitRes = await fetchRetry(API_PREFIX + '/pipeline/run-full', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
@@ -518,7 +518,7 @@
                 await sleep(2000);
                 pollCount++;
 
-                const res = await fetch(API_PREFIX + '/pipeline/jobs/' + encodeURIComponent(jobId), {
+                const res = await fetchRetry(API_PREFIX + '/pipeline/jobs/' + encodeURIComponent(jobId), {
                     signal: athenaAbortController.signal,
                 });
                 if (res.status === 404) break;
@@ -546,7 +546,7 @@
             // 서버 작업 취소 (pipeline job이 있으면)
             if (athenaJobId) {
                 try {
-                    await fetch(API_PREFIX + '/pipeline/jobs/' + encodeURIComponent(athenaJobId), {
+                    await fetchRetry(API_PREFIX + '/pipeline/jobs/' + encodeURIComponent(athenaJobId), {
                         method: 'DELETE',
                     });
                 } catch (_) { /* ignore */ }
@@ -594,7 +594,7 @@
                 const formData = new FormData();
                 formData.append('file', file);
 
-                const submitRes = await fetch(API_PREFIX + '/upload/reviews', {
+                const submitRes = await fetchRetry(API_PREFIX + '/upload/reviews', {
                     method: 'POST',
                     body: formData,
                     signal: uploadAbortController.signal,
@@ -633,7 +633,7 @@
             }
             if (uploadJobId) {
                 try {
-                    await fetch(API_PREFIX + '/upload/jobs/' + encodeURIComponent(uploadJobId), {
+                    await fetchRetry(API_PREFIX + '/upload/jobs/' + encodeURIComponent(uploadJobId), {
                         method: 'DELETE',
                     });
                 } catch (_) { /* ignore */ }
@@ -648,7 +648,7 @@
                 await sleep(2000);
                 pollCount++;
 
-                var res = await fetch(API_PREFIX + '/upload/jobs/' + encodeURIComponent(jobId), {
+                var res = await fetchRetry(API_PREFIX + '/upload/jobs/' + encodeURIComponent(jobId), {
                     signal: uploadAbortController.signal,
                 });
                 if (res.status === 404) break;
@@ -674,7 +674,7 @@
         // =============================================
         async function checkActiveJobs() {
             try {
-                var res = await fetch(API_PREFIX + '/pipeline/active-jobs');
+                var res = await fetchRetry(API_PREFIX + '/pipeline/active-jobs');
                 if (!res.ok) return;
                 var data = await res.json();
 
@@ -902,7 +902,7 @@
             payload[group][key] = isNaN(Number(newValue)) ? newValue : Number(newValue);
 
             try {
-                var res = await fetch(API_PREFIX + '/pipeline/config', {
+                var res = await fetchRetry(API_PREFIX + '/pipeline/config', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),

@@ -108,32 +108,41 @@ function showToast(message, type, duration) {
 }
 
 /* ============================================================
+ * fetch 503 재시도 래퍼 (drop-in replacement)
+ * uvicorn --limit-concurrency 제한 시 503은 요청 미처리 거부이므로
+ * 모든 HTTP 메서드에 대해 재시도가 안전함
+ * ============================================================ */
+
+async function fetchRetry(url, options) {
+    var maxRetries = 2;
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+        var response = await fetch(url, options);
+        if (response.status === 503 && attempt < maxRetries) {
+            await new Promise(function (r) { setTimeout(r, 300 * (attempt + 1)); });
+            continue;
+        }
+        return response;
+    }
+}
+
+/* ============================================================
  * API 요청 래퍼
  * ============================================================ */
 
 async function apiRequest(url, options) {
     if (!options) options = {};
-    var maxRetries = 2;
+    var response = await fetchRetry(url, {
+        headers: {
+            'Content-Type': 'application/json',
+            ...options.headers
+        },
+        ...options
+    });
 
-    for (var attempt = 0; attempt <= maxRetries; attempt++) {
-        var response = await fetch(url, {
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            },
-            ...options
-        });
-
-        if (response.status === 503 && attempt < maxRetries) {
-            await new Promise(function (r) { setTimeout(r, 300 * (attempt + 1)); });
-            continue;
-        }
-
-        if (!response.ok) {
-            var error = await response.json().catch(function () { return {}; });
-            throw new Error(error.error || error.detail || 'HTTP ' + response.status);
-        }
-
-        return response.json();
+    if (!response.ok) {
+        var error = await response.json().catch(function () { return {}; });
+        throw new Error(error.error || error.detail || 'HTTP ' + response.status);
     }
+
+    return response.json();
 }

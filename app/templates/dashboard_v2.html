@@ -3678,7 +3678,7 @@
                 }
 
                 try {
-                    const response = await fetch(`${API_PREFIX}/reports/${branchId}/list?limit=5`);
+                    const response = await fetchRetry(`${API_PREFIX}/reports/${branchId}/list?limit=5`);
                     const result = await response.json();
 
                     if (result.success && result.data && result.data.length > 0) {
@@ -3761,7 +3761,7 @@
                 `;
 
                 try {
-                    const response = await fetch(`${API_PREFIX}/reports/${reportState.branchId}?start_date=${startDate}&end_date=${endDate}`);
+                    const response = await fetchRetry(`${API_PREFIX}/reports/${reportState.branchId}?start_date=${startDate}&end_date=${endDate}`);
                     const result = await response.json();
 
                     if (result.success) {
@@ -3795,7 +3795,7 @@
                 }
 
                 try {
-                    const response = await fetch(
+                    const response = await fetchRetry(
                         `${API_PREFIX}/reports/${reportState.branchId}?start_date=${startDate}&end_date=${endDate}`,
                         { method: 'DELETE' }
                     );
@@ -3804,7 +3804,7 @@
                     if (result.success) {
                         showToast('리포트가 삭제되었습니다.', 'success');
                         // 목록 새로고침
-                        const listResponse = await fetch(`${API_PREFIX}/reports/${reportState.branchId}/list?limit=5`);
+                        const listResponse = await fetchRetry(`${API_PREFIX}/reports/${reportState.branchId}/list?limit=5`);
                         const listResult = await listResponse.json();
                         if (listResult.success && listResult.data && listResult.data.length > 0) {
                             renderReportList(listResult.data);
@@ -4139,7 +4139,7 @@
             async function fetchPresets(branchType) {
                 try {
                     const qs = branchType ? '?branch_type=' + encodeURIComponent(branchType) : '';
-                    const resp = await fetch(API_PREFIX + '/presets' + qs);
+                    const resp = await fetchRetry(API_PREFIX + '/presets' + qs);
                     const json = await resp.json();
                     if (json.success) { presetCache = json.data; return json.data; }
                 } catch (e) { console.error('Preset fetch error:', e); }
@@ -4359,7 +4359,7 @@
             async function fetchReviewCounts() {
                 const infoBar = document.getElementById('review-count-info');
                 try {
-                    const resp = await fetch(
+                    const resp = await fetchRetry(
                         `${API_PREFIX}/reports/${reportState.branchId}/review-count?start_date=${reportState.startDate}&end_date=${reportState.endDate}`
                     );
                     if (!resp.ok) {
@@ -4477,7 +4477,7 @@
 
                 try {
                     // 1단계: 비동기 작업 제출 (즉시 반환)
-                    const submitResponse = await fetch(`${API_PREFIX}/reports/${reportState.branchId}/generate/async`, {
+                    const submitResponse = await fetchRetry(`${API_PREFIX}/reports/${reportState.branchId}/generate/async`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -4649,7 +4649,7 @@
                         return;
                     }
 
-                    const statusResponse = await fetch(`${API_PREFIX}/reports/${reportState.branchId}/job/${jobId}`, {
+                    const statusResponse = await fetchRetry(`${API_PREFIX}/reports/${reportState.branchId}/job/${jobId}`, {
                         signal: reportPollingController ? reportPollingController.signal : undefined
                     });
 
@@ -4690,7 +4690,7 @@
 
             async function fetchReportData() {
                 // 생성된 리포트 데이터 가져오기
-                const response = await fetch(
+                const response = await fetchRetry(
                     `${API_PREFIX}/reports/${reportState.branchId}?start_date=${reportState.startDate}&end_date=${reportState.endDate}`,
                     { signal: reportPollingController ? reportPollingController.signal : undefined }
                 );
@@ -4719,7 +4719,7 @@
 
                 try {
                     // 비동기 작업 제출 (/generate/async는 regenerate와 동일한 로직 사용)
-                    const submitResponse = await fetch(`${API_PREFIX}/reports/${reportState.branchId}/generate/async`, {
+                    const submitResponse = await fetchRetry(`${API_PREFIX}/reports/${reportState.branchId}/generate/async`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

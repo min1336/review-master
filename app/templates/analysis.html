@@ -1170,7 +1170,7 @@
         // Load filter options from API
         async function loadFilterOptions() {
             try {
-                const response = await fetch(`${API_PREFIX}/analysis/filters`);
+                const response = await fetchRetry(`${API_PREFIX}/analysis/filters`);
                 const result = await response.json();
                 const data = result.data || result;
 
@@ -1541,7 +1541,7 @@
                     sort_by: 'latest'
                 });
 
-                const response = await fetch(`${API_PREFIX}/analysis/reviews?${params}`);
+                const response = await fetchRetry(`${API_PREFIX}/analysis/reviews?${params}`);
                 const result = await response.json();
                 const data = result.data || result;
 
@@ -1809,7 +1809,7 @@
                     params.append('date_to', dateTo);
                 }
 
-                const response = await fetch(`${API_PREFIX}/analysis/reviews/export?${params}`);
+                const response = await fetchRetry(`${API_PREFIX}/analysis/reviews/export?${params}`);
 
                 if (!response.ok) {
                     throw new Error('Export failed');
@@ -1904,7 +1904,7 @@
                     loadingMsg.textContent = '';
                 }
 
-                const response = await fetch(`${API_PREFIX}/analysis/reviews?${params}`);
+                const response = await fetchRetry(`${API_PREFIX}/analysis/reviews?${params}`);
                 const result = await response.json();
                 const data = result.data || result;
 
@@ -2107,7 +2107,7 @@
             try {
                 // 1) 비동기 동기화 작업 제출
                 updateSyncProgress(20, '동기화 작업 제출 중...');
-                const submitRes = await fetch(`${API_PREFIX}/sync/reviews`, {
+                const submitRes = await fetchRetry(`${API_PREFIX}/sync/reviews`, {
                     method: 'POST',
                     signal: syncAbortController.signal,
                 });
@@ -2127,7 +2127,7 @@
                 for (let i = 0; i < 60; i++) {
                     await new Promise(r => setTimeout(r, 2000));
 
-                    const pollRes = await fetch(`${API_PREFIX}/sync/jobs/${jobId}`, {
+                    const pollRes = await fetchRetry(`${API_PREFIX}/sync/jobs/${jobId}`, {
                         signal: syncAbortController.signal,
                     });
                     if (pollRes.status === 404) {
