@@ -44,15 +44,12 @@ class KeywordExtractor:
 
     @property
     def kiwi(self):
-        """Kiwi 인스턴스 (지연 로딩)"""
+        """Kiwi 인스턴스 (싱글턴 팩토리 사용)"""
         if self._kiwi_available is None:
-            try:
-                from kiwipiepy import Kiwi
+            from domain.analysis._singletons import get_kiwi
 
-                self._kiwi = Kiwi()
-                self._kiwi_available = True
-            except ImportError:
-                self._kiwi_available = False
+            self._kiwi = get_kiwi()
+            self._kiwi_available = self._kiwi is not None
 
         return self._kiwi
 

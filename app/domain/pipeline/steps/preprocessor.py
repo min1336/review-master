@@ -16,31 +16,18 @@ class ReviewPreprocessor:
     """전처리 + 키워드 추출 + 감정 분석 + 태그 분류"""
 
     def __init__(self) -> None:
-        self._kiwi = None
-        self._sentiment_analyzer = None
-        self._hybrid_classifier = None
-        self._init_kiwi()
+        from domain.analysis._singletons import (
+            get_hybrid_classifier,
+            get_kiwi,
+            get_sentiment_analyzer,
+        )
 
-    def _init_kiwi(self) -> None:
-        """Kiwi 형태소 분석기 초기화"""
-        try:
-            from kiwipiepy import Kiwi
-
-            self._kiwi = Kiwi()
-            logger.info("Kiwi 형태소 분석기 초기화 완료")
-        except ImportError:
-            logger.warning("Kiwi 미설치 - 정규식 폴백 사용")
+        self._kiwi = get_kiwi()
+        self._sentiment_analyzer = get_sentiment_analyzer()
+        self._hybrid_classifier = get_hybrid_classifier()
 
     def process_batch(self, reviews: list[dict]) -> list[ProcessedReviewDTO]:
         """리뷰 배치를 ProcessedReviewDTO로 변환"""
-        if self._sentiment_analyzer is None:
-            from domain.analysis import UnifiedSentimentAnalyzer
-
-            self._sentiment_analyzer = UnifiedSentimentAnalyzer(lazy_load=True)
-        if self._hybrid_classifier is None:
-            from domain.analysis import HybridClassifier
-
-            self._hybrid_classifier = HybridClassifier(lazy_load=True)
 
         results: list[ProcessedReviewDTO] = []
         for raw in reviews:

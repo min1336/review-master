@@ -1,0 +1,55 @@
+"""NLP 모델 싱글턴 팩토리 — 프로세스당 1개 인스턴스
+
+ONNX 임베딩 모델(~200MB), Kiwi 형태소 분석기(~50MB) 등
+무거운 NLP 리소스를 모듈 레벨 전역 변수로 관리하여
+UnifiedPipeline 인스턴스가 여러 번 생성되더라도 모델을 재로드하지 않는다.
+"""
+
+from __future__ import annotations
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+_kiwi = None
+_hybrid_classifier = None
+_sentiment_analyzer = None
+
+
+def get_kiwi():
+    """Kiwi 형태소 분석기 싱글턴 반환"""
+    global _kiwi
+    if _kiwi is None:
+        try:
+            from kiwipiepy import Kiwi
+
+            _kiwi = Kiwi()
+            logger.info("Kiwi 형태소 분석기 초기화 완료 (싱글턴)")
+        except ImportError:
+            logger.warning("Kiwi 미설치 - 정규식 폴백 사용")
+    return _kiwi
+
+
+def get_hybrid_classifier():
+    """HybridClassifier 싱글턴 반환 (ONNX 임베딩 포함)"""
+    global _hybrid_classifier
+    if _hybrid_classifier is None:
+        from domain.analysis import HybridClassifier
+
+        _hybrid_classifier = HybridClassifier(lazy_load=True)
+        logger.info("HybridClassifier 초기화 완료 (싱글턴)")
+    return _hybrid_classifier
+
+
+def get_sentiment_analyzer():
+    """UnifiedSentimentAnalyzer 싱글턴 반환"""
+    global _sentiment_analyzer
+    if _sentiment_analyzer is None:
+        from domain.analysis import UnifiedSentimentAnalyzer
+
+        _sentiment_analyzer = UnifiedSentimentAnalyzer(
+            lazy_load=True,
+            hybrid_classifier=get_hybrid_classifier(),
+        )
+        logger.info("UnifiedSentimentAnalyzer 초기화 완료 (싱글턴)")
+    return _sentiment_analyzer

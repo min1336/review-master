@@ -44,22 +44,16 @@ class BasePipeline(ABC):
     """
 
     def __init__(self) -> None:
-        self.kiwi = None
+        from domain.analysis._singletons import (
+            get_hybrid_classifier,
+            get_kiwi,
+            get_sentiment_analyzer,
+        )
+
+        self.kiwi = get_kiwi()
         self._session_factory: async_sessionmaker[AsyncSession] | None = None
-        self._sentiment_analyzer = None  # UnifiedSentimentAnalyzer
-        self._hybrid_classifier = None  # HybridClassifier (태그 분류용)
-
-        self._init_kiwi()
-
-    def _init_kiwi(self) -> None:
-        """Kiwi 형태소 분석기 초기화"""
-        try:
-            from kiwipiepy import Kiwi
-
-            self.kiwi = Kiwi()
-            logger.info("Kiwi 형태소 분석기 초기화 완료")
-        except ImportError:
-            logger.warning("Kiwi 미설치 - 정규식 폴백 사용")
+        self._sentiment_analyzer = get_sentiment_analyzer()
+        self._hybrid_classifier = get_hybrid_classifier()
 
     async def _get_session(self) -> AsyncSession:
         """DB 비동기 세션 획득 (lazy loading)"""
@@ -166,15 +160,6 @@ class BasePipeline(ABC):
         if not text:
             return "neutral", 0.5
 
-        # UnifiedSentimentAnalyzer 지연 로딩 (HybridClassifier 인스턴스 공유)
-        if self._sentiment_analyzer is None:
-            from ..analysis import UnifiedSentimentAnalyzer
-
-            self._sentiment_analyzer = UnifiedSentimentAnalyzer(
-                lazy_load=True,
-                hybrid_classifier=self._hybrid_classifier,
-            )
-
         result = self._sentiment_analyzer.analyze(text, keywords)
         return result.sentiment, result.confidence
 
@@ -201,15 +186,6 @@ class BasePipeline(ABC):
         """
         if not text:
             return "neutral", 0.5
-
-        # UnifiedSentimentAnalyzer 지연 로딩 (HybridClassifier 인스턴스 공유)
-        if self._sentiment_analyzer is None:
-            from ..analysis import UnifiedSentimentAnalyzer
-
-            self._sentiment_analyzer = UnifiedSentimentAnalyzer(
-                lazy_load=True,
-                hybrid_classifier=self._hybrid_classifier,
-            )
 
         result = self._sentiment_analyzer.analyze_with_ratings(
             text=text,

@@ -5,25 +5,11 @@
 from __future__ import annotations
 
 import asyncio
-import threading
-
-# ============================================================
-# ML 모델 싱글턴 (FastEmbed 모델을 한 번만 로드하여 재사용)
-# Docker 환경(512MB RAM)에서 매 요청마다 ~1.1GB 모델을
-# 새로 로드하면 OOM → ERR_EMPTY_RESPONSE 발생
-# ============================================================
-_classifier_instance = None
-_init_lock = threading.Lock()
-
 
 def _get_classifier():
-    global _classifier_instance
-    if _classifier_instance is None:
-        with _init_lock:
-            if _classifier_instance is None:
-                from domain.analysis import HybridClassifier
-                _classifier_instance = HybridClassifier(lazy_load=False)
-    return _classifier_instance
+    from domain.analysis._singletons import get_hybrid_classifier
+
+    return get_hybrid_classifier()
 
 
 class TagService:

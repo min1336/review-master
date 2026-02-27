@@ -76,9 +76,9 @@ class UnifiedSentimentAnalyzer:
             self._absa = RuleBasedABSA()
 
         if self._hybrid is None:
-            from .hybrid_classifier import HybridClassifier
+            from domain.analysis._singletons import get_hybrid_classifier
 
-            self._hybrid = HybridClassifier(lazy_load=True)
+            self._hybrid = get_hybrid_classifier()
 
     def analyze(
         self,

@@ -69,7 +69,6 @@ class RealtimePipeline(BasePipeline):
 
     def __init__(self) -> None:
         super().__init__()
-        self._hybrid_classifier = None
         self._tag_id_cache: dict[str, int] = {}  # tag_name -> tag_id
 
     async def process(self, review_data: dict) -> RealtimeResultDTO:
@@ -149,12 +148,7 @@ class RealtimePipeline(BasePipeline):
         # 1. 키워드 추출
         keywords = self.extract_keywords(text)
 
-        # 2. HybridClassifier로 태그+감정 분류
-        if self._hybrid_classifier is None:
-            from ..analysis import HybridClassifier
-
-            self._hybrid_classifier = HybridClassifier(lazy_load=True)
-
+        # 2. HybridClassifier로 태그+감정 분류 (싱글턴)
         tag_result = self._hybrid_classifier.classify_review(
             review=text, keywords=keywords
         )

@@ -321,10 +321,16 @@ async def get_pipeline_job_service():
     return PipelineJobService.get_instance()
 
 
-async def get_realtime_pipeline() -> "RealtimePipeline":
-    from domain.pipeline import RealtimePipeline
+_realtime_pipeline: "RealtimePipeline | None" = None
 
-    return RealtimePipeline()
+
+async def get_realtime_pipeline() -> "RealtimePipeline":
+    global _realtime_pipeline
+    if _realtime_pipeline is None:
+        from domain.pipeline import RealtimePipeline
+
+        _realtime_pipeline = RealtimePipeline()
+    return _realtime_pipeline
 
 
 
