@@ -1,7 +1,8 @@
-"""리뷰 동기화 서비스 - UnifiedPipeline 통합"""
+"""리뷰 동기화 서비스 - UnifiedPipeline 통합 (날짜 기반 청킹)"""
 
 from __future__ import annotations
 
+import asyncio
 import gc
 import logging
 from collections.abc import Awaitable, Callable
@@ -19,6 +20,54 @@ from schemas.sync import SyncResultResponse
 logger = logging.getLogger(__name__)
 
 SYNC_TYPE = "daily_pipeline"
+
+
+def _generate_day_ranges(
+    since: datetime, until: datetime | None
+) -> list[tuple[datetime, datetime]]:
+    """날짜 범위를 1일 단위로 분할.
+
+    Athena 쿼리 경계: register_date > since AND register_date <= until
+    각 청크의 since는 이전 청크의 until → 빈틈/중복 없음.
+    """
+    if until is None:
+        until = utc_now()
+
+    ranges: list[tuple[datetime, datetime]] = []
+    chunk_start = since
+
+    while chunk_start < until:
+        next_midnight = (chunk_start + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        day_end = next_midnight - timedelta(seconds=1)
+        chunk_end = min(day_end, until)
+
+        ranges.append((chunk_start, chunk_end))
+        chunk_start = chunk_end
+
+    return ranges
+
+
+def _make_chunk_callback(
+    parent: Callable[[int, str], Awaitable[None]] | None,
+    day_idx: int,
+    total_days: int,
+) -> Callable[[int, str], Awaitable[None]] | None:
+    """pipeline.run()의 내부 progress(0~100)를 청크별 구간으로 리매핑."""
+    if parent is None:
+        return None
+
+    chunk_size = 89.0 / total_days  # 전체 5%~94% 중 이 청크의 몫
+    chunk_base = 5 + day_idx * chunk_size
+
+    async def callback(progress: int, message: str) -> None:
+        absolute = int(chunk_base + (progress / 100.0) * chunk_size)
+        absolute = min(absolute, 94)
+        label = f"[{day_idx + 1}/{total_days}일]"
+        await parent(absolute, f"{label} {message}")
+
+    return callback
 
 
 class SyncService:
@@ -78,79 +127,44 @@ class SyncService:
             if date_to:
                 until = datetime.strptime(date_to + " 23:59:59", "%Y-%m-%d %H:%M:%S")
 
+            # 2. 날짜 범위를 1일 단위로 분할
+            day_ranges = _generate_day_ranges(since, until)
+            total_days = len(day_ranges)
+
             range_desc = f"{since.strftime('%Y-%m-%d')}~{date_to or '현재'}"
-            logger.info(f"동기화 시작: {range_desc} 리뷰 조회")
-            print(f"[DailyPipeline] 시작: {range_desc} 리뷰 조회")
+            logger.info(f"동기화 시작: {range_desc} ({total_days}일 청크)")
+            print(f"[DailyPipeline] 시작: {range_desc} ({total_days}일 청크)")
 
             if progress_callback:
-                await progress_callback(5, f"동기화 시작 ({range_desc})")
+                await progress_callback(5, f"동기화 시작 ({range_desc}, {total_days}일)")
 
-            # 2. Athena에서 리뷰 조회
-            athena_reviews = self._athena_client.fetch_reviews_since(since, until=until)
+            # 3. 날짜 청크별 처리: Athena 조회 → 중복 제거 → upsert → pipeline
+            total_synced = 0
+            total_new = 0
+            total_processed = 0
+            chunk_errors: list[str] = []
 
-            if not athena_reviews:
-                await metadata_repo.update_last_sync_at(SYNC_TYPE)
-                await session.commit()
-                return SyncResultResponse(
-                    success=True,
-                    message="신규 리뷰가 없습니다",
-                    synced_count=0,
-                    new_reviews=0,
-                    duration_seconds=(utc_now() - start_time).total_seconds(),
-                )
-
-            # 3. 중복 제거 (in-place: athena_reviews를 재활용)
-            seen_ids: set[str] = set()
-            reviews: list[dict] = []
-            for row in athena_reviews:
-                review_id = row.get("review_id")
-                if review_id in seen_ids:
-                    continue
-                seen_ids.add(review_id)
-                reviews.append(row)
-            del athena_reviews, seen_ids
-            gc.collect()
-
-            logger.info(f"Athena 조회 완료: {len(reviews)}개 (중복 제거 후)")
-
-            if progress_callback:
-                await progress_callback(20, f"Athena 조회 완료: {len(reviews)}건")
-
-            # 4. branch_reviews에 원본 저장 (is_new=true, 복사 없이 in-place 추가)
-            review_ids: list[int] = []
-            for r in reviews:
-                raw = r.get("review_id") or r.get("리뷰번호")
-                if raw is None:
-                    continue
+            for day_idx, (chunk_since, chunk_until) in enumerate(day_ranges):
                 try:
-                    review_ids.append(int(raw))
-                except (ValueError, TypeError):
-                    continue
-            existing_count = await self._review_repo.count_existing_review_ids(
-                review_ids
-            )
-            for row in reviews:
-                row["is_new"] = True
-            saved_count = await self._review_repo.upsert_batch(reviews)
-            new_count = max(saved_count - existing_count, 0)
-            # upsert 커밋: 파이프라인이 별도 세션으로 같은 행을 UPDATE하므로
-            # 행 잠금을 해제해야 데드락 방지 (upsert는 idempotent)
-            await self._review_repo.commit()
-            logger.info(
-                f"branch_reviews 저장 완료: {saved_count}개 upsert "
-                f"(신규 {new_count}개, 기존 {existing_count}개)"
-            )
+                    synced, new, processed = await self._process_day_chunk(
+                        chunk_since,
+                        chunk_until,
+                        day_idx,
+                        total_days,
+                        progress_callback,
+                    )
+                    total_synced += synced
+                    total_new += new
+                    total_processed += processed
+                except Exception as e:
+                    day_label = chunk_since.strftime("%m-%d")
+                    logger.error(
+                        f"청크 {day_idx + 1}/{total_days} ({day_label}) 실패: {e}",
+                        exc_info=True,
+                    )
+                    chunk_errors.append(f"{day_label}: {e}")
 
-            if progress_callback:
-                await progress_callback(35, f"{saved_count}건 저장 완료")
-
-            # 5. UnifiedPipeline 실행 (감정/태그 통계 저장)
-            total_reviews = len(reviews)
-            result = await self._pipeline.run(reviews, progress_callback)
-            processed_count = result.processed_reviews
-            failed_count = total_reviews - result.processed_reviews
-
-            # 6. last_sync_at 업데이트
+            # 4. last_sync_at 업데이트 (모든 청크 완료 후 1회)
             if progress_callback:
                 await progress_callback(95, "메타데이터 업데이트")
             await metadata_repo.update_last_sync_at(SYNC_TYPE)
@@ -158,29 +172,129 @@ class SyncService:
             await session.commit()
             duration = (utc_now() - start_time).total_seconds()
 
+            # 5. 결과 응답 생성
+            if total_synced == 0 and not chunk_errors:
+                return SyncResultResponse(
+                    success=True,
+                    message="신규 리뷰가 없습니다",
+                    synced_count=0,
+                    new_reviews=0,
+                    duration_seconds=duration,
+                )
+
+            failed_count = total_synced - total_processed
             logger.info(
-                f"동기화 완료: {saved_count}개 저장, {processed_count}개 분석, "
+                f"동기화 완료: {total_synced}개 저장, {total_processed}개 분석, "
                 f"{failed_count}개 실패 ({duration:.1f}초)"
             )
 
+            if chunk_errors:
+                return SyncResultResponse(
+                    success=total_synced > 0,
+                    message=f"{total_synced}개 저장 (일부 실패: {len(chunk_errors)}일)",
+                    synced_count=total_synced,
+                    new_reviews=total_new,
+                    duration_seconds=duration,
+                    error="; ".join(chunk_errors),
+                )
+
             return SyncResultResponse(
                 success=True,
-                message=f"{saved_count}개 리뷰 저장 + {processed_count}개 분석 완료",
-                synced_count=saved_count,
-                new_reviews=new_count,
+                message=f"{total_synced}개 리뷰 저장 + {total_processed}개 분석 완료",
+                synced_count=total_synced,
+                new_reviews=total_new,
                 duration_seconds=duration,
             )
 
         except Exception as e:
-            logger.error(f"동기화 실패: {e}")
+            logger.error(f"동기화 실패: {e}", exc_info=True)
             return SyncResultResponse(
                 success=False,
                 message="동기화 실행 중 오류가 발생했습니다",
-                error=str(e),
+                error="sync_failed",
                 duration_seconds=(utc_now() - start_time).total_seconds(),
             )
         finally:
             await session.close()
+
+    async def _process_day_chunk(
+        self,
+        chunk_since: datetime,
+        chunk_until: datetime,
+        day_idx: int,
+        total_days: int,
+        progress_callback: Callable[[int, str], Awaitable[None]] | None,
+    ) -> tuple[int, int, int]:
+        """1일분 리뷰 처리: Athena 조회 → 중복 제거 → upsert → pipeline.
+
+        Returns:
+            (synced_count, new_count, processed_count)
+        """
+        day_label = chunk_since.strftime("%m-%d")
+
+        # 1. Athena에서 리뷰 조회 (블로킹 방지: to_thread)
+        athena_reviews = await asyncio.to_thread(
+            self._athena_client.fetch_reviews_since,
+            chunk_since,
+            until=chunk_until,
+        )
+
+        if not athena_reviews:
+            logger.info(f"[{day_label}] 리뷰 없음, 건너뜀")
+            return 0, 0, 0
+
+        # 2. 중복 제거
+        seen_ids: set[str] = set()
+        reviews: list[dict] = []
+        for row in athena_reviews:
+            review_id = row.get("review_id")
+            if review_id in seen_ids:
+                continue
+            seen_ids.add(review_id)
+            reviews.append(row)
+        del athena_reviews, seen_ids
+        gc.collect()
+
+        logger.info(f"[{day_label}] Athena 조회 완료: {len(reviews)}개")
+
+        # 3. branch_reviews에 원본 저장 (is_new=true)
+        review_ids: list[int] = []
+        for r in reviews:
+            raw = r.get("review_id") or r.get("리뷰번호")
+            if raw is None:
+                continue
+            try:
+                review_ids.append(int(raw))
+            except (ValueError, TypeError):
+                continue
+        existing_count = await self._review_repo.count_existing_review_ids(
+            review_ids
+        )
+        for row in reviews:
+            row["is_new"] = True
+        saved_count = await self._review_repo.upsert_batch(reviews)
+        new_count = max(saved_count - existing_count, 0)
+        # upsert 커밋: 파이프라인이 별도 세션으로 같은 행을 UPDATE하므로
+        # 행 잠금을 해제해야 데드락 방지 (upsert는 idempotent)
+        await self._review_repo.commit()
+
+        logger.info(
+            f"[{day_label}] {saved_count}개 upsert "
+            f"(신규 {new_count}개, 기존 {existing_count}개)"
+        )
+
+        # 4. UnifiedPipeline 실행 (감정/태그 통계 저장)
+        chunk_cb = _make_chunk_callback(progress_callback, day_idx, total_days)
+        result = await self._pipeline.run(reviews, chunk_cb)
+        processed_count = result.processed_reviews
+
+        logger.info(f"[{day_label}] 파이프라인 완료: {processed_count}개 처리")
+
+        # 5. 메모리 해제
+        del reviews
+        gc.collect()
+
+        return saved_count, new_count, processed_count
 
     async def mark_reviews_as_read(
         self, review_ids: list[int] | None = None
