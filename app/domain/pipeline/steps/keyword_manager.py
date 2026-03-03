@@ -71,76 +71,90 @@ class KeywordManager:
             logger.info("키워드 업데이트할 데이터 없음")
             return 0
 
-        # 2. 지점별 키워드 업데이트
+        # 2. 지점별 키워드 업데이트 (처리 후 즉시 메모리 해제)
         updated_branches = 0
+        branch_ids = list(branch_keywords.keys())
 
-        for branch_id, keywords_data in branch_keywords.items():
+        for branch_id in branch_ids:
+            keywords_data = branch_keywords.pop(branch_id)
             try:
-                # 2-1. 기존 키워드 로드
-                result = await session.execute(
-                    select(
-                        BranchKeywordORM.keyword,
-                        BranchKeywordORM.count,
-                        BranchKeywordORM.last_seen_at,
-                    )
-                    .where(BranchKeywordORM.branch_id == branch_id)
+                updated_branches += await self._update_branch(
+                    session, branch_id, keywords_data
                 )
-
-                existing_map: dict[str, dict] = {}
-                for row in result.all():
-                    existing_map[row.keyword] = {
-                        "count": row.count or 0,
-                        "last_seen_at": _ensure_aware(row.last_seen_at),
-                    }
-
-                # 2-2. 누적 집계 (배치 내 등장 횟수 합산)
-                upsert_rows = []
-                for keyword, batch_data in keywords_data.items():
-                    existing = existing_map.get(keyword)
-                    batch_count = batch_data["count"]
-                    new_date = batch_data["last_seen_at"]
-
-                    if existing:
-                        new_count = existing["count"] + batch_count
-                        old_date = existing["last_seen_at"]
-                        if old_date and new_date:
-                            final_date = max(new_date, old_date)
-                        else:
-                            final_date = new_date or old_date
-                    else:
-                        new_count = batch_count
-                        final_date = new_date
-
-                    upsert_rows.append({
-                        "branch_id": branch_id,
-                        "keyword": keyword,
-                        "count": new_count,
-                        "last_seen_at": final_date,
-                    })
-
-                # 2-3. DB upsert
-                if upsert_rows:
-                    for row_data in upsert_rows:
-                        stmt = (
-                            pg_insert(BranchKeywordORM.__table__)
-                            .values(**row_data)
-                            .on_conflict_do_update(
-                                index_elements=["branch_id", "keyword"],
-                                set_={
-                                    "count": row_data["count"],
-                                    "last_seen_at": row_data["last_seen_at"],
-                                },
-                            )
-                        )
-                        await session.execute(stmt)
-                    updated_branches += 1
-                    logger.info(
-                        f"지점 {branch_id} 키워드 {len(upsert_rows)}개 업데이트"
-                    )
-
             except Exception as e:
                 logger.warning(f"지점 {branch_id} 키워드 업데이트 실패: {e}")
                 continue
 
         logger.info(f"총 {updated_branches}개 지점 키워드 업데이트 완료")
         return updated_branches
+
+    async def _update_branch(
+        self,
+        session: AsyncSession,
+        branch_id: int,
+        keywords_data: dict[str, dict],
+    ) -> int:
+        """단일 지점의 키워드 업데이트.
+
+        Returns:
+            1 if updated, 0 otherwise
+        """
+        # 1. 기존 키워드 로드
+        result = await session.execute(
+            select(
+                BranchKeywordORM.keyword,
+                BranchKeywordORM.count,
+                BranchKeywordORM.last_seen_at,
+            ).where(BranchKeywordORM.branch_id == branch_id)
+        )
+
+        existing_map: dict[str, dict] = {
+            row.keyword: {
+                "count": row.count or 0,
+                "last_seen_at": _ensure_aware(row.last_seen_at),
+            }
+            for row in result.all()
+        }
+
+        # 2. 누적 집계 (배치 내 등장 횟수 합산)
+        upsert_rows = []
+        for keyword, batch_data in keywords_data.items():
+            existing = existing_map.get(keyword)
+            batch_count = batch_data["count"]
+            new_date = batch_data["last_seen_at"]
+
+            if existing:
+                new_count = existing["count"] + batch_count
+                old_date = existing["last_seen_at"]
+                if old_date and new_date:
+                    final_date = max(new_date, old_date)
+                else:
+                    final_date = new_date or old_date
+            else:
+                new_count = batch_count
+                final_date = new_date
+
+            upsert_rows.append({
+                "branch_id": branch_id,
+                "keyword": keyword,
+                "count": new_count,
+                "last_seen_at": final_date,
+            })
+
+        # 3. 배치 upsert (N개 키워드를 1번의 SQL로 처리)
+        if upsert_rows:
+            stmt = pg_insert(BranchKeywordORM.__table__).values(upsert_rows)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["branch_id", "keyword"],
+                set_={
+                    "count": stmt.excluded.count,
+                    "last_seen_at": stmt.excluded.last_seen_at,
+                },
+            )
+            await session.execute(stmt)
+            logger.info(
+                f"지점 {branch_id} 키워드 {len(upsert_rows)}개 업데이트"
+            )
+            return 1
+
+        return 0
