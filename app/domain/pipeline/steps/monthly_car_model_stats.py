@@ -112,60 +112,53 @@ class MonthlyCarModelStatsUpdater:
             if missing:
                 await self._ensure_subtag_entries(session, missing, tag_id_cache)
 
-        # 4. 기존 데이터 SELECT -> 증분 합산 -> UPSERT (개별 savepoint)
+        # 4. car_model별 배치 upsert (처리 후 즉시 메모리 해제)
+        tbl = MonthlyCarModelTagStatsORM.__table__
         saved = 0
-        for (car_model, period, tag_name), counts in groups.items():
-            car_model_id = model_id_cache.get(car_model)
-            tag_id = tag_id_cache.get(tag_name)
-            if not car_model_id or not tag_id:
+        model_names = list({k[0] for k in groups})
+
+        for model_name in model_names:
+            car_model_id = model_id_cache.get(model_name)
+            if not car_model_id:
+                continue
+
+            # 이 모델의 그룹만 추출 + 원본에서 제거 (메모리 해제)
+            model_keys = [k for k in groups if k[0] == model_name]
+            upsert_rows = []
+            for key in model_keys:
+                counts = groups.pop(key)
+                tag_id = tag_id_cache.get(key[2])  # key = (model, period, tag)
+                if not tag_id:
+                    continue
+                upsert_rows.append({
+                    "car_model_id": car_model_id,
+                    "period": key[1],
+                    "tag_id": tag_id,
+                    "positive_count": counts["positive"],
+                    "negative_count": counts["negative"],
+                    "neutral_count": counts["neutral"],
+                })
+
+            if not upsert_rows:
                 continue
 
             try:
                 async with session.begin_nested():
-                    result = await session.execute(
-                        select(MonthlyCarModelTagStatsORM)
-                        .where(MonthlyCarModelTagStatsORM.car_model_id == car_model_id)
-                        .where(MonthlyCarModelTagStatsORM.period == period)
-                        .where(MonthlyCarModelTagStatsORM.tag_id == tag_id)
-                    )
-                    existing_row = result.scalar_one_or_none()
-                    old: dict = {}
-                    if existing_row:
-                        old = {
-                            c.key: getattr(existing_row, c.key)
-                            for c in MonthlyCarModelTagStatsORM.__table__.columns
-                        }
-
-                    new_pos = (old.get("positive_count", 0) or 0) + counts["positive"]
-                    new_neg = (old.get("negative_count", 0) or 0) + counts["negative"]
-                    new_neu = (old.get("neutral_count", 0) or 0) + counts["neutral"]
-
-                    values = {
-                        "car_model_id": car_model_id,
-                        "period": period,
-                        "tag_id": tag_id,
-                        "positive_count": new_pos,
-                        "negative_count": new_neg,
-                        "neutral_count": new_neu,
-                    }
-                    stmt = (
-                        pg_insert(MonthlyCarModelTagStatsORM.__table__)
-                        .values(**values)
-                        .on_conflict_do_update(
-                            index_elements=["car_model_id", "period", "tag_id"],
-                            set_={
-                                "positive_count": values["positive_count"],
-                                "negative_count": values["negative_count"],
-                                "neutral_count": values["neutral_count"],
-                            },
-                        )
+                    stmt = pg_insert(tbl).values(upsert_rows)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=["car_model_id", "period", "tag_id"],
+                        set_={
+                            "positive_count": tbl.c.positive_count + stmt.excluded.positive_count,
+                            "negative_count": tbl.c.negative_count + stmt.excluded.negative_count,
+                            "neutral_count": tbl.c.neutral_count + stmt.excluded.neutral_count,
+                        },
                     )
                     await session.execute(stmt)
-                saved += 1
+                saved += len(upsert_rows)
             except Exception as e:
                 logger.warning(
-                    f"monthly_car_model_tag_stats upsert 실패 "
-                    f"(model={car_model}, period={period}, tag={tag_name}): {e}"
+                    f"monthly_car_model_tag_stats 배치 upsert 실패 "
+                    f"(model={model_name}): {e}"
                 )
 
         logger.info(f"monthly_car_model_tag_stats 저장 완료: {saved}건")
