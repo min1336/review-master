@@ -1841,6 +1841,7 @@
             <div class="table-container">
                 <table>
                     <colgroup>
+                        <col style="width: 36px;"> <!-- Checkbox -->
                         <col style="width: 50px;"> <!-- Region -->
                         <col style="width: 160px;"> <!-- Name -->
                         <col style="width: 130px;"> <!-- Summary -->
@@ -1849,6 +1850,9 @@
                     </colgroup>
                     <thead>
                         <tr>
+                            <th style="width: 36px; text-align: center; padding: 8px 4px;">
+                                <input type="checkbox" id="select-all-branch" title="전체 선택" style="cursor: pointer; accent-color: var(--primary);">
+                            </th>
                             <th onclick="handleSort('region')" style="cursor: pointer;">지역 <span id="sort-icon-region"
                                     class="sort-icon"></span></th>
                             <th onclick="handleSort('branch_name')" style="cursor: pointer;">업체명 <span
@@ -1867,13 +1871,19 @@
                                 if(!tb)return;
                                 var h='';
                                 for(var i=0;i<8;i++){
-                                    h+='<tr class="skeleton-row"><td><div class="skeleton-line short" style="width:36px;height:12px;"></div></td><td><div class="skeleton-line medium" style="height:14px;margin-bottom:6px;"></div><div class="skeleton-line" style="width:50%;height:10px;"></div></td><td><div class="skeleton-line long" style="height:14px;"></div></td><td><div class="skeleton-line short" style="width:44px;height:14px;"></div></td><td><div class="skeleton-line short" style="width:36px;height:14px;"></div></td></tr>';
+                                    h+='<tr class="skeleton-row"><td></td><td><div class="skeleton-line short" style="width:36px;height:12px;"></div></td><td><div class="skeleton-line medium" style="height:14px;margin-bottom:6px;"></div><div class="skeleton-line" style="width:50%;height:10px;"></div></td><td><div class="skeleton-line long" style="height:14px;"></div></td><td><div class="skeleton-line short" style="width:44px;height:14px;"></div></td><td><div class="skeleton-line short" style="width:36px;height:14px;"></div></td></tr>';
                                 }
                                 tb.innerHTML=h;
                             })();
                         </script>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Batch Actions -->
+            <div id="batch-actions" style="display: none; align-items: center; justify-content: space-between; padding: 10px 16px; background: #eef2ff; border-top: 1px solid var(--grey-7);">
+                <span style="font-size: 13px; color: var(--grey-2);"><strong id="selected-count">0</strong>개 업체 선택됨</span>
+                <button id="btn-batch-pdf" class="btn btn-primary btn-sm" onclick="window.dashboardHandlers.downloadBatchPDF()">일괄 리포트 생성</button>
             </div>
 
             <!-- Pagination -->
@@ -2412,6 +2422,7 @@
                 let html = '';
                 for (let i = 0; i < rowCount; i++) {
                     html += `<tr class="skeleton-row">
+                        <td></td>
                         <td><div class="skeleton-line short" style="width: 36px; height: 12px;"></div></td>
                         <td><div class="skeleton-line medium" style="width: ${60 + Math.random() * 40}%; height: 14px; margin-bottom: 6px;"></div><div class="skeleton-line" style="width: 50%; height: 10px;"></div></td>
                         <td><div class="skeleton-line long" style="height: 14px;"></div></td>
@@ -2436,7 +2447,7 @@
                 if (!tableEl) return;
 
                 if (!data || data.length === 0) {
-                    tableEl.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--grey-5);">데이터 없음</td></tr>';
+                    tableEl.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--grey-5);">데이터 없음</td></tr>';
                     return;
                 }
 
@@ -2445,6 +2456,12 @@
 
                 // Add click handlers to table rows
                 attachRowClickHandlers();
+
+                // 선택 상태 초기화
+                const selectAll = getElement('select-all-branch');
+                if (selectAll) selectAll.checked = false;
+                const batchActions = getElement('batch-actions');
+                if (batchActions) batchActions.style.display = 'none';
             }
 
             function findBestPeriod(data) {
@@ -2470,6 +2487,9 @@
 
                 return `
                 <tr class="clickable-row" data-branch-id="${row.branch_id}" data-summary="${fullSummary}" style="vertical-align: middle; cursor: pointer; transition: background-color 0.2s;">
+                    <td style="text-align: center; padding: 4px;" onclick="event.stopPropagation();">
+                        <input type="checkbox" class="branch-checkbox" data-branch-id="${row.branch_id}" onchange="window.dashboardHandlers.updateBranchSelection()" style="cursor: pointer; accent-color: var(--primary);">
+                    </td>
                     <td style="text-align: center; color: var(--grey-3); font-size: 11px;">${toMetroRegion(row.region)}</td>
                     <td>
                         <div class="branch-info">
@@ -2491,7 +2511,7 @@
                 rows.forEach(row => {
                     row.addEventListener('click', function (e) {
                         // Prevent row click if clicking on interactive elements
-                        if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.closest('a')) {
+                        if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.closest('button') || e.target.closest('a')) {
                             return;
                         }
 
@@ -2839,7 +2859,11 @@
                     loadSavedReport,
                     renderReportContent,
                     downloadReportPDF,
-                    deleteReport
+                    deleteReport,
+                    // Batch PDF handlers
+                    downloadBatchPDF,
+                    updateBranchSelection,
+                    toggleSelectAllBranch
                 };
 
                 window.handleSort = handleSort;
@@ -2874,6 +2898,11 @@
                     btnScheduler.addEventListener('click', () => {
                         window.location.href = `${BASE_PATH}/scheduler`;
                     });
+                }
+
+                const selectAllBranch = getElement('select-all-branch');
+                if (selectAllBranch) {
+                    selectAllBranch.addEventListener('change', toggleSelectAllBranch);
                 }
 
                 const searchInput = getElement('search-input');
@@ -5072,6 +5101,183 @@
 
                 const url = `${API_PREFIX}/reports/${reportState.branchId}/pdf?start_date=${reportState.startDate}&end_date=${reportState.endDate}`;
                 window.open(url, '_blank');
+            }
+
+            // ============================================================
+            // BATCH REPORT (일괄 리포트 생성 + PDF 다운로드)
+            // ============================================================
+
+            function getSelectedBranchIds() {
+                const checkboxes = document.querySelectorAll('.branch-checkbox:checked');
+                return Array.from(checkboxes).map(cb => parseInt(cb.dataset.branchId));
+            }
+
+            function updateBranchSelection() {
+                const all = document.querySelectorAll('.branch-checkbox');
+                const checked = document.querySelectorAll('.branch-checkbox:checked');
+                const batchActions = getElement('batch-actions');
+                const countEl = getElement('selected-count');
+                const selectAll = getElement('select-all-branch');
+
+                if (countEl) countEl.textContent = checked.length;
+                if (batchActions) batchActions.style.display = checked.length > 0 ? 'flex' : 'none';
+                if (selectAll) selectAll.checked = all.length > 0 && all.length === checked.length;
+            }
+
+            function toggleSelectAllBranch() {
+                const selectAll = getElement('select-all-branch');
+                if (!selectAll) return;
+                const checkboxes = document.querySelectorAll('.branch-checkbox');
+                checkboxes.forEach(cb => { cb.checked = selectAll.checked; });
+                updateBranchSelection();
+            }
+
+            async function downloadBatchPDF() {
+                const branchIds = getSelectedBranchIds();
+                if (branchIds.length === 0) {
+                    showToast('업체를 선택해주세요.', 'error');
+                    return;
+                }
+                if (branchIds.length > 30) {
+                    showToast('최대 30개까지 선택 가능합니다.', 'error');
+                    return;
+                }
+
+                const dateFilter = getDateFilter();
+                let startDate = dateFilter.from;
+                let endDate = dateFilter.to;
+
+                if (!startDate || !endDate) {
+                    const today = new Date();
+                    const oneYearAgo = new Date(today);
+                    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                    endDate = formatDateForAPI(today);
+                    startDate = formatDateForAPI(oneYearAgo);
+                }
+
+                const btn = getElement('btn-batch-pdf');
+                const originalText = btn ? btn.textContent : '';
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = `리포트 생성 중... (0/${branchIds.length})`;
+                }
+
+                try {
+                    // 1단계: 모든 업체에 비동기 생성 작업 제출
+                    const jobs = [];
+                    for (const branchId of branchIds) {
+                        try {
+                            const submitResponse = await fetchRetry(`${API_PREFIX}/reports/${branchId}/generate/async`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ start_date: startDate, end_date: endDate })
+                            });
+
+                            if (!submitResponse.ok) {
+                                const error = await submitResponse.json().catch(() => ({}));
+                                console.warn(`Branch ${branchId} 생성 요청 실패:`, error.detail);
+                                continue;
+                            }
+
+                            const submitResult = await submitResponse.json();
+                            if (submitResult.success && submitResult.data?.job_id) {
+                                jobs.push({ branchId, jobId: submitResult.data.job_id, done: false, failed: false });
+                            }
+                        } catch (e) {
+                            console.warn(`Branch ${branchId} 생성 요청 오류:`, e.message);
+                        }
+                    }
+
+                    if (jobs.length === 0) {
+                        throw new Error('리포트 생성 요청에 모두 실패했습니다.');
+                    }
+
+                    // 2단계: 모든 작업 병렬 폴링 (최대 120초)
+                    let pollCount = 0;
+                    const maxPolls = CONFIG.POLLING.MAX_POLLS;
+
+                    while (pollCount < maxPolls) {
+                        const pending = jobs.filter(j => !j.done && !j.failed);
+                        if (pending.length === 0) break;
+
+                        await new Promise(resolve => setTimeout(resolve, CONFIG.POLLING.INTERVAL_MS));
+
+                        await Promise.allSettled(pending.map(async (job) => {
+                            try {
+                                const statusResponse = await fetchRetry(
+                                    `${API_PREFIX}/reports/${job.branchId}/job/${job.jobId}`
+                                );
+                                if (!statusResponse.ok) return;
+
+                                const statusResult = await statusResponse.json();
+                                const jobData = statusResult.data;
+
+                                if (jobData.status === 'completed') {
+                                    job.done = true;
+                                } else if (jobData.status === 'failed') {
+                                    job.failed = true;
+                                    console.warn(`Branch ${job.branchId} 생성 실패:`, jobData.error_message);
+                                }
+                            } catch (e) {
+                                console.warn(`Branch ${job.branchId} 상태 조회 오류:`, e.message);
+                            }
+                        }));
+
+                        const doneCount = jobs.filter(j => j.done || j.failed).length;
+                        if (btn) {
+                            btn.textContent = `리포트 생성 중... (${doneCount}/${jobs.length})`;
+                        }
+                        pollCount++;
+                    }
+
+                    const completedJobs = jobs.filter(j => j.done);
+                    if (completedJobs.length === 0) {
+                        throw new Error('모든 리포트 생성에 실패했습니다. 잠시 후 다시 시도해주세요.');
+                    }
+
+                    // 3단계: 생성 완료된 리포트 ZIP 다운로드
+                    if (btn) btn.textContent = 'PDF 다운로드 중...';
+
+                    const response = await fetchRetry(`${API_PREFIX}/reports/batch-pdf`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            branch_ids: branchIds,
+                            start_date: startDate,
+                            end_date: endDate
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errData = await response.json().catch(() => ({}));
+                        throw new Error(errData.detail || 'PDF 다운로드 실패');
+                    }
+
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `AI_Reports_${startDate}_${endDate}.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+
+                    const failedCount = jobs.filter(j => j.failed).length;
+                    if (failedCount > 0) {
+                        showToast(`${completedJobs.length}개 완료, ${failedCount}개 실패`, 'warning');
+                    } else {
+                        showToast(`${completedJobs.length}개 업체 리포트 다운로드 완료`, 'success');
+                    }
+                } catch (e) {
+                    console.error('Batch report error:', e);
+                    showToast(e.message || '일괄 리포트 생성에 실패했습니다.', 'error');
+                } finally {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = originalText;
+                    }
+                }
             }
 
             async function toggleReviews(branchId) {

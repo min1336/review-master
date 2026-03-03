@@ -7,6 +7,7 @@ Router: /api/reports
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import date
 
@@ -16,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from core.timezone import date_to_utc
 from schemas.common import ApiResponseModel, api_response, validate_date_range_d
+from schemas.report import BatchPdfRequest
 from services.report_service import ReportService
 
 from ._common import resolve_period_or_dates
@@ -24,6 +26,83 @@ from .deps import get_report_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["report"])
+
+# ================================================================
+# 고정 경로 (Fixed-path routes) — path parameter 라우트보다 위에 배치
+# ================================================================
+
+
+@router.post("/batch-pdf")
+async def api_batch_download_pdf(
+    req: BatchPdfRequest,
+    service: ReportService = Depends(get_report_service),
+) -> Response:
+    """선택된 업체들의 PDF를 ZIP으로 일괄 다운로드
+
+    캐시된 리포트만 포함하며, 미생성 업체는 skipped 목록으로 반환.
+    ZIP 내 각 PDF 파일명: AI_Report_{업체명}_{기간}.pdf
+    """
+    import io
+    import zipfile
+    import urllib.parse
+
+    validate_date_range_d(req.start_date, req.end_date)
+    parsed_start = date_to_utc(req.start_date)
+    parsed_end = date_to_utc(req.end_date, end_of_day=True)
+    date_label = f"{req.start_date}_{req.end_date}"
+
+    async def _build_zip() -> bytes:
+        buf = io.BytesIO()
+        skipped = []
+
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for branch_id in req.branch_ids:
+                try:
+                    report = await service.get_saved_report(
+                        branch_id, parsed_start, parsed_end,
+                    )
+                    if report is None:
+                        skipped.append(branch_id)
+                        continue
+
+                    pdf_bytes = await service.generate_pdf(report)
+                    filename = f"AI_Report_{report.branch_name}_{date_label}.pdf"
+                    zf.writestr(filename, pdf_bytes)
+                except Exception:
+                    logger.warning("Batch PDF: branch %d 스킵 (오류)", branch_id)
+                    skipped.append(branch_id)
+
+            if skipped:
+                skip_text = f"리포트 미생성 업체 ID: {', '.join(map(str, skipped))}\n"
+                skip_text += "해당 업체는 개별 리포트를 먼저 생성해주세요."
+                zf.writestr("_skipped.txt", skip_text)
+
+        return buf.getvalue()
+
+    try:
+        zip_bytes = await asyncio.wait_for(_build_zip(), timeout=120)
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504, detail="일괄 PDF 생성 시간 초과 (120초). 선택 수를 줄여주세요.",
+        )
+
+    if len(zip_bytes) < 100:
+        raise HTTPException(
+            status_code=404,
+            detail="선택된 업체의 리포트가 모두 미생성 상태입니다. 개별 리포트를 먼저 생성해주세요.",
+        )
+
+    zip_filename = f"AI_Reports_{date_label}.zip"
+    encoded_filename = urllib.parse.quote(zip_filename)
+
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+        },
+    )
+
 
 # ================================================================
 # Path parameter 경로 (/{branch_id}/*)

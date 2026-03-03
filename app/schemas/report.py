@@ -197,6 +197,13 @@ class ReportRequest(BaseModel):
         )
 
 
+class BatchPdfRequest(BaseModel):
+    """일괄 PDF 다운로드 요청"""
+    branch_ids: list[int] = Field(..., min_length=1, max_length=30)
+    start_date: date
+    end_date: date
+
+
 # ============================================================
 # 리포트 데이터 모델
 # ============================================================
