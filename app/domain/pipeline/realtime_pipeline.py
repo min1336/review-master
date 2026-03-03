@@ -127,13 +127,13 @@ class RealtimePipeline(BasePipeline):
             )
 
         except Exception as e:
-            logger.error(f"리뷰 처리 실패: {e}")
+            logger.error(f"리뷰 처리 실패: {e}", exc_info=True)
             return RealtimeResultDTO(
                 branch_id=branch_id,
                 sentiment="neutral",
                 tags=[],
                 saved=False,
-                error=str(e),
+                error="processing_failed",
             )
 
     async def _analyze_with_content(
