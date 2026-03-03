@@ -24,9 +24,8 @@ services:
       - N8N_API_KEY
       - N8N_TEST_MODE
       - CARMORE_ADMIN_URL
-    cpus: "0.5"
-    mem_limit: "500m"
-    memswap_limit: "1g"
+    cpus: "1.0"
+    mem_limit: "1024m"
     networks:
       - n8n_network
 
