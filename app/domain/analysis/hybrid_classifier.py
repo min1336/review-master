@@ -34,6 +34,7 @@ from .absa import RuleBasedABSA
 from core.constants import (
     CONTEXT_WINDOW_SIZE,
     EMBEDDING_MODEL,
+    LIGHTWEIGHT_MODE,
     SIMILARITY_THRESHOLD,
 )
 
@@ -72,27 +73,44 @@ class HybridClassifier:
         model_name: str | None = None,
         similarity_threshold: float = DEFAULT_THRESHOLD,
         lazy_load: bool = True,
+        embedding_enabled: bool | None = None,
     ):
         """
         Args:
             model_name: FastEmbed 모델명 (ONNX 기반)
             similarity_threshold: 최소 유사도 임계값 (미만이면 '기타')
             lazy_load: True면 첫 사용 시 모델 로드
+            embedding_enabled: 임베딩 사용 여부 (None이면 LIGHTWEIGHT_MODE에 따름)
         """
         self.model_name = model_name or self.DEFAULT_MODEL
         self.similarity_threshold = similarity_threshold
+        self._embedding_enabled = not LIGHTWEIGHT_MODE if embedding_enabled is None else embedding_enabled
 
         # ABSA
         self._absa = RuleBasedABSA()
+
+        # 규칙 기반 역인덱스 — O(1) 정확/어간 매칭, O(N) 부분문자열 폴백
+        self._rule_exact_map: dict[str, str] = {}
+        self._rule_substr_pairs: list[tuple[str, str]] = []
+        for tag, kws in RULE_BASED_TAG_MAPPING.items():
+            for rule_kw in kws:
+                if rule_kw not in self._rule_exact_map:
+                    self._rule_exact_map[rule_kw] = tag
+                self._rule_substr_pairs.append((rule_kw, tag))
 
         # 임베딩 관련
         self._model = None
         self._tag_manager: TagEmbeddingManager | None = None
         self._tag_embeddings: dict[str, np.ndarray] | None = None
         self._tag_names: list[str] | None = None
+        self._tag_matrix: np.ndarray | None = None
+        self._tag_matrix_normalized: np.ndarray | None = None
         self._initialized = False
 
-        if not lazy_load:
+        if not self._embedding_enabled:
+            self._initialized = True
+            logger.info("HybridClassifier: 경량 모드 (임베딩 비활성화)")
+        elif not lazy_load:
             self._initialize_embedding()
 
     def _initialize_embedding(self) -> bool:
@@ -115,6 +133,11 @@ class HybridClassifier:
             self._tag_manager = TagEmbeddingManager(model=self._model)
             self._tag_embeddings = self._tag_manager.get_or_compute()
             self._tag_names = list(self._tag_embeddings.keys())
+            self._tag_matrix = np.array(
+                [self._tag_embeddings[tag] for tag in self._tag_names]
+            )
+            tag_norms = np.linalg.norm(self._tag_matrix, axis=1, keepdims=True)
+            self._tag_matrix_normalized = self._tag_matrix / (tag_norms + 1e-9)
 
             self._initialized = True
             logger.info("HybridClassifier 초기화 완료")
@@ -154,19 +177,32 @@ class HybridClassifier:
     # =========================================================================
 
     def _check_rule_based_mapping(self, keyword: str) -> tuple[str, float] | None:
-        """규칙 기반 태그 매핑 확인 (임베딩보다 우선)
+        """규칙 기반 태그 매핑 확인 (역인덱스 사용)
 
         매칭 전략:
-        1. 정확 일치 (keyword == rule_kw)
-        2. 부분 문자열 일치 (rule_kw in keyword)
-        3. 어간 일치 (extract_stem(keyword) == rule_kw)
+        1. 정확 일치 — O(1) dict lookup
+        2. 어간 일치 — O(1) dict lookup
+        3. 부분 문자열 일치 — O(N) 폴백 (드문 경로)
         """
         keyword_lower = keyword.lower().strip()
+
+        # O(1) 정확 일치
+        tag = self._rule_exact_map.get(keyword_lower)
+        if tag:
+            return (tag, 1.0)
+
+        # O(1) 어간 일치
         keyword_stem = extract_stem(keyword_lower)
-        for tag, keywords in RULE_BASED_TAG_MAPPING.items():
-            for rule_kw in keywords:
-                if keyword_lower == rule_kw or rule_kw in keyword_lower or keyword_stem == rule_kw:
-                    return (tag, 1.0)
+        if keyword_stem:
+            tag = self._rule_exact_map.get(keyword_stem)
+            if tag:
+                return (tag, 1.0)
+
+        # O(N) 부분 문자열 폴백
+        for rule_kw, tag in self._rule_substr_pairs:
+            if rule_kw in keyword_lower:
+                return (tag, 1.0)
+
         return None
 
     def _cosine_similarity(self, vec1: np.ndarray, vec2: np.ndarray) -> float:
@@ -207,6 +243,10 @@ class HybridClassifier:
         rule_result = self._check_rule_based_mapping(keyword)
         if rule_result:
             return rule_result
+
+        # 경량 모드: 규칙에 없으면 기타
+        if not self._embedding_enabled:
+            return ("기타", 0.0)
 
         # 임베딩 기반 분류
         keyword_embedding = np.array(list(self._model.embed([keyword])))[0]
@@ -262,22 +302,17 @@ class HybridClassifier:
                 embedding_indices.append(i)
                 embedding_keywords.append(kw)
 
-        if not embedding_keywords:
+        if not embedding_keywords or not self._embedding_enabled:
             return results
 
         # 배치 인코딩
         keyword_embeddings = np.array(list(self._model.embed(embedding_keywords)))
 
-        tag_matrix = np.array([self._tag_embeddings[tag] for tag in self._tag_names])
-
-        # 코사인 유사도 행렬 계산
+        # 코사인 유사도 행렬 계산 (tag_matrix_normalized는 초기화 시 캐시됨)
         kw_norms = np.linalg.norm(keyword_embeddings, axis=1, keepdims=True)
-        tag_norms = np.linalg.norm(tag_matrix, axis=1, keepdims=True)
-
         kw_normalized = keyword_embeddings / (kw_norms + 1e-9)
-        tag_normalized = tag_matrix / (tag_norms + 1e-9)
 
-        similarity_matrix = np.dot(kw_normalized, tag_normalized.T)
+        similarity_matrix = np.dot(kw_normalized, self._tag_matrix_normalized.T)
 
         for idx, orig_idx in enumerate(embedding_indices):
             scores = similarity_matrix[idx]
@@ -483,6 +518,9 @@ class HybridClassifier:
     def get_tag_names(self) -> list[str]:
         """태그 그룹명 목록 반환"""
         self._ensure_initialized()
+        if self._tag_names is None:
+            from .patterns import TAG_REGISTRY
+            return list(TAG_REGISTRY.keys())
         return self._tag_names.copy()
 
     def get_tag_color(self, tag_name: str) -> str:

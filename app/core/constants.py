@@ -5,6 +5,13 @@
 한 곳에서 관리합니다.
 """
 
+import os
+
+# -- 파이프라인 모드 --
+# LIGHTWEIGHT_MODE=true → 임베딩 모델 비활성화 (메모리 ~360MB, 512MB 컨테이너용)
+# LIGHTWEIGHT_MODE=false (기본) → 전체 모델 로드 (메모리 ~1GB, 2GB+ 컨테이너용)
+LIGHTWEIGHT_MODE = os.getenv("LIGHTWEIGHT_MODE", "false").lower() in ("true", "1", "yes")
+
 # -- 임베딩 / 분류 --
 EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 SIMILARITY_THRESHOLD = 0.35

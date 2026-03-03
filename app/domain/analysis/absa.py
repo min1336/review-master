@@ -80,12 +80,22 @@ class RuleBasedABSA:
         "빨랐": ("배달", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
     }
 
-    # 긍정 키워드 + 없다 → 부정
+    # 긍정 키워드 + 없다 → 부정 (사전 컴파일)
     POSITIVE_NEGATION_PATTERNS = [
-        (r"친절.{0,5}없", "negative"),
-        (r"설명.{0,5}없", "negative"),
-        (r"안내.{0,5}없", "negative"),
-        (r"배려.{0,5}없", "negative"),
+        (re.compile(r"친절.{0,5}없"), "negative"),
+        (re.compile(r"설명.{0,5}없"), "negative"),
+        (re.compile(r"안내.{0,5}없"), "negative"),
+        (re.compile(r"배려.{0,5}없"), "negative"),
+    ]
+
+    # 부정어 + "없" 이중부정 패턴 (사전 컴파일 — 루프 내 동적 re.search 제거)
+    _NEG_ABSENCE_PATTERNS: list[tuple[str, re.Pattern]] = [
+        (kw, re.compile(rf"{kw}.{{0,10}}없"))
+        for kw in [
+            "불편", "불만", "문제", "걱정", "아쉬", "냄새", "흠",
+            "나쁜", "부담", "탈", "고장", "실망", "불안", "위험",
+            "부족", "어려", "힘들",
+        ]
     ]
 
     def __init__(self, chunker: ClauseChunker | None = None):
@@ -222,9 +232,12 @@ class RuleBasedABSA:
         # 2. 명확한 부정 패턴 선체크 (불친절, 비싸 등 접두사형 부정)
         strong_neg_count = sum(1 for p in STRONG_NEGATIVE_KEYWORDS if p in text)
 
+        # POSITIVE_REGEX 결과 캐시 (중복 호출 방지)
+        _pos_words_cache = POSITIVE_REGEX.findall(text)
+
         # 명확한 부정이 있는 경우 → 부정 우선
         if strong_neg_count > 0:
-            positive_matches = len(POSITIVE_REGEX.findall(text))
+            positive_matches = len(_pos_words_cache)
             if strong_neg_count >= positive_matches:
                 confidence = min(0.95, 0.7 + 0.05 * strong_neg_count)
                 return "negative", confidence
@@ -236,7 +249,7 @@ class RuleBasedABSA:
 
         # 3. 긍정+부정 체크 (친절+없다 = 부정)
         for pattern, sentiment in self.POSITIVE_NEGATION_PATTERNS:
-            if re.search(pattern, text):
+            if pattern.search(text):
                 return sentiment, 0.9
 
         # 4. SHORT REVIEW BOOST: 30자 미만 + 명확한 긍정어 → 높은 confidence
@@ -272,13 +285,8 @@ class RuleBasedABSA:
 
         # "없" 특수 처리 - 부정 키워드 + 없 → 긍정 전환 (이중부정)
         if "없" in text:
-            neg_keywords = [
-                "불편", "불만", "문제", "걱정", "아쉬", "냄새", "흠",
-                "나쁜", "부담", "탈", "고장", "실망", "불안", "위험",
-                "부족", "어려", "힘들",
-            ]
-            for nk in neg_keywords:
-                if nk in text and re.search(rf"{nk}.{{0,10}}없", text):
+            for nk, pattern in self._NEG_ABSENCE_PATTERNS:
+                if nk in text and pattern.search(text):
                     positive_matches += 1
                     negative_matches = max(0, negative_matches - 1)
 
@@ -287,7 +295,7 @@ class RuleBasedABSA:
             base_confidence = 0.6 + 0.1 * (positive_matches - negative_matches)
 
             # REPETITION DETECTION: Check for repeated positive words
-            positive_words = POSITIVE_REGEX.findall(text)
+            positive_words = _pos_words_cache
             unique_words = set(positive_words)
             repetition_ratio = len(positive_words) / max(len(unique_words), 1)
 
