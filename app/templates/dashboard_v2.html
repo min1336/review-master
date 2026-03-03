@@ -2100,6 +2100,7 @@
                     from: null,
                     to: null
                 },
+                selectedBranches: new Set(),
                 editMode: {
                     isActive: false,
                     selectedTags: [],
@@ -2457,11 +2458,8 @@
                 // Add click handlers to table rows
                 attachRowClickHandlers();
 
-                // 선택 상태 초기화
-                const selectAll = getElement('select-all-branch');
-                if (selectAll) selectAll.checked = false;
-                const batchActions = getElement('batch-actions');
-                if (batchActions) batchActions.style.display = 'none';
+                // 선택 상태 복원 (페이지 전환 시 state 기반)
+                restoreBranchCheckboxes();
             }
 
             function findBestPeriod(data) {
@@ -2483,7 +2481,7 @@
 
                 const isFav = isFavorite(row.branch_id);
                 const rating = row.avg_rating ? row.avg_rating.toFixed(1) : '-';
-                const fullSummary = bestSummary ? escapeHtml(bestSummary) : '';
+                const fullSummary = bestSummary ? escapeAttr(bestSummary) : '';
 
                 return `
                 <tr class="clickable-row" data-branch-id="${row.branch_id}" data-summary="${fullSummary}" style="vertical-align: middle; cursor: pointer; transition: background-color 0.2s;">
@@ -2787,7 +2785,7 @@
                 const tableEl = getElement('summaries-table');
                 if (tableEl) {
                     const style = isError ? 'color: var(--error);' : 'color: var(--grey-5);';
-                    tableEl.innerHTML = `<tr><td colspan="5" style="text-align:center; ${style}">${escapeHtml(message)}</td></tr>`;
+                    tableEl.innerHTML = `<tr><td colspan="6" style="text-align:center; ${style}">${escapeHtml(message)}</td></tr>`;
                 }
             }
 
@@ -5108,28 +5106,60 @@
             // ============================================================
 
             function getSelectedBranchIds() {
-                const checkboxes = document.querySelectorAll('.branch-checkbox:checked');
-                return Array.from(checkboxes).map(cb => parseInt(cb.dataset.branchId));
+                return Array.from(state.selectedBranches);
             }
 
             function updateBranchSelection() {
-                const all = document.querySelectorAll('.branch-checkbox');
-                const checked = document.querySelectorAll('.branch-checkbox:checked');
+                const checkboxes = document.querySelectorAll('.branch-checkbox');
+                checkboxes.forEach(cb => {
+                    const id = parseInt(cb.dataset.branchId);
+                    if (cb.checked) {
+                        state.selectedBranches.add(id);
+                    } else {
+                        state.selectedBranches.delete(id);
+                    }
+                });
+
                 const batchActions = getElement('batch-actions');
                 const countEl = getElement('selected-count');
                 const selectAll = getElement('select-all-branch');
 
-                if (countEl) countEl.textContent = checked.length;
-                if (batchActions) batchActions.style.display = checked.length > 0 ? 'flex' : 'none';
-                if (selectAll) selectAll.checked = all.length > 0 && all.length === checked.length;
+                if (countEl) countEl.textContent = state.selectedBranches.size;
+                if (batchActions) batchActions.style.display = state.selectedBranches.size > 0 ? 'flex' : 'none';
+                if (selectAll && checkboxes.length > 0) {
+                    selectAll.checked = Array.from(checkboxes).every(cb => cb.checked);
+                }
             }
 
             function toggleSelectAllBranch() {
                 const selectAll = getElement('select-all-branch');
                 if (!selectAll) return;
                 const checkboxes = document.querySelectorAll('.branch-checkbox');
-                checkboxes.forEach(cb => { cb.checked = selectAll.checked; });
+                checkboxes.forEach(cb => {
+                    cb.checked = selectAll.checked;
+                    const id = parseInt(cb.dataset.branchId);
+                    if (selectAll.checked) {
+                        state.selectedBranches.add(id);
+                    } else {
+                        state.selectedBranches.delete(id);
+                    }
+                });
                 updateBranchSelection();
+            }
+
+            function restoreBranchCheckboxes() {
+                const checkboxes = document.querySelectorAll('.branch-checkbox');
+                checkboxes.forEach(cb => {
+                    cb.checked = state.selectedBranches.has(parseInt(cb.dataset.branchId));
+                });
+                const selectAll = getElement('select-all-branch');
+                if (selectAll) {
+                    selectAll.checked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
+                }
+                const batchActions = getElement('batch-actions');
+                if (batchActions) batchActions.style.display = state.selectedBranches.size > 0 ? 'flex' : 'none';
+                const countEl = getElement('selected-count');
+                if (countEl) countEl.textContent = state.selectedBranches.size;
             }
 
             async function downloadBatchPDF() {
@@ -5238,11 +5268,12 @@
                     // 3단계: 생성 완료된 리포트 ZIP 다운로드
                     if (btn) btn.textContent = 'PDF 다운로드 중...';
 
+                    const completedBranchIds = completedJobs.map(j => j.branchId);
                     const response = await fetchRetry(`${API_PREFIX}/reports/batch-pdf`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            branch_ids: branchIds,
+                            branch_ids: completedBranchIds,
                             start_date: startDate,
                             end_date: endDate
                         })
