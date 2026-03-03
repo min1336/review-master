@@ -285,8 +285,10 @@ class CarModelRepository:
         )
         rows = result.scalars().all()
 
+        from domain.analysis.patterns import normalize_category_name
+
         mapping: dict[int, tuple[str, str]] = {}
         for row in rows:
-            cat_name = row.category.name if row.category else ""
+            cat_name = normalize_category_name(row.category.name) if row.category else ""
             mapping[row.id] = (row.name, cat_name)
         return mapping

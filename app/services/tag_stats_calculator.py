@@ -11,7 +11,12 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from core.constants import IMPROVEMENT_NEGATIVE_RATIO, STRENGTH_POSITIVE_RATIO
-from domain.analysis.patterns import AFFILIATE_CATEGORIES
+from domain.analysis.patterns import (
+    AFFILIATE_CATEGORIES,
+    CATEGORY_NEGATIVE_LABELS,
+    CATEGORY_POSITIVE_LABELS,
+    normalize_category_name,
+)
 from schemas.report import TagRankItem
 
 if TYPE_CHECKING:
@@ -126,7 +131,9 @@ class TagStatsCalculator:
             total_neg += neg
             total_neu += neu
 
-            cat_name = self._rpc_val(row, "categoryName", "category_name", default="") or ""
+            cat_name = normalize_category_name(
+                self._rpc_val(row, "categoryName", "category_name", default="") or ""
+            )
             tag_details.append({
                 "tag_name": name, "category_name": cat_name,
                 "positive": pos, "negative": neg, "total": total,
@@ -203,7 +210,7 @@ class TagStatsCalculator:
             total_neg += neg
 
             cat_info = tag_info.get("categories") or {}
-            cat_name = cat_info.get("name", "")
+            cat_name = normalize_category_name(cat_info.get("name", ""))
 
             tag_details.append({
                 "tag_name": name,
@@ -250,7 +257,8 @@ class TagStatsCalculator:
                 continue
             pos_ratio = round(stats["positive"] / stats["total"] * 100)
             if pos_ratio >= STRENGTH_POSITIVE_RATIO:
-                strengths.append(f"{cat_name}({pos_ratio}%)")
+                label = CATEGORY_POSITIVE_LABELS.get(cat_name, cat_name)
+                strengths.append(f"{label}({pos_ratio}%)")
                 strengths_detail.append({"category_name": cat_name, "ratio": pos_ratio})
             if len(strengths) >= 3:
                 break
@@ -267,7 +275,8 @@ class TagStatsCalculator:
                 continue
             neg_ratio = round(stats["negative"] / stats["total"] * 100)
             if neg_ratio >= IMPROVEMENT_NEGATIVE_RATIO:
-                improvements.append(f"{cat_name}({neg_ratio}%)")
+                label = CATEGORY_NEGATIVE_LABELS.get(cat_name, cat_name)
+                improvements.append(f"{label}({neg_ratio}%)")
                 improvements_detail.append({"category_name": cat_name, "ratio": neg_ratio})
             if len(improvements) >= 3:
                 break

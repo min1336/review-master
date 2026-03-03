@@ -101,17 +101,21 @@ class TestTagRegistryMapping:
             assert actual == expected, f"'{tag_name}' (group={group}) tag_type 불일치"
 
     def test_total_tag_count(self):
-        """전체 매핑된 태그 수 = 카테고리 수 + 서브태그 수"""
+        """전체 매핑된 태그 수 = 고유 키 수 (카테고리명과 서브태그명 중복 제거)"""
         from domain.analysis.patterns import TAG_REGISTRY
 
         tag_to_cat, _ = self._build_mappings()
 
-        expected_count = len(TAG_REGISTRY)
-        for cat_meta in TAG_REGISTRY.values():
-            expected_count += len(cat_meta.tags)
+        # 카테고리명과 서브태그명이 같은 경우(외관, 가격, 청결) dict 키가 충돌하므로
+        # set으로 고유 키 수를 계산
+        expected_names: set[str] = set()
+        for cat_name, cat_meta in TAG_REGISTRY.items():
+            expected_names.add(cat_name)
+            for sub_tag_name in cat_meta.tags:
+                expected_names.add(sub_tag_name)
 
-        assert len(tag_to_cat) == expected_count, (
-            f"매핑 수 불일치: {len(tag_to_cat)} vs 예상 {expected_count}"
+        assert len(tag_to_cat) == len(expected_names), (
+            f"매핑 수 불일치: {len(tag_to_cat)} vs 예상 {len(expected_names)}"
         )
 
     def test_known_vehicle_category_present(self):

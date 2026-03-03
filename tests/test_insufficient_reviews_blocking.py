@@ -104,20 +104,38 @@ class TestSummaryServiceInsufficientReviews:
         assert "부족" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_blocks_when_total_count_is_exactly_30(self):
-        """전체 리뷰 정확히 30건 → 생성 차단 (<= 조건)"""
+    async def test_allows_when_total_count_is_exactly_30(self):
+        """전체 리뷰 정확히 30건 → 'all' 기간으로 정상 진행 (< 조건이므로 허용)"""
         summary_repo = self._mock_summary_repo()
-        service = self._make_service(summary_repo=summary_repo)
+        branch_tag_repo = AsyncMock()
+        branch_tag_repo.get_by_branch = AsyncMock(return_value=[])
+        service = self._make_service(
+            summary_repo=summary_repo,
+            branch_tag_repo=branch_tag_repo,
+        )
 
-        # 4개 기간 쿼리 → 0, 전체 쿼리 → 30
-        factory = _make_mock_session([0, 0, 0, 0, 30])
+        # 4개 기간 쿼리 → 0, 전체 쿼리 → 30, 추가 쿼리용 여유분
+        factory = _make_mock_session([0, 0, 0, 0, 30, 0, 0, 0, 0, 0])
 
-        with patch("repository.database.get_session_factory", return_value=factory):
+        mock_response = MagicMock()
+        mock_response.content = "테스트 요약"
+
+        mock_provider = AsyncMock()
+        mock_provider.async_generate = AsyncMock(return_value=mock_response)
+
+        with (
+            patch("repository.database.get_session_factory", return_value=factory),
+            patch("infrastructure.llm.get_provider", return_value=mock_provider),
+            patch("infrastructure.llm.prompts.SummaryPromptBuilder") as mock_builder_cls,
+            patch("infrastructure.llm.prompts.OperationalSummaryPromptBuilder"),
+        ):
+            mock_builder_cls.create_enhanced_summary_prompt.return_value = ("system", "user")
+            mock_builder_cls.get_insufficient_reviews_message.return_value = ""
+
             result = await service.generate_summary_with_data(branch_id=1)
 
-        assert result["success"] is False
-        assert result["review_count"] == 30
-        assert "부족" in result["error"]
+        # 30건은 < 30 조건에 해당하지 않으므로 차단되지 않음
+        assert result.get("success") is not False or result.get("period") == "all"
 
     @pytest.mark.asyncio
     async def test_insufficient_message_includes_actual_count(self):

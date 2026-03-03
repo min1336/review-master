@@ -76,7 +76,7 @@ class TestReportServiceDelegation:
 
         result = await service._step_tags(branch_id=42)
 
-        tag_calculator.compute.assert_awaited_once_with(42)
+        tag_calculator.compute.assert_awaited_once_with(42, None, None)
         assert result == expected_tags
 
     @pytest.mark.asyncio
@@ -95,7 +95,7 @@ class TestReportServiceDelegation:
         data = {"branch_name": "테스트지점", "tags": []}
         result = await service._step_ai(data)
 
-        ai_generator.generate_all.assert_awaited_once_with(data)
+        ai_generator.generate_all.assert_awaited_once_with(data, report_config=None)
         assert result == expected_ai
 
     @pytest.mark.asyncio

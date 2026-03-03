@@ -668,6 +668,24 @@ VEHICLE_CATEGORIES: set[str] = {
     name for name, cat in TAG_REGISTRY.items() if cat.group == "vehicle"
 }
 
+# 구버전 카테고리명 → 현재명 매핑 (DB 마이그레이션 009 미적용 호환)
+LEGACY_CATEGORY_MAP: dict[str, str] = {
+    "직원이 친절함": "직원친절",
+    "차량외관이 좋음": "외관",
+    "가격이 저렴함": "가격",
+    "차량이 청결함": "청결",
+    "사고 처리를 잘해줌": "사고 처리",
+    "주유비 부담 없음": "주유비",
+    "배달 서비스가 우수함": "배달",
+}
+
+
+def normalize_category_name(name: str) -> str:
+    """카테고리명 정규화 (구버전→현재 매핑)"""
+    if not name:
+        return name or ""
+    return LEGACY_CATEGORY_MAP.get(name, name)
+
 # 7개 카테고리 → 긍정/부정 표시 문장
 CATEGORY_POSITIVE_LABELS: dict[str, str] = {
     cat_name: cat.positive_label for cat_name, cat in TAG_REGISTRY.items()
