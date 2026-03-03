@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import re
+import threading
 import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -262,6 +263,7 @@ class _SearchCache:
     def __init__(self, ttl: int = _CACHE_TTL) -> None:
         self._ttl = ttl
         self._store: dict[str, tuple[float, Any]] = {}
+        self._lock = threading.Lock()
 
     @staticmethod
     def _make_key(params: dict) -> str:
@@ -270,23 +272,24 @@ class _SearchCache:
 
     def get(self, params: dict) -> Any | None:
         key = self._make_key(params)
-        entry = self._store.get(key)
-        if entry is None:
-            return None
-        ts, value = entry
-        if time.time() - ts > self._ttl:
-            del self._store[key]
-            return None
-        return value
+        with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            ts, value = entry
+            if time.time() - ts > self._ttl:
+                del self._store[key]
+                return None
+            return value
 
     def set(self, params: dict, value: Any) -> None:
         key = self._make_key(params)
         now = time.time()
-        # 만료된 항목 항상 정리
-        self._store = {
-            k: v for k, v in self._store.items() if now - v[0] <= self._ttl
-        }
-        self._store[key] = (time.time(), value)
+        with self._lock:
+            self._store = {
+                k: v for k, v in self._store.items() if now - v[0] <= self._ttl
+            }
+            self._store[key] = (now, value)
 
 
 _DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -473,6 +476,10 @@ class AthenaClient:
         Returns:
             리뷰 딕셔너리 리스트
         """
+        if not isinstance(since, datetime):
+            raise TypeError(f"since must be datetime, got {type(since)}")
+        if until is not None and not isinstance(until, datetime):
+            raise TypeError(f"until must be datetime, got {type(until)}")
         safe_since = since.strftime("%Y-%m-%d %H:%M:%S")
         query = REVIEW_QUERY.format(since=safe_since)
 
@@ -488,7 +495,7 @@ class AthenaClient:
             query += f"\nLIMIT {int(limit)}"
 
         logger.info(f"Athena 쿼리 실행: since={since}, until={until}")
-        print(f"[DEBUG] Athena 쿼리:\n{query[:500]}...")
+        logger.debug("Athena 쿼리 (처음 500자): %s...", query[:500])
 
         try:
             result = self._execute_query(query)
