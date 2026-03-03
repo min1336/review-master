@@ -75,67 +75,76 @@ class MonthlyStatsUpdater:
         if not groups:
             return 0
 
-        # 기존 데이터 조회 -> 증분 합산
-        saved = 0
-        for (branch_id, period), g in groups.items():
-            try:
-                async with session.begin_nested():
-                    result = await session.execute(
-                        select(MonthlyRatingStatsORM)
-                        .where(MonthlyRatingStatsORM.branch_id == branch_id)
-                        .where(MonthlyRatingStatsORM.period == period)
-                    )
-                    existing_row = result.scalar_one_or_none()
-                    old: dict = {}
-                    if existing_row:
-                        old = {
-                            c.key: getattr(existing_row, c.key)
-                            for c in MonthlyRatingStatsORM.__table__.columns
-                        }
-
-                    old_review_count = old.get("review_count", 0) or 0
-                    new_review_count = old_review_count + g["review_count"]
-
-                    avg_service = self._incremental_avg(
-                        old.get("avg_rating_service"), old_review_count,
-                        g["sum_service"], g["cnt_service"],
-                    )
-                    avg_car = self._incremental_avg(
-                        old.get("avg_rating_car"), old_review_count,
-                        g["sum_car"], g["cnt_car"],
-                    )
-                    avg_conv = self._incremental_avg(
-                        old.get("avg_rating_convenience"), old_review_count,
-                        g["sum_convenience"], g["cnt_convenience"],
-                    )
-
-                    values = {
-                        "branch_id": branch_id,
-                        "period": period,
-                        "avg_rating_service": avg_service,
-                        "avg_rating_car": avg_car,
-                        "avg_rating_convenience": avg_conv,
-                        "review_count": new_review_count,
-                    }
-                    stmt = (
-                        pg_insert(MonthlyRatingStatsORM.__table__)
-                        .values(**values)
-                        .on_conflict_do_update(
-                            index_elements=["branch_id", "period"],
-                            set_={
-                                "avg_rating_service": values["avg_rating_service"],
-                                "avg_rating_car": values["avg_rating_car"],
-                                "avg_rating_convenience": values["avg_rating_convenience"],
-                                "review_count": values["review_count"],
-                            },
-                        )
-                    )
-                    await session.execute(stmt)
-                saved += 1
-            except Exception as e:
-                logger.warning(
-                    f"monthly_rating_stats upsert 실패 (branch={branch_id}, period={period}): {e}"
+        # 기존 데이터 일괄 조회 (1회 SELECT)
+        tbl = MonthlyRatingStatsORM.__table__
+        all_keys = list(groups.keys())
+        existing_map: dict[tuple[int, str], dict] = {}
+        try:
+            from sqlalchemy import tuple_
+            result = await session.execute(
+                select(
+                    MonthlyRatingStatsORM.branch_id,
+                    MonthlyRatingStatsORM.period,
+                    MonthlyRatingStatsORM.avg_rating_service,
+                    MonthlyRatingStatsORM.avg_rating_car,
+                    MonthlyRatingStatsORM.avg_rating_convenience,
+                    MonthlyRatingStatsORM.review_count,
+                ).where(
+                    tuple_(MonthlyRatingStatsORM.branch_id, MonthlyRatingStatsORM.period)
+                    .in_(all_keys)
                 )
+            )
+            for row in result.all():
+                existing_map[(row.branch_id, row.period)] = {
+                    "avg_rating_service": row.avg_rating_service,
+                    "avg_rating_car": row.avg_rating_car,
+                    "avg_rating_convenience": row.avg_rating_convenience,
+                    "review_count": row.review_count or 0,
+                }
+        except Exception as e:
+            logger.warning(f"monthly_rating_stats 배치 조회 실패: {e}")
+
+        # 증분 평균 계산 + 배치 upsert (1회 INSERT)
+        upsert_rows = []
+        for (branch_id, period), g in groups.items():
+            old = existing_map.get((branch_id, period), {})
+            old_review_count = old.get("review_count", 0) or 0
+
+            upsert_rows.append({
+                "branch_id": branch_id,
+                "period": period,
+                "avg_rating_service": self._incremental_avg(
+                    old.get("avg_rating_service"), old_review_count,
+                    g["sum_service"], g["cnt_service"],
+                ),
+                "avg_rating_car": self._incremental_avg(
+                    old.get("avg_rating_car"), old_review_count,
+                    g["sum_car"], g["cnt_car"],
+                ),
+                "avg_rating_convenience": self._incremental_avg(
+                    old.get("avg_rating_convenience"), old_review_count,
+                    g["sum_convenience"], g["cnt_convenience"],
+                ),
+                "review_count": old_review_count + g["review_count"],
+            })
+
+        saved = 0
+        if upsert_rows:
+            try:
+                stmt = pg_insert(tbl).values(upsert_rows)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["branch_id", "period"],
+                    set_={
+                        "avg_rating_service": stmt.excluded.avg_rating_service,
+                        "avg_rating_car": stmt.excluded.avg_rating_car,
+                        "avg_rating_convenience": stmt.excluded.avg_rating_convenience,
+                        "review_count": stmt.excluded.review_count,
+                    },
+                )
+                await session.execute(stmt)
+                saved = len(upsert_rows)
+            except Exception as e:
+                logger.warning(f"monthly_rating_stats 배치 upsert 실패: {e}")
 
         logger.info(f"monthly_rating_stats 저장 완료: {saved}건")
         return saved
@@ -162,55 +171,37 @@ class MonthlyStatsUpdater:
         if not groups:
             return 0
 
-        saved = 0
+        # SQL-level increment 배치 upsert (SELECT 불필요)
+        tbl = MonthlySentimentStatsORM.__table__
+        upsert_rows = []
         for (branch_id, period), counts in groups.items():
+            review_count = counts["positive"] + counts["negative"] + counts["neutral"]
+            upsert_rows.append({
+                "branch_id": branch_id,
+                "period": period,
+                "positive_count": counts["positive"],
+                "negative_count": counts["negative"],
+                "neutral_count": counts["neutral"],
+                "review_count": review_count,
+            })
+
+        saved = 0
+        if upsert_rows:
             try:
-                async with session.begin_nested():
-                    result = await session.execute(
-                        select(MonthlySentimentStatsORM)
-                        .where(MonthlySentimentStatsORM.branch_id == branch_id)
-                        .where(MonthlySentimentStatsORM.period == period)
-                    )
-                    existing_row = result.scalar_one_or_none()
-                    old: dict = {}
-                    if existing_row:
-                        old = {
-                            c.key: getattr(existing_row, c.key)
-                            for c in MonthlySentimentStatsORM.__table__.columns
-                        }
-
-                    new_pos = (old.get("positive_count", 0) or 0) + counts["positive"]
-                    new_neg = (old.get("negative_count", 0) or 0) + counts["negative"]
-                    new_neu = (old.get("neutral_count", 0) or 0) + counts["neutral"]
-                    total = new_pos + new_neg + new_neu
-
-                    values = {
-                        "branch_id": branch_id,
-                        "period": period,
-                        "positive_count": new_pos,
-                        "negative_count": new_neg,
-                        "neutral_count": new_neu,
-                        "review_count": total,
-                    }
-                    stmt = (
-                        pg_insert(MonthlySentimentStatsORM.__table__)
-                        .values(**values)
-                        .on_conflict_do_update(
-                            index_elements=["branch_id", "period"],
-                            set_={
-                                "positive_count": values["positive_count"],
-                                "negative_count": values["negative_count"],
-                                "neutral_count": values["neutral_count"],
-                                "review_count": values["review_count"],
-                            },
-                        )
-                    )
-                    await session.execute(stmt)
-                saved += 1
-            except Exception as e:
-                logger.warning(
-                    f"monthly_sentiment_stats upsert 실패 (branch={branch_id}, period={period}): {e}"
+                stmt = pg_insert(tbl).values(upsert_rows)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["branch_id", "period"],
+                    set_={
+                        "positive_count": tbl.c.positive_count + stmt.excluded.positive_count,
+                        "negative_count": tbl.c.negative_count + stmt.excluded.negative_count,
+                        "neutral_count": tbl.c.neutral_count + stmt.excluded.neutral_count,
+                        "review_count": tbl.c.review_count + stmt.excluded.review_count,
+                    },
                 )
+                await session.execute(stmt)
+                saved = len(upsert_rows)
+            except Exception as e:
+                logger.warning(f"monthly_sentiment_stats 배치 upsert 실패: {e}")
 
         logger.info(f"monthly_sentiment_stats 저장 완료: {saved}건")
         return saved
@@ -256,56 +247,46 @@ class MonthlyStatsUpdater:
             logger.warning(f"tags 배치 조회 실패: {e}")
             return 0
 
+        # SQL-level increment 배치 upsert (branch별 그룹핑)
+        tbl = MonthlyTagStatsORM.__table__
         saved = 0
-        for (branch_id, period, tag_name), counts in groups.items():
-            tag_id = tag_id_cache.get(tag_name)
-            if not tag_id:
+        branch_ids = list({k[0] for k in groups})
+
+        for branch_id in branch_ids:
+            upsert_rows = []
+            branch_keys = [k for k in groups if k[0] == branch_id]
+            for key in branch_keys:
+                counts = groups.pop(key)
+                tag_id = tag_id_cache.get(key[2])
+                if not tag_id:
+                    continue
+                upsert_rows.append({
+                    "branch_id": branch_id,
+                    "period": key[1],
+                    "tag_id": tag_id,
+                    "positive_count": counts["positive"],
+                    "negative_count": counts["negative"],
+                    "neutral_count": counts["neutral"],
+                })
+
+            if not upsert_rows:
                 continue
+
             try:
-                async with session.begin_nested():
-                    result = await session.execute(
-                        select(MonthlyTagStatsORM)
-                        .where(MonthlyTagStatsORM.branch_id == branch_id)
-                        .where(MonthlyTagStatsORM.period == period)
-                        .where(MonthlyTagStatsORM.tag_id == tag_id)
-                    )
-                    existing_row = result.scalar_one_or_none()
-                    old: dict = {}
-                    if existing_row:
-                        old = {
-                            c.key: getattr(existing_row, c.key)
-                            for c in MonthlyTagStatsORM.__table__.columns
-                        }
-
-                    new_pos = (old.get("positive_count", 0) or 0) + counts["positive"]
-                    new_neg = (old.get("negative_count", 0) or 0) + counts["negative"]
-                    new_neu = (old.get("neutral_count", 0) or 0) + counts["neutral"]
-
-                    values = {
-                        "branch_id": branch_id,
-                        "period": period,
-                        "tag_id": tag_id,
-                        "positive_count": new_pos,
-                        "negative_count": new_neg,
-                        "neutral_count": new_neu,
-                    }
-                    stmt = (
-                        pg_insert(MonthlyTagStatsORM.__table__)
-                        .values(**values)
-                        .on_conflict_do_update(
-                            index_elements=["branch_id", "period", "tag_id"],
-                            set_={
-                                "positive_count": values["positive_count"],
-                                "negative_count": values["negative_count"],
-                                "neutral_count": values["neutral_count"],
-                            },
-                        )
-                    )
-                    await session.execute(stmt)
-                saved += 1
+                stmt = pg_insert(tbl).values(upsert_rows)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["branch_id", "period", "tag_id"],
+                    set_={
+                        "positive_count": tbl.c.positive_count + stmt.excluded.positive_count,
+                        "negative_count": tbl.c.negative_count + stmt.excluded.negative_count,
+                        "neutral_count": tbl.c.neutral_count + stmt.excluded.neutral_count,
+                    },
+                )
+                await session.execute(stmt)
+                saved += len(upsert_rows)
             except Exception as e:
                 logger.warning(
-                    f"monthly_tag_stats upsert 실패 (branch={branch_id}, period={period}, tag={tag_name}): {e}"
+                    f"monthly_tag_stats 배치 upsert 실패 (branch={branch_id}): {e}"
                 )
 
         logger.info(f"monthly_tag_stats 저장 완료: {saved}건")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import gc
 import logging
 import time
@@ -70,7 +71,9 @@ class UnifiedPipeline:
             # Step 1: 전처리 + 키워드 + 감정 + 태그 분류 (동기)
             t0 = time.monotonic()
             try:
-                processed = self.preprocessor.process_batch(reviews)
+                processed = await asyncio.to_thread(
+                    self.preprocessor.process_batch, reviews
+                )
                 result.add_step(PipelineStepResultDTO(
                     step_name="preprocessor", success=True,
                     input_count=len(reviews), output_count=len(processed),

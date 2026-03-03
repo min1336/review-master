@@ -18,11 +18,12 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from repository.orm_models import (
@@ -145,12 +146,12 @@ class RealtimePipeline(BasePipeline):
         Returns:
             (sentiment, tags)
         """
-        # 1. 키워드 추출
-        keywords = self.extract_keywords(text)
+        # 1. 키워드 추출 (CPU-bound → 별도 스레드)
+        keywords = await asyncio.to_thread(self.extract_keywords, text)
 
-        # 2. HybridClassifier로 태그+감정 분류 (싱글턴)
-        tag_result = self._hybrid_classifier.classify_review(
-            review=text, keywords=keywords
+        # 2. HybridClassifier로 태그+감정 분류 (CPU-bound → 별도 스레드)
+        tag_result = await asyncio.to_thread(
+            self._hybrid_classifier.classify_review, text, keywords
         )
 
         # 3. 태그별 감정 정리
@@ -172,13 +173,14 @@ class RealtimePipeline(BasePipeline):
 
             tags.append({"name": tag_name, "sentiment": tag_sentiment})
 
-        # 4. 전체 감정 결정 (BasePipeline 통합 분석 -- 배치와 동일 경로)
-        final_sentiment, _ = self.analyze_sentiment_with_ratings(
-            text=text,
-            keywords=keywords,
-            rating_service=ratings.get("service"),
-            rating_car=ratings.get("car"),
-            rating_convenience=ratings.get("convenience"),
+        # 4. 전체 감정 결정 (CPU-bound → 별도 스레드)
+        final_sentiment, _ = await asyncio.to_thread(
+            self.analyze_sentiment_with_ratings,
+            text,
+            keywords,
+            ratings.get("service"),
+            ratings.get("car"),
+            ratings.get("convenience"),
         )
 
         return final_sentiment, tags
@@ -258,49 +260,32 @@ class RealtimePipeline(BasePipeline):
     async def _increment_sentiment_stats(
         self, session: AsyncSession, branch_id: int, sentiment: str
     ) -> None:
-        """monthly_sentiment_stats 증분 업데이트 (현재 월)"""
+        """monthly_sentiment_stats SQL-level 증분 업데이트 (SELECT 불필요)"""
         from datetime import datetime
 
         period = datetime.now().strftime("%Y-%m")
-
-        result = await session.execute(
-            select(MonthlySentimentStatsORM)
-            .where(MonthlySentimentStatsORM.branch_id == branch_id)
-            .where(MonthlySentimentStatsORM.period == period)
-        )
-        existing_row = result.scalar_one_or_none()
+        tbl = MonthlySentimentStatsORM.__table__
 
         pos_delta = 1 if sentiment == "positive" else 0
         neg_delta = 1 if sentiment == "negative" else 0
         neu_delta = 1 if sentiment == "neutral" else 0
 
-        if existing_row:
-            new_pos = (existing_row.positive_count or 0) + pos_delta
-            new_neg = (existing_row.negative_count or 0) + neg_delta
-            new_neu = (existing_row.neutral_count or 0) + neu_delta
-        else:
-            new_pos, new_neg, new_neu = pos_delta, neg_delta, neu_delta
-
-        values = {
-            "branch_id": branch_id,
-            "period": period,
-            "positive_count": new_pos,
-            "negative_count": new_neg,
-            "neutral_count": new_neu,
-            "review_count": new_pos + new_neg + new_neu,
-        }
-        stmt = (
-            pg_insert(MonthlySentimentStatsORM.__table__)
-            .values(**values)
-            .on_conflict_do_update(
-                index_elements=["branch_id", "period"],
-                set_={
-                    "positive_count": values["positive_count"],
-                    "negative_count": values["negative_count"],
-                    "neutral_count": values["neutral_count"],
-                    "review_count": values["review_count"],
-                },
-            )
+        stmt = pg_insert(tbl).values(
+            branch_id=branch_id,
+            period=period,
+            positive_count=pos_delta,
+            negative_count=neg_delta,
+            neutral_count=neu_delta,
+            review_count=1,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["branch_id", "period"],
+            set_={
+                "positive_count": tbl.c.positive_count + stmt.excluded.positive_count,
+                "negative_count": tbl.c.negative_count + stmt.excluded.negative_count,
+                "neutral_count": tbl.c.neutral_count + stmt.excluded.neutral_count,
+                "review_count": tbl.c.review_count + stmt.excluded.review_count,
+            },
         )
         await session.execute(stmt)
 
@@ -329,58 +314,32 @@ class RealtimePipeline(BasePipeline):
         tag_id: int,
         sentiment: str,
     ) -> None:
-        """branch_tags 증분 업데이트 (UPSERT)"""
-        # 현재 값 조회
-        result = await session.execute(
-            select(BranchTagORM)
-            .where(BranchTagORM.branch_id == branch_id)
-            .where(BranchTagORM.tag_id == tag_id)
-            .where(BranchTagORM.period_type == "all")
+        """branch_tags SQL-level 증분 업데이트 (SELECT 불필요)"""
+        bt_tbl = BranchTagORM.__table__
+
+        pos_delta = 1 if sentiment == "positive" else 0
+        neg_delta = 1 if sentiment == "negative" else 0
+
+        stmt = pg_insert(bt_tbl).values(
+            branch_id=branch_id,
+            tag_id=tag_id,
+            period_type="all",
+            positive_count=pos_delta,
+            negative_count=neg_delta,
+            neutral_count=0,
+            count=1,
+            weighted_score=1.0,
         )
-        existing_row = result.scalar_one_or_none()
-
-        if existing_row:
-            # UPDATE (증분)
-            positive = existing_row.positive_count or 0
-            negative = existing_row.negative_count or 0
-            count = existing_row.count or 0
-            weighted = existing_row.weighted_score or 0.0
-
-            if sentiment == "positive":
-                positive += 1
-            elif sentiment == "negative":
-                negative += 1
-
-            await session.execute(
-                update(BranchTagORM)
-                .where(BranchTagORM.branch_id == branch_id)
-                .where(BranchTagORM.tag_id == tag_id)
-                .where(BranchTagORM.period_type == "all")
-                .values(
-                    positive_count=positive,
-                    negative_count=negative,
-                    count=count + 1,
-                    weighted_score=weighted + 1.0,
-                )
-            )
-        else:
-            # INSERT (신규)
-            positive = 1 if sentiment == "positive" else 0
-            negative = 1 if sentiment == "negative" else 0
-
-            stmt = (
-                pg_insert(BranchTagORM.__table__)
-                .values(
-                    branch_id=branch_id,
-                    tag_id=tag_id,
-                    period_type="all",
-                    positive_count=positive,
-                    negative_count=negative,
-                    count=1,
-                    weighted_score=1.0,
-                )
-            )
-            await session.execute(stmt)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["branch_id", "tag_id", "period_type"],
+            set_={
+                "positive_count": bt_tbl.c.positive_count + stmt.excluded.positive_count,
+                "negative_count": bt_tbl.c.negative_count + stmt.excluded.negative_count,
+                "count": bt_tbl.c.count + stmt.excluded.count,
+                "weighted_score": func.coalesce(bt_tbl.c.weighted_score, 0.0) + stmt.excluded.weighted_score,
+            },
+        )
+        await session.execute(stmt)
 
     # BasePipeline의 추상 메서드 구현
     async def run(self, *args, **kwargs):

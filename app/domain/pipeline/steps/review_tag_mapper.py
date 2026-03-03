@@ -76,25 +76,22 @@ class ReviewTagMapper:
         if not upsert_rows:
             return 0
 
-        # 3. 배치 upsert (500건 단위)
+        # 3. 진정한 배치 upsert (500건 단위 — 1 SQL per batch)
+        tbl = ReviewTagMappingORM.__table__
         saved = 0
         batch_size = 500
         for i in range(0, len(upsert_rows), batch_size):
             batch = upsert_rows[i : i + batch_size]
             try:
-                for row_data in batch:
-                    stmt = (
-                        pg_insert(ReviewTagMappingORM.__table__)
-                        .values(**row_data)
-                        .on_conflict_do_update(
-                            index_elements=["review_id", "tag_id", "sentiment"],
-                            set_={
-                                "matched_keyword": row_data["matched_keyword"],
-                                "source": row_data["source"],
-                            },
-                        )
-                    )
-                    await session.execute(stmt)
+                stmt = pg_insert(tbl).values(batch)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["review_id", "tag_id", "sentiment"],
+                    set_={
+                        "matched_keyword": stmt.excluded.matched_keyword,
+                        "source": stmt.excluded.source,
+                    },
+                )
+                await session.execute(stmt)
                 saved += len(batch)
             except Exception as e:
                 logger.warning(f"review_tag_mappings upsert 실패 (batch {i}): {e}")

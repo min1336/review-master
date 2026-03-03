@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.decay import compute_decay
@@ -169,118 +169,62 @@ class TagAggregator:
 
         if keyword_rows:
             try:
-                for row_data in keyword_rows:
-                    stmt = (
-                        pg_insert(KeywordMappingORM.__table__)
-                        .values(**row_data)
-                        .on_conflict_do_update(
-                            index_elements=["keyword"],
-                            set_={
-                                "tag_id": row_data["tag_id"],
-                                "is_auto": row_data["is_auto"],
-                            },
-                        )
-                    )
-                    await session.execute(stmt)
+                kw_tbl = KeywordMappingORM.__table__
+                stmt = pg_insert(kw_tbl).values(keyword_rows)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["keyword"],
+                    set_={
+                        "tag_id": stmt.excluded.tag_id,
+                        "is_auto": stmt.excluded.is_auto,
+                    },
+                )
+                await session.execute(stmt)
             except Exception as e:
                 logger.warning(f"keyword_mappings 배치 upsert 실패: {e}")
 
-        # 4. branch_tags UPSERT (지점별 배치 조회 -> 메모리 증분 -> 배치 upsert)
+        # 4. branch_tags 배치 upsert (SQL-level increment — SELECT 불필요)
+        bt_tbl = BranchTagORM.__table__
         for branch_id, tag_data in branch_tag_data.items():
-            tag_ids_for_branch: list[int] = [
-                tag_id_cache[tn] for tn in tag_data if tn in tag_id_cache
-            ]
-            if not tag_ids_for_branch:
+            upsert_rows = []
+            for tag_name, counts in tag_data.items():
+                tag_id = tag_id_cache.get(tag_name)
+                if not tag_id:
+                    continue
+
+                incremental = (
+                    counts["positive_count"]
+                    + counts["negative_count"]
+                    + counts["neutral_count"]
+                )
+                weighted_delta = counts.get("weighted_delta") or float(incremental)
+
+                upsert_rows.append({
+                    "branch_id": branch_id,
+                    "tag_id": tag_id,
+                    "period_type": "all",
+                    "positive_count": counts["positive_count"],
+                    "negative_count": counts["negative_count"],
+                    "neutral_count": counts["neutral_count"],
+                    "count": incremental,
+                    "weighted_score": weighted_delta,
+                })
+
+            if not upsert_rows:
                 continue
 
             try:
-                # 지점의 기존 branch_tags를 한 번에 조회 (weighted_score 포함)
-                existing_result = await session.execute(
-                    select(
-                        BranchTagORM.tag_id,
-                        BranchTagORM.positive_count,
-                        BranchTagORM.negative_count,
-                        BranchTagORM.neutral_count,
-                        BranchTagORM.count,
-                        BranchTagORM.weighted_score,
-                    )
-                    .where(BranchTagORM.branch_id == branch_id)
-                    .where(BranchTagORM.period_type == "all")
-                    .where(BranchTagORM.tag_id.in_(tag_ids_for_branch))
+                stmt = pg_insert(bt_tbl).values(upsert_rows)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["branch_id", "tag_id", "period_type"],
+                    set_={
+                        "positive_count": bt_tbl.c.positive_count + stmt.excluded.positive_count,
+                        "negative_count": bt_tbl.c.negative_count + stmt.excluded.negative_count,
+                        "neutral_count": bt_tbl.c.neutral_count + stmt.excluded.neutral_count,
+                        "count": bt_tbl.c.count + stmt.excluded.count,
+                        "weighted_score": func.coalesce(bt_tbl.c.weighted_score, 0.0) + stmt.excluded.weighted_score,
+                    },
                 )
-
-                existing_map: dict[int, dict] = {}
-                for row in existing_result.all():
-                    existing_map[row.tag_id] = {
-                        "positive_count": row.positive_count,
-                        "negative_count": row.negative_count,
-                        "neutral_count": row.neutral_count,
-                        "count": row.count,
-                        "weighted_score": row.weighted_score,
-                    }
-
-                # 메모리에서 증분 계산 후 배치 upsert
-                for tag_name, counts in tag_data.items():
-                    tag_id = tag_id_cache.get(tag_name)
-                    if not tag_id:
-                        continue
-
-                    existing = existing_map.get(tag_id)
-                    if existing:
-                        old_pos = existing.get("positive_count", 0) or 0
-                        old_neg = existing.get("negative_count", 0) or 0
-                        old_neu = existing.get("neutral_count", 0) or 0
-                        old_count = existing.get("count", 0) or 0
-                        new_pos = old_pos + counts["positive_count"]
-                        new_neg = old_neg + counts["negative_count"]
-                        new_neu = old_neu + counts["neutral_count"]
-                    else:
-                        new_pos = counts["positive_count"]
-                        new_neg = counts["negative_count"]
-                        new_neu = counts["neutral_count"]
-                        old_count = 0
-
-                    new_total = (
-                        old_count
-                        + counts["positive_count"]
-                        + counts["negative_count"]
-                        + counts["neutral_count"]
-                    )
-
-                    existing_weighted = (existing.get("weighted_score") or 0.0) if existing else 0.0
-                    incremental = (
-                        counts["positive_count"]
-                        + counts["negative_count"]
-                        + counts["neutral_count"]
-                    )
-                    weighted_delta = counts.get("weighted_delta") or float(incremental)
-
-                    values = {
-                        "branch_id": branch_id,
-                        "tag_id": tag_id,
-                        "period_type": "all",
-                        "positive_count": new_pos,
-                        "negative_count": new_neg,
-                        "neutral_count": new_neu,
-                        "count": new_total,
-                        "weighted_score": existing_weighted + weighted_delta,
-                    }
-                    stmt = (
-                        pg_insert(BranchTagORM.__table__)
-                        .values(**values)
-                        .on_conflict_do_update(
-                            index_elements=["branch_id", "tag_id", "period_type"],
-                            set_={
-                                "positive_count": values["positive_count"],
-                                "negative_count": values["negative_count"],
-                                "neutral_count": values["neutral_count"],
-                                "count": values["count"],
-                                "weighted_score": values["weighted_score"],
-                            },
-                        )
-                    )
-                    await session.execute(stmt)
-
+                await session.execute(stmt)
             except Exception as e:
                 logger.warning(
                     f"branch_tags 업데이트 실패 (branch_id={branch_id}): {e}"
