@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import date
 
 from typing import Any
@@ -51,9 +52,10 @@ async def api_batch_download_pdf(
     parsed_end = date_to_utc(req.end_date, end_of_day=True)
     date_label = f"{req.start_date}_{req.end_date}"
 
-    async def _build_zip() -> bytes:
+    async def _build_zip() -> tuple[bytes, int]:
         buf = io.BytesIO()
-        skipped = []
+        skipped: list[int] = []
+        pdf_count = 0
 
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             for branch_id in req.branch_ids:
@@ -66,10 +68,12 @@ async def api_batch_download_pdf(
                         continue
 
                     pdf_bytes = await service.generate_pdf(report)
-                    filename = f"AI_Report_{report.branch_name}_{date_label}.pdf"
+                    safe_name = re.sub(r'[\\/:*?"<>|]', '_', report.branch_name)
+                    filename = f"AI_Report_{safe_name}_{date_label}.pdf"
                     zf.writestr(filename, pdf_bytes)
+                    pdf_count += 1
                 except Exception:
-                    logger.warning("Batch PDF: branch %d 스킵 (오류)", branch_id)
+                    logger.exception("Batch PDF: branch %d 처리 실패", branch_id)
                     skipped.append(branch_id)
 
             if skipped:
@@ -77,16 +81,16 @@ async def api_batch_download_pdf(
                 skip_text += "해당 업체는 개별 리포트를 먼저 생성해주세요."
                 zf.writestr("_skipped.txt", skip_text)
 
-        return buf.getvalue()
+        return buf.getvalue(), pdf_count
 
     try:
-        zip_bytes = await asyncio.wait_for(_build_zip(), timeout=120)
+        zip_bytes, pdf_count = await asyncio.wait_for(_build_zip(), timeout=120)
     except asyncio.TimeoutError:
         raise HTTPException(
             status_code=504, detail="일괄 PDF 생성 시간 초과 (120초). 선택 수를 줄여주세요.",
         )
 
-    if len(zip_bytes) < 100:
+    if pdf_count == 0:
         raise HTTPException(
             status_code=404,
             detail="선택된 업체의 리포트가 모두 미생성 상태입니다. 개별 리포트를 먼저 생성해주세요.",
@@ -133,44 +137,6 @@ async def api_get_review_count(
         return api_response(result)
     except Exception as e:
         logger.exception("리뷰 수 확인 오류")
-        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
-
-
-@router.get("/{branch_id}", response_model=ApiResponseModel[dict])
-async def api_get_report(
-    branch_id: int,
-    period: str | None = Query(None, pattern=r"^(all|1y|12m|6m|3m|1m)$", description="기간 프리셋 (1m/3m/6m/12m/1y/all)"),
-    start_date: date | None = Query(None, description="시작일 (YYYY-MM-DD)"),
-    end_date: date | None = Query(None, description="종료일 (YYYY-MM-DD)"),
-    service: ReportService = Depends(get_report_service),
-) -> dict[str, Any]:
-    """저장된 리포트 조회 (없으면 신규 생성)
-
-    period, start_date+end_date 모두 미지정 시 리뷰 수 기반 최적 기간을 자동 선택합니다.
-    둘 다 지정하면 period가 우선합니다.
-    """
-    auto_detected = False
-    if not period and not (start_date and end_date):
-        period = await service.resolve_recommended_period(branch_id)
-        auto_detected = True
-
-    parsed_start, parsed_end = resolve_period_or_dates(period, start_date, end_date)
-
-    try:
-        report, is_new = await service.get_or_generate_report(
-            branch_id=branch_id,
-            start_date=parsed_start,
-            end_date=parsed_end,
-        )
-        report_data = report.model_dump()
-        report_data["is_new"] = is_new
-        report_data["resolved_period"] = period
-        report_data["auto_detected"] = auto_detected
-        return api_response(report_data)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        logger.exception("리포트 조회 오류")
         raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
@@ -247,7 +213,8 @@ async def api_download_report_pdf(
 
         pdf_bytes = await service.generate_pdf(report)
 
-        filename = f"AI_Report_{report.branch_name}_{date_label}.pdf"
+        safe_name = re.sub(r'[\\/:*?"<>|]', '_', report.branch_name)
+        filename = f"AI_Report_{safe_name}_{date_label}.pdf"
         encoded_filename = urllib.parse.quote(filename)
 
         return Response(
@@ -263,4 +230,42 @@ async def api_download_report_pdf(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.exception("PDF 생성 오류")
+        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
+
+
+@router.get("/{branch_id}", response_model=ApiResponseModel[dict])
+async def api_get_report(
+    branch_id: int,
+    period: str | None = Query(None, pattern=r"^(all|1y|12m|6m|3m|1m)$", description="기간 프리셋 (1m/3m/6m/12m/1y/all)"),
+    start_date: date | None = Query(None, description="시작일 (YYYY-MM-DD)"),
+    end_date: date | None = Query(None, description="종료일 (YYYY-MM-DD)"),
+    service: ReportService = Depends(get_report_service),
+) -> dict[str, Any]:
+    """저장된 리포트 조회 (없으면 신규 생성)
+
+    period, start_date+end_date 모두 미지정 시 리뷰 수 기반 최적 기간을 자동 선택합니다.
+    둘 다 지정하면 period가 우선합니다.
+    """
+    auto_detected = False
+    if not period and not (start_date and end_date):
+        period = await service.resolve_recommended_period(branch_id)
+        auto_detected = True
+
+    parsed_start, parsed_end = resolve_period_or_dates(period, start_date, end_date)
+
+    try:
+        report, is_new = await service.get_or_generate_report(
+            branch_id=branch_id,
+            start_date=parsed_start,
+            end_date=parsed_end,
+        )
+        report_data = report.model_dump()
+        report_data["is_new"] = is_new
+        report_data["resolved_period"] = period
+        report_data["auto_detected"] = auto_detected
+        return api_response(report_data)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("리포트 조회 오류")
         raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
