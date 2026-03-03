@@ -1,31 +1,32 @@
-.PHONY: run local local-prod local-prod-stop local-prod-logs build clean
+.PHONY: run dev up down logs clean
 
-# 한 번에 빌드, 실행, 로그 확인 (Ctrl+C로 로그만 종료, 컨테이너 유지)
-run: build
-	API_IMAGE=review-api:local docker compose -f docker-compose.prod.yml up -d
+IMAGE   := review-api:local
+COMPOSE := API_IMAGE=$(IMAGE) docker compose --env-file .env.local -f docker-compose.local.yml
+
+# 로컬 개발 서버 (hot-reload)
+dev:
+	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Docker 빌드 → 실행 → 로그 (Ctrl+C로 로그만 종료)
+run: build up
 	docker logs -f review-api
 
 # Docker 이미지 빌드
 build:
-	docker build -t review-api:local .
+	docker build -t $(IMAGE) .
 
-# 로컬 개발 서버 실행
-local:
-	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# 컨테이너 백그라운드 실행
+up: build
+	$(COMPOSE) up -d
 
-# Docker 컨테이너 실행 (build 후 백그라운드 실행)
-local-prod: build
-	API_IMAGE=review-api:local docker compose -f docker-compose.prod.yml up -d
+# 컨테이너 중지
+down:
+	$(COMPOSE) down
 
-# Docker 컨테이너 중지 및 삭제
-local-prod-stop:
-	docker compose -f docker-compose.prod.yml down
+# 로그 확인
+logs:
+	$(COMPOSE) logs -f
 
-# Docker 로그 확인
-local-prod-logs:
-	docker compose -f docker-compose.prod.yml logs -f
-
-# Docker 이미지 및 컨테이너 정리
-clean:
-	docker compose -f docker-compose.prod.yml down
-	docker rmi review-api:local || true
+# 이미지 + 컨테이너 정리
+clean: down
+	docker rmi $(IMAGE) || true
