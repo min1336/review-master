@@ -79,57 +79,58 @@ class MonthlyStatsUpdater:
         saved = 0
         for (branch_id, period), g in groups.items():
             try:
-                result = await session.execute(
-                    select(MonthlyRatingStatsORM)
-                    .where(MonthlyRatingStatsORM.branch_id == branch_id)
-                    .where(MonthlyRatingStatsORM.period == period)
-                )
-                existing_row = result.scalar_one_or_none()
-                old: dict = {}
-                if existing_row:
-                    old = {
-                        c.key: getattr(existing_row, c.key)
-                        for c in MonthlyRatingStatsORM.__table__.columns
-                    }
-
-                old_review_count = old.get("review_count", 0) or 0
-                new_review_count = old_review_count + g["review_count"]
-
-                avg_service = self._incremental_avg(
-                    old.get("avg_rating_service"), old_review_count,
-                    g["sum_service"], g["cnt_service"],
-                )
-                avg_car = self._incremental_avg(
-                    old.get("avg_rating_car"), old_review_count,
-                    g["sum_car"], g["cnt_car"],
-                )
-                avg_conv = self._incremental_avg(
-                    old.get("avg_rating_convenience"), old_review_count,
-                    g["sum_convenience"], g["cnt_convenience"],
-                )
-
-                values = {
-                    "branch_id": branch_id,
-                    "period": period,
-                    "avg_rating_service": avg_service,
-                    "avg_rating_car": avg_car,
-                    "avg_rating_convenience": avg_conv,
-                    "review_count": new_review_count,
-                }
-                stmt = (
-                    pg_insert(MonthlyRatingStatsORM.__table__)
-                    .values(**values)
-                    .on_conflict_do_update(
-                        index_elements=["branch_id", "period"],
-                        set_={
-                            "avg_rating_service": values["avg_rating_service"],
-                            "avg_rating_car": values["avg_rating_car"],
-                            "avg_rating_convenience": values["avg_rating_convenience"],
-                            "review_count": values["review_count"],
-                        },
+                async with session.begin_nested():
+                    result = await session.execute(
+                        select(MonthlyRatingStatsORM)
+                        .where(MonthlyRatingStatsORM.branch_id == branch_id)
+                        .where(MonthlyRatingStatsORM.period == period)
                     )
-                )
-                await session.execute(stmt)
+                    existing_row = result.scalar_one_or_none()
+                    old: dict = {}
+                    if existing_row:
+                        old = {
+                            c.key: getattr(existing_row, c.key)
+                            for c in MonthlyRatingStatsORM.__table__.columns
+                        }
+
+                    old_review_count = old.get("review_count", 0) or 0
+                    new_review_count = old_review_count + g["review_count"]
+
+                    avg_service = self._incremental_avg(
+                        old.get("avg_rating_service"), old_review_count,
+                        g["sum_service"], g["cnt_service"],
+                    )
+                    avg_car = self._incremental_avg(
+                        old.get("avg_rating_car"), old_review_count,
+                        g["sum_car"], g["cnt_car"],
+                    )
+                    avg_conv = self._incremental_avg(
+                        old.get("avg_rating_convenience"), old_review_count,
+                        g["sum_convenience"], g["cnt_convenience"],
+                    )
+
+                    values = {
+                        "branch_id": branch_id,
+                        "period": period,
+                        "avg_rating_service": avg_service,
+                        "avg_rating_car": avg_car,
+                        "avg_rating_convenience": avg_conv,
+                        "review_count": new_review_count,
+                    }
+                    stmt = (
+                        pg_insert(MonthlyRatingStatsORM.__table__)
+                        .values(**values)
+                        .on_conflict_do_update(
+                            index_elements=["branch_id", "period"],
+                            set_={
+                                "avg_rating_service": values["avg_rating_service"],
+                                "avg_rating_car": values["avg_rating_car"],
+                                "avg_rating_convenience": values["avg_rating_convenience"],
+                                "review_count": values["review_count"],
+                            },
+                        )
+                    )
+                    await session.execute(stmt)
                 saved += 1
             except Exception as e:
                 logger.warning(
@@ -164,46 +165,47 @@ class MonthlyStatsUpdater:
         saved = 0
         for (branch_id, period), counts in groups.items():
             try:
-                result = await session.execute(
-                    select(MonthlySentimentStatsORM)
-                    .where(MonthlySentimentStatsORM.branch_id == branch_id)
-                    .where(MonthlySentimentStatsORM.period == period)
-                )
-                existing_row = result.scalar_one_or_none()
-                old: dict = {}
-                if existing_row:
-                    old = {
-                        c.key: getattr(existing_row, c.key)
-                        for c in MonthlySentimentStatsORM.__table__.columns
-                    }
-
-                new_pos = (old.get("positive_count", 0) or 0) + counts["positive"]
-                new_neg = (old.get("negative_count", 0) or 0) + counts["negative"]
-                new_neu = (old.get("neutral_count", 0) or 0) + counts["neutral"]
-                total = new_pos + new_neg + new_neu
-
-                values = {
-                    "branch_id": branch_id,
-                    "period": period,
-                    "positive_count": new_pos,
-                    "negative_count": new_neg,
-                    "neutral_count": new_neu,
-                    "review_count": total,
-                }
-                stmt = (
-                    pg_insert(MonthlySentimentStatsORM.__table__)
-                    .values(**values)
-                    .on_conflict_do_update(
-                        index_elements=["branch_id", "period"],
-                        set_={
-                            "positive_count": values["positive_count"],
-                            "negative_count": values["negative_count"],
-                            "neutral_count": values["neutral_count"],
-                            "review_count": values["review_count"],
-                        },
+                async with session.begin_nested():
+                    result = await session.execute(
+                        select(MonthlySentimentStatsORM)
+                        .where(MonthlySentimentStatsORM.branch_id == branch_id)
+                        .where(MonthlySentimentStatsORM.period == period)
                     )
-                )
-                await session.execute(stmt)
+                    existing_row = result.scalar_one_or_none()
+                    old: dict = {}
+                    if existing_row:
+                        old = {
+                            c.key: getattr(existing_row, c.key)
+                            for c in MonthlySentimentStatsORM.__table__.columns
+                        }
+
+                    new_pos = (old.get("positive_count", 0) or 0) + counts["positive"]
+                    new_neg = (old.get("negative_count", 0) or 0) + counts["negative"]
+                    new_neu = (old.get("neutral_count", 0) or 0) + counts["neutral"]
+                    total = new_pos + new_neg + new_neu
+
+                    values = {
+                        "branch_id": branch_id,
+                        "period": period,
+                        "positive_count": new_pos,
+                        "negative_count": new_neg,
+                        "neutral_count": new_neu,
+                        "review_count": total,
+                    }
+                    stmt = (
+                        pg_insert(MonthlySentimentStatsORM.__table__)
+                        .values(**values)
+                        .on_conflict_do_update(
+                            index_elements=["branch_id", "period"],
+                            set_={
+                                "positive_count": values["positive_count"],
+                                "negative_count": values["negative_count"],
+                                "neutral_count": values["neutral_count"],
+                                "review_count": values["review_count"],
+                            },
+                        )
+                    )
+                    await session.execute(stmt)
                 saved += 1
             except Exception as e:
                 logger.warning(
@@ -260,45 +262,46 @@ class MonthlyStatsUpdater:
             if not tag_id:
                 continue
             try:
-                result = await session.execute(
-                    select(MonthlyTagStatsORM)
-                    .where(MonthlyTagStatsORM.branch_id == branch_id)
-                    .where(MonthlyTagStatsORM.period == period)
-                    .where(MonthlyTagStatsORM.tag_id == tag_id)
-                )
-                existing_row = result.scalar_one_or_none()
-                old: dict = {}
-                if existing_row:
-                    old = {
-                        c.key: getattr(existing_row, c.key)
-                        for c in MonthlyTagStatsORM.__table__.columns
-                    }
-
-                new_pos = (old.get("positive_count", 0) or 0) + counts["positive"]
-                new_neg = (old.get("negative_count", 0) or 0) + counts["negative"]
-                new_neu = (old.get("neutral_count", 0) or 0) + counts["neutral"]
-
-                values = {
-                    "branch_id": branch_id,
-                    "period": period,
-                    "tag_id": tag_id,
-                    "positive_count": new_pos,
-                    "negative_count": new_neg,
-                    "neutral_count": new_neu,
-                }
-                stmt = (
-                    pg_insert(MonthlyTagStatsORM.__table__)
-                    .values(**values)
-                    .on_conflict_do_update(
-                        index_elements=["branch_id", "period", "tag_id"],
-                        set_={
-                            "positive_count": values["positive_count"],
-                            "negative_count": values["negative_count"],
-                            "neutral_count": values["neutral_count"],
-                        },
+                async with session.begin_nested():
+                    result = await session.execute(
+                        select(MonthlyTagStatsORM)
+                        .where(MonthlyTagStatsORM.branch_id == branch_id)
+                        .where(MonthlyTagStatsORM.period == period)
+                        .where(MonthlyTagStatsORM.tag_id == tag_id)
                     )
-                )
-                await session.execute(stmt)
+                    existing_row = result.scalar_one_or_none()
+                    old: dict = {}
+                    if existing_row:
+                        old = {
+                            c.key: getattr(existing_row, c.key)
+                            for c in MonthlyTagStatsORM.__table__.columns
+                        }
+
+                    new_pos = (old.get("positive_count", 0) or 0) + counts["positive"]
+                    new_neg = (old.get("negative_count", 0) or 0) + counts["negative"]
+                    new_neu = (old.get("neutral_count", 0) or 0) + counts["neutral"]
+
+                    values = {
+                        "branch_id": branch_id,
+                        "period": period,
+                        "tag_id": tag_id,
+                        "positive_count": new_pos,
+                        "negative_count": new_neg,
+                        "neutral_count": new_neu,
+                    }
+                    stmt = (
+                        pg_insert(MonthlyTagStatsORM.__table__)
+                        .values(**values)
+                        .on_conflict_do_update(
+                            index_elements=["branch_id", "period", "tag_id"],
+                            set_={
+                                "positive_count": values["positive_count"],
+                                "negative_count": values["negative_count"],
+                                "neutral_count": values["neutral_count"],
+                            },
+                        )
+                    )
+                    await session.execute(stmt)
                 saved += 1
             except Exception as e:
                 logger.warning(
