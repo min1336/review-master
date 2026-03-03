@@ -773,6 +773,7 @@ class FilterOptionsDTO(BaseModel):
     """
 
     regions: list[str] = Field(default_factory=list)
+    region_groups: dict[str, list[str]] = Field(default_factory=dict)
     companies: list[str] = Field(default_factory=list)
     branches: list[BranchOptionDTO] = Field(default_factory=list)
 

@@ -2130,48 +2130,35 @@
                 return isFavorite(id);
             }
 
-            // 지역 변환 (시/군/구 → 광역시/도)
+            // 지역 그룹 매핑 (8대 분류)
+            const REGION_GROUP_MAP = {
+                // 표준 시/도
+                '서울': '서울', '경기': '경기도', '인천': '경기도',
+                '강원': '강원도',
+                '충남': '충청도', '충북': '충청도', '대전': '충청도', '세종': '충청도',
+                '전남': '전라도', '전북': '전라도', '광주': '전라도',
+                '경남': '경상도', '경북': '경상도', '부산': '경상도', '대구': '경상도', '울산': '경상도',
+                '제주': '제주도',
+                '해외': '해외',
+                // 공항/도시명 (비표준)
+                '김포공항': '서울', '강남': '서울',
+                '인천공항': '경기도', '김포': '경기도',
+                '강릉': '강원도', '속초': '강원도',
+                '여수': '전라도', '전주': '전라도',
+                '김해공항': '경상도', '김해': '경상도', '대구공항': '경상도', '경주': '경상도',
+                '제주공항': '제주도',
+            };
+
+            function getRegionGroup(region) {
+                if (!region) return '해외';
+                const prefix = region.trim().split(' ')[0];
+                return REGION_GROUP_MAP[prefix] || '해외';
+            }
+
+            // 테이블 셀 표시용 (상세 지역)
             function toMetroRegion(region) {
                 if (!region) return '-';
-                const r = region.trim();
-
-                // "경기 평택시", "서울 강남구" 형태 처리
-                const parts = r.split(' ');
-
-                if (parts.length >= 2) {
-                    const province = parts[0]; // 광역시/도
-                    const cityOrDistrict = parts[1]; // 시/구/군
-
-                    // "시"로 끝나는 경우: "시" 제거하고 반환 (예: "평택시" → "평택")
-                    if (cityOrDistrict.endsWith('시')) {
-                        return cityOrDistrict.replace(/시$/, '');
-                    }
-
-                    // "구"나 "군"으로 끝나는 경우: 광역시/도명만 반환
-                    if (cityOrDistrict.endsWith('구') || cityOrDistrict.endsWith('군')) {
-                        // 광역시/도명에서 불필요한 접미사 제거
-                        let cityName = province
-                            .replace('특별시', '')
-                            .replace('광역시', '')
-                            .replace('특별자치시', '')
-                            .replace('특별자치도', '')
-                            .replace('도', '');
-                        return cityName;
-                    }
-                }
-
-                // 공백이 없는 경우 (예: "제주", "서울")
-                if (parts.length === 1) {
-                    let cityName = r
-                        .replace('특별시', '')
-                        .replace('광역시', '')
-                        .replace('특별자치시', '')
-                        .replace('특별자치도', '')
-                        .replace('도', '');
-                    return cityName;
-                }
-
-                return r;
+                return region.trim();
             }
 
             // State getters
@@ -2332,7 +2319,7 @@
                 });
 
                 if (filters.keyword) params.set('keyword', filters.keyword);
-                if (filters.region) params.set('region', filters.region);
+                if (filters.region) params.set('region_group', filters.region);
                 if (state.dateFilter.from) params.set('review_date_from', state.dateFilter.from);
                 if (state.dateFilter.to) params.set('review_date_to', state.dateFilter.to);
 
@@ -2985,39 +2972,35 @@
                 }
             }
 
-            // 광역시/도 → 검색 키워드 매핑
-            function getRegionSearchKey(cityName) {
-                // 시 이름을 그대로 검색 키워드로 사용
-                // 예: "평택" → "평택", "서울" → "서울"
-                return cityName;
-            }
+            // getRegionGroup()으로 대체됨 (8대 분류 매핑)
 
             async function loadRegionStatsData() {
                 try {
                     const data = await fetchRegionStats();
                     setRegionStats(data);
 
-                    // 시 단위로 집계 (toMetroRegion 사용)
-                    const cityStats = {};
+                    // 8대 분류로 집계
+                    const GROUP_ORDER = ['서울', '경기도', '강원도', '충청도', '전라도', '경상도', '제주도', '해외'];
+                    const groupStats = {};
                     data.forEach(r => {
                         if (r.region && r.region !== '미분류') {
-                            const city = toMetroRegion(r.region);
-                            if (!cityStats[city]) {
-                                cityStats[city] = { count: 0, total_reviews: 0 };
+                            const group = REGION_GROUP_MAP[r.region] || '해외';
+                            if (!groupStats[group]) {
+                                groupStats[group] = { count: 0, total_reviews: 0 };
                             }
-                            cityStats[city].count += r.count || 0;
-                            cityStats[city].total_reviews += r.total_reviews || 0;
+                            groupStats[group].count += r.count || 0;
+                            groupStats[group].total_reviews += r.total_reviews || 0;
                         }
                     });
 
                     const select = getElement('filter-region');
                     if (select) {
-                        // 지점 수 기준 정렬
-                        const sorted = Object.entries(cityStats).sort((a, b) => b[1].count - a[1].count);
-                        sorted.forEach(([city, stats]) => {
+                        GROUP_ORDER.forEach(group => {
+                            const stats = groupStats[group];
+                            if (!stats) return;
                             const opt = document.createElement('option');
-                            opt.value = getRegionSearchKey(city); // 검색용 키워드
-                            opt.textContent = `${city} (${stats.count})`;
+                            opt.value = group;
+                            opt.textContent = `${group} (${stats.count})`;
                             select.appendChild(opt);
                         });
                     }
@@ -3034,8 +3017,8 @@
 
             // 필터 조건에 맞는지 확인하는 함수
             function matchesFilters(item, filters) {
-                // 지역 필터 확인
-                if (filters.region && item.region !== filters.region) {
+                // 지역 그룹 필터 확인
+                if (filters.region && getRegionGroup(item.region) !== filters.region) {
                     return false;
                 }
 

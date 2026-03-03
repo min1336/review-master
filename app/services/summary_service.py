@@ -101,6 +101,7 @@ class SummaryService:
     async def get_summaries(
         self,
         region: str | None = None,
+        region_group: str | None = None,
         keyword: str | None = None,
         min_rating: float | None = None,
         max_rating: float | None = None,
@@ -134,6 +135,7 @@ class SummaryService:
             summaries = await self.summary_repo.search(
                 keyword=keyword,
                 region=region,
+                region_group=region_group,
                 min_rating=min_rating,
                 max_rating=max_rating,
                 min_reviews=min_reviews,
@@ -144,6 +146,7 @@ class SummaryService:
         else:
             summaries = await self.summary_repo.get_all_with_filters(
                 region=region,
+                region_group=region_group,
                 min_reviews=min_reviews,
                 limit=limit,
                 offset=offset,

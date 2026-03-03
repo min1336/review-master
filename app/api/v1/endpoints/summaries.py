@@ -27,7 +27,8 @@ router = APIRouter(tags=["summaries"])
 
 @router.get("", response_model=ApiListResponseModel[Summary])
 async def api_summaries(
-    region: str | None = Query(None, description="지역 필터"),
+    region: str | None = Query(None, description="지역 필터 (텍스트 매칭)"),
+    region_group: str | None = Query(None, description="지역 그룹 필터 (서울/경기도/강원도/충청도/전라도/경상도/제주도/해외)"),
     keyword: str | None = Query(None, description="키워드/업체명 검색"),
     min_rating: float | None = Query(None, description="최소 평점"),
     max_rating: float | None = Query(None, description="최대 평점"),
@@ -56,6 +57,7 @@ async def api_summaries(
 
     summaries = await service.get_summaries(
         region=region,
+        region_group=region_group,
         keyword=keyword,
         min_rating=min_rating,
         max_rating=max_rating,

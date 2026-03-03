@@ -1177,8 +1177,9 @@
                 allRegions = data.regions || [];
                 allBranches = data.branches || [];
 
-                // Build region mapping
-                buildRegionMapping();
+                // Build region mapping (서버 제공 8대 분류 사용)
+                regionMapping = data.region_groups || {};
+                simplifiedRegionList = Object.keys(regionMapping);
 
                 // Initialize dropdowns
                 updateRegionSelect();
@@ -1193,42 +1194,7 @@
             }
         }
 
-        // Region simplification logic
-        const METRO_CITIES = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종'];
-
-        function simplifyRegion(region) {
-            const parts = region.split(' ');
-            const province = parts[0];
-
-            // 광역시/특별시: 도시명만 반환
-            if (METRO_CITIES.includes(province)) {
-                return province;
-            }
-
-            // 제주
-            if (province === '제주') {
-                return '제주';
-            }
-
-            // 해외 등 단독 항목
-            if (parts.length === 1) {
-                return region;
-            }
-
-            // 도 지역: 시/군/구 접미사 제거
-            const city = parts.slice(1).join(' ');
-            return city.replace(/[시군구]$/, '');
-        }
-
-        function buildRegionMapping() {
-            regionMapping = {};
-            allRegions.forEach(region => {
-                const simplified = simplifyRegion(region);
-                if (!regionMapping[simplified]) regionMapping[simplified] = [];
-                regionMapping[simplified].push(region);
-            });
-            simplifiedRegionList = Object.keys(regionMapping).sort();
-        }
+        // Region grouping: 서버 API에서 region_groups로 제공 (loadFilterOptions에서 설정)
 
         // Update region dropdown (단순화)
         function updateRegionSelect() {

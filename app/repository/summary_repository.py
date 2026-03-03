@@ -39,6 +39,7 @@ class SummaryRepository(BaseRepository[Summary]):
     async def get_all_with_filters(
         self,
         region: str | None = None,
+        region_group: str | None = None,
         min_reviews: int = 0,
         limit: int = 50,
         offset: int = 0,
@@ -50,7 +51,15 @@ class SummaryRepository(BaseRepository[Summary]):
 
         if min_reviews > 0:
             stmt = stmt.where(BranchSummaryORM.review_count >= min_reviews)
-        if region:
+        if region_group:
+            from core.constants import REGION_GROUP_PREFIXES
+
+            prefixes = REGION_GROUP_PREFIXES.get(region_group, [])
+            if prefixes:
+                stmt = stmt.where(
+                    or_(*[BranchSummaryORM.region.ilike(f"{p}%") for p in prefixes])
+                )
+        elif region:
             stmt = stmt.where(BranchSummaryORM.region.ilike(f"%{region}%"))
 
         is_desc = order.lower() == "desc"
@@ -119,6 +128,7 @@ class SummaryRepository(BaseRepository[Summary]):
         self,
         keyword: str | None = None,
         region: str | None = None,
+        region_group: str | None = None,
         min_rating: float | None = None,
         max_rating: float | None = None,
         min_reviews: int = 0,
@@ -129,7 +139,15 @@ class SummaryRepository(BaseRepository[Summary]):
 
         if min_reviews > 0:
             stmt = stmt.where(BranchSummaryORM.review_count >= min_reviews)
-        if region:
+        if region_group:
+            from core.constants import REGION_GROUP_PREFIXES
+
+            prefixes = REGION_GROUP_PREFIXES.get(region_group, [])
+            if prefixes:
+                stmt = stmt.where(
+                    or_(*[BranchSummaryORM.region.ilike(f"{p}%") for p in prefixes])
+                )
+        elif region:
             stmt = stmt.where(BranchSummaryORM.region.ilike(f"%{region}%"))
         if min_rating is not None:
             stmt = stmt.where(BranchSummaryORM.avg_rating >= min_rating)

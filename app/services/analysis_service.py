@@ -108,8 +108,21 @@ class AnalysisService:
             # 지역 목록 (branches에 있는 지역만)
             regions = sorted({b.region for b in branches if b.region})
 
+            # 8대 분류 지역 그룹 생성 (필터 드롭다운용)
+            from core.constants import REGION_GROUP_MAP, REGION_GROUP_ORDER
+
+            groups: dict[str, list[str]] = {}
+            for r in regions:
+                prefix = r.split()[0] if r and r.strip() else ""
+                group = REGION_GROUP_MAP.get(prefix, "해외")
+                groups.setdefault(group, []).append(r)
+            region_groups = {
+                g: sorted(groups[g]) for g in REGION_GROUP_ORDER if g in groups
+            }
+
             return FilterOptionsDTO(
                 regions=regions,
+                region_groups=region_groups,
                 companies=companies,
                 branches=branches,
             )
