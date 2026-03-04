@@ -177,37 +177,3 @@ class ClauseChunker:
         parts = self._punctuation_regex.split(text)
         return [p.strip() for p in parts if p.strip()]
 
-    def chunk_batch(self, texts: list[str]) -> list[list[str]]:
-        """
-        배치 청킹
-
-        Args:
-            texts: 텍스트 리스트
-
-        Returns:
-            각 텍스트별 청크 리스트
-        """
-        return [self.chunk(text) for text in texts]
-
-    def chunk_with_metadata(self, text: str) -> list[dict]:
-        """
-        메타데이터와 함께 청킹
-
-        Returns:
-            [{'text': '청크내용', 'index': 0, 'start': 0, 'end': 10}, ...]
-        """
-        chunks = self.chunk(text)
-        result = []
-        current_pos = 0
-
-        for i, chunk in enumerate(chunks):
-            # 원본에서 청크 위치 찾기
-            start = text.find(chunk, current_pos)
-            if start == -1:
-                start = current_pos
-            end = start + len(chunk)
-
-            result.append({"text": chunk, "index": i, "start": start, "end": end})
-            current_pos = end
-
-        return result

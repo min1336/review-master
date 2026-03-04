@@ -262,21 +262,3 @@ class ReportJobService:
         """
         return await self.job_repo.cleanup_old_jobs(days)
 
-    async def recover_stale_jobs(self, stale_minutes: int = 30) -> int:
-        """
-        고아 작업 복구 (서버 재시작 시 호출)
-
-        processing 상태로 오래 방치된 작업들을 failed로 마킹합니다.
-        서버 재시작 시 이전에 실행 중이던 작업들은 메모리에서 사라지지만
-        DB에는 processing 상태로 남아있게 됩니다.
-
-        Args:
-            stale_minutes: 고아 작업으로 판단할 시간 (분)
-
-        Returns:
-            복구된 작업 수
-        """
-        return await self.job_repo.mark_stale_jobs_failed(
-            stale_minutes=stale_minutes,
-            error_message="서버 재시작으로 인한 작업 중단. 다시 시도해주세요.",
-        )

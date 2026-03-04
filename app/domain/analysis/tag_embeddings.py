@@ -36,10 +36,6 @@ class TagEmbeddingManager:
         self.cache_path = cache_path or self.DEFAULT_CACHE_PATH
         self._embeddings: dict[str, np.ndarray] | None = None
 
-    def set_model(self, model):
-        """모델 설정 (지연 로딩용)"""
-        self.model = model
-
     def compute_embeddings(self) -> dict[str, np.ndarray]:
         """
         각 태그 그룹의 대표 임베딩 계산
@@ -143,23 +139,7 @@ class TagEmbeddingManager:
 
         return embeddings
 
-    def get_tag_names(self) -> list:
-        """태그 그룹명 목록 반환"""
-        return list(TAG_DESCRIPTIONS.keys())
-
     def get_tag_color(self, tag_name: str) -> str:
         """태그 색상 반환"""
         return TAG_COLORS.get(tag_name, "#6b7280")  # 기본: 회색
 
-    def clear_cache(self) -> bool:
-        """캐시 삭제"""
-        self._embeddings = None
-        if os.path.exists(self.cache_path):
-            try:
-                os.remove(self.cache_path)
-                logger.info(f"캐시 삭제 완료: {self.cache_path}")
-                return True
-            except Exception as e:
-                logger.error(f"캐시 삭제 실패: {e}")
-                return False
-        return True

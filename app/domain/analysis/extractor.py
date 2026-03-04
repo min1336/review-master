@@ -121,14 +121,6 @@ class KeywordExtractor:
         """
         return [self.extract(text) for text in texts]
 
-    def add_stopwords(self, words: set[str]):
-        """불용어 추가"""
-        self.stopwords = self.stopwords | words
-
-    def remove_stopwords(self, words: set[str]):
-        """불용어 제거"""
-        self.stopwords = self.stopwords - words
-
     # ========== 청킹 지원 메서드 ==========
 
     def extract_from_chunks(self, chunks: list[str]) -> list[list[str]]:
@@ -188,22 +180,3 @@ class KeywordExtractor:
             "flat_keywords": flat_keywords,
         }
 
-    def extract_batch_with_chunking(
-        self, texts: list[str], chunker: ClauseChunker = None
-    ) -> list[dict]:
-        """
-        배치 텍스트 청킹 + 키워드 추출
-
-        Args:
-            texts: 텍스트 리스트
-            chunker: ClauseChunker 인스턴스
-
-        Returns:
-            각 텍스트별 extract_with_chunking 결과 리스트
-        """
-        if chunker is None:
-            from .chunker import ClauseChunker
-
-            chunker = ClauseChunker()
-
-        return [self.extract_with_chunking(text, chunker) for text in texts]

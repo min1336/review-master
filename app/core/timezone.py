@@ -33,13 +33,6 @@ def to_kst(dt: datetime) -> datetime:
     return dt.astimezone(KST)
 
 
-def to_utc(dt: datetime) -> datetime:
-    """naive datetime → UTC-aware 변환. 이미 aware면 UTC로 변환."""
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=UTC)
-    return dt.astimezone(UTC)
-
-
 def parse_date_str(date_str: str, end_of_day: bool = False) -> datetime:
     """
     YYYY-MM-DD 문자열 → UTC-aware datetime 변환.
@@ -70,10 +63,3 @@ def date_to_utc(d: "date", end_of_day: bool = False) -> datetime:
     return dt
 
 
-def ensure_aware(dt: datetime | None) -> datetime | None:
-    """None-safe naive→UTC 변환. None이면 None 반환."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=UTC)
-    return dt

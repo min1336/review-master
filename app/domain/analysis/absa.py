@@ -141,10 +141,6 @@ class RuleBasedABSA:
 
         return [self._to_dict(r) for r in merged]
 
-    def analyze_batch(self, reviews: list[str]) -> list[list[dict]]:
-        """배치 분석"""
-        return [self.analyze(review) for review in reviews]
-
     def _analyze_clause(self, clause: str) -> list[AspectOpinion]:
         """단일 절 분석"""
         results = []

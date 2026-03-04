@@ -196,34 +196,6 @@ class BasePipeline(ABC):
         )
         return result.sentiment, result.confidence
 
-    def process_review(self, review: ReviewDTO) -> ProcessedReviewDTO | None:
-        """
-        리뷰 처리 (전처리 + 키워드 추출 + 감정 분석)
-
-        Args:
-            review: ReviewDTO 객체
-
-        Returns:
-            ProcessedReviewDTO 또는 None (필터됨)
-        """
-        # 전처리
-        preprocessed = self.preprocess_review(review)
-        if preprocessed is None:
-            return None
-
-        # 키워드 추출
-        keywords = self.extract_keywords(preprocessed.content)
-
-        # 감정 분석
-        sentiment, score = self.analyze_sentiment(preprocessed.content, keywords)
-
-        return ProcessedReviewDTO(
-            review=preprocessed,
-            keywords=keywords,
-            sentiment=sentiment,
-            sentiment_score=score,
-        )
-
     # =========================================================================
     # 추상 메서드
     # =========================================================================

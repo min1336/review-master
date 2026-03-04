@@ -74,32 +74,6 @@ class KeywordAggregator:
         keyword_counts = Counter(all_keywords)
         return [kw for kw, _ in keyword_counts.most_common(top_n)]
 
-    def extract_and_aggregate(
-        self,
-        df: pd.DataFrame,
-        text_col: str = "리뷰내용",
-        branch_col: str = "지점번호",
-        top_n: int = 10,
-    ) -> pd.DataFrame:
-        """
-        키워드 추출 + 집계 한번에 수행
-
-        Args:
-            df: 리뷰 데이터프레임
-            text_col: 리뷰 텍스트 컬럼명
-            branch_col: 지점 번호 컬럼명
-            top_n: 상위 N개 키워드
-
-        Returns:
-            지점별 키워드 집계 결과 DataFrame
-        """
-        df = df.copy()
-        df["keywords"] = df[text_col].apply(
-            lambda x: self.extractor.extract(str(x)) if pd.notna(x) else []
-        )
-
-        return self.aggregate(df, branch_col, "keywords", top_n)
-
     def export_to_excel(
         self, keywords_df: pd.DataFrame, output_path: str, top_n: int = 10
     ) -> str:

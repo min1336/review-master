@@ -433,25 +433,6 @@ class HybridClassifier:
             if any(sentiments.values())
         }
 
-    def classify_review_simple(self, review: str) -> list[dict]:
-        """ABSA만 사용한 간단 분석"""
-        return self._absa.analyze(review)
-
-    def classify_batch_reviews(
-        self, reviews: list[str], keywords_list: list[list[str]] = None
-    ) -> list[dict[str, dict[str, list[str]]]]:
-        """여러 리뷰 배치 분석"""
-        results = []
-
-        if keywords_list is None:
-            keywords_list = [None] * len(reviews)
-
-        for review, keywords in zip(reviews, keywords_list, strict=False):
-            result = self.classify_review(review, keywords)
-            results.append(result)
-
-        return results
-
     def get_review_summary(self, review: str, keywords: list[str] = None) -> dict:
         """
         리뷰 분석 요약 반환
@@ -495,33 +476,6 @@ class HybridClassifier:
             "negative_aspects": negative_aspects,
             "details": dict(details),
         }
-
-    def format_tag_sentiment(
-        self, result: dict[str, dict[str, list[str]]], hide_neutral: bool = True
-    ) -> str:
-        """결과를 태그별감정 형식으로 포맷팅 (예: "직원친절(+), 청결(-)")"""
-        parts = []
-
-        for tag, sentiments in result.items():
-            pos_count = len(sentiments.get("positive", []))
-            neg_count = len(sentiments.get("negative", []))
-
-            if pos_count > neg_count:
-                parts.append(f"{tag}(+)")
-            elif neg_count > pos_count:
-                parts.append(f"{tag}(-)")
-            elif not hide_neutral:
-                parts.append(f"{tag}(0)")
-
-        return ", ".join(parts)
-
-    def get_tag_names(self) -> list[str]:
-        """태그 그룹명 목록 반환"""
-        self._ensure_initialized()
-        if self._tag_names is None:
-            from .patterns import TAG_REGISTRY
-            return list(TAG_REGISTRY.keys())
-        return self._tag_names.copy()
 
     def get_tag_color(self, tag_name: str) -> str:
         """태그 색상 반환"""

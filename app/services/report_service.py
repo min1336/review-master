@@ -286,25 +286,6 @@ class ReportService:
         report = await self.generate_report(branch_id, start_date, end_date)
         return report, True
 
-    async def regenerate_report(
-        self,
-        branch_id: int,
-        start_date: datetime,
-        end_date: datetime,
-    ) -> ReportData:
-        """
-        리포트 재생성 (기존 리포트 덮어쓰기)
-
-        Args:
-            branch_id: 지점 ID
-            start_date: 시작일
-            end_date: 종료일
-
-        Returns:
-            새로 생성된 리포트
-        """
-        return await self.generate_report(branch_id, start_date, end_date)
-
     async def _step_collect(
         self,
         branch_id: int,

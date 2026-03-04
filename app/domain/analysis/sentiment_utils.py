@@ -311,33 +311,3 @@ class UnifiedSentimentAnalyzer:
         return text_sentiment, text_confidence * 0.9, "text_preferred"
 
 
-# =============================================================================
-# 하위 호환성을 위한 기존 함수 유지
-# =============================================================================
-
-def calculate_comprehensive_sentiment(
-    rating_service: float | None,
-    rating_car: float | None,
-    rating_convenience: float | None,
-    content_sentiment: str | None,
-) -> str:
-    """
-    [DEPRECATED] 기존 호환성을 위해 유지
-
-    새 코드에서는 UnifiedSentimentAnalyzer.analyze_with_ratings() 사용 권장
-    """
-    ratings = [
-        r for r in [rating_service, rating_car, rating_convenience] if r is not None
-    ]
-    is_any_rating_low = (
-        any(r < NEGATIVE_RATING_THRESHOLD for r in ratings) if ratings else False
-    )
-
-    is_content_negative = content_sentiment == "negative"
-
-    if is_any_rating_low:
-        return "negative"
-    elif is_content_negative:
-        return "neutral"
-    else:
-        return content_sentiment or "neutral"

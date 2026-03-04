@@ -58,15 +58,6 @@ def parse_date(date_str: str | None, end_of_day: bool = False) -> datetime | Non
         ) from e
 
 
-def validate_date_range(start: datetime | None, end: datetime | None) -> None:
-    """시작일/종료일 순서 검증. 시작일이 종료일보다 늦으면 HTTPException(400)"""
-    if start and end and start > end:
-        raise HTTPException(
-            status_code=400,
-            detail="시작일이 종료일보다 늦을 수 없습니다.",
-        )
-
-
 def validate_date_range_d(start: date | None, end: date | None) -> None:
     """date 타입 시작일/종료일 순서 검증"""
     if start and end and start > end:
