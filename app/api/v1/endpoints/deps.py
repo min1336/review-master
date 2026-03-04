@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import hmac
 import logging
-from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.container import ServiceContainer
 from repository.database import get_session
 
 logger = logging.getLogger(__name__)
@@ -166,7 +166,7 @@ async def get_summary_service(
 
     return SummaryService(
         summary_repo, branch_tag_repo, review_repo, sentiment_repo,
-        athena_client=_get_athena_client(),
+        athena_client=ServiceContainer.get_athena_client(),
     )
 
 
@@ -207,20 +207,6 @@ async def get_carmore_service(
     return CarmoreService(affiliate_repo)
 
 
-@lru_cache(maxsize=1)
-def _get_athena_client():
-    try:
-        from core.config import get_settings
-        from infrastructure.athena import AthenaClient
-
-        settings = get_settings()
-        if settings.aws_access_key_id and settings.athena_output_bucket:
-            return AthenaClient()
-    except (ImportError, AttributeError, ValueError) as e:
-        logger.warning("Athena 클라이언트 초기화 스킵: %s", e)
-    return None
-
-
 async def get_new_review_repo(
     session: AsyncSession = Depends(get_db_session),
 ) -> NewReviewRepository:
@@ -237,7 +223,7 @@ async def get_analysis_service(
     from services.analysis_service import AnalysisService
 
     return AnalysisService(
-        review_repo, summary_repo, _get_athena_client(),
+        review_repo, summary_repo, ServiceContainer.get_athena_client(),
         new_review_repo=new_review_repo,
     )
 
@@ -247,7 +233,7 @@ async def get_sync_service(
 ) -> SyncService:
     from services.sync_service import SyncService
 
-    return SyncService(review_repo, _get_athena_client())
+    return SyncService(review_repo, ServiceContainer.get_athena_client())
 
 
 # ============================================================
@@ -271,7 +257,7 @@ async def get_report_service(
 
     cache_service = ReportCacheService(report_repo, review_repo, branch_tag_repo)
     tag_calculator = TagStatsCalculator(branch_tag_repo)
-    ai_generator = ReportAIGenerator(summary_repo, review_repo, athena_client=_get_athena_client())
+    ai_generator = ReportAIGenerator(summary_repo, review_repo, athena_client=ServiceContainer.get_athena_client())
 
     return ReportService(
         summary_repo, review_repo, branch_tag_repo,
@@ -321,16 +307,8 @@ async def get_pipeline_job_service():
     return PipelineJobService.get_instance()
 
 
-_realtime_pipeline: "RealtimePipeline | None" = None
-
-
 async def get_realtime_pipeline() -> "RealtimePipeline":
-    global _realtime_pipeline
-    if _realtime_pipeline is None:
-        from domain.pipeline import RealtimePipeline
-
-        _realtime_pipeline = RealtimePipeline()
-    return _realtime_pipeline
+    return await ServiceContainer.get_realtime_pipeline()
 
 
 
