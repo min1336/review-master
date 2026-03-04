@@ -11,12 +11,10 @@ import gc
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any
-from uuid import uuid4
 
-from core.timezone import utc_now
 from schemas.pipeline_console import PipelineJobStatusResponse
+from services.base_job_service import BaseJobService, BaseJobState
 
 logger = logging.getLogger(__name__)
 
@@ -24,37 +22,18 @@ PIPELINE_CHUNK_DEFAULT = 500
 
 
 @dataclass
-class PipelineJobState:
+class PipelineJobState(BaseJobState):
     """인메모리 파이프라인 작업 상태"""
 
-    job_id: str
-    status: str = "pending"  # pending | processing | completed | failed
-    progress: int = 0
-    message: str = ""
     total_reviews: int = 0
     processed_reviews: int = 0
     current_chunk: int = 0
     total_chunks: int = 0
-    error: str | None = None
     result: dict | None = None
-    created_at: datetime = field(default_factory=utc_now)
-    task: asyncio.Task[Any] | None = field(default=None, repr=False)
 
 
-class PipelineJobService:
+class PipelineJobService(BaseJobService[PipelineJobState, PipelineJobStatusResponse]):
     """전체 재처리 파이프라인 비동기 작업 관리 (인메모리 싱글턴)"""
-
-    _instance: PipelineJobService | None = None
-    _MAX_COMPLETED_JOBS = 5
-
-    def __init__(self) -> None:
-        self._jobs: dict[str, PipelineJobState] = {}
-
-    @classmethod
-    def get_instance(cls) -> PipelineJobService:
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
 
     async def submit_job(
         self,
@@ -67,16 +46,16 @@ class PipelineJobService:
         자기 자신 및 다른 파이프라인 서비스(sync, upload)에 활성 작업이 있으면 거부한다.
         """
         # 자기 자신의 활성 작업 확인
-        for job in self._jobs.values():
-            if job.status in ("pending", "processing"):
-                return self._to_response(job)
+        active = self._find_active_job()
+        if active:
+            return self._to_response(active)
 
         # 상호 배제: 다른 파이프라인 작업 확인
         self._check_other_pipelines()
 
         self._prune_old_jobs()
 
-        job_id = uuid4().hex[:12]
+        job_id = self._generate_job_id()
         state = PipelineJobState(job_id=job_id)
         self._jobs[job_id] = state
 
@@ -90,28 +69,6 @@ class PipelineJobService:
             job_id, date_from, date_to, chunk_size,
         )
         return self._to_response(state)
-
-    def get_job_status(self, job_id: str) -> PipelineJobStatusResponse | None:
-        """작업 상태 조회"""
-        state = self._jobs.get(job_id)
-        if state is None:
-            return None
-        return self._to_response(state)
-
-    async def cancel_job(self, job_id: str) -> bool:
-        """작업 취소"""
-        state = self._jobs.get(job_id)
-        if state is None:
-            return False
-
-        if state.task and not state.task.done():
-            state.task.cancel()
-            state.status = "failed"
-            state.error = "사용자에 의해 취소됨"
-            logger.info("파이프라인 작업 취소: %s", job_id)
-            return True
-
-        return False
 
     def _check_other_pipelines(self) -> None:
         """다른 파이프라인 서비스에 활성 작업이 있으면 HTTPException 발생"""
@@ -129,15 +86,6 @@ class PipelineJobService:
         for job in upload_svc._jobs.values():
             if job.status in ("pending", "processing"):
                 raise HTTPException(409, "업로드 작업이 실행 중입니다")
-
-    def _prune_old_jobs(self) -> None:
-        """완료/실패 작업이 초과하면 오래된 것부터 제거"""
-        done = [s for s in self._jobs.values() if s.status in ("completed", "failed")]
-        if len(done) <= self._MAX_COMPLETED_JOBS:
-            return
-        done.sort(key=lambda s: s.created_at)
-        for s in done[: len(done) - self._MAX_COMPLETED_JOBS]:
-            self._jobs.pop(s.job_id, None)
 
     async def _run_job(
         self,
@@ -258,8 +206,7 @@ class PipelineJobService:
             state.message = "파이프라인 처리 중 오류 발생"
             logger.exception("파이프라인 작업 실패: %s", state.job_id)
 
-    @staticmethod
-    def _to_response(state: PipelineJobState) -> PipelineJobStatusResponse:
+    def _to_response(self, state: PipelineJobState) -> PipelineJobStatusResponse:
         return PipelineJobStatusResponse(
             job_id=state.job_id,
             status=state.status,

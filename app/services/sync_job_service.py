@@ -10,44 +10,26 @@ import asyncio
 import gc
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any
-from uuid import uuid4
 
 from core.timezone import utc_now
 from schemas.sync import SyncJobStatusResponse, SyncResultResponse
+from services.base_job_service import BaseJobService, BaseJobState
 
 logger = logging.getLogger(__name__)
 
+# 작업 TTL: 이 시간 초과 시 좀비 작업으로 간주하고 자동 만료 (초)
+_JOB_STALE_TIMEOUT_SECONDS = 300
+
 
 @dataclass
-class SyncJobState:
+class SyncJobState(BaseJobState):
     """인메모리 작업 상태"""
 
-    job_id: str
-    status: str = "pending"  # pending | processing | completed | failed
-    progress: int = 0
-    message: str = ""
-    error: str | None = None
-    result: SyncResultResponse | None = None
-    created_at: datetime = field(default_factory=utc_now)
-    task: asyncio.Task[Any] | None = field(default=None, repr=False)
+    result: SyncResultResponse | None = field(default=None)
 
 
-class SyncJobService:
+class SyncJobService(BaseJobService[SyncJobState, SyncJobStatusResponse]):
     """동기화 비동기 작업 관리 (인메모리 싱글턴)"""
-
-    _instance: SyncJobService | None = None
-    _MAX_COMPLETED_JOBS = 5
-
-    def __init__(self) -> None:
-        self._jobs: dict[str, SyncJobState] = {}
-
-    @classmethod
-    def get_instance(cls) -> SyncJobService:
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
 
     async def submit_job(
         self,
@@ -62,14 +44,30 @@ class SyncJobService:
             date_from: 시작일 (YYYY-MM-DD). None이면 last_sync_at 기준.
             date_to: 종료일 (YYYY-MM-DD). None이면 제한 없음.
         """
-        # 이미 실행 중인 작업이 있는 경우
-        for job in self._jobs.values():
-            if job.status in ("pending", "processing"):
-                return self._to_response(job)
+        # 이미 실행 중인 작업이 있는 경우 (좀비 작업 감지 포함)
+        active = self._find_active_job()
+        if active is not None:
+            elapsed = (utc_now() - active.created_at).total_seconds()
+            task_dead = active.task is None or active.task.done()
+
+            if task_dead or elapsed > _JOB_STALE_TIMEOUT_SECONDS:
+                active.status = "failed"
+                if task_dead:
+                    active.error = "작업이 비정상 종료되었습니다"
+                else:
+                    active.error = f"작업 시간 초과 ({int(elapsed)}초)"
+                    if active.task:
+                        active.task.cancel()
+                logger.warning(
+                    "Stale sync job expired: %s (elapsed=%.0fs, task_dead=%s)",
+                    active.job_id, elapsed, task_dead,
+                )
+            else:
+                return self._to_response(active)
 
         self._prune_old_jobs()
 
-        job_id = uuid4().hex[:12]
+        job_id = self._generate_job_id()
         state = SyncJobState(job_id=job_id)
         self._jobs[job_id] = state
 
@@ -78,40 +76,6 @@ class SyncJobService:
 
         return self._to_response(state)
 
-    def get_job_status(self, job_id: str) -> SyncJobStatusResponse | None:
-        """작업 상태 조회 (DB 접근 없음)"""
-        state = self._jobs.get(job_id)
-        if state is None:
-            return None
-        return self._to_response(state)
-
-    async def cancel_job(self, job_id: str) -> bool:
-        """작업 취소"""
-        state = self._jobs.get(job_id)
-        if state is None:
-            return False
-
-        if state.task and not state.task.done():
-            state.task.cancel()
-            state.status = "failed"
-            state.error = "사용자에 의해 취소됨"
-            logger.info(f"동기화 작업 취소: {job_id}")
-            return True
-
-        return False
-
-    def _prune_old_jobs(self) -> None:
-        """완료/실패 작업이 _MAX_COMPLETED_JOBS를 초과하면 오래된 것부터 제거"""
-        done = [
-            s for s in self._jobs.values()
-            if s.status in ("completed", "failed")
-        ]
-        if len(done) <= self._MAX_COMPLETED_JOBS:
-            return
-        done.sort(key=lambda s: s.created_at)
-        for s in done[: len(done) - self._MAX_COMPLETED_JOBS]:
-            self._jobs.pop(s.job_id, None)
-
     async def _run_job(
         self,
         state: SyncJobState,
@@ -119,35 +83,28 @@ class SyncJobService:
         date_to: str | None = None,
     ) -> None:
         """백그라운드에서 동기화 실행"""
+        state.status = "processing"
+        state.progress = 0
+        state.message = "동기화 준비 중"
         try:
-            state.status = "processing"
-            state.progress = 0
-            state.message = "동기화 준비 중"
-
             async def progress_callback(progress: int, message: str) -> None:
                 state.progress = progress
                 state.message = message
 
             # SyncService 인스턴스 생성
-            from infrastructure.athena import AthenaClient
+            # NOTE: NLP 모델은 서버 시작 시 _prewarm_nlp_models()에서 미리 로드되므로
+            # 여기서는 동기 생성해도 이벤트 루프 블로킹 없음.
+            # asyncio.to_thread 래핑 시 threading.Lock 경합으로 이벤트 루프 데드락 위험.
+            from core.container import ServiceContainer
             from repository.database import get_session_factory
             from repository.review_repository import BranchReviewRepository
             from services.sync_service import SyncService
 
+            athena_client = ServiceContainer.get_athena_client()
+
             session = get_session_factory()()
             try:
                 review_repo = BranchReviewRepository(session)
-
-                athena_client: AthenaClient | None = None
-                try:
-                    from core.config import get_settings
-
-                    settings = get_settings()
-                    if settings.aws_access_key_id and settings.athena_output_bucket:
-                        athena_client = AthenaClient()
-                except Exception as e:
-                    logger.debug(f"Athena 클라이언트 초기화 스킵: {e}")
-
                 sync_service = SyncService(review_repo, athena_client)
 
                 result = await sync_service.sync_reviews(
@@ -173,14 +130,13 @@ class SyncJobService:
             state.status = "failed"
             state.error = "작업이 취소되었습니다"
             logger.info(f"동기화 작업 취소됨: {state.job_id}")
-        except Exception as e:
+        except BaseException as e:
             state.status = "failed"
             state.error = str(e)
             state.message = "동기화 중 오류 발생"
             logger.exception(f"동기화 작업 실패: {state.job_id}")
 
-    @staticmethod
-    def _to_response(state: SyncJobState) -> SyncJobStatusResponse:
+    def _to_response(self, state: SyncJobState) -> SyncJobStatusResponse:
         return SyncJobStatusResponse(
             job_id=state.job_id,
             status=state.status,

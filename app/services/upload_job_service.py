@@ -14,13 +14,10 @@ import io
 import logging
 import re
 import time
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any
-from uuid import uuid4
+from dataclasses import dataclass
 
-from core.timezone import utc_now
 from schemas.upload import UploadJobStatusResponse, UploadResultResponse, UploadRowError
+from services.base_job_service import BaseJobService, BaseJobState
 
 logger = logging.getLogger(__name__)
 
@@ -210,34 +207,15 @@ def validate_columns(raw_dicts: list[dict]) -> str | None:
 
 
 @dataclass
-class UploadJobState:
+class UploadJobState(BaseJobState):
     """인메모리 업로드 작업 상태 (파싱 데이터는 저장하지 않음)"""
 
-    job_id: str
-    status: str = "pending"
-    progress: int = 0
-    message: str = ""
     total_rows: int = 0
-    error: str | None = None
     result: UploadResultResponse | None = None
-    created_at: datetime = field(default_factory=utc_now)
-    task: asyncio.Task[Any] | None = field(default=None, repr=False)
 
 
-class UploadJobService:
+class UploadJobService(BaseJobService[UploadJobState, UploadJobStatusResponse]):
     """엑셀/CSV 업로드 비동기 작업 관리 (인메모리 싱글턴)"""
-
-    _instance: UploadJobService | None = None
-    _MAX_COMPLETED_JOBS = 5
-
-    def __init__(self) -> None:
-        self._jobs: dict[str, UploadJobState] = {}
-
-    @classmethod
-    def get_instance(cls) -> UploadJobService:
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
 
     async def submit_job(
         self,
@@ -251,13 +229,13 @@ class UploadJobService:
         이미 활성 작업이 있으면 기존 job_id를 반환한다 (단일 활성 업로드 제한).
         raw_rows/mapped_rows는 background task의 로컬 변수로만 유지된다 (GC 대응).
         """
-        for job in self._jobs.values():
-            if job.status in ("pending", "processing"):
-                return self._to_response(job)
+        active = self._find_active_job()
+        if active:
+            return self._to_response(active)
 
         self._prune_old_jobs()
 
-        job_id = uuid4().hex[:12]
+        job_id = self._generate_job_id()
         state = UploadJobState(
             job_id=job_id,
             total_rows=total_rows,
@@ -274,37 +252,6 @@ class UploadJobService:
             job_id, total_rows, filename,
         )
         return self._to_response(state)
-
-    def get_job_status(self, job_id: str) -> UploadJobStatusResponse | None:
-        """작업 상태 조회"""
-        state = self._jobs.get(job_id)
-        if state is None:
-            return None
-        return self._to_response(state)
-
-    async def cancel_job(self, job_id: str) -> bool:
-        """작업 취소"""
-        state = self._jobs.get(job_id)
-        if state is None:
-            return False
-
-        if state.task and not state.task.done():
-            state.task.cancel()
-            state.status = "failed"
-            state.error = "사용자에 의해 취소됨"
-            logger.info("업로드 작업 취소: %s", job_id)
-            return True
-
-        return False
-
-    def _prune_old_jobs(self) -> None:
-        """완료/실패 작업이 초과하면 오래된 것부터 제거"""
-        done = [s for s in self._jobs.values() if s.status in ("completed", "failed")]
-        if len(done) <= self._MAX_COMPLETED_JOBS:
-            return
-        done.sort(key=lambda s: s.created_at)
-        for s in done[: len(done) - self._MAX_COMPLETED_JOBS]:
-            self._jobs.pop(s.job_id, None)
 
     async def _run_job(
         self,
@@ -398,8 +345,7 @@ class UploadJobService:
             state.message = "업로드 처리 중 오류 발생"
             logger.exception("업로드 작업 실패: %s", state.job_id)
 
-    @staticmethod
-    def _to_response(state: UploadJobState) -> UploadJobStatusResponse:
+    def _to_response(self, state: UploadJobState) -> UploadJobStatusResponse:
         return UploadJobStatusResponse(
             job_id=state.job_id,
             status=state.status,
