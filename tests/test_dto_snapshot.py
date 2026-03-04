@@ -301,6 +301,7 @@ def test_filter_options_dto_snapshot():
                 "region": "서울",
             }
         ],
+        "region_groups": {},
     }
 
 
@@ -309,7 +310,7 @@ def test_filter_options_dto_empty():
     dto = FilterOptionsDTO()
     result = dto.model_dump(by_alias=True)
 
-    assert result == {"regions": [], "companies": [], "branches": []}
+    assert result == {"regions": [], "companies": [], "branches": [], "region_groups": {}}
 
 
 # ===========================================================================

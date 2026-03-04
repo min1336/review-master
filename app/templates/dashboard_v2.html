@@ -869,25 +869,31 @@
             justify-content: space-between;
             transition: all 0.2s;
         }
+
         .settings-toggle:hover {
             background: var(--grey-8, #f3f4f6);
             border-color: var(--grey-6, #d1d5db);
         }
+
         .settings-toggle .toggle-arrow {
             transition: transform 0.2s;
             font-size: 12px;
         }
+
         .settings-toggle.open .toggle-arrow {
             transform: rotate(180deg);
         }
+
         .settings-panel {
             display: none;
             margin-top: 12px;
         }
+
         .settings-panel.open {
             display: block;
             margin-bottom: 16px;
         }
+
         .settings-section {
             border: 1px solid var(--grey-6, #d1d5db);
             border-radius: 8px;
@@ -895,12 +901,14 @@
             margin-bottom: 12px;
             background: var(--grey-9, #f9fafb);
         }
+
         .settings-section-title {
             font-size: 13px;
             font-weight: 600;
             color: var(--grey-2, #1f2937);
             margin-bottom: 12px;
         }
+
         .settings-checkbox-row {
             display: flex;
             align-items: center;
@@ -910,9 +918,11 @@
             color: var(--grey-2, #1f2937);
             cursor: pointer;
         }
+
         .settings-checkbox-row input[type="checkbox"] {
             accent-color: var(--primary, #6366f1);
         }
+
         .settings-slider-row {
             display: flex;
             align-items: center;
@@ -921,16 +931,19 @@
             font-size: 13px;
             color: var(--grey-2, #1f2937);
         }
+
         .settings-slider-row input[type="range"] {
             flex: 1;
             accent-color: var(--primary, #6366f1);
         }
+
         .settings-slider-row .slider-value {
             min-width: 40px;
             text-align: right;
             font-weight: 600;
             color: var(--grey-2, #1f2937);
         }
+
         .settings-select-row {
             display: flex;
             align-items: center;
@@ -939,6 +952,7 @@
             font-size: 13px;
             color: var(--grey-2, #1f2937);
         }
+
         .settings-select-row select {
             flex: 1;
             padding: 6px 10px;
@@ -948,9 +962,11 @@
             font-family: inherit;
             background: white;
         }
+
         .settings-textarea-row {
             margin-top: 8px;
         }
+
         .settings-textarea-row textarea {
             width: 100%;
             padding: 10px;
@@ -962,6 +978,7 @@
             min-height: 60px;
             box-sizing: border-box;
         }
+
         .char-count {
             text-align: right;
             font-size: 11px;
@@ -977,6 +994,7 @@
             border-radius: var(--radius-sm, 6px);
             border: 1px solid var(--grey-7, #e5e7eb);
         }
+
         .preset-section select {
             width: 100%;
             padding: 8px 10px;
@@ -986,6 +1004,7 @@
             background: #fff;
             margin-top: 6px;
         }
+
         .preset-recommended-badge {
             display: inline-block;
             font-size: 10px;
@@ -1004,6 +1023,7 @@
             gap: 6px;
             margin-top: 6px;
         }
+
         .settings-focus-item {
             display: flex;
             align-items: center;
@@ -1012,6 +1032,7 @@
             color: var(--grey-3, #374151);
             cursor: pointer;
         }
+
         .settings-focus-item input[type="checkbox"] {
             accent-color: var(--primary, #6366f1);
         }
@@ -1023,13 +1044,16 @@
             color: var(--grey-5);
             margin-left: 2px;
         }
+
         .period-preset-btn.has-count.sufficient {
             border-color: #a7f3d0;
         }
+
         .period-preset-btn.has-count.sufficient .period-count-badge {
             color: #10b981;
             font-weight: 600;
         }
+
         .review-count-info {
             display: flex;
             align-items: center;
@@ -1041,18 +1065,22 @@
             font-size: 13px;
             transition: all 0.3s;
         }
+
         .review-count-info.loading {
             background: var(--grey-8);
             color: var(--grey-5);
         }
+
         .review-count-info.sufficient {
             background: #d1fae5;
             color: #065f46;
         }
+
         .review-count-info.insufficient {
             background: #fef3c7;
             color: #92400e;
         }
+
         .review-count-info .count-number {
             font-weight: 700;
         }
@@ -1573,9 +1601,11 @@
             flex-direction: column;
             gap: 2px;
         }
+
         .branch-info .company-name {
             font-weight: 600;
         }
+
         .branch-info .branch-name {
             font-size: 12px;
             color: var(--grey-4);
@@ -1621,13 +1651,18 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
             animation: shimmer 1.5s infinite;
         }
 
         @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
+            0% {
+                transform: translateX(-100%);
+            }
+
+            100% {
+                transform: translateX(100%);
+            }
         }
 
         .skeleton-row td {
@@ -1650,13 +1685,22 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
             animation: shimmer 1.5s infinite;
         }
 
-        .skeleton-line.short { width: 40px; margin: 0 auto; }
-        .skeleton-line.medium { width: 80%; }
-        .skeleton-line.long { width: 90%; }
+        .skeleton-line.short {
+            width: 40px;
+            margin: 0 auto;
+        }
+
+        .skeleton-line.medium {
+            width: 80%;
+        }
+
+        .skeleton-line.long {
+            width: 90%;
+        }
 
         .skeleton-stat {
             height: 24px;
@@ -1674,7 +1718,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
             animation: shimmer 1.5s infinite;
         }
 
@@ -1757,7 +1801,6 @@
         .review-item__sentiment {
             margin-left: var(--spacing-xs);
         }
-
     </style>
 </head>
 
@@ -1851,29 +1894,32 @@
                     <thead>
                         <tr>
                             <th style="width: 36px; text-align: center; padding: 8px 4px;">
-                                <input type="checkbox" id="select-all-branch" title="전체 선택" style="cursor: pointer; accent-color: var(--primary);">
+                                <input type="checkbox" id="select-all-branch" title="전체 선택"
+                                    style="cursor: pointer; accent-color: var(--primary);">
                             </th>
                             <th onclick="handleSort('region')" style="cursor: pointer;">지역 <span id="sort-icon-region"
                                     class="sort-icon"></span></th>
                             <th onclick="handleSort('branch_name')" style="cursor: pointer;">업체명 <span
                                     id="sort-icon-branch_name" class="sort-icon"></span></th>
                             <th>요약</th>
-                            <th onclick="handleSort('avg_rating')" style="cursor: pointer; width: 70px; text-align: center;">별점 <span
+                            <th onclick="handleSort('avg_rating')"
+                                style="cursor: pointer; width: 70px; text-align: center;">별점 <span
                                     id="sort-icon-avg_rating" class="sort-icon"></span></th>
-                            <th onclick="handleSort('review_count')" style="cursor: pointer; width: 80px; text-align: center;">리뷰수 <span
+                            <th onclick="handleSort('review_count')"
+                                style="cursor: pointer; width: 80px; text-align: center;">리뷰수 <span
                                     id="sort-icon-review_count" class="sort-icon"></span></th>
                         </tr>
                     </thead>
                     <tbody id="summaries-table">
                         <script>
-                            (function(){
-                                var tb=document.getElementById('summaries-table');
-                                if(!tb)return;
-                                var h='';
-                                for(var i=0;i<8;i++){
-                                    h+='<tr class="skeleton-row"><td></td><td><div class="skeleton-line short" style="width:36px;height:12px;"></div></td><td><div class="skeleton-line medium" style="height:14px;margin-bottom:6px;"></div><div class="skeleton-line" style="width:50%;height:10px;"></div></td><td><div class="skeleton-line long" style="height:14px;"></div></td><td><div class="skeleton-line short" style="width:44px;height:14px;"></div></td><td><div class="skeleton-line short" style="width:36px;height:14px;"></div></td></tr>';
+                            (function () {
+                                var tb = document.getElementById('summaries-table');
+                                if (!tb) return;
+                                var h = '';
+                                for (var i = 0; i < 8; i++) {
+                                    h += '<tr class="skeleton-row"><td></td><td><div class="skeleton-line short" style="width:36px;height:12px;"></div></td><td><div class="skeleton-line medium" style="height:14px;margin-bottom:6px;"></div><div class="skeleton-line" style="width:50%;height:10px;"></div></td><td><div class="skeleton-line long" style="height:14px;"></div></td><td><div class="skeleton-line short" style="width:44px;height:14px;"></div></td><td><div class="skeleton-line short" style="width:36px;height:14px;"></div></td></tr>';
                                 }
-                                tb.innerHTML=h;
+                                tb.innerHTML = h;
                             })();
                         </script>
                     </tbody>
@@ -1881,9 +1927,12 @@
             </div>
 
             <!-- Batch Actions -->
-            <div id="batch-actions" style="display: none; align-items: center; justify-content: space-between; padding: 10px 16px; background: #eef2ff; border-top: 1px solid var(--grey-7);">
-                <span style="font-size: 13px; color: var(--grey-2);"><strong id="selected-count">0</strong>개 업체 선택됨</span>
-                <button id="btn-batch-pdf" class="btn btn-primary btn-sm" onclick="window.dashboardHandlers.downloadBatchPDF()">일괄 리포트 생성</button>
+            <div id="batch-actions"
+                style="display: none; align-items: center; justify-content: space-between; padding: 10px 16px; background: #eef2ff; border-top: 1px solid var(--grey-7);">
+                <span style="font-size: 13px; color: var(--grey-2);"><strong id="selected-count">0</strong>개 업체
+                    선택됨</span>
+                <button id="btn-batch-pdf" class="btn btn-primary btn-sm"
+                    onclick="window.dashboardHandlers.downloadBatchPDF()">일괄 리포트 생성</button>
             </div>
 
             <!-- Pagination -->
@@ -2153,7 +2202,7 @@
                 '해외': '해외',
                 // 공항/도시명 (비표준)
                 '김포공항': '서울', '강남': '서울',
-                '인천공항': '경기도', '김포': '경기도',
+                '인천공항': '경기도',
                 '강릉': '강원도', '속초': '강원도',
                 '여수': '전라도', '전주': '전라도',
                 '김해공항': '경상도', '김해': '경상도', '대구공항': '경상도', '경주': '경상도',
@@ -2543,17 +2592,17 @@
 
                     if (!summary) return;
 
-                    cell.addEventListener('mouseenter', function(e) {
+                    cell.addEventListener('mouseenter', function (e) {
                         tooltip.textContent = summary;
                         tooltip.classList.add('visible');
                         updateTooltipPosition(e, tooltip);
                     });
 
-                    cell.addEventListener('mousemove', function(e) {
+                    cell.addEventListener('mousemove', function (e) {
                         updateTooltipPosition(e, tooltip);
                     });
 
-                    cell.addEventListener('mouseleave', function() {
+                    cell.addEventListener('mouseleave', function () {
                         tooltip.classList.remove('visible');
                     });
                 });
@@ -3207,7 +3256,7 @@
                     const bestPeriod = headerWrap ? headerWrap.dataset.bestPeriod : 'all';
                     window._bestPeriod = bestPeriod;
                     const periodLabel = document.getElementById('summary-period-label');
-                    const periodMap = {'1m':'1개월 요약','3m':'3개월 요약','6m':'6개월 요약','1y':'1년 요약','all':'전체 기간 요약'};
+                    const periodMap = { '1m': '1개월 요약', '3m': '3개월 요약', '6m': '6개월 요약', '1y': '1년 요약', 'all': '전체 기간 요약' };
                     if (periodLabel) periodLabel.textContent = periodMap[bestPeriod] || '';
 
                     await loadBranchTags(data, branchId);
@@ -3531,7 +3580,7 @@
                         }
 
                         // 기간 레이블 업데이트
-                        const periodMap = {'1m':'1개월 요약','3m':'3개월 요약','6m':'6개월 요약','1y':'1년 요약','all':'전체 기간 요약'};
+                        const periodMap = { '1m': '1개월 요약', '3m': '3개월 요약', '6m': '6개월 요약', '1y': '1년 요약', 'all': '전체 기간 요약' };
                         const lbl = getElement('summary-period-label');
                         if (lbl) lbl.textContent = periodMap[generatedPeriod] || '';
 
@@ -3851,7 +3900,7 @@
                 if (reportActiveJobId && reportState.branchId) {
                     fetch(`${API_PREFIX}/reports/${reportState.branchId}/job/${reportActiveJobId}`, {
                         method: 'DELETE'
-                    }).catch(function() {});
+                    }).catch(function () { });
                     reportActiveJobId = null;
                 }
 
@@ -4130,7 +4179,7 @@
             }
 
             const DETAIL_LEVEL_DEFAULTS = {
-                brief:    { summary: 250, eval: 150 },
+                brief: { summary: 250, eval: 150 },
                 standard: { summary: 600, eval: 250 },
                 detailed: { summary: 1000, eval: 400 },
             };
@@ -4797,7 +4846,7 @@
                     if (!tags || tags.length === 0) return '<div style="color:var(--grey-5);font-size:13px;">데이터 부족</div>';
                     const color = mode === 'negative' ? '#ef4444' : '#10b981';
                     return tags.map((t, i) =>
-                        `<div style="color:var(--grey-3);font-size:13px;padding:3px 0;">${i+1}. ${escapeHtml(t.tag_name)} <span style="color:${color};">${t.count}건</span></div>`
+                        `<div style="color:var(--grey-3);font-size:13px;padding:3px 0;">${i + 1}. ${escapeHtml(t.tag_name)} <span style="color:${color};">${t.count}건</span></div>`
                     ).join('');
                 }
 
@@ -4807,7 +4856,7 @@
                     const tagColor = mode === 'disliked' ? '#ef4444' : '#10b981';
                     return vehicles.map((v, i) => {
                         const tagsStr = (v.tags || []).slice(0, 3).map(t => `<span style="color:${tagColor};">${escapeHtml(t)}</span>`).join(', ');
-                        return `<div style="color:var(--grey-3);font-size:13px;padding:3px 0;">${i+1}. ${escapeHtml(v.model)}${tagsStr ? ' ' + tagsStr : ''}</div>`;
+                        return `<div style="color:var(--grey-3);font-size:13px;padding:3px 0;">${i + 1}. ${escapeHtml(v.model)}${tagsStr ? ' ' + tagsStr : ''}</div>`;
                     }).join('');
                 }
 
@@ -4837,16 +4886,16 @@
                             <div style="flex: 1; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 14px;">
                                 <div style="font-weight: 600; color: #10b981; margin-bottom: 10px; font-size: 13px;">현상유지</div>
                                 ${(data.strengths || []).length > 0
-                                    ? (data.strengths || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
-                                    : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
-                                }
+                            ? (data.strengths || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
+                            : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
+                        }
                             </div>
                             <div style="flex: 1; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 14px;">
                                 <div style="font-weight: 600; color: #ef4444; margin-bottom: 10px; font-size: 13px;">보완필요</div>
                                 ${(data.improvements || []).length > 0
-                                    ? (data.improvements || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
-                                    : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
-                                }
+                            ? (data.improvements || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
+                            : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
+                        }
                             </div>
                         </div>
                     </div>
@@ -5054,16 +5103,16 @@
                             <div style="flex: 1; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 14px;">
                                 <div style="font-weight: 600; color: #10b981; margin-bottom: 10px; font-size: 13px;">현상유지</div>
                                 ${(data.strengths || []).length > 0
-                                    ? (data.strengths || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
-                                    : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
-                                }
+                            ? (data.strengths || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
+                            : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
+                        }
                             </div>
                             <div style="flex: 1; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 14px;">
                                 <div style="font-weight: 600; color: #ef4444; margin-bottom: 10px; font-size: 13px;">보완필요</div>
                                 ${(data.improvements || []).length > 0
-                                    ? (data.improvements || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
-                                    : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
-                                }
+                            ? (data.improvements || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
+                            : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
+                        }
                             </div>
                         </div>
                     </div>
