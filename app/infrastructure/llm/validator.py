@@ -205,24 +205,3 @@ def validate_report_content(
         )
 
     return len(warnings) == 0, warnings
-
-
-def validate_and_log(text: str, branch_name: str = None) -> tuple[bool, str]:
-    """
-    검증 및 로그용 결과 반환
-
-    Args:
-        text: 검증할 텍스트
-        branch_name: 지점명 (로그용)
-
-    Returns:
-        Tuple[bool, str]: (통과 여부, 로그 메시지)
-    """
-    is_valid, errors = validate_summary(text)
-
-    if is_valid:
-        msg = f"[{branch_name or '지점'}] 검증 통과"
-    else:
-        msg = f"[{branch_name or '지점'}] 검증 실패: {'; '.join(errors)}"
-
-    return is_valid, msg

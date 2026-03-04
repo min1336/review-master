@@ -45,11 +45,6 @@ class LLMProvider(ABC):
         """
         pass
 
-    @abstractmethod
-    def is_available(self) -> bool:
-        """Provider 사용 가능 여부"""
-        pass
-
     @property
     @abstractmethod
     def model_name(self) -> str:

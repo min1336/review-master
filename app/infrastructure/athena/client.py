@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import boto3
+from botocore.config import Config as BotoConfig
 
 from core.config import get_settings
 
@@ -317,6 +318,11 @@ class AthenaClient:
             aws_access_key_id=settings.aws_access_key_id,
             aws_secret_access_key=settings.aws_secret_access_key.get_secret_value(),
             region_name=settings.aws_region,
+            config=BotoConfig(
+                connect_timeout=10,
+                read_timeout=30,
+                retries={"max_attempts": 2},
+            ),
         )
         self._database = settings.athena_database
         self._output_bucket = settings.athena_output_bucket
@@ -529,14 +535,23 @@ class AthenaClient:
         # 쿼리 완료 대기
         state = "RUNNING"
         elapsed = 0
+        status = None
         while state in ("RUNNING", "QUEUED") and elapsed < timeout:
             time.sleep(2)
             elapsed += 2
 
-            status = self._client.get_query_execution(
-                QueryExecutionId=query_execution_id
-            )
-            state = status["QueryExecution"]["Status"]["State"]
+            try:
+                status = self._client.get_query_execution(
+                    QueryExecutionId=query_execution_id
+                )
+                state = status["QueryExecution"]["Status"]["State"]
+            except Exception as e:
+                logger.warning(f"쿼리 상태 조회 실패 ({elapsed}초): {e}")
+                if elapsed >= timeout:
+                    raise RuntimeError(
+                        f"Athena 쿼리 상태 조회 실패 (타임아웃 {timeout}초): {e}"
+                    )
+                continue
 
             if elapsed % 10 == 0:
                 logger.info(f"쿼리 상태: {state} ({elapsed}초 경과)")
@@ -550,13 +565,17 @@ class AthenaClient:
         # 결과 조회
         return self._get_query_results(query_execution_id)
 
-    def _get_query_results(self, query_execution_id: str) -> list[dict]:
-        """쿼리 결과 조회 (페이지네이션 처리)"""
+    def _get_query_results(
+        self, query_execution_id: str, max_pages: int = 500
+    ) -> list[dict]:
+        """쿼리 결과 조회 (페이지네이션 처리, 최대 max_pages 페이지)"""
         results: list[dict] = []
         next_token = None
         columns: list[str] = []
+        page_count = 0
 
-        while True:
+        while page_count < max_pages:
+            page_count += 1
             if next_token:
                 response = self._client.get_query_results(
                     QueryExecutionId=query_execution_id,

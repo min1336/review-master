@@ -100,6 +100,7 @@ class OpenAIProvider(LLMProvider):
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
+                timeout=30,
             )
 
             content = response.choices[0].message.content.strip()
@@ -185,6 +186,7 @@ class OpenAIProvider(LLMProvider):
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
+                timeout=30,
             )
             content = response.choices[0].message.content.strip()
             if content and not content.endswith((".", "!", "?", "다", "요", '"')):
@@ -216,10 +218,6 @@ class OpenAIProvider(LLMProvider):
             return LLMResponse(
                 content="", model=self._model, success=False, error=error_msg
             )
-
-    def is_available(self) -> bool:
-        """Provider 사용 가능 여부"""
-        return self._init_client()
 
     @property
     def model_name(self) -> str:

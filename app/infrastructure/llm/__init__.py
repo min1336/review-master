@@ -13,7 +13,7 @@ from .base import LLMProvider, LLMResponse
 from .openai_provider import OpenAIProvider
 from .prompts import OperationalSummaryPromptBuilder, SummaryPromptBuilder
 from .rate_limiter import RateLimiter
-from .validator import validate_and_log, validate_summary
+from .validator import validate_summary
 
 __all__ = [
     "LLMProvider",
@@ -24,7 +24,6 @@ __all__ = [
     "BranchType",
     "RateLimiter",
     "validate_summary",
-    "validate_and_log",
 ]
 
 
