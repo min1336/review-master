@@ -64,22 +64,43 @@ async def lifespan(app: FastAPI):
     print("\n" + "=" * 60)
     print("Review Summary AI - FastAPI 운영팀 모니터링 대시보드")
     print("=" * 60)
-    print("\n로컬 접속:    http://localhost:8000")
-    print("API 문서:     http://localhost:8000/docs")
-    print("\nAPI 엔드포인트:")
-    print("  GET  /api/summaries          - 요약 목록")
-    print("  GET  /api/tags              - 태그 목록")
-    print("  GET  /api/analysis/reviews  - 리뷰 목록 (is_new=true 지원)")
-    print("=" * 60 + "\n")
 
     # 고아 작업 복구 (서버 재시작 시 processing 상태로 방치된 작업 정리)
     await _recover_stale_report_jobs()
+
+    # NLP 모델 프리로드 (첫 동기화 시 이벤트 루프 블로킹 방지)
+    await _prewarm_nlp_models()
 
     yield
 
     # 엔진 종료
     if settings.get_database_url():
         await close_db()
+
+
+async def _prewarm_nlp_models():
+    """서버 시작 시 NLP 모델 프리로드 (스레드에서 실행)
+
+    Kiwi (~50MB), HybridClassifier, SentimentAnalyzer를
+    서버 시작 시 미리 로드하여 첫 동기화에서 이벤트 루프 블로킹을 방지한다.
+    """
+    import asyncio
+
+    def _load():
+        try:
+            from domain.analysis._singletons import (
+                get_hybrid_classifier,
+                get_kiwi,
+                get_sentiment_analyzer,
+            )
+            get_kiwi()
+            get_hybrid_classifier()
+            get_sentiment_analyzer()
+            print("[Startup] NLP 모델 프리로드 완료 (Kiwi, Classifier, Sentiment)")
+        except Exception as e:
+            print(f"[Startup] NLP 모델 프리로드 실패 (무시됨): {e}")
+
+    await asyncio.to_thread(_load)
 
 
 async def _recover_stale_report_jobs():

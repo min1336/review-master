@@ -5,7 +5,9 @@ ONNX 임베딩 모델(~200MB), Kiwi 형태소 분석기(~50MB) 등
 UnifiedPipeline 인스턴스가 여러 번 생성되더라도 모델을 재로드하지 않는다.
 
 asyncio.to_thread() 환경에서 동시 호출 시 중복 초기화를 방지하기 위해
-threading.Lock을 사용한 Double-Checked Locking 패턴을 적용한다.
+threading.RLock(재진입 가능)을 사용한 Double-Checked Locking 패턴을 적용한다.
+RLock을 쓰는 이유: get_sentiment_analyzer()가 _lock 보유 중 get_hybrid_classifier()를
+호출하므로, 비재진입 Lock이면 데드락이 발생한다.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ import threading
 
 logger = logging.getLogger(__name__)
 
-_lock = threading.Lock()
+_lock = threading.RLock()
 _kiwi = None
 _hybrid_classifier = None
 _sentiment_analyzer = None
