@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from .chunker import ClauseChunker
 from .patterns import (
     ASPECT_KEYWORDS,
+    CONCESSION_REGEX,
     GENERAL_POSITIVE_KEYWORDS,
     NEGATIVE_REGEX,
     POSITIVE_EXCEPTION_REGEX,
@@ -78,6 +79,11 @@ class RuleBasedABSA:
         "빨리": ("배달", ["배차", "차량", "픽업", "처리", "배달", "대기", "응대"]),
         "빠르": ("배달", ["배차", "차량", "픽업", "처리", "배달", "대기", "응대"]),
         "빨랐": ("배달", ["배차", "차량", "픽업", "처리", "배달", "대기"]),
+        # 사고 처리 generic 키워드 — 사고/보험 문맥 필수
+        "안심": ("사고 처리", ["보험", "사고", "면책", "자차", "커버", "보장", "보상"]),
+        "처리": ("사고 처리", ["사고", "보험", "면책", "접수", "파손", "충돌", "수리"]),
+        "접수": ("사고 처리", ["사고", "보험", "면책", "파손", "충돌"]),
+        "책임": ("사고 처리", ["보험", "사고", "면책", "보장", "보상", "배상"]),
     }
 
     # 긍정 키워드 + 없다 → 부정 (사전 컴파일)
@@ -451,7 +457,7 @@ class RuleBasedABSA:
 
         result = defaultdict(lambda: {"positive": [], "negative": [], "neutral": []})
 
-        # 절별 ABSA 분석 (merge 없이 — 같은 카테고리의 긍정/부정 모두 유지)
+        # 절별 ABSA 분석
         clauses = self._chunker.chunk(review)
         for clause in clauses:
             clause_results = self._analyze_clause(clause)
@@ -462,10 +468,32 @@ class RuleBasedABSA:
                     if kw not in result[aspect][sentiment]:
                         result[aspect][sentiment].append(kw)
 
-        # 빈 태그 제거
+        # 양보/반전 구문 체크: 전체 리뷰에서 "걱정했는데 괜찮" 같은 패턴 감지
+        has_concession = bool(CONCESSION_REGEX.search(review))
+
+        # 동일 카테고리 positive+negative 충돌 해소
+        resolved = {}
+        for tag, sentiments in result.items():
+            if not any(sentiments.values()):
+                continue
+            pos_kws = sentiments.get("positive", [])
+            neg_kws = sentiments.get("negative", [])
+            neu_kws = sentiments.get("neutral", [])
+
+            if pos_kws and neg_kws:
+                # 반전 구문이면서 부정 근거가 약할 때만 긍정 우선
+                if has_concession and len(neg_kws) <= 1:
+                    resolved[tag] = {"positive": pos_kws, "negative": [], "neutral": neu_kws}
+                elif len(pos_kws) >= len(neg_kws):
+                    resolved[tag] = {"positive": pos_kws, "negative": [], "neutral": neu_kws}
+                else:
+                    resolved[tag] = {"positive": [], "negative": neg_kws, "neutral": neu_kws}
+            else:
+                resolved[tag] = sentiments
+
         return {
             tag: sentiments
-            for tag, sentiments in result.items()
+            for tag, sentiments in resolved.items()
             if any(sentiments.values())
         }
 

@@ -39,6 +39,7 @@ from core.constants import (
 )
 
 from .patterns import (
+    CONCESSION_REGEX,
     GENERAL_POSITIVE_KEYWORDS,
     RULE_BASED_TAG_MAPPING,
     extract_stem,
@@ -427,9 +428,31 @@ class HybridClassifier:
                     if not already_classified:
                         result[tag][sentiment].append(kw)
 
+        # 양보/반전 구문 체크
+        has_concession = bool(CONCESSION_REGEX.search(review))
+
+        # 동일 카테고리 positive+negative 충돌 해소 (ABSA 후 임베딩 추가로 발생 가능)
+        resolved = {}
+        for tag, sentiments in result.items():
+            if not any(sentiments.values()):
+                continue
+            pos_kws = sentiments.get("positive", [])
+            neg_kws = sentiments.get("negative", [])
+            neu_kws = sentiments.get("neutral", [])
+
+            if pos_kws and neg_kws:
+                if has_concession and len(neg_kws) <= 1:
+                    resolved[tag] = {"positive": pos_kws, "negative": [], "neutral": neu_kws}
+                elif len(pos_kws) >= len(neg_kws):
+                    resolved[tag] = {"positive": pos_kws, "negative": [], "neutral": neu_kws}
+                else:
+                    resolved[tag] = {"positive": [], "negative": neg_kws, "neutral": neu_kws}
+            else:
+                resolved[tag] = sentiments
+
         return {
             tag: sentiments
-            for tag, sentiments in result.items()
+            for tag, sentiments in resolved.items()
             if any(sentiments.values())
         }
 
