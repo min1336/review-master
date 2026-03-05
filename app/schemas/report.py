@@ -307,6 +307,13 @@ class PriorityAction(BaseModel):
     negative_count: int = 0
 
 
+class TagCoverage(BaseModel):
+    """태그 분석 커버리지 (신뢰도 표기용)"""
+    tagged_reviews: int = 0      # 태그가 1개 이상 있는 리뷰 수
+    total_reviews: int = 0       # 전체 리뷰 수
+    ratio: int = 0               # 커버리지 비율 (0-100%)
+
+
 class ReportData(BaseModel):
     """리포트 전체 데이터"""
     branch_id: int
@@ -326,6 +333,7 @@ class ReportData(BaseModel):
     affiliate_evaluation: AffiliateEvaluation | None = None
     vehicle_evaluation: VehicleEvaluation | None = None
     generated_at: str = ""
+    tag_coverage: TagCoverage | None = None
     # 신규 인사이트 섹션 (선택적, 하위호환)
     trend_comparison: TrendComparison | None = None
     benchmark: BenchmarkData | None = None

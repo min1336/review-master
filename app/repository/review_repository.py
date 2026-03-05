@@ -113,7 +113,7 @@ class BranchReviewRepository(BaseRepository[Review]):
                         "review_date": self._safe_datetime(
                             r.get("review_date") or r.get("등록일시")
                         ),
-                        "car_model": r.get("car_model") or r.get("차량모델"),
+                        "car_model": r.get("car_model") or r.get("차량모델") or r.get("car_type") or r.get("차종"),
                         "rent_type": r.get("rent_type") or r.get("렌트타입"),
                         "is_new": r.get("is_new", False),
                     }
@@ -237,6 +237,32 @@ class BranchReviewRepository(BaseRepository[Review]):
             next_day = review_date_to + timedelta(days=1)
             stmt = stmt.where(BranchReviewORM.review_date < next_day)
 
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
+
+    async def count_tagged_reviews(
+        self,
+        branch_id: int,
+        review_date_from: datetime | None = None,
+        review_date_to: datetime | None = None,
+    ) -> int:
+        """태그가 1개 이상 매핑된 리뷰 수 카운트 (신뢰도 표기용)"""
+        from .orm_models import ReviewTagMappingORM
+
+        subq = (
+            select(ReviewTagMappingORM.review_id)
+            .join(BranchReviewORM, BranchReviewORM.review_id == ReviewTagMappingORM.review_id)
+            .where(BranchReviewORM.branch_id == branch_id)
+            .where(BranchReviewORM.deleted_at.is_(None))
+        )
+        if review_date_from:
+            subq = subq.where(BranchReviewORM.review_date >= review_date_from)
+        if review_date_to:
+            next_day = review_date_to + timedelta(days=1)
+            subq = subq.where(BranchReviewORM.review_date < next_day)
+
+        subq = subq.distinct().subquery()
+        stmt = select(func.count()).select_from(subq)
         result = await self._session.execute(stmt)
         return result.scalar_one()
 

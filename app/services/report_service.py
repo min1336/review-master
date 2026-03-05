@@ -43,6 +43,7 @@ from schemas.report import (  # noqa: F401
     VehicleAnalysis,
     StrengthItem,
     TopTagItem,
+    TagCoverage,
     ReportData,
     TrendItem,
     TrendComparison,
@@ -616,6 +617,7 @@ class ReportService:
             affiliate_evaluation=affiliate_eval,
             vehicle_evaluation=vehicle_eval,
             generated_at=to_kst(utc_now()).strftime("%Y-%m-%d %H:%M"),
+            tag_coverage=TagCoverage(**collected["tag_coverage"]) if collected.get("tag_coverage") else None,
         )
 
         # 인사이트 데이터 추가 (선택적, 실패해도 리포트 생성에 영향 없음)
@@ -706,6 +708,23 @@ class ReportService:
                 collected["total_reviews"] = period_count
             except Exception as e:
                 logger.warning(f"기간별 리뷰 수 조회 실패: {e}")
+
+        # 태그 커버리지 조회 (신뢰도 표기용)
+        if self.review_repo:
+            try:
+                tagged_count = await self.review_repo.count_tagged_reviews(
+                    branch_id=branch_id,
+                    review_date_from=start_date,
+                    review_date_to=end_date,
+                )
+                total = collected["total_reviews"]
+                collected["tag_coverage"] = {
+                    "tagged_reviews": tagged_count,
+                    "total_reviews": total,
+                    "ratio": round(tagged_count / total * 100) if total > 0 else 0,
+                }
+            except Exception as e:
+                logger.warning(f"태그 커버리지 조회 실패: {e}")
 
         # Step 2: 태그 분석 (20-40%) — config에 따라 스킵 가능
         await update_progress(20)
