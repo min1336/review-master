@@ -100,7 +100,7 @@ class OpenAIProvider(LLMProvider):
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                timeout=30,
+                timeout=60,
             )
 
             content = response.choices[0].message.content.strip()
@@ -186,7 +186,7 @@ class OpenAIProvider(LLMProvider):
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                timeout=30,
+                timeout=60,
             )
             content = response.choices[0].message.content.strip()
             if content and not content.endswith((".", "!", "?", "다", "요", '"')):

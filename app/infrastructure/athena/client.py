@@ -50,6 +50,7 @@ SELECT
         WHEN 3 THEN 'GLOBAL_API'
     END                     AS affiliate_type,
     r."차종"                AS car_type,
+    r."차량모델"            AS car_model,
     r.rentType              AS rent_type
 FROM carmore.new_review_list nrl
 LEFT JOIN (
@@ -68,6 +69,7 @@ LEFT JOIN (
             WHEN 7 THEN 'SUV'
             ELSE NULL
         END AS "차종",
+        trl.trl_car_model AS "차량모델",
         CASE TRY_CAST(trl.reserv_rent_type AS INTEGER)
             WHEN 1 THEN 'SHORT'
             WHEN 2 THEN 'MONTH'
@@ -94,6 +96,7 @@ LEFT JOIN (
             WHEN 7 THEN 'SUV'
             ELSE NULL
         END AS "차종",
+        wari.wari_car_name AS "차량모델",
         CASE
             WHEN date_diff('day', wari.wari_rental_start, wari.wari_rental_end) < 15 THEN 'SHORT'
             WHEN date_diff('day', wari.wari_rental_start, wari.wari_rental_end) < 30 THEN 'MONTH'
@@ -120,6 +123,7 @@ LEFT JOIN (
             WHEN 7 THEN 'SUV'
             ELSE NULL
         END AS "차종",
+        cim.carinfomst_name AS "차량모델",
         CASE
             WHEN date_diff('day', cgar.cgar_rent_start_datetime, cgar.cgar_rent_end_datetime) < 15 THEN 'SHORT'
             WHEN date_diff('day', cgar.cgar_rent_start_datetime, cgar.cgar_rent_end_datetime) < 30 THEN 'MONTH'
@@ -183,6 +187,7 @@ SELECT
     nrl.register_date       AS review_date,
     nrl.status              AS status,
     r."차종"                AS car_type,
+    r."차량모델"            AS car_model,
     COUNT(*) OVER()         AS total_count
 FROM carmore.new_review_list nrl
 LEFT JOIN (
@@ -194,6 +199,7 @@ LEFT JOIN (
             WHEN 3 THEN '중형' WHEN 4 THEN '대형' WHEN 5 THEN '수입'
             WHEN 6 THEN 'RV' WHEN 7 THEN 'SUV' ELSE NULL
         END AS "차종",
+        trl.trl_car_model AS "차량모델",
         CASE TRY_CAST(trl.reserv_rent_type AS INTEGER)
             WHEN 1 THEN 'SHORT' WHEN 2 THEN 'MONTH' ELSE 'SUBSCRIPTION'
         END AS rentType
@@ -210,6 +216,7 @@ LEFT JOIN (
             WHEN 3 THEN '중형' WHEN 4 THEN '대형' WHEN 5 THEN '수입'
             WHEN 6 THEN 'RV' WHEN 7 THEN 'SUV' ELSE NULL
         END AS "차종",
+        wari.wari_car_name AS "차량모델",
         CASE
             WHEN date_diff('day', wari.wari_rental_start, wari.wari_rental_end) < 15 THEN 'SHORT'
             WHEN date_diff('day', wari.wari_rental_start, wari.wari_rental_end) < 30 THEN 'MONTH'
@@ -228,6 +235,7 @@ LEFT JOIN (
             WHEN 3 THEN '중형' WHEN 4 THEN '대형' WHEN 5 THEN '수입'
             WHEN 6 THEN 'RV' WHEN 7 THEN 'SUV' ELSE NULL
         END AS "차종",
+        cim.carinfomst_name AS "차량모델",
         CASE
             WHEN date_diff('day', cgar.cgar_rent_start_datetime, cgar.cgar_rent_end_datetime) < 15 THEN 'SHORT'
             WHEN date_diff('day', cgar.cgar_rent_start_datetime, cgar.cgar_rent_end_datetime) < 30 THEN 'MONTH'

@@ -236,17 +236,16 @@ class AnalysisService:
 
                 # new_reviews가 비어있으면 branch_reviews로 폴백
 
-            # Athena 분기: Athena 원본(new_review_list)에는 sentiment/is_new 컬럼이 없으므로,
-            # 해당 필터가 있으면 Supabase(branch_reviews)에서 처리한다.
+            # Athena 분기: is_new만 Supabase 전용 (sentiment는 평점 기반 계산 가능)
             use_athena = (
                 self.athena_client is not None
-                and sentiment is None
                 and is_new is None
             )
 
             if use_athena:
                 return await self._search_via_athena(
-                    effective_branch_ids, date_from, date_to, sort_by, limit, offset
+                    effective_branch_ids, date_from, date_to, sort_by, limit, offset,
+                    sentiment=sentiment,
                 )
 
             # 기존 Supabase 경로
@@ -284,17 +283,29 @@ class AnalysisService:
         sort_by: str,
         limit: int,
         offset: int,
+        sentiment: str | None = None,
     ) -> AnalysisReviewListDTO:
-        """Athena를 통한 리뷰 검색 (블로킹 방지: to_thread)"""
+        """Athena를 통한 리뷰 검색 (블로킹 방지: to_thread)
+
+        sentiment 필터가 있으면 더 많이 가져와서 DTO의 평점 기반
+        감정 계산 후 후필터링한다.
+        """
         try:
-            rows, total = await asyncio.to_thread(
+            # sentiment 필터 시 over-fetch 후 후필터링
+            fetch_limit = limit
+            fetch_offset = offset
+            if sentiment:
+                fetch_limit = 500
+                fetch_offset = 0
+
+            rows, athena_total = await asyncio.to_thread(
                 self.athena_client.fetch_reviews_with_filters,
                 branch_ids=branch_ids,
                 date_from=date_from,
                 date_to=date_to,
                 sort_by=sort_by,
-                limit=limit,
-                offset=offset,
+                limit=fetch_limit,
+                offset=fetch_offset,
             )
 
             # 파이프라인 감정 보강: branch_reviews에서 sentiment 병합
@@ -307,6 +318,15 @@ class AnalysisService:
                         row["sentiment"] = sentiment_map[rid]
 
             reviews = [AnalysisReviewDTO.from_db_row(row) for row in rows]
+
+            # sentiment 후필터링 (DTO의 _calculate_sentiment 결과 기준)
+            if sentiment:
+                reviews = [r for r in reviews if r.sentiment == sentiment]
+                total = len(reviews)
+                reviews = reviews[offset:offset + limit]
+            else:
+                total = athena_total
+
             return AnalysisReviewListDTO(reviews=reviews, total=total)
 
         except Exception as e:

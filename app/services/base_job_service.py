@@ -33,6 +33,7 @@ class BaseJobState:
     message: str = ""
     error: str | None = None
     created_at: datetime = field(default_factory=utc_now)
+    last_activity_at: datetime = field(default_factory=utc_now)
     task: asyncio.Task[Any] | None = field(default=None, repr=False)
 
 

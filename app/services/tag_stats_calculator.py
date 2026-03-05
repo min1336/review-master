@@ -347,19 +347,37 @@ class TagStatsCalculator:
     def compute_top_tags(
         tag_details: list[dict],
     ) -> tuple[list[TagRankItem], list[TagRankItem], list[dict]]:
-        """Top 5 긍정/부정 태그 + TopTagItem detail 산출"""
+        """Top 5 긍정/부정 태그 + TopTagItem detail 산출
+
+        동일 category_name의 태그를 합산하여 카테고리 단위로 순위를 산출합니다.
+        """
         affiliate_tags = [
             t for t in tag_details
             if t["category_name"] in AFFILIATE_CATEGORIES and t["total"] > 0
         ]
 
-        top_positive_raw = sorted(affiliate_tags, key=lambda t: t["positive"], reverse=True)[:5]
-        top_negative_raw = sorted(affiliate_tags, key=lambda t: t["negative"], reverse=True)[:5]
+        # 카테고리별 집계
+        cat_agg: dict[str, dict] = {}
+        for t in affiliate_tags:
+            cat = t["category_name"]
+            if cat not in cat_agg:
+                cat_agg[cat] = {"positive": 0, "negative": 0, "total": 0}
+            cat_agg[cat]["positive"] += t["positive"]
+            cat_agg[cat]["negative"] += t["negative"]
+            cat_agg[cat]["total"] += t["total"]
+
+        cat_list = [
+            {"category_name": cat, **vals}
+            for cat, vals in cat_agg.items()
+        ]
+
+        top_positive_raw = sorted(cat_list, key=lambda t: t["positive"], reverse=True)[:5]
+        top_negative_raw = sorted(cat_list, key=lambda t: t["negative"], reverse=True)[:5]
         top_negative_raw = [t for t in top_negative_raw if t["negative"] > 0]
 
         top_positive = [
             TagRankItem(
-                tag_name=t["tag_name"],
+                tag_name=t["category_name"],
                 category_name=t["category_name"],
                 count=t["positive"],
                 ratio=round(t["positive"] / t["total"] * 100) if t["total"] > 0 else 0,
@@ -368,7 +386,7 @@ class TagStatsCalculator:
         ]
         top_negative = [
             TagRankItem(
-                tag_name=t["tag_name"],
+                tag_name=t["category_name"],
                 category_name=t["category_name"],
                 count=t["negative"],
                 ratio=round(t["negative"] / t["total"] * 100) if t["total"] > 0 else 0,
@@ -379,7 +397,7 @@ class TagStatsCalculator:
         # TopTagItem detail (프론트/API 구조화 제공용)
         top_tags_detail = [
             {
-                "name": t["tag_name"],
+                "name": t["category_name"],
                 "count": t["positive"],
                 "positive_ratio": round(t["positive"] / t["total"] * 100) if t["total"] > 0 else 0,
             }

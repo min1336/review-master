@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.analysis.patterns import VEHICLE_CATEGORIES
-from repository.orm_models import BranchReviewORM
+from repository.orm_models import BranchReviewORM, CategoryORM
 
 if TYPE_CHECKING:
     from services.report_service import VehicleAnalysis, VehicleRankItem
@@ -154,67 +154,100 @@ class VehicleAnalyzer:
     ) -> tuple:
         """차량별 호평/불만 Top 5 + 태그 리스트 생성
 
-        vehicle_analysis (기간 필터링 된 데이터)의 count/like_ratio를 기본으로,
-        vehicle_tags_raw (all-time car_model_tags)의 태그를 보강하여 VehicleRankItem 생성.
+        vehicle_analysis (기간 필터링 된 실제 모델명 데이터)를 기본으로,
+        vehicle_tags_raw (car_model_tags)의 태그가 매칭되면 보강합니다.
+
+        vehicle_tags_raw의 키가 차종 카테고리(SUV, 준중형 등)일 경우
+        vehicle_analysis의 실제 모델명을 우선 사용합니다.
 
         Returns:
             (top_liked, top_disliked)
         """
         from services.report_service import VehicleRankItem
 
-        va_map = {v.get("model", ""): v for v in vehicle_analysis}
+        # vehicle_tags_raw 키가 실제 모델명인지 차종 카테고리인지 판별
+        _CAR_TYPE_CATEGORIES = {"경형", "소형", "준중형", "중형", "대형", "SUV", "RV", "수입"}
+        raw_keys = set(vehicle_tags_raw.keys())
+        raw_is_category = raw_keys and raw_keys.issubset(_CAR_TYPE_CATEGORIES)
 
         items: list[dict] = []
-        for car_model, raw in vehicle_tags_raw.items():
-            va = va_map.get(car_model, {})
-            count = va.get("count", 0) or raw.get("total_count", 0)
-            like_ratio = va.get("like_ratio", 0)
-            dislike_ratio = va.get("dislike_ratio", 0)
 
-            if not va and raw["total_count"] > 0:
-                like_ratio = round(raw["total_positive"] / raw["total_count"] * 100)
-                dislike_ratio = round(raw["total_negative"] / raw["total_count"] * 100)
+        if raw_is_category or not vehicle_tags_raw:
+            # vehicle_tags_raw가 차종 카테고리만 → vehicle_analysis 기반으로 빌드
+            for va in vehicle_analysis:
+                model = va.get("model", "") if isinstance(va, dict) else getattr(va, "model", "")
+                count = va.get("count", 0) if isinstance(va, dict) else getattr(va, "count", 0)
+                like_ratio = va.get("like_ratio", 0) if isinstance(va, dict) else getattr(va, "like_ratio", 0)
+                dislike_ratio = va.get("dislike_ratio", 0) if isinstance(va, dict) else getattr(va, "dislike_ratio", 0)
+                top_praise = va.get("top_praise", "") if isinstance(va, dict) else getattr(va, "top_praise", "")
+                top_issue = va.get("top_issue", "") if isinstance(va, dict) else getattr(va, "top_issue", "")
 
-            veh_tags = [
-                (name, ts)
-                for name, ts in raw.get("tags", {}).items()
-                if ts.get("category_name", "") in VEHICLE_CATEGORIES
-                and ts.get("total", 0) > 0
-            ]
+                if not model or count == 0:
+                    continue
 
-            # 서브태그 우선: name != category_name인 항목이 서브태그
-            subtag_entries = [
-                (n, ts) for n, ts in veh_tags
-                if n != ts.get("category_name")
-            ]
-            display_tags = subtag_entries if subtag_entries else veh_tags
+                pos_tags = [top_praise] if top_praise else []
+                neg_tags = [top_issue] if top_issue else []
+                total_pos = count * like_ratio // 100 if like_ratio else 0
+                total_neg = count * dislike_ratio // 100 if dislike_ratio else 0
 
-            # 태그별 건수 정렬 후 Top 2만 표시
-            pos_sorted = sorted(
-                [(name, ts["positive"]) for name, ts in display_tags if ts["positive"] > 0],
-                key=lambda x: x[1], reverse=True,
-            )
-            neg_sorted = sorted(
-                [(name, ts["negative"]) for name, ts in display_tags if ts["negative"] > 0],
-                key=lambda x: x[1], reverse=True,
-            )
+                items.append({
+                    "model": model,
+                    "count": count,
+                    "total_pos_tags": total_pos,
+                    "total_neg_tags": total_neg,
+                    "pos_tags": pos_tags,
+                    "neg_tags": neg_tags,
+                })
+        else:
+            # vehicle_tags_raw가 실제 모델명 → 기존 로직 사용
+            va_map = {v.get("model", ""): v for v in vehicle_analysis}
 
-            pos_tags = [f"{name}({cnt}건)" for name, cnt in pos_sorted[:2]]
-            neg_tags = [f"{name}({cnt}건)" for name, cnt in neg_sorted[:2]]
+            for car_model, raw in vehicle_tags_raw.items():
+                va = va_map.get(car_model, {})
+                count = va.get("count", 0) or raw.get("total_count", 0)
+                like_ratio = va.get("like_ratio", 0)
+                dislike_ratio = va.get("dislike_ratio", 0)
 
-            total_pos_tags = sum(cnt for _, cnt in pos_sorted)
-            total_neg_tags = sum(cnt for _, cnt in neg_sorted)
+                if not va and raw["total_count"] > 0:
+                    like_ratio = round(raw["total_positive"] / raw["total_count"] * 100)
+                    dislike_ratio = round(raw["total_negative"] / raw["total_count"] * 100)
 
-            items.append(
-                {
+                veh_tags = [
+                    (name, ts)
+                    for name, ts in raw.get("tags", {}).items()
+                    if ts.get("category_name", "") in VEHICLE_CATEGORIES
+                    and ts.get("total", 0) > 0
+                ]
+
+                subtag_entries = [
+                    (n, ts) for n, ts in veh_tags
+                    if n != ts.get("category_name")
+                ]
+                display_tags = subtag_entries if subtag_entries else veh_tags
+
+                pos_sorted = sorted(
+                    [(name, ts["positive"]) for name, ts in display_tags if ts["positive"] > 0],
+                    key=lambda x: x[1], reverse=True,
+                )
+                neg_sorted = sorted(
+                    [(name, ts["negative"]) for name, ts in display_tags if ts["negative"] > 0],
+                    key=lambda x: x[1], reverse=True,
+                )
+
+                pos_tags = [f"{name}({cnt}건)" for name, cnt in pos_sorted[:2]]
+                neg_tags = [f"{name}({cnt}건)" for name, cnt in neg_sorted[:2]]
+
+                total_pos_tags = sum(cnt for _, cnt in pos_sorted)
+                total_neg_tags = sum(cnt for _, cnt in neg_sorted)
+
+                items.append({
                     "model": car_model,
                     "count": count,
                     "total_pos_tags": total_pos_tags,
                     "total_neg_tags": total_neg_tags,
                     "pos_tags": pos_tags,
                     "neg_tags": neg_tags,
-                }
-            )
+                })
 
         sorted_liked = sorted(
             items, key=lambda x: (x["total_pos_tags"], x["count"]), reverse=True
@@ -312,10 +345,12 @@ class VehicleAnalyzer:
         if not all_rows:
             return []
 
-        # branch_reviews에는 태그 정보가 없으므로 car_model_tags에서 태그 보강
-        tag_info = await self._get_vehicle_tag_info(session, branch_id)
+        # review_tag_mappings에서 차량 모델별 태그 직접 조회
+        tag_info = await self._get_vehicle_tag_info_from_reviews(
+            session, branch_id, start_date, end_date
+        )
 
-        # 차량별 그룹화 (reviews 소스이므로 total_count = total, tags = tag_info에서)
+        # 차량별 그룹화
         car_data: dict[str, dict] = {}
         for row in all_rows:
             car_model = row.car_model or "기타"
@@ -337,33 +372,70 @@ class VehicleAnalyzer:
 
         return self._convert_to_vehicle_analysis(car_data)
 
-    async def _get_vehicle_tag_info(self, session: AsyncSession, branch_id: int) -> dict:
-        """monthly_car_model_tag_stats에서 차량별 대표 태그 정보 조회 (기간 무관)
+    async def _get_vehicle_tag_info_from_reviews(
+        self,
+        session: AsyncSession,
+        branch_id: int,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> dict:
+        """review_tag_mappings에서 차량 모델별 태그 정보 직접 조회
 
-        top_praise, top_issue 계산에 필요한 태그 통계를 반환합니다.
-        _convert_to_vehicle_analysis의 tags 구조와 호환되도록
-        {"positive": N, "negative": N, "total": N} 형태로 반환합니다.
+        car_models_master를 경유하지 않고 review_tag_mappings + branch_reviews를
+        직접 조인하여 실제 모델명 기준으로 태그 통계를 반환합니다.
 
         Returns:
             dict: {car_model: {tag_name: {"positive": N, "negative": N, "total": N}}}
         """
-        from repository.car_model_repository import CarModelRepository
+        from repository.orm_models import ReviewTagMappingORM, TagORM
 
-        repo = CarModelRepository(session)
+        next_day = end_date + timedelta(days=1)
+
         try:
-            raw = await repo.get_vehicle_analysis_data(branch_id)
-        except Exception:
+            stmt = (
+                select(
+                    BranchReviewORM.car_model,
+                    TagORM.name.label("tag_name"),
+                    ReviewTagMappingORM.sentiment,
+                    func.count().label("cnt"),
+                )
+                .join(BranchReviewORM, BranchReviewORM.review_id == ReviewTagMappingORM.review_id)
+                .join(TagORM, TagORM.id == ReviewTagMappingORM.tag_id)
+                .where(BranchReviewORM.branch_id == branch_id)
+                .where(BranchReviewORM.review_date >= start_date)
+                .where(BranchReviewORM.review_date < next_day)
+                .where(TagORM.category_id.in_(
+                    select(CategoryORM.id).where(CategoryORM.name.in_(VEHICLE_CATEGORIES))
+                ))
+                .group_by(
+                    BranchReviewORM.car_model,
+                    TagORM.name,
+                    ReviewTagMappingORM.sentiment,
+                )
+            )
+            result = await session.execute(stmt)
+            rows = result.all()
+        except Exception as e:
+            logger.warning(f"차량 태그 직접 조회 실패 (branch_id={branch_id}): {e}")
             return {}
 
-        # get_vehicle_analysis_data의 tags에서 neutral 제외하여 호환 형식으로 변환
         car_tags: dict[str, dict] = {}
-        for car_model, data in raw.items():
-            car_tags[car_model] = {}
-            for tag_name, tag_stats in data.get("tags", {}).items():
-                car_tags[car_model][tag_name] = {
-                    "positive": tag_stats.get("positive", 0),
-                    "negative": tag_stats.get("negative", 0),
-                    "total": tag_stats.get("total", 0),
-                }
+        for row in rows:
+            car_model = row.car_model or "기타"
+            tag_name = row.tag_name
+            sentiment = row.sentiment
+            cnt = row.cnt
+
+            if car_model not in car_tags:
+                car_tags[car_model] = {}
+            if tag_name not in car_tags[car_model]:
+                car_tags[car_model][tag_name] = {"positive": 0, "negative": 0, "total": 0}
+
+            if sentiment == "positive":
+                car_tags[car_model][tag_name]["positive"] += cnt
+            elif sentiment == "negative":
+                car_tags[car_model][tag_name]["negative"] += cnt
+            car_tags[car_model][tag_name]["total"] += cnt
 
         return car_tags
+

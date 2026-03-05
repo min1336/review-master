@@ -40,8 +40,10 @@ def _generate_day_ranges(
         next_midnight = (chunk_start + timedelta(days=1)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
-        day_end = next_midnight - timedelta(seconds=1)
-        chunk_end = min(day_end, until)
+        chunk_end = min(next_midnight, until)
+
+        if chunk_end <= chunk_start:
+            break  # 안전장치: 무한 루프 방지
 
         ranges.append((chunk_start, chunk_end))
         chunk_start = chunk_end

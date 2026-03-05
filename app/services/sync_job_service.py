@@ -47,7 +47,7 @@ class SyncJobService(BaseJobService[SyncJobState, SyncJobStatusResponse]):
         # 이미 실행 중인 작업이 있는 경우 (좀비 작업 감지 포함)
         active = self._find_active_job()
         if active is not None:
-            elapsed = (utc_now() - active.created_at).total_seconds()
+            elapsed = (utc_now() - active.last_activity_at).total_seconds()
             task_dead = active.task is None or active.task.done()
 
             if task_dead or elapsed > _JOB_STALE_TIMEOUT_SECONDS:
@@ -90,6 +90,7 @@ class SyncJobService(BaseJobService[SyncJobState, SyncJobStatusResponse]):
             async def progress_callback(progress: int, message: str) -> None:
                 state.progress = progress
                 state.message = message
+                state.last_activity_at = utc_now()
 
             # SyncService 인스턴스 생성
             # NOTE: NLP 모델은 서버 시작 시 _prewarm_nlp_models()에서 미리 로드되므로
@@ -130,7 +131,7 @@ class SyncJobService(BaseJobService[SyncJobState, SyncJobStatusResponse]):
             state.status = "failed"
             state.error = "작업이 취소되었습니다"
             logger.info(f"동기화 작업 취소됨: {state.job_id}")
-        except BaseException as e:
+        except Exception as e:
             state.status = "failed"
             state.error = str(e)
             state.message = "동기화 중 오류 발생"

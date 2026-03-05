@@ -47,12 +47,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- 3. review_count 자동 갱신 트리거 (DDL 003)
--- branch_reviews INSERT/DELETE/UPDATE 시 branch_summaries.review_count 동기화
+-- 3. review_count + branch_name 자동 갱신 트리거 (DDL 003 확장)
+-- branch_reviews INSERT/DELETE/UPDATE 시 branch_summaries 동기화
+-- branch_name: "회사명 지점명" 형식으로 자동 설정 (NULL인 경우만)
 CREATE OR REPLACE FUNCTION fn_sync_branch_review_count()
 RETURNS TRIGGER AS $$
 DECLARE
     target_branch_id INTEGER;
+    combined_name    VARCHAR(100);
 BEGIN
     IF TG_OP = 'UPDATE' AND OLD.branch_id IS DISTINCT FROM NEW.branch_id THEN
         UPDATE branch_summaries
@@ -68,15 +70,26 @@ BEGIN
         target_branch_id := NEW.branch_id;
     END IF;
 
-    INSERT INTO branch_summaries (branch_id, review_count)
+    -- branch_name 조합: "회사명 지점명" (프로덕션 형식)
+    IF TG_OP != 'DELETE' THEN
+        combined_name := LEFT(TRIM(
+            COALESCE(NEW.company_name, '') || ' ' || COALESCE(NEW.branch_name, '')
+        ), 100);
+        IF combined_name = '' THEN combined_name := NULL; END IF;
+    END IF;
+
+    INSERT INTO branch_summaries (branch_id, branch_name, review_count)
     VALUES (
         target_branch_id,
+        combined_name,
         (SELECT COUNT(*) FROM branch_reviews WHERE branch_id = target_branch_id)
     )
     ON CONFLICT (branch_id) DO UPDATE
     SET review_count = (
         SELECT COUNT(*) FROM branch_reviews WHERE branch_id = target_branch_id
-    );
+    ),
+    -- branch_name은 NULL인 경우만 채움 (수동 설정값 보호)
+    branch_name = COALESCE(branch_summaries.branch_name, EXCLUDED.branch_name);
 
     IF TG_OP = 'DELETE' THEN
         RETURN OLD;
@@ -91,5 +104,31 @@ CREATE TRIGGER trg_sync_branch_review_count
 AFTER INSERT OR DELETE OR UPDATE ON branch_reviews
 FOR EACH ROW
 EXECUTE FUNCTION fn_sync_branch_review_count();
+
+-- 4. ON CONFLICT upsert에 필요한 UNIQUE 인덱스 (누락 시 모든 upsert 실패)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_branch_reviews_review_id ON branch_reviews (review_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_tags_name ON tags (name);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_branch_tags_composite ON branch_tags (branch_id, tag_id, period_type);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_car_models_master_model_name ON car_models_master (model_name);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_review_tag_mappings_composite ON review_tag_mappings (review_id, tag_id, sentiment);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_monthly_tag_stats_composite ON monthly_tag_stats (branch_id, period, tag_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_monthly_car_model_tag_stats_composite ON monthly_car_model_tag_stats (car_model_id, period, tag_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_monthly_rating_stats_composite ON monthly_rating_stats (branch_id, period);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_monthly_sentiment_stats_composite ON monthly_sentiment_stats (branch_id, period);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_branch_keywords_composite ON branch_keywords (branch_id, keyword);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_branch_reports_composite ON branch_reports (branch_id, period_start, period_end);
+
+-- 5. get_summary_stats(): 대시보드 통계 (지점 수, 리뷰 수)
+-- summary_repository.py에서 /api/summaries/stats 조회 시 사용
+CREATE OR REPLACE FUNCTION get_summary_stats()
+RETURNS TABLE(total_branches bigint, total_reviews bigint) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        COUNT(*)::bigint AS total_branches,
+        COALESCE(SUM(review_count), 0)::bigint AS total_reviews
+    FROM branch_summaries;
+END;
+$$ LANGUAGE plpgsql STABLE;
 
 COMMIT;

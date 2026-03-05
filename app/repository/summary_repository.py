@@ -65,17 +65,11 @@ class SummaryRepository(BaseRepository[Summary]):
         is_desc = order.lower() == "desc"
         sort_col = getattr(BranchSummaryORM, sort_by)
 
-        # avg_rating 정렬 시 NULL을 가장 낮은 점수로 처리 (NULLS LAST)
-        if sort_by == "avg_rating":
-            if is_desc:
-                stmt = stmt.order_by(sort_col.desc().nulls_last())
-            else:
-                stmt = stmt.order_by(sort_col.asc().nulls_last())
+        # NULL 값을 항상 마지막으로 정렬 (NULLS LAST)
+        if is_desc:
+            stmt = stmt.order_by(sort_col.desc().nulls_last())
         else:
-            if is_desc:
-                stmt = stmt.order_by(sort_col.desc())
-            else:
-                stmt = stmt.order_by(sort_col.asc())
+            stmt = stmt.order_by(sort_col.asc().nulls_last())
 
         stmt = stmt.offset(offset).limit(limit)
 
