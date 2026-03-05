@@ -181,7 +181,39 @@ async def main():
             total_deleted, total_mappings, total_elapsed,
         )
 
-        # 5. branch_tags 재집계
+        # 5. "일반" fallback 태깅 — 매핑 없는 리뷰에 기본 태그 부여
+        general_tag_id = tag_name_to_id.get("일반")
+        if general_tag_id:
+            logger.info("Assigning '일반' fallback tag to unmapped reviews...")
+            unmapped_result = await session.execute(text("""
+                INSERT INTO review_tag_mappings (review_id, tag_id, sentiment, matched_keyword, source)
+                SELECT
+                    br.review_id,
+                    :tag_id,
+                    CASE
+                        WHEN COALESCE(br.rating_service, 0) + COALESCE(br.rating_car, 0) + COALESCE(br.rating_convenience, 0) >= 12 THEN 'positive'
+                        WHEN COALESCE(br.rating_service, 0) + COALESCE(br.rating_car, 0) + COALESCE(br.rating_convenience, 0) < 9 THEN 'negative'
+                        ELSE 'neutral'
+                    END,
+                    '기본 분류',
+                    'retag_v2_fallback'
+                FROM branch_reviews br
+                WHERE br.deleted_at IS NULL
+                  AND br.content IS NOT NULL
+                  AND LENGTH(br.content) >= 5
+                  AND NOT EXISTS (
+                      SELECT 1 FROM review_tag_mappings rtm
+                      WHERE rtm.review_id = br.review_id
+                  )
+                ON CONFLICT (review_id, tag_id, sentiment) DO NOTHING
+            """), {"tag_id": general_tag_id})
+            fallback_count = unmapped_result.rowcount
+            await session.commit()
+            logger.info("Fallback '일반' tags assigned: %d reviews", fallback_count)
+        else:
+            logger.warning("'일반' tag not found — skipping fallback")
+
+        # 6. branch_tags 재집계
         logger.info("Re-aggregating branch_tags(all)...")
         await session.execute(text("DELETE FROM branch_tags WHERE period_type = 'all'"))
         await session.execute(text("""
