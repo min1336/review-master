@@ -52,6 +52,7 @@ CONTEXT_WINDOW_SIZE = 50         # 감정 분석 문맥 윈도우 (글자)
 - `app/repository/orm_models.py` — SQLAlchemy ORM 모델 정의
 - `app/models/` — Pydantic DB 모델
 - `app/schemas/` — API 요청/응답 DTO
+- `app/scripts/` — 운영 스크립트 (retag_reviews, run_auto_mapping 등)
 - `app/templates/` — HTML 대시보드 (dashboard_v2, analysis)
 - `app/static/js/shared-utils.js` — 공통 JS (escapeHtml, escapeAttr, showToast, apiRequest 등)
 - `app/static/css/shared-theme.css` — 공통 CSS 변수, 리셋, toast 애니메이션
@@ -82,8 +83,10 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 
 ## 태그 시스템
 
-- 7개 카테고리, 52개 세분화 태그 (상세: `app/domain/analysis/patterns.py` RULE_BASED_TAG_MAPPING)
-- 감정 판단: 규칙 패턴 매칭 + 문맥 분석, 이중부정 처리, 문맥 윈도우 50자
+- 8개 카테고리, 52개 세분화 태그 + "일반" fallback (상세: `app/domain/analysis/patterns.py`)
+- "일반" 태그(id=13853, category_id=8): 분류 미매핑 리뷰에 자동 부여, 평점 합산으로 감정 판정
+- 감정 판단: 규칙 패턴 매칭 + 문맥 분석, 이중부정 처리, 반전 구문(CONCESSION) 인식, 문맥 윈도우 50자
+- 동일 카테고리 충돌 해소: pos+neg 공존 시 다수결, 반전 구문 시 neg 제거
 - API Envelope: `{"success": true, "data": ..., "count": N}`
 
 ## Testing
@@ -94,6 +97,8 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 ## Architecture Decisions
 
 - 데이터 정합성: DB 레벨 솔루션(트리거, 제약조건, 계산 컬럼) 우선
+- `branch_tags` 테이블: `created_at` 컬럼 없음 (count, positive/negative/neutral_count, updated_at만 존재)
+- branch_tags 재집계: `DELETE WHERE period_type='all'` + `INSERT ... ON CONFLICT DO UPDATE`
 - 명시적 요청 없이 API 측 데이터 수정 금지
 
 ## Git Rules
@@ -130,6 +135,8 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 - `alembic upgrade head` — DB 마이그레이션 적용
 - `alembic revision --autogenerate -m "설명"` — 마이그레이션 생성
 - `python app/scripts/run_auto_mapping.py` — 키워드 자동 매핑
+- `PGPASSWORD=devpass psql -h localhost -p 3306 -U n8n_user -d review_summary_db` — 로컬 DB 접속
+- `cd app && ../.venv/bin/python scripts/retag_reviews.py` — 리뷰 재태깅 (app/ 에서 실행 필수)
 
 > 상세 API 엔드포인트, DB 테이블, 대시보드 UI 패턴 → `.claude/docs/reference.md` 참조
 > DB 스키마 상세 (27개 테이블 컬럼, 관계도, 데이터 흐름) → `.claude/docs/database-schema.md` 참조
