@@ -817,11 +817,15 @@ class AnalysisReviewDTO(BaseModel):
         rating_car = _safe_float(row.get("rating_car"))
         rating_convenience = _safe_float(row.get("rating_convenience"))
 
-        # 감정 계산: 평점 + DB 감정 결합
+        # 감정: DB에 파이프라인이 계산한 값이 있으면 그대로 사용
         db_sentiment = row.get("sentiment")
-        final_sentiment = cls._calculate_sentiment(
-            rating_service, rating_car, rating_convenience, db_sentiment
-        )
+        if db_sentiment in ("positive", "negative", "neutral"):
+            final_sentiment = db_sentiment
+        else:
+            # DB 감정 없는 경우(Athena 등) → 평점 기반 fallback
+            final_sentiment = cls._calculate_sentiment(
+                rating_service, rating_car, rating_convenience, db_sentiment
+            )
 
         return cls(
             id=row.get("id"),

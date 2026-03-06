@@ -334,6 +334,7 @@ class AnalysisService:
             # Supabase 폴백
             result = await self.review_repo.search_with_filters(
                 branch_ids=branch_ids,
+                sentiment=sentiment,
                 date_from=date_from,
                 date_to=date_to,
                 sort_by=sort_by,
