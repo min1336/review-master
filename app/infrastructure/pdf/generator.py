@@ -1,9 +1,8 @@
 """
 PDF 생성기
 
-FPDF2를 사용하여 리포트를 PDF로 생성합니다.
-시스템 의존성 없이 pip만으로 설치 가능합니다.
-한글 폰트는 시스템 폰트(fonts-nanum)를 사용합니다.
+weasyprint를 사용하여 HTML 템플릿을 PDF로 변환합니다.
+weasyprint 미설치 시 FPDF2로 fallback합니다.
 """
 
 from __future__ import annotations
@@ -18,6 +17,14 @@ if TYPE_CHECKING:
     from services.report_service import ReportData
 
 logger = logging.getLogger(__name__)
+
+# weasyprint 사용 가능 여부 (시스템 의존성 필요)
+try:
+    import weasyprint as _wp
+    _HAS_WEASYPRINT = True
+except (ImportError, OSError):
+    _HAS_WEASYPRINT = False
+    logger.info("weasyprint 미설치 — FPDF2 fallback 사용")
 
 
 class PDFGenerator:
@@ -82,9 +89,34 @@ class PDFGenerator:
     # ================================================================
 
     def generate_simple(self, report: ReportData) -> bytes:
+        """PDF 생성 — weasyprint 우선, FPDF2 fallback"""
+        if _HAS_WEASYPRINT:
+            try:
+                return self._generate_html_pdf(report)
+            except Exception as e:
+                logger.warning(f"weasyprint PDF 생성 실패, FPDF2 fallback: {e}")
         if isinstance(report.top_tags_detail, list):
             return self._generate_new_format(report)
         return self._generate_legacy_format(report)
+
+    # ================================================================
+    # HTML → PDF (weasyprint)
+    # ================================================================
+
+    _TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent / "templates" / "pdf"
+
+    def _generate_html_pdf(self, report: ReportData) -> bytes:
+        """Jinja2 HTML 템플릿을 weasyprint로 PDF 변환"""
+        from jinja2 import Environment, FileSystemLoader
+
+        env = Environment(
+            loader=FileSystemLoader(str(self._TEMPLATE_DIR)),
+            autoescape=True,
+        )
+        template = env.get_template("report_template.html")
+        html_str = template.render(report=report)
+        doc = _wp.HTML(string=html_str)
+        return doc.write_pdf()
 
     # ================================================================
     # 심플 포맷 (3-섹션: 요약 / 업체 평가 / 차량 평가)
@@ -256,31 +288,6 @@ class PDFGenerator:
                     msg = f"이 지점은 {bm.region_name or '해당 지역'} 평균보다 낮은 평점이므로, 개선 조치가 필요할 수 있습니다."
                 pdf.multi_cell(w, row, msg)
             pdf.ln(gap)
-
-        # ── 6. 우선순위 액션 ──
-        if report.priority_actions:
-            self._section(pdf, font, "6. 우선순위 액션")
-
-            for a in report.priority_actions:
-                impact_kr = "높음" if a.impact == "high" else ("보통" if a.impact == "medium" else "낮음")
-                effort_kr = "높음" if a.effort == "high" else ("보통" if a.effort == "medium" else "낮음")
-
-                pdf.set_font(font, "B", 9)
-                pdf.cell(w, row, f"{a.rank}순위: {a.category_name}",
-                         new_x="LMARGIN", new_y="NEXT")
-
-                pdf.set_font(font, "", 7)
-                pdf.set_text_color(100, 100, 100)
-                pdf.cell(w, row, f"  영향: {impact_kr}  |  난이도: {effort_kr}  |  부정률 {a.negative_ratio}% ({a.tag_name} {a.negative_count}건)",
-                         new_x="LMARGIN", new_y="NEXT")
-                pdf.set_text_color(0, 0, 0)
-
-                pdf.set_font(font, "", 8)
-                pdf.cell(w, row, f"  {a.issue}",
-                         new_x="LMARGIN", new_y="NEXT")
-                pdf.cell(w, row, f"  -> {a.action}",
-                         new_x="LMARGIN", new_y="NEXT")
-                pdf.ln(gap)
 
         # ── 푸터 ──
         self._hr(pdf, m, w)

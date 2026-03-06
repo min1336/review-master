@@ -70,13 +70,6 @@
             padding-bottom: 10px;
             border-bottom: 2px solid #e5e7eb;
             margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .section-icon {
-            font-size: 16pt;
         }
 
         /* Summary Box */
@@ -89,99 +82,142 @@
             line-height: 1.8;
         }
 
-        /* Keywords */
-        .keywords {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
+        .ai-text-box {
+            background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+            border-left: 4px solid #6366f1;
+            padding: 16px;
+            border-radius: 0 8px 8px 0;
+            font-size: 10pt;
+            line-height: 1.7;
             margin-top: 12px;
         }
 
-        .keyword {
-            background: #dbeafe;
-            color: #1e40af;
-            padding: 4px 12px;
-            border-radius: 16px;
+        /* Eval Columns */
+        .eval-columns {
+            display: flex;
+            gap: 16px;
+        }
+
+        .eval-col {
+            flex: 1;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .eval-col.positive {
+            background: rgba(16, 185, 129, 0.06);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .eval-col.negative {
+            background: rgba(239, 68, 68, 0.06);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .eval-col-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 11pt;
+        }
+
+        .eval-col-title.positive {
+            color: #10b981;
+        }
+
+        .eval-col-title.negative {
+            color: #ef4444;
+        }
+
+        .eval-item {
+            color: #374151;
             font-size: 10pt;
+            padding: 3px 0;
+        }
+
+        .eval-item .count {
             font-weight: 500;
         }
 
-        /* Trend Chart */
-        .trend-chart {
-            margin-top: 16px;
+        .eval-item .count.positive {
+            color: #10b981;
         }
 
-        .trend-bar-container {
+        .eval-item .count.negative {
+            color: #ef4444;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
             display: flex;
-            align-items: center;
-            margin-bottom: 8px;
             gap: 12px;
+            margin-bottom: 12px;
         }
 
-        .trend-label {
-            width: 60px;
-            font-size: 9pt;
-            color: #6b7280;
-        }
-
-        .trend-bar {
+        .stat-card {
             flex: 1;
-            height: 20px;
-            background: #f3f4f6;
-            border-radius: 4px;
-            overflow: hidden;
-            display: flex;
+            background: #f9fafb;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
         }
 
-        .bar-positive {
-            background: #10b981;
+        .stat-card-label {
+            font-size: 9pt;
+            color: #6b7280;
+            margin-bottom: 4px;
         }
 
-        .bar-neutral {
-            background: #fbbf24;
+        .stat-card-value {
+            font-size: 18pt;
+            font-weight: 700;
         }
 
-        .bar-negative {
-            background: #ef4444;
+        .stat-card-sub {
+            font-size: 8pt;
+            color: #6b7280;
+            margin-top: 2px;
         }
 
-        .trend-count {
-            width: 50px;
-            text-align: right;
+        .stat-card-detail {
+            font-size: 9pt;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+
+        /* Change Card */
+        .change-card {
+            flex: 1;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .change-card.good {
+            background: rgba(16, 185, 129, 0.06);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .change-card.bad {
+            background: rgba(239, 68, 68, 0.06);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .change-label {
             font-size: 9pt;
             color: #6b7280;
         }
 
-        .trend-legend {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin-top: 12px;
-            font-size: 9pt;
+        .change-value {
+            font-size: 16pt;
+            font-weight: 700;
         }
 
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 4px;
+        .change-value.good {
+            color: #10b981;
         }
 
-        .legend-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-        }
-
-        .legend-dot.positive {
-            background: #10b981;
-        }
-
-        .legend-dot.neutral {
-            background: #fbbf24;
-        }
-
-        .legend-dot.negative {
-            background: #ef4444;
+        .change-value.bad {
+            color: #ef4444;
         }
 
         /* Vehicle Table */
@@ -204,176 +240,69 @@
             border-bottom: 1px solid #e5e7eb;
         }
 
-        .vehicle-table tr:hover {
-            background: #f9fafb;
-        }
-
-        /* Strengths & Weaknesses */
-        .sw-container {
-            display: flex;
-            gap: 24px;
-        }
-
-        .sw-column {
-            flex: 1;
-        }
-
-        .sw-title {
-            font-size: 11pt;
-            font-weight: 600;
-            margin-bottom: 12px;
-            padding: 8px 12px;
-            border-radius: 6px;
-        }
-
-        .sw-title.strengths {
-            background: #dcfce7;
-            color: #166534;
-        }
-
-        .sw-title.weaknesses {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        .strength-item,
-        .weakness-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 12px;
-            margin-bottom: 6px;
-            background: #f9fafb;
-            border-radius: 6px;
-        }
-
-        .tag-name {
-            font-weight: 500;
-        }
-
-        .ratio {
-            font-weight: 600;
-            padding: 2px 8px;
-            border-radius: 12px;
+        /* Category Trend Table */
+        .trend-table {
+            width: 100%;
+            border-collapse: collapse;
             font-size: 10pt;
-        }
-
-        .ratio.positive {
-            background: #dcfce7;
-            color: #166534;
-        }
-
-        .ratio.negative {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        /* Action Items */
-        .action-item {
-            background: #f9fafb;
             border: 1px solid #e5e7eb;
             border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 12px;
+            overflow: hidden;
         }
 
-        .action-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-
-        .action-number {
-            width: 24px;
-            height: 24px;
-            background: #2563eb;
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            font-size: 10pt;
-        }
-
-        .priority {
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 9pt;
-            font-weight: 600;
-        }
-
-        .priority.high {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        .priority.medium {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .priority.low {
-            background: #dbeafe;
-            color: #1e40af;
-        }
-
-        .category {
+        .trend-table th {
+            background: #f3f4f6;
+            padding: 8px 12px;
+            text-align: center;
             font-weight: 600;
             color: #374151;
         }
 
-        .action-issue {
-            font-size: 10pt;
-            color: #6b7280;
-            margin-bottom: 6px;
+        .trend-table th:first-child {
+            text-align: left;
         }
 
-        .action-solution {
-            font-size: 10pt;
-            color: #1f2937;
-            background: white;
-            padding: 10px;
-            border-radius: 6px;
-            border-left: 3px solid #10b981;
-        }
-
-        /* Footer */
-        .footer {
-            margin-top: 40px;
-            padding-top: 20px;
+        .trend-table td {
+            padding: 8px 12px;
             border-top: 1px solid #e5e7eb;
             text-align: center;
-            font-size: 9pt;
-            color: #9ca3af;
+            color: #374151;
         }
 
-        /* Stats Grid */
-        .stats-grid {
-            display: flex;
-            gap: 16px;
-            margin-bottom: 20px;
+        .trend-table td:first-child {
+            text-align: left;
         }
 
-        .stat-card {
-            flex: 1;
-            background: #f9fafb;
-            padding: 16px;
+        /* Benchmark info box */
+        .benchmark-info {
+            margin-top: 12px;
             border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 10pt;
+            color: #374151;
+        }
+
+        .benchmark-info.good {
+            background: rgba(16, 185, 129, 0.06);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .benchmark-info.bad {
+            background: rgba(239, 68, 68, 0.06);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        /* Sentiment Colors */
+        .sentiment-positive {
+            color: #10b981;
+        }
+
+        .sentiment-negative {
+            color: #ef4444;
+        }
+
+        .text-center {
             text-align: center;
-        }
-
-        .stat-value {
-            font-size: 20pt;
-            font-weight: 700;
-            color: #2563eb;
-        }
-
-        .stat-label {
-            font-size: 9pt;
-            color: #6b7280;
-            margin-top: 4px;
         }
 
         .empty-message {
@@ -382,22 +311,16 @@
             padding: 20px;
         }
 
-        /* Utility Classes */
-        .text-center {
+        /* Footer (헤더 아래 배치) */
+        .footer {
             text-align: center;
+            font-size: 9pt;
+            color: #9ca3af;
+            margin-bottom: 28px;
         }
 
-        /* Sentiment Colors */
-        .sentiment-positive {
-            color: #10b981;
-        }
-
-        .sentiment-neutral {
-            color: #f59e0b;
-        }
-
-        .sentiment-negative {
-            color: #ef4444;
+        .footer .confidence {
+            margin-bottom: 4px;
         }
 
         @media print {
@@ -419,57 +342,204 @@
             </div>
         </div>
 
-        <!-- Period Summary -->
-        <div class="section">
-            <div class="section-title">
-                <span class="section-icon">📊</span>
-                기간별 요약 분석
+        <!-- 신뢰도 + 생성일 -->
+        <div class="footer">
+            {% if report.tag_coverage %}
+            <div class="confidence">
+                분석 신뢰도:
+                <span style="color: {{ '#10b981' if report.tag_coverage.ratio >= 70 else '#f59e0b' if report.tag_coverage.ratio >= 40 else '#ef4444' }}; font-weight: 600;">{{ report.tag_coverage.ratio }}%</span>
+                (태그 분석 {{ report.tag_coverage.tagged_reviews }}건 / 전체 {{ report.tag_coverage.total_reviews }}건)
             </div>
+            {% endif %}
+            Generated by Carmore AI · {{ report.generated_at }}
+        </div>
+
+        <!-- 1. 요약 -->
+        {% if report.period_summary %}
+        <div class="section">
+            <div class="section-title">요약</div>
             <div class="summary-box">
                 {{ report.period_summary }}
             </div>
         </div>
+        {% endif %}
 
-
-        <!-- Vehicle Analysis -->
+        <!-- 2. 업체 평가 -->
+        {% if report.affiliate_evaluation %}
         <div class="section">
-            <div class="section-title">
-                <span class="section-icon">🚗</span>
-                차량별 평가 분석
+            <div class="section-title">업체 평가</div>
+            <div class="eval-columns">
+                <div class="eval-col positive">
+                    <div class="eval-col-title positive">잘한점</div>
+                    {% if report.affiliate_evaluation.top_positive %}
+                    {% for t in report.affiliate_evaluation.top_positive %}
+                    <div class="eval-item">{{ loop.index }}. {{ t.tag_name }} <span class="count positive">{{ t.count }}건</span></div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="eval-item" style="color: #9ca3af;">데이터 부족</div>
+                    {% endif %}
+                </div>
+                <div class="eval-col negative">
+                    <div class="eval-col-title negative">개선점</div>
+                    {% if report.affiliate_evaluation.top_negative %}
+                    {% for t in report.affiliate_evaluation.top_negative %}
+                    <div class="eval-item">{{ loop.index }}. {{ t.tag_name }} <span class="count negative">{{ t.count }}건</span></div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="eval-item" style="color: #9ca3af;">데이터 부족</div>
+                    {% endif %}
+                </div>
             </div>
-            <table class="vehicle-table">
+            {% if report.affiliate_evaluation.ai_text %}
+            <div class="ai-text-box">{{ report.affiliate_evaluation.ai_text }}</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- 3. 차량 평가 -->
+        {% if report.vehicle_evaluation %}
+        <div class="section">
+            <div class="section-title">차량 평가</div>
+            <div class="eval-columns">
+                <div class="eval-col positive">
+                    <div class="eval-col-title positive">칭찬 차량</div>
+                    {% if report.vehicle_evaluation.top_liked %}
+                    {% for v in report.vehicle_evaluation.top_liked %}
+                    <div class="eval-item">{{ loop.index }}. {{ v.model }}{% if v.tags %} <span class="count positive">{{ v.tags[:3]|join(', ') }}</span>{% endif %}</div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="eval-item" style="color: #9ca3af;">데이터 부족</div>
+                    {% endif %}
+                </div>
+                <div class="eval-col negative">
+                    <div class="eval-col-title negative">불만 차량</div>
+                    {% if report.vehicle_evaluation.top_disliked %}
+                    {% for v in report.vehicle_evaluation.top_disliked %}
+                    <div class="eval-item">{{ loop.index }}. {{ v.model }}{% if v.tags %} <span class="count negative">{{ v.tags[:3]|join(', ') }}</span>{% endif %}</div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="eval-item" style="color: #9ca3af;">데이터 부족</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% if report.vehicle_evaluation.ai_text %}
+            <div class="ai-text-box">{{ report.vehicle_evaluation.ai_text }}</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- 4. 트렌드 비교 -->
+        {% if report.trend_comparison %}
+        <div class="section">
+            <div class="section-title">트렌드 비교</div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-card-label">이전 기간</div>
+                    <div style="font-size:10pt;color:#374151;">{{ report.trend_comparison.previous_period }}</div>
+                    <div class="stat-card-detail">{{ report.trend_comparison.previous_total_reviews }}건</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-label">현재 기간</div>
+                    <div style="font-size:10pt;color:#374151;">{{ report.trend_comparison.current_period }}</div>
+                    <div class="stat-card-detail">{{ report.trend_comparison.current_total_reviews }}건</div>
+                </div>
+            </div>
+            <div class="stats-grid">
+                <div class="change-card {{ 'good' if report.trend_comparison.overall_positive_change >= 0 else 'bad' }}">
+                    <div class="change-label">긍정률 변화</div>
+                    <div class="change-value {{ 'good' if report.trend_comparison.overall_positive_change >= 0 else 'bad' }}">{{ '+' if report.trend_comparison.overall_positive_change >= 0 }}{{ report.trend_comparison.overall_positive_change }}%p</div>
+                </div>
+                <div class="change-card {{ 'good' if report.trend_comparison.overall_negative_change <= 0 else 'bad' }}">
+                    <div class="change-label">부정률 변화</div>
+                    <div class="change-value {{ 'good' if report.trend_comparison.overall_negative_change <= 0 else 'bad' }}">{{ '+' if report.trend_comparison.overall_negative_change >= 0 }}{{ report.trend_comparison.overall_negative_change }}%p</div>
+                </div>
+            </div>
+            {% if report.trend_comparison.category_trends %}
+            <table class="trend-table">
                 <thead>
                     <tr>
-                        <th>차량 모델</th>
-                        <th class="text-center">리뷰 수</th>
-                        <th>주요 호평</th>
-                        <th>주요 불만</th>
+                        <th>카테고리</th>
+                        <th>이전</th>
+                        <th>현재</th>
+                        <th>변화</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% if report.vehicle_analysis %}
-                    {% for v in report.vehicle_analysis %}
+                    {% for t in report.trend_comparison.category_trends %}
                     <tr>
-                        <td>{{ v.model }}</td>
-                        <td class="text-center">{{ v.count }}건</td>
-                        <td class="sentiment-positive">{{ v.top_praise or '-' }}</td>
-                        <td class="sentiment-negative">{{ v.top_issue or '-' }}</td>
+                        <td>{{ t.category_name }}</td>
+                        <td>{{ t.previous_ratio }}%</td>
+                        <td>{{ t.current_ratio }}%</td>
+                        <td style="font-weight:600;color:{{ '#10b981' if t.direction == 'up' else '#ef4444' if t.direction == 'down' else '#6b7280' }};">
+                            {{ '▲' if t.direction == 'up' else '▼' if t.direction == 'down' else '―' }} {{ '+' if t.change >= 0 }}{{ t.change }}%p
+                        </td>
                     </tr>
                     {% endfor %}
-                    {% else %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- 6. 벤치마크 -->
+        {% if report.benchmark %}
+        <div class="section">
+            <div class="section-title">벤치마크</div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-card-label">이 지점</div>
+                    <div class="stat-card-value" style="color:#f59e0b;">{{ '%.1f' % report.benchmark.branch_rating }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-label">{{ report.benchmark.region_name or '지역' }} 평균</div>
+                    <div class="stat-card-value" style="color:#374151;">{{ '%.1f' % report.benchmark.regional_avg_rating }}</div>
+                    <div class="stat-card-sub">상위 {{ report.benchmark.regional_rank_pct }}% ({{ report.benchmark.total_branches_in_region }}개 지점)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-label">전국 평균</div>
+                    <div class="stat-card-value" style="color:#374151;">{{ '%.1f' % report.benchmark.national_avg_rating }}</div>
+                    <div class="stat-card-sub">상위 {{ report.benchmark.national_rank_pct }}% ({{ report.benchmark.total_branches_national }}개 지점)</div>
+                </div>
+            </div>
+            {% if report.benchmark.branch_rating > 0 %}
+            {% if report.benchmark.branch_rating >= report.benchmark.regional_avg_rating %}
+            <div class="benchmark-info good">
+                이 지점은 {{ report.benchmark.region_name or '해당 지역' }} 평균 이상의 평점을 유지하고 있습니다.
+            </div>
+            {% else %}
+            <div class="benchmark-info bad">
+                이 지점은 {{ report.benchmark.region_name or '해당 지역' }} 평균보다 낮은 평점이므로, 개선 조치가 필요할 수 있습니다.
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- 7. 부정 리뷰 목록 -->
+        {% if report.negative_reviews %}
+        <div class="section">
+            <div class="section-title">부정 리뷰 목록</div>
+            <table class="vehicle-table">
+                <thead>
                     <tr>
-                        <td colspan="4" class="empty-message">차량별 데이터가 없습니다.</td>
+                        <th style="width: 15%;">날짜</th>
+                        <th style="width: 10%;">평점</th>
+                        <th>리뷰 내용</th>
                     </tr>
-                    {% endif %}
+                </thead>
+                <tbody>
+                    {% for r in report.negative_reviews %}
+                    <tr>
+                        <td>{{ r.review_date }}</td>
+                        <td class="text-center sentiment-negative">{{ r.rating }}</td>
+                        <td style="white-space:pre-line;">{{ r.content|replace('<br>', '\n')|replace('<br/>', '\n')|replace('<br />', '\n') }}</td>
+                    </tr>
+                    {% endfor %}
                 </tbody>
             </table>
         </div>
+        {% endif %}
 
-
-        <!-- Footer -->
-        <div class="footer">
-            Generated by Carmore AI · {{ report.generated_at }}
-        </div>
     </div>
 </body>
 
