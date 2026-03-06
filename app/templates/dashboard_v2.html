@@ -3677,9 +3677,9 @@
                         include_vehicle_eval: true,
                         include_trend_comparison: true,
                         include_benchmark: true,
-                        include_priority_actions: true,
-                        summary_max_length: 600,
-                        eval_max_length: 250,
+                        include_priority_actions: false,
+                        summary_max_length: 300,
+                        eval_max_length: 150,
                     },
                     data: {
                         include_tags: true,
@@ -3711,8 +3711,8 @@
                     output: {
                         include_period_summary: true, include_affiliate_eval: true,
                         include_vehicle_eval: true, include_trend_comparison: true,
-                        include_benchmark: true, include_priority_actions: true,
-                        summary_max_length: 600, eval_max_length: 250,
+                        include_benchmark: true, include_priority_actions: false,
+                        summary_max_length: 300, eval_max_length: 150,
                     },
                     data: {
                         include_tags: true, include_vehicles: true,
@@ -4169,9 +4169,8 @@
                 buildSettingsCheckbox(section, '차량 평가', 'output', 'include_vehicle_eval');
                 buildSettingsCheckbox(section, '트렌드 비교', 'output', 'include_trend_comparison');
                 buildSettingsCheckbox(section, '벤치마크', 'output', 'include_benchmark');
-                buildSettingsCheckbox(section, '우선순위 액션', 'output', 'include_priority_actions');
-                buildSettingsSlider(section, '요약 분량', 'output', 'summary_max_length', 400, 1000, 50, '자');
-                buildSettingsSlider(section, '평가 분량', 'output', 'eval_max_length', 150, 400, 50, '자');
+                buildSettingsSlider(section, '요약 분량', 'output', 'summary_max_length', 150, 1000, 50, '자');
+                buildSettingsSlider(section, '평가 분량', 'output', 'eval_max_length', 100, 400, 50, '자');
 
                 panel.appendChild(section);
             }
@@ -4193,9 +4192,9 @@
             }
 
             const DETAIL_LEVEL_DEFAULTS = {
-                brief: { summary: 250, eval: 150 },
-                standard: { summary: 600, eval: 250 },
-                detailed: { summary: 1000, eval: 400 },
+                brief: { summary: 150, eval: 100 },
+                standard: { summary: 300, eval: 150 },
+                detailed: { summary: 600, eval: 250 },
             };
 
             const AIRPORT_KEYWORDS = ['공항', '인천공항', '김포공항', '제주공항', '김해공항', '대구공항'];
@@ -4903,29 +4902,6 @@
                     </div>
                     ` : ''}
 
-                    <!-- 섹션 1-b: 강점 / 개선점 -->
-                    ${(data.strengths && data.strengths.length > 0) || (data.improvements && data.improvements.length > 0) ? `
-                    <div class="report-section">
-                        <div class="report-section-title">강점 / 개선점</div>
-                        <div style="display: flex; gap: 16px;">
-                            <div style="flex: 1; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 14px;">
-                                <div style="font-weight: 600; color: #10b981; margin-bottom: 10px; font-size: 13px;">현상유지</div>
-                                ${(data.strengths || []).length > 0
-                            ? (data.strengths || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
-                            : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
-                        }
-                            </div>
-                            <div style="flex: 1; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 14px;">
-                                <div style="font-weight: 600; color: #ef4444; margin-bottom: 10px; font-size: 13px;">보완필요</div>
-                                ${(data.improvements || []).length > 0
-                            ? (data.improvements || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
-                            : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
-                        }
-                            </div>
-                        </div>
-                    </div>
-                    ` : ''}
-
                     <!-- 섹션 2: 업체 평가 -->
                     ${data.affiliate_evaluation ? `
                     <div class="report-section">
@@ -4950,7 +4926,7 @@
                         <div class="report-section-title">차량 평가</div>
                         <div style="display: flex; gap: 16px;">
                             <div style="flex:1; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:8px; padding:12px;">
-                                <div style="font-weight:600; color:#10b981; margin-bottom:8px; font-size:13px;">호평 차량</div>
+                                <div style="font-weight:600; color:#10b981; margin-bottom:8px; font-size:13px;">칭찬 차량</div>
                                 ${buildVehicleList(veh.top_liked, 'liked')}
                             </div>
                             <div style="flex:1; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.2); border-radius:8px; padding:12px;">
@@ -5047,26 +5023,28 @@
                     </div>
                     ` : ''}
 
-                    <!-- 섹션 6: 우선순위 액션 (선택적) -->
-                    ${data.priority_actions && data.priority_actions.length > 0 ? `
+                    <!-- 섹션 6: 부정 리뷰 목록 -->
+                    ${data.negative_reviews && data.negative_reviews.length > 0 ? `
                     <div class="report-section">
-                        <div class="report-section-title">우선순위 액션</div>
-                        <div style="display:flex;flex-direction:column;gap:10px;">
-                            ${data.priority_actions.map(a => `
-                            <div style="background:var(--grey-8);border-radius:8px;padding:14px;border-left:4px solid ${a.impact === 'high' ? '#ef4444' : a.impact === 'medium' ? '#f59e0b' : '#10b981'};">
-                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                                    <span style="font-size:14px;font-weight:600;color:var(--grey-2);">${a.rank}순위: ${escapeHtml(a.category_name)}</span>
-                                    <div style="display:flex;gap:6px;">
-                                        <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${a.impact === 'high' ? 'rgba(239,68,68,0.1)' : a.impact === 'medium' ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)'};color:${a.impact === 'high' ? '#ef4444' : a.impact === 'medium' ? '#f59e0b' : '#10b981'};">영향 ${a.impact === 'high' ? '높음' : a.impact === 'medium' ? '보통' : '낮음'}</span>
-                                        <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(99,102,241,0.1);color:#6366f1;">난이도 ${a.effort === 'high' ? '높음' : a.effort === 'medium' ? '보통' : '낮음'}</span>
-                                    </div>
-                                </div>
-                                <div style="font-size:12px;color:var(--grey-4);margin-bottom:4px;">부정률 ${a.negative_ratio}% · ${escapeHtml(a.tag_name)} ${a.negative_count}건</div>
-                                <div style="font-size:13px;color:var(--grey-4);margin-bottom:4px;">${escapeHtml(a.issue)}</div>
-                                <div style="font-size:13px;color:var(--grey-3);">${escapeHtml(a.action)}</div>
-                            </div>
-                            `).join('')}
-                        </div>
+                        <div class="report-section-title">부정 리뷰 목록</div>
+                        <table class="report-table" style="width:100%;border-collapse:collapse;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align:left;padding:8px 10px;font-size:12px;color:var(--grey-4);border-bottom:2px solid var(--grey-7);">날짜</th>
+                                    <th style="text-align:center;padding:8px 10px;font-size:12px;color:var(--grey-4);border-bottom:2px solid var(--grey-7);">평점</th>
+                                    <th style="text-align:left;padding:8px 10px;font-size:12px;color:var(--grey-4);border-bottom:2px solid var(--grey-7);">리뷰 내용</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.negative_reviews.map(r => `
+                                <tr>
+                                    <td style="padding:8px 10px;font-size:12px;color:var(--grey-4);border-bottom:1px solid var(--grey-7);white-space:nowrap;">${escapeHtml(r.review_date || '')}</td>
+                                    <td style="padding:8px 10px;font-size:12px;color:#ef4444;text-align:center;border-bottom:1px solid var(--grey-7);">${escapeHtml(String(r.rating || ''))}</td>
+                                    <td style="padding:8px 10px;font-size:12px;color:var(--grey-3);border-bottom:1px solid var(--grey-7);line-height:1.5;white-space:pre-line;">${escapeHtml((r.content || '').replace(/<br\s*\/?>/gi, '\n'))}</td>
+                                </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
                     </div>
                     ` : ''}
 
@@ -5121,28 +5099,6 @@
                             ${escapeHtml(data.period_summary || '요약 정보가 없습니다.')}
                         </div>
                     </div>
-
-                    <!-- Strengths & Improvements -->
-                    ${(data.strengths && data.strengths.length > 0) || (data.improvements && data.improvements.length > 0) ? `
-                    <div class="report-section">
-                        <div style="display: flex; gap: 16px;">
-                            <div style="flex: 1; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 14px;">
-                                <div style="font-weight: 600; color: #10b981; margin-bottom: 10px; font-size: 13px;">현상유지</div>
-                                ${(data.strengths || []).length > 0
-                            ? (data.strengths || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
-                            : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
-                        }
-                            </div>
-                            <div style="flex: 1; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 14px;">
-                                <div style="font-weight: 600; color: #ef4444; margin-bottom: 10px; font-size: 13px;">보완필요</div>
-                                ${(data.improvements || []).length > 0
-                            ? (data.improvements || []).map(s => `<div style="color: var(--grey-3); font-size: 13px; padding: 4px 0;">${escapeHtml(s)}</div>`).join('')
-                            : '<div style="color: var(--grey-5); font-size: 13px;">데이터 부족</div>'
-                        }
-                            </div>
-                        </div>
-                    </div>
-                    ` : ''}
 
                     <!-- Vehicle Analysis -->
                     <div class="report-section">
