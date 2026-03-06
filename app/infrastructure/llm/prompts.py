@@ -490,26 +490,25 @@ class RichSummaryPromptBuilder:
 </task>
 
 <output_format>
-하나의 흐름으로 이어지는 설명식 문단(400~600자)으로 작성합니다.
-분석 기간과 리뷰 수 개요로 시작하여, 긍정/부정 건수와 주요 강점을 서술하고,
-개선이 필요한 부분을 언급한 뒤, 운영 관점의 제안으로 자연스럽게 마무리합니다.
+하나의 흐름으로 이어지는 간결한 문단(200~300자)으로 작성합니다.
+분석 기간과 리뷰 수 개요로 시작하여, 주요 강점과 개선 필요 부분을 핵심만 언급합니다.
 섹션 구분이나 제목 없이 문장이 매끄럽게 이어지도록 작성하세요.
 </output_format>
 
 <writing_style>
 - 객관적이고 분석적인 톤
 - 숫자 데이터를 근거로 활용
-- 통계 건수를 근거로 서술
 - 운영자 관점에서 실용적인 인사이트 제공
 - 접속사를 활용해 문장 간 자연스럽게 연결
 </writing_style>
 
 <data_usage_rules>
 - 부정률이 20% 이상인 태그는 반드시 리포트에서 언급하세요
-- 수치 데이터를 최소 3회 이상 인용하세요 (예: "긍정 102건/120건", "부정 18건")
-- 운영 제안은 구체적 액션으로 작성하세요:
-  나쁜 예: "서비스 개선이 필요합니다"
-  좋은 예: "전화응대 부정률이 35%로 높으므로, 전화 응대 매뉴얼 재교육을 권장합니다"
+- 수치 데이터를 최소 2회 이상 인용하세요 (예: "긍정 85%", "부정 18건")
+- 불만 항목은 구체적으로 서술하세요: 어떤 태그에서, 몇 건의 불만이, 어떤 내용인지 명시
+  나쁜 예: "일부 개선이 필요합니다"
+  좋은 예: "외관 관련 불만이 23건으로 스크래치와 세차 상태에 대한 지적이 있었으며, 출고 전 점검 강화가 필요합니다"
+- 불만 건수가 있다면 강점과 동등한 비중으로 서술하세요
 </data_usage_rules>
 
 <constraints>
@@ -519,8 +518,11 @@ class RichSummaryPromptBuilder:
 - 이모지, 특수문자 사용 금지
 - 과장 표현 금지: "최고", "완벽", "강력추천", "무조건"
 - 제공되지 않은 정보 추측 금지
-- 전체 400~600자 분량
+- 전체 200~300자 분량
 - 반드시 순수 텍스트 문단으로만 작성
+- 누구나 이해할 수 있는 쉬운 일상 단어를 사용하세요. 전문 용어를 피하세요:
+  "긍정률" 대신 "좋은 평가 비율", "부정 피드백" 대신 "불만 의견",
+  "CS 응대" 대신 "고객 응대", "프로세스" 대신 "절차"
 </constraints>"""
 
     @classmethod
@@ -617,8 +619,9 @@ class RichSummaryPromptBuilder:
 {reviews_text if reviews_text else "(대표 리뷰 없음)"}
 </sample_reviews>
 
-위 데이터를 기반으로 하나의 자연스러운 문단으로 분석 리포트를 작성하세요.
-개요, 강점, 개선점, 운영 제안이 끊김 없이 이어지도록 서술하세요."""
+위 데이터를 기반으로 200~300자 이내의 간결한 한 문단으로 작성하세요.
+핵심 수치와 주요 강점/개선점만 요약하고, 불필요한 상세 설명은 생략하세요.
+반드시 300자를 넘기지 마세요."""
 
         return cls.REPORT_SYSTEM_PROMPT, user_prompt
 
@@ -643,7 +646,7 @@ class RichSummaryPromptBuilder:
 
 <task>
 주어진 태그별 감정 통계와 태그 순위 데이터를 분석하여 업체 서비스 평가 텍스트를 작성하세요.
-잘한점을 7, 개선점을 3 비율로 서술합니다.
+잘한점을 6, 개선점을 4 비율로 서술합니다.
 잘한점 칭찬으로 시작하고, 개선점에 대한 구체적 액션 제안, 보완 시 기대효과로 마무리합니다.
 </task>
 
@@ -654,14 +657,29 @@ class RichSummaryPromptBuilder:
 - 보완 시 예상되는 긍정적 효과로 마무리
 </writing_style>
 
+<negative_detail_rules>
+- 개선점 Top 5에 있는 태그는 건수와 함께 구체적 불만 내용을 서술하세요
+  나쁜 예: "응대 부분에서 아쉬운 점이 있습니다"
+  좋은 예: "전화응대 불만이 15건으로 연결 지연과 불친절 응대에 대한 지적이 있어 개선이 필요합니다"
+- 불만 태그가 여러 개면 건수가 많은 순서로 서술하세요
+</negative_detail_rules>
+
+<dedup>
+기간 요약에서 이미 다룬 내용은 반복하지 마세요.
+업체 서비스에만 해당하는 고유한 인사이트를 제공하세요.
+같은 태그나 키워드를 다시 언급하지 말고, 다른 관점의 분석을 제시하세요.
+</dedup>
+
 <constraints>
 - 마크다운 서식 전면 금지: **, *, -, #, [], () 등 사용 금지
 - 이모지, 특수문자 사용 금지
 - 과장 표현 금지: "최고", "완벽", "강력추천"
 - 제공되지 않은 정보 추측 금지
 - 리뷰 원문을 직접 인용하지 마세요
-- 150-250자 분량
+- 150-200자 분량
 - 반드시 순수 텍스트 문단으로만 작성
+- 누구나 이해할 수 있는 쉬운 일상 단어를 사용하세요:
+  "CS 응대" 대신 "고객 응대", "프로세스" 대신 "절차", "피드백" 대신 "의견"
 </constraints>"""
 
     # ============================================================
@@ -674,7 +692,7 @@ class RichSummaryPromptBuilder:
 
 <task>
 주어진 태그별 감정 통계와 차량 순위 데이터를 분석하여 차량 평가 텍스트를 작성하세요.
-강점을 7, 아쉬운점을 3 비율로 서술합니다.
+강점을 6, 아쉬운점을 4 비율로 서술합니다.
 강점을 먼저 나열하고, 아쉬운점에 대한 구체적 개선 방안, 보완 시 기대효과로 마무리합니다.
 차량 모델명과 수치를 반드시 인용하세요.
 </task>
@@ -686,13 +704,28 @@ class RichSummaryPromptBuilder:
 - 보완 시 예상되는 긍정적 효과로 마무리
 </writing_style>
 
+<negative_detail_rules>
+- 불만 차량은 모델명, 불만 건수, 구체적 불만 내용(어떤 문제인지)을 함께 서술하세요
+  나쁜 예: "일부 차량에 아쉬운 점이 있습니다"
+  좋은 예: "레이 차량에서 실내 냄새 불만이 8건, 외관 스크래치 지적이 5건으로 출고 전 세차와 외관 점검이 필요합니다"
+- 불만 태그가 여러 개면 건수가 많은 순서로 서술하세요
+</negative_detail_rules>
+
+<dedup>
+기간 요약이나 업체 평가에서 이미 다룬 내용은 반복하지 마세요.
+차량 상태와 모델별 특성에만 집중하여 고유한 인사이트를 제공하세요.
+같은 태그나 키워드를 다시 언급하지 말고, 다른 관점의 분석을 제시하세요.
+</dedup>
+
 <constraints>
 - 마크다운 서식 전면 금지: **, *, -, #, [], () 등 사용 금지
 - 이모지, 특수문자 사용 금지
 - 과장 표현 금지: "최고", "완벽", "강력추천"
 - 제공되지 않은 정보 추측 금지
-- 150-250자 분량
+- 150-200자 분량
 - 반드시 순수 텍스트 문단으로만 작성
+- 누구나 이해할 수 있는 쉬운 일상 단어를 사용하세요:
+  "호평률" 대신 "좋은 평가 비율", "불만률" 대신 "불만 비율"
 </constraints>"""
 
     # ============================================================
@@ -727,9 +760,9 @@ class RichSummaryPromptBuilder:
     }
 
     DETAIL_LEVEL_MAP = {
-        "brief": {"summary": (150, 250), "eval": (100, 150)},
-        "standard": {"summary": (400, 600), "eval": (150, 250)},
-        "detailed": {"summary": (600, 1000), "eval": (250, 400)},
+        "brief": {"summary": (100, 150), "eval": (80, 100)},
+        "standard": {"summary": (200, 300), "eval": (100, 150)},
+        "detailed": {"summary": (400, 600), "eval": (150, 250)},
     }
 
     @classmethod
@@ -823,6 +856,7 @@ class RichSummaryPromptBuilder:
         top_positive_tags: list[dict],
         top_negative_tags: list[dict],
         sample_reviews: list[str] | None = None,
+        prior_texts: list[str] | None = None,
     ) -> tuple[str, str]:
         """
         업체 평가 텍스트 프롬프트 생성 (독립 LLM 호출)
@@ -830,6 +864,7 @@ class RichSummaryPromptBuilder:
         Args:
             tag_details: 업체 카테고리 태그 통계
                 [{"tag_name": str, "category_name": str, "positive": int, "negative": int, "total": int}]
+            prior_texts: 이전 섹션에서 이미 생성된 텍스트 (중복 방지용)
 
         Returns:
             tuple: (system_prompt, user_prompt)
@@ -848,6 +883,17 @@ class RichSummaryPromptBuilder:
             for i, t in enumerate(top_negative_tags[:5])
         ) or "  데이터 없음"
 
+        already_written = ""
+        if prior_texts:
+            already_written = f"""
+<already_written>
+아래는 이미 작성된 다른 섹션의 텍스트입니다. 같은 표현, 같은 키워드, 같은 내용을 절대 반복하지 마세요.
+---
+{chr(10).join(prior_texts)}
+---
+</already_written>
+"""
+
         user_prompt = f"""다음 데이터를 바탕으로 {branch_name}의 업체 서비스 평가 텍스트를 작성하세요.
 
 <affiliate_analysis>
@@ -858,7 +904,7 @@ class RichSummaryPromptBuilder:
 개선점 Top 5:
 {neg_lines}
 </affiliate_analysis>
-
+{already_written}
 잘한점 칭찬으로 시작하고, 개선점 및 보완 시 예상효과를 포함하여 150-250자로 작성하세요."""
 
         return cls.AFFILIATE_EVAL_SYSTEM_PROMPT, user_prompt
@@ -871,6 +917,7 @@ class RichSummaryPromptBuilder:
         top_liked_vehicles: list[dict],
         top_disliked_vehicles: list[dict],
         sample_reviews: list[str] | None = None,
+        prior_texts: list[str] | None = None,
     ) -> tuple[str, str]:
         """
         차량 평가 텍스트 프롬프트 생성 (독립 LLM 호출)
@@ -878,6 +925,7 @@ class RichSummaryPromptBuilder:
         Args:
             tag_details: 차량 카테고리 태그 통계
                 [{"tag_name": str, "category_name": str, "positive": int, "negative": int, "total": int}]
+            prior_texts: 이전 섹션에서 이미 생성된 텍스트 (중복 방지용)
 
         Returns:
             tuple: (system_prompt, user_prompt)
@@ -901,6 +949,17 @@ class RichSummaryPromptBuilder:
             for idx, review in enumerate(sample_reviews[:5], 1):
                 reviews_text += f'{idx}. "{str(review)[:100]}"\n'
 
+        already_written = ""
+        if prior_texts:
+            already_written = f"""
+<already_written>
+아래는 이미 작성된 다른 섹션의 텍스트입니다. 같은 표현, 같은 키워드, 같은 내용을 절대 반복하지 마세요.
+---
+{chr(10).join(prior_texts)}
+---
+</already_written>
+"""
+
         user_prompt = f"""다음 데이터를 바탕으로 {branch_name}의 차량 평가 텍스트를 작성하세요.
 
 <vehicle_analysis>
@@ -913,7 +972,7 @@ class RichSummaryPromptBuilder:
 </vehicle_analysis>
 
 {f'<sample_reviews>{chr(10)}{reviews_text}</sample_reviews>' if reviews_text else ''}
-
+{already_written}
 강점 나열로 시작하고, 아쉬운점 및 보완 시 예상효과를 포함하여 150-250자로 작성하세요."""
 
         return cls.VEHICLE_EVAL_SYSTEM_PROMPT, user_prompt

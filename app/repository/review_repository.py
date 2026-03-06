@@ -266,6 +266,45 @@ class BranchReviewRepository(BaseRepository[Review]):
         result = await self._session.execute(stmt)
         return result.scalar_one()
 
+    async def get_negative_reviews(
+        self,
+        branch_id: int,
+        review_date_from: datetime | None = None,
+        review_date_to: datetime | None = None,
+        limit: int = 10,
+    ) -> list[dict]:
+        """부정 리뷰 조회 (리포트 하단 나열용)"""
+        conditions = [
+            BranchReviewORM.branch_id == branch_id,
+            BranchReviewORM.sentiment == "negative",
+            BranchReviewORM.deleted_at.is_(None),
+        ]
+        if review_date_from:
+            conditions.append(BranchReviewORM.review_date >= review_date_from)
+        if review_date_to:
+            next_day = review_date_to + timedelta(days=1)
+            conditions.append(BranchReviewORM.review_date < next_day)
+
+        stmt = (
+            select(
+                BranchReviewORM.content,
+                BranchReviewORM.rating_service,
+                BranchReviewORM.review_date,
+            )
+            .where(*conditions)
+            .order_by(BranchReviewORM.review_date.desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return [
+            {
+                "content": (row.content or "")[:200],
+                "rating": float(row.rating_service) if row.rating_service else 0.0,
+                "review_date": row.review_date.strftime("%Y-%m-%d") if row.review_date else "",
+            }
+            for row in result.all()
+        ]
+
     async def get_stats(self) -> list[dict]:
         """지점별 리뷰 통계 (RPC로 DB 서버에서 집계)"""
         result = await self._session.execute(

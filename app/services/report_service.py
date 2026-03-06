@@ -49,6 +49,7 @@ from schemas.report import (  # noqa: F401
     TrendComparison,
     BenchmarkData,
     PriorityAction,
+    NegativeReviewItem,
 )
 
 
@@ -620,6 +621,13 @@ class ReportService:
             tag_coverage=TagCoverage(**collected["tag_coverage"]) if collected.get("tag_coverage") else None,
         )
 
+        # 부정 리뷰 추가
+        neg_rows = collected.get("negative_reviews", [])
+        if neg_rows:
+            report.negative_reviews = [
+                NegativeReviewItem(**r) for r in neg_rows
+            ]
+
         # 인사이트 데이터 추가 (선택적, 실패해도 리포트 생성에 영향 없음)
         if insights:
             if cfg.output.include_trend_comparison and "trend_comparison" in insights:
@@ -769,6 +777,19 @@ class ReportService:
 
         ai = await self._step_ai(ai_data, cfg)
         await update_progress(85)
+
+        # Step 3.5: 부정 리뷰 수집
+        if self.review_repo:
+            try:
+                neg_rows = await self.review_repo.get_negative_reviews(
+                    branch_id=branch_id,
+                    review_date_from=start_date,
+                    review_date_to=end_date,
+                    limit=10,
+                )
+                collected["negative_reviews"] = neg_rows
+            except Exception as e:
+                logger.warning(f"부정 리뷰 조회 실패: {e}")
 
         # Step 4: 리포트 조립 및 저장 (85-100%)
         await update_progress(85)

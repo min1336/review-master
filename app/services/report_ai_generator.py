@@ -56,13 +56,14 @@ class ReportAIGenerator:
         # 차량 분석 요약 텍스트 생성
         vehicle_summary = self._build_vehicle_summary(data.get("vehicle_analysis", []))
 
-        # 코루틴 목록 (조건부 포함)
-        coros = []
-        coro_keys = []
+        # 순차 생성: 이전 텍스트를 다음 프롬프트에 전달하여 중복 방지
+        period_summary = ""
+        affiliate_ai_text = ""
+        vehicle_ai_text = ""
 
         # 1. 기간 요약 생성
         if cfg.output.include_period_summary:
-            coros.append(self._generate_period_summary(
+            period_summary = await self._generate_period_summary(
                 branch_name=data["branch_name"],
                 total_reviews=data["total_reviews"],
                 top_tags=data["tags"],
@@ -74,12 +75,11 @@ class ReportAIGenerator:
                 sample_reviews=sample_reviews,
                 vehicle_summary=vehicle_summary,
                 report_config=cfg,
-            ))
-            coro_keys.append("period_summary")
+            )
 
-        # 2. 업체 평가 텍스트 (통합 메서드)
+        # 2. 업체 평가 텍스트 (기간 요약 텍스트를 전달하여 중복 방지)
         if cfg.output.include_affiliate_eval:
-            coros.append(self._generate_evaluation_text(
+            affiliate_ai_text = await self._generate_evaluation_text(
                 branch_name=data["branch_name"],
                 tag_details=data.get("tag_details", []),
                 category_filter=AFFILIATE_CATEGORIES,
@@ -89,12 +89,13 @@ class ReportAIGenerator:
                 sample_reviews=None,
                 label="업체",
                 report_config=cfg,
-            ))
-            coro_keys.append("affiliate_ai_text")
+                prior_texts=[period_summary] if period_summary else [],
+            )
 
-        # 3. 차량 평가 텍스트 (통합 메서드)
+        # 3. 차량 평가 텍스트 (기간 요약 + 업체 평가 텍스트를 전달)
         if cfg.output.include_vehicle_eval:
-            coros.append(self._generate_evaluation_text(
+            prior = [t for t in [period_summary, affiliate_ai_text] if t]
+            vehicle_ai_text = await self._generate_evaluation_text(
                 branch_name=data["branch_name"],
                 tag_details=data.get("tag_details", []),
                 category_filter=VEHICLE_CATEGORIES,
@@ -104,18 +105,13 @@ class ReportAIGenerator:
                 sample_reviews=sample_reviews,
                 label="차량",
                 report_config=cfg,
-            ))
-            coro_keys.append("vehicle_ai_text")
-
-        # 순차 실행 (AsyncSession 동시 사용 불가)
-        result_map = {}
-        for key, coro in zip(coro_keys, coros):
-            result_map[key] = await coro
+                prior_texts=prior,
+            )
 
         return {
-            "period_summary": result_map.get("period_summary", ""),
-            "affiliate_ai_text": result_map.get("affiliate_ai_text", ""),
-            "vehicle_ai_text": result_map.get("vehicle_ai_text", ""),
+            "period_summary": period_summary,
+            "affiliate_ai_text": affiliate_ai_text,
+            "vehicle_ai_text": vehicle_ai_text,
         }
 
     # ----------------------------------------------------------------
@@ -141,6 +137,7 @@ class ReportAIGenerator:
         sample_reviews: list[str] | None,
         label: str,
         report_config=None,
+        prior_texts: list[str] | None = None,
     ) -> str:
         """업체/차량 평가 공통 LLM 호출"""
         filtered_tags = [
@@ -166,6 +163,7 @@ class ReportAIGenerator:
                         self._to_dicts(top_negative),
                 },
                 sample_reviews=sample_reviews,
+                prior_texts=prior_texts,
             )
 
             # 커스텀 설정 적용

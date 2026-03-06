@@ -21,9 +21,9 @@ class ReportOutputConfig(BaseModel):
     include_vehicle_eval: bool = True
     include_trend_comparison: bool = True
     include_benchmark: bool = True
-    include_priority_actions: bool = True
-    summary_max_length: int = Field(600, ge=400, le=1000)
-    eval_max_length: int = Field(250, ge=150, le=400)
+    include_priority_actions: bool = False
+    summary_max_length: int = Field(300, ge=150, le=1000)
+    eval_max_length: int = Field(150, ge=100, le=400)
 
 
 class ReportDataConfig(BaseModel):
@@ -112,8 +112,8 @@ class PromptPresetCreate(BaseModel):
     focus_areas: list[str] = Field(default_factory=list)
     custom_instruction: str = Field("", max_length=500)
     temperature: float = Field(0.5, ge=0.0, le=1.0)
-    summary_max_length: int = Field(600, ge=150, le=1000)
-    eval_max_length: int = Field(250, ge=100, le=400)
+    summary_max_length: int = Field(300, ge=150, le=1000)
+    eval_max_length: int = Field(150, ge=100, le=400)
     is_default: bool = False
     display_order: int = 0
 
@@ -165,8 +165,8 @@ class PromptPresetResponse(BaseModel):
     focus_areas: list[str] = Field(default_factory=list)
     custom_instruction: str = ""
     temperature: float = 0.5
-    summary_max_length: int = 600
-    eval_max_length: int = 250
+    summary_max_length: int = 300
+    eval_max_length: int = 150
     is_default: bool = False
     is_active: bool = True
     display_order: int = 0
@@ -307,6 +307,13 @@ class PriorityAction(BaseModel):
     negative_count: int = 0
 
 
+class NegativeReviewItem(BaseModel):
+    """부정 리뷰 항목"""
+    content: str = ""
+    rating: float = 0.0
+    review_date: str = ""
+
+
 class TagCoverage(BaseModel):
     """태그 분석 커버리지 (신뢰도 표기용)"""
     tagged_reviews: int = 0      # 태그가 1개 이상 있는 리뷰 수
@@ -338,6 +345,7 @@ class ReportData(BaseModel):
     trend_comparison: TrendComparison | None = None
     benchmark: BenchmarkData | None = None
     priority_actions: list[PriorityAction] = []
+    negative_reviews: list[NegativeReviewItem] = []
 
     @model_validator(mode="before")
     @classmethod
