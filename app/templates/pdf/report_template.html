@@ -365,6 +365,8 @@
         {% endif %}
 
         <!-- 2. 업체 평가 -->
+        {% set TAG_POS = {'직원친절':'직원이 친절함','사고 처리':'사고 처리를 잘해줌','배달':'배달 서비스가 우수함','가격':'가격이 저렴함','주유비':'주유비 부담 없음','외관':'차량 외관이 좋음','청결':'차량이 청결함'} %}
+        {% set TAG_NEG = {'직원친절':'직원이 불친절함','사고 처리':'사고 처리를 잘 못해줌','배달':'배달 서비스가 미흡함','가격':'가격이 비쌈','주유비':'주유비 부담 있음','외관':'차량 외관이 안좋음','청결':'차량이 불결함'} %}
         {% if report.affiliate_evaluation %}
         <div class="section">
             <div class="section-title">업체 평가</div>
@@ -373,7 +375,7 @@
                     <div class="eval-col-title positive">잘한점</div>
                     {% if report.affiliate_evaluation.top_positive %}
                     {% for t in report.affiliate_evaluation.top_positive %}
-                    <div class="eval-item">{{ loop.index }}. {{ t.tag_name }} <span class="count positive">{{ t.count }}건</span></div>
+                    <div class="eval-item">{{ loop.index }}. {{ TAG_POS.get(t.tag_name, t.tag_name) }} <span class="count positive">{{ t.count }}건</span></div>
                     {% endfor %}
                     {% else %}
                     <div class="eval-item" style="color: #9ca3af;">데이터 부족</div>
@@ -383,7 +385,7 @@
                     <div class="eval-col-title negative">개선점</div>
                     {% if report.affiliate_evaluation.top_negative %}
                     {% for t in report.affiliate_evaluation.top_negative %}
-                    <div class="eval-item">{{ loop.index }}. {{ t.tag_name }} <span class="count negative">{{ t.count }}건</span></div>
+                    <div class="eval-item">{{ loop.index }}. {{ TAG_NEG.get(t.tag_name, t.tag_name) }} <span class="count negative">{{ t.count }}건</span></div>
                     {% endfor %}
                     {% else %}
                     <div class="eval-item" style="color: #9ca3af;">데이터 부족</div>

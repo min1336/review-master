@@ -163,7 +163,10 @@ class PDFGenerator:
             if pos_tags:
                 self._sub(pdf, font, "잘한점")
                 pdf.set_font(font, "", 8)
-                pos_line = ", ".join(f"{t.tag_name}({t.count}건)" for t in pos_tags)
+                pos_line = ", ".join(
+                    f"{self._TAG_SENTENCE_MAP.get(t.tag_name, {}).get('positive', t.tag_name)}({t.count}건)"
+                    for t in pos_tags
+                )
                 pdf.cell(w, 4.5, f"  {pos_line}",
                          new_x="LMARGIN", new_y="NEXT")
             pdf.ln(gap)
@@ -172,7 +175,10 @@ class PDFGenerator:
             if neg_tags:
                 self._sub(pdf, font, "개선점")
                 pdf.set_font(font, "", 8)
-                neg_line = ", ".join(f"{t.tag_name}({t.count}건)" for t in neg_tags)
+                neg_line = ", ".join(
+                    f"{self._TAG_SENTENCE_MAP.get(t.tag_name, {}).get('negative', t.tag_name)}({t.count}건)"
+                    for t in neg_tags
+                )
                 pdf.cell(w, 4.5, f"  {neg_line}",
                          new_x="LMARGIN", new_y="NEXT")
             pdf.ln(gap)
@@ -289,6 +295,54 @@ class PDFGenerator:
                 pdf.multi_cell(w, row, msg)
             pdf.ln(gap)
 
+        # ── 6. 부정 리뷰 목록 ──
+        if report.negative_reviews:
+            self._section(pdf, font, "6. 부정 리뷰 목록")
+
+            col_date = 30
+            col_rating = 15
+            col_content = w - col_date - col_rating
+
+            pdf.set_font(font, "B", 7)
+            pdf.set_fill_color(240, 240, 240)
+            pdf.cell(col_date, row, " 날짜", border=1, fill=True)
+            pdf.cell(col_rating, row, " 평점", border=1, fill=True, align="C")
+            pdf.cell(col_content, row, " 리뷰 내용", border=1, fill=True)
+            pdf.ln(row)
+
+            pdf.set_font(font, "", 7)
+            for r in report.negative_reviews:
+                date_str = r.review_date or ""
+                rating_str = str(r.rating) if r.rating else ""
+                content = (r.content or "").replace("<br>", " ").replace("<br/>", " ").replace("<br />", " ")
+
+                # 내용 길이에 따라 multi_cell 사용
+                x_before = pdf.get_x()
+                y_before = pdf.get_y()
+
+                pdf.cell(col_date, row, f" {date_str}", border="LBT")
+                pdf.set_text_color(239, 68, 68)
+                pdf.cell(col_rating, row, rating_str, border="BT", align="C")
+                pdf.set_text_color(0, 0, 0)
+
+                # 내용이 길면 줄바꿈 처리
+                x_content = pdf.get_x()
+                pdf.multi_cell(col_content, row, f" {content}", border="RBT")
+                y_after = pdf.get_y()
+
+                # multi_cell이 여러 줄이면 앞 셀 높이 보정
+                if y_after - y_before > row:
+                    actual_h = y_after - y_before
+                    pdf.set_xy(x_before, y_before)
+                    pdf.cell(col_date, actual_h, f" {date_str}", border="LBT")
+                    pdf.set_text_color(239, 68, 68)
+                    pdf.cell(col_rating, actual_h, rating_str, border="BT", align="C")
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.set_xy(x_content, y_before)
+                    pdf.multi_cell(col_content, row, f" {content}", border="RBT")
+
+            pdf.ln(gap)
+
         # ── 푸터 ──
         self._hr(pdf, m, w)
         pdf.set_font(font, "", 7)
@@ -301,6 +355,16 @@ class PDFGenerator:
     # ── 심플 헬퍼 ──
 
     # 브랜드 접두사 (DB 원본에 "기아K5", "현대아반떼" 등으로 저장됨)
+    _TAG_SENTENCE_MAP = {
+        '직원친절': {'positive': '직원이 친절함', 'negative': '직원이 불친절함'},
+        '사고 처리': {'positive': '사고 처리를 잘해줌', 'negative': '사고 처리를 잘 못해줌'},
+        '배달': {'positive': '배달 서비스가 우수함', 'negative': '배달 서비스가 미흡함'},
+        '가격': {'positive': '가격이 저렴함', 'negative': '가격이 비쌈'},
+        '주유비': {'positive': '주유비 부담 없음', 'negative': '주유비 부담 있음'},
+        '외관': {'positive': '차량 외관이 좋음', 'negative': '차량 외관이 안좋음'},
+        '청결': {'positive': '차량이 청결함', 'negative': '차량이 불결함'},
+    }
+
     _BRAND_PREFIXES = [
         "BMWBMW", "BMW",
         "벤츠", "아우디아우디", "아우디",

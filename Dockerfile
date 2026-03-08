@@ -11,24 +11,32 @@ ENV UV_NO_DEV=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# Install Korean fonts + weasyprint system dependencies for PDF generation
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        fonts-nanum \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libpangoft2-1.0-0 \
+        libgdk-pixbuf-2.0-0 \
+        libcairo2 \
+        libharfbuzz0b \
+        libfontconfig1 && \
+    rm -rf /var/lib/apt/lists/*
+
 # Install dependencies first (better layer caching)
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-install-project
+    uv sync --locked --no-install-project --extra pdf
 
 # Copy application code
 COPY . ./
 
 RUN mkdir -p /app/credentials
 
-# Install Korean fonts for PDF generation (system package - best practice)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends fonts-nanum && \
-    rm -rf /var/lib/apt/lists/*
-
 # Ensure environment is synced against lock (and validates it)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked && rm -rf /root/.cache/uv/*
+    uv sync --locked --extra pdf
 
 EXPOSE 8000
 

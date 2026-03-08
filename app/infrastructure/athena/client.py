@@ -123,7 +123,7 @@ LEFT JOIN (
             WHEN 7 THEN 'SUV'
             ELSE NULL
         END AS "차종",
-        cim.carinfomst_name AS "차량모델",
+        cim.carinfomst_model AS "차량모델",
         CASE
             WHEN date_diff('day', cgar.cgar_rent_start_datetime, cgar.cgar_rent_end_datetime) < 15 THEN 'SHORT'
             WHEN date_diff('day', cgar.cgar_rent_start_datetime, cgar.cgar_rent_end_datetime) < 30 THEN 'MONTH'
@@ -235,7 +235,7 @@ LEFT JOIN (
             WHEN 3 THEN '중형' WHEN 4 THEN '대형' WHEN 5 THEN '수입'
             WHEN 6 THEN 'RV' WHEN 7 THEN 'SUV' ELSE NULL
         END AS "차종",
-        cim.carinfomst_name AS "차량모델",
+        cim.carinfomst_model AS "차량모델",
         CASE
             WHEN date_diff('day', cgar.cgar_rent_start_datetime, cgar.cgar_rent_end_datetime) < 15 THEN 'SHORT'
             WHEN date_diff('day', cgar.cgar_rent_start_datetime, cgar.cgar_rent_end_datetime) < 30 THEN 'MONTH'

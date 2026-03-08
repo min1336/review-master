@@ -8,7 +8,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 
-from core.timezone import utc_now
+from core.timezone import parse_date_str, utc_now
 
 from domain.pipeline.unified_pipeline import UnifiedPipeline
 from infrastructure.athena import AthenaClient
@@ -119,7 +119,7 @@ class SyncService:
 
             # 1. 조회 기간 결정: 명시적 date_from이 있으면 사용, 없으면 last_sync_at
             if date_from:
-                since = datetime.strptime(date_from, "%Y-%m-%d")
+                since = parse_date_str(date_from)
             else:
                 since = await metadata_repo.get_last_sync_at(SYNC_TYPE)
                 if not since:
@@ -127,7 +127,11 @@ class SyncService:
 
             until = None
             if date_to:
-                until = datetime.strptime(date_to + " 23:59:59", "%Y-%m-%d %H:%M:%S")
+                until = parse_date_str(date_to, end_of_day=True)
+
+            # 2. 날짜 범위를 1일 단위로 분할
+            day_ranges = _generate_day_ranges(since, until)
+            total_days = len(day_ranges)
 
             # 2. 날짜 범위를 1일 단위로 분할
             day_ranges = _generate_day_ranges(since, until)
