@@ -59,6 +59,29 @@ async def api_cancel_sync_job(
     return api_response({"message": "작업이 취소되었습니다"})
 
 
+@router.post("/reviews/cleanup-ghosts", response_model=ApiResponseModel[dict])
+async def api_cleanup_ghost_reviews(
+    sync_service=Depends(get_sync_service),
+) -> dict[str, Any]:
+    """Athena 비활성 ghost review 일괄 정리 (관리자용)
+
+    로컬 DB에만 존재하고 Athena에서 비활성(status!=1)인 리뷰를 삭제한다.
+    Athena 전체 조회가 포함되므로 30초 이상 소요될 수 있음.
+    """
+    try:
+        deleted = await sync_service.cleanup_ghost_reviews()
+    except Exception as e:
+        logger.error(f"Ghost review 정리 실패: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=502,
+            detail="Ghost review 정리 중 오류가 발생했습니다",
+        )
+    return api_response({
+        "deleted_count": deleted,
+        "message": f"Ghost review {deleted}개 삭제 완료" if deleted else "Ghost review 없음",
+    })
+
+
 @router.post("/reviews/read", response_model=ApiResponseModel[dict])
 async def api_mark_reviews_as_read(
     request: MarkReadRequest,

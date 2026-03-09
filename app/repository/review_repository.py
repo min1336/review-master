@@ -502,15 +502,54 @@ class BranchReviewRepository(BaseRepository[Review]):
             total += result.rowcount
         return total
 
-    async def delete_by_review_ids(self, review_ids: list[int], batch_size: int = 100) -> int:
-        """리뷰 ID로 삭제 (soft delete된 리뷰 동기화용)"""
+    async def get_review_ids_by_date_range(
+        self, since: datetime, until: datetime,
+    ) -> set[int]:
+        """지정 기간의 review_id 집합 조회 (ghost review 감지용)
+
+        Athena REVIEW_QUERY와 동일한 경계: review_date > since AND review_date <= until
+        """
+        stmt = (
+            select(BranchReviewORM.review_id)
+            .where(
+                BranchReviewORM.review_date > since,
+                BranchReviewORM.review_date <= until,
+                BranchReviewORM.review_id.isnot(None),
+            )
+        )
+        result = await self._session.execute(stmt)
+        return {row[0] for row in result.all()}
+
+    async def get_all_review_ids(self) -> set[int]:
+        """전체 review_id 집합 조회 (일괄 ghost review 정리용)"""
+        stmt = (
+            select(BranchReviewORM.review_id)
+            .where(BranchReviewORM.review_id.isnot(None))
+        )
+        result = await self._session.execute(stmt)
+        return {row[0] for row in result.all()}
+
+    async def delete_by_review_ids(self, review_ids: list[int], batch_size: int = 500) -> int:
+        """리뷰 ID로 삭제 + 관련 review_tag_mappings 정리
+
+        FK 제약 조건이 없으므로 review_tag_mappings도 명시적으로 삭제한다.
+        """
         if not review_ids:
             return 0
+
+        from .orm_models import ReviewTagMappingORM
 
         deleted_count = 0
         for i in range(0, len(review_ids), batch_size):
             batch = review_ids[i : i + batch_size]
             try:
+                # 1. review_tag_mappings 먼저 삭제 (고아 행 방지)
+                tag_stmt = delete(ReviewTagMappingORM).where(
+                    ReviewTagMappingORM.review_id.in_(batch)
+                )
+                await self._session.execute(tag_stmt)
+
+                # 2. branch_reviews 삭제
                 stmt = delete(BranchReviewORM).where(
                     BranchReviewORM.review_id.in_(batch)
                 )
@@ -520,6 +559,6 @@ class BranchReviewRepository(BaseRepository[Review]):
                 logger.warning(f"Failed to delete reviews batch: {e}")
 
         if deleted_count > 0:
-            logger.info(f"Deleted {deleted_count} reviews (soft deleted in source)")
+            logger.info(f"Deleted {deleted_count} ghost reviews + related tag mappings")
 
         return deleted_count

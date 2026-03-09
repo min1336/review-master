@@ -290,11 +290,76 @@ class SyncService:
 
         logger.info(f"[{day_label}] 파이프라인 완료: {processed_count}개 처리")
 
-        # 5. 메모리 해제
+        # 5. Ghost review 정리: 해당 기간 내 로컬에만 존재하는 리뷰 삭제
+        athena_id_set = set(review_ids)
+        local_ids = await self._review_repo.get_review_ids_by_date_range(
+            chunk_since, chunk_until,
+        )
+        ghost_ids = local_ids - athena_id_set
+        if ghost_ids:
+            deleted = await self._review_repo.delete_by_review_ids(list(ghost_ids))
+            await self._review_repo.commit()
+            logger.info(f"[{day_label}] Ghost review {deleted}개 삭제 (Athena 비활성)")
+
+        # 6. 메모리 해제
         del reviews
         gc.collect()
 
         return saved_count, new_count, processed_count
+
+    async def cleanup_ghost_reviews(
+        self,
+        progress_callback: Callable[[int, str], Awaitable[None]] | None = None,
+    ) -> int:
+        """Athena에서 비활성화된 ghost review 일괄 정리
+
+        전체 로컬 review_id와 Athena 활성 review_id를 비교하여
+        비활성 리뷰를 삭제한다. 최초 1회 실행용.
+        """
+        if not self._athena_client:
+            logger.warning("Athena 클라이언트 미설정 — ghost 정리 불가")
+            return 0
+
+        if progress_callback:
+            await progress_callback(5, "Athena에서 활성 리뷰 ID 조회 중...")
+
+        # 1. Athena 활성 review_id 조회
+        active_ids = await asyncio.to_thread(
+            self._athena_client.fetch_all_active_review_ids,
+        )
+        logger.info(f"Athena 활성 리뷰: {len(active_ids)}개")
+
+        if progress_callback:
+            await progress_callback(40, f"활성 리뷰 {len(active_ids)}개 확인")
+
+        # 2. 로컬 DB 전체 review_id 조회
+        local_ids = await self._review_repo.get_all_review_ids()
+        logger.info(f"로컬 리뷰: {len(local_ids)}개")
+
+        if progress_callback:
+            await progress_callback(60, f"로컬 리뷰 {len(local_ids)}개 확인")
+
+        # 3. Ghost review 식별
+        ghost_ids = local_ids - active_ids
+        if not ghost_ids:
+            logger.info("Ghost review 없음")
+            if progress_callback:
+                await progress_callback(100, "Ghost review 없음")
+            return 0
+
+        logger.info(f"Ghost review {len(ghost_ids)}개 감지 — 삭제 시작")
+        if progress_callback:
+            await progress_callback(70, f"Ghost review {len(ghost_ids)}개 삭제 중...")
+
+        # 4. 삭제
+        deleted = await self._review_repo.delete_by_review_ids(list(ghost_ids))
+        await self._review_repo.commit()
+
+        logger.info(f"Ghost review 정리 완료: {deleted}개 삭제")
+        if progress_callback:
+            await progress_callback(100, f"Ghost review {deleted}개 삭제 완료")
+
+        return deleted
 
     async def mark_reviews_as_read(
         self, review_ids: list[int] | None = None

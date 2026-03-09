@@ -336,6 +336,30 @@ class AthenaClient:
         self._output_bucket = settings.athena_output_bucket
         self._search_cache = _SearchCache()
 
+    def fetch_all_active_review_ids(self) -> set[int]:
+        """모든 활성(status=1) 리뷰 ID 조회 (ghost review 일괄 정리용)
+
+        SELECT만 수행하므로 비용이 낮지만 22만+ 행을 반환할 수 있어
+        일괄 정리 시에만 호출한다.
+        """
+        query = (
+            "SELECT nrl.serial AS review_id "
+            "FROM carmore.new_review_list nrl "
+            "WHERE TRY_CAST(nrl.status AS INTEGER) = 1"
+        )
+        logger.info("Athena: 전체 활성 리뷰 ID 조회 시작")
+        results = self._execute_query(query)
+        ids = set()
+        for r in results:
+            raw = r.get("review_id")
+            if raw is not None:
+                try:
+                    ids.add(int(raw))
+                except (ValueError, TypeError):
+                    pass
+        logger.info(f"Athena: 활성 리뷰 ID {len(ids)}개 조회 완료")
+        return ids
+
     def fetch_reviews_with_filters(
         self,
         branch_ids: list[int] | None = None,
