@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     # Public API
     public_api_key: SecretStr = SecretStr("")
 
+    # Internal API 인증 (미설정 시 인증 생략 — 하위 호환)
+    internal_api_key: SecretStr = SecretStr("")
+
+    # CORS 허용 도메인 (빈 리스트 → ["*"] 전체 허용)
+    cors_origins: list[str] = []
+
     # AWS Athena 설정
     aws_access_key_id: str = ""
     aws_secret_access_key: SecretStr = SecretStr("")

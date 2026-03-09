@@ -114,6 +114,14 @@ function showToast(message, type, duration) {
  * ============================================================ */
 
 async function fetchRetry(url, options) {
+    if (!options) options = {};
+    // 내부 API 인증 헤더 자동 첨부
+    if (window.__INTERNAL_API_KEY__) {
+        if (!options.headers) options.headers = {};
+        if (!options.headers['X-Internal-Key']) {
+            options.headers['X-Internal-Key'] = window.__INTERNAL_API_KEY__;
+        }
+    }
     var maxRetries = 2;
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
         var response = await fetch(url, options);
@@ -131,13 +139,13 @@ async function fetchRetry(url, options) {
 
 async function apiRequest(url, options) {
     if (!options) options = {};
-    var response = await fetchRetry(url, {
-        headers: {
-            'Content-Type': 'application/json',
-            ...options.headers
-        },
-        ...options
-    });
+    var headers = {
+        'Content-Type': 'application/json',
+    };
+    Object.assign(headers, options.headers);
+    var finalOptions = Object.assign({}, options);
+    delete finalOptions.headers;
+    var response = await fetchRetry(url, Object.assign({ headers: headers }, finalOptions));
 
     if (!response.ok) {
         var error = await response.json().catch(function () { return {}; });

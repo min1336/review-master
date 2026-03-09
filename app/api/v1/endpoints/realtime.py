@@ -13,9 +13,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from schemas.common import ApiResponseModel, api_response
 from schemas.realtime import ReviewInput
 
-from .deps import get_realtime_pipeline
+from .deps import get_realtime_pipeline, require_internal_auth
 
-router = APIRouter(tags=["realtime"])
+router = APIRouter(tags=["realtime"], dependencies=[Depends(require_internal_auth)])
 logger = logging.getLogger(__name__)
 
 

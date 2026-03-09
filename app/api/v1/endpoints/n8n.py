@@ -9,14 +9,26 @@ import logging
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from schemas.common import ApiResponseModel, api_response
+
+from .deps import require_internal_auth
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["n8n"])
 
 N8N_BASE = "https://n8n-cloud.carmore.kr"
 N8N_TIMEOUT = httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=5.0)
+
+# Module-level reusable client (avoids creating a new connection per request)
+_http_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(timeout=N8N_TIMEOUT)
+    return _http_client
 
 
 def _webhook_prefix() -> str:
@@ -28,11 +40,11 @@ def _webhook_prefix() -> str:
 async def _call_n8n(path: str) -> dict[str, Any]:
     """n8n 웹훅을 호출하고 응답을 반환한다."""
     url = f"{N8N_BASE}{_webhook_prefix()}{path}"
+    client = _get_client()
     try:
-        async with httpx.AsyncClient(timeout=N8N_TIMEOUT) as client:
-            resp = await client.post(url)
-            resp.raise_for_status()
-            return resp.json()
+        resp = await client.post(url)
+        resp.raise_for_status()
+        return resp.json()
     except httpx.TimeoutException:
         logger.error("n8n webhook timeout: %s", url)
         raise HTTPException(status_code=504, detail="n8n 웹훅 응답 시간 초과")
@@ -47,14 +59,35 @@ async def _call_n8n(path: str) -> dict[str, Any]:
         raise HTTPException(status_code=502, detail="n8n 웹훅 연결 실패")
 
 
-@router.post("/review-sync", response_model=ApiResponseModel[dict])
+_SLACK_BOT_BASE = "http://slack-bot:8080"
+
+
+@router.post("/webhook/jotform-cancellation")
+async def jotform_cancellation_proxy(request: Request) -> dict[str, Any]:
+    """Jotform webhook → slack-bot 프록시. n8n 외부 경로 제약 우회용."""
+    body = await request.body()
+    content_type = request.headers.get("content-type", "")
+    client = _get_client()
+    try:
+        resp = await client.post(
+            f"{_SLACK_BOT_BASE}/webhook/cancellation",
+            content=body,
+            headers={"Content-Type": content_type},
+        )
+        return resp.json()
+    except httpx.HTTPError as e:
+        logger.error("slack-bot webhook proxy error: %s", e)
+        raise HTTPException(status_code=502, detail="slack-bot 웹훅 연결 실패")
+
+
+@router.post("/review-sync", response_model=ApiResponseModel[dict], dependencies=[Depends(require_internal_auth)])
 async def n8n_review_sync() -> dict[str, Any]:
     """신규 리뷰 동기화 (n8n 웹훅)"""
     result = await _call_n8n("/review-sync")
     return api_response(result)
 
 
-@router.post("/generate-summary", response_model=ApiResponseModel[dict])
+@router.post("/generate-summary", response_model=ApiResponseModel[dict], dependencies=[Depends(require_internal_auth)])
 async def n8n_generate_summary() -> dict[str, Any]:
     """월별 요약/리포트 생성 (n8n 웹훅)"""
     result = await _call_n8n("/generate-summary")

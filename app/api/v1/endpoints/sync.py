@@ -10,10 +10,10 @@ from schemas.sync import (
     SyncRequest,
 )
 
-from .deps import get_sync_job_service, get_sync_service
+from .deps import get_sync_job_service, get_sync_service, require_internal_auth
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["sync"])
+router = APIRouter(tags=["sync"], dependencies=[Depends(require_internal_auth)])
 
 
 @router.post("/reviews", status_code=202, response_model=ApiResponseModel[dict])
@@ -71,7 +71,7 @@ async def api_mark_reviews_as_read(
         logger.error(f"리뷰 읽음 처리 실패: {e}", exc_info=True)
         raise HTTPException(
             status_code=502,
-            detail=f"리뷰 읽음 처리 중 DB 오류가 발생했습니다: {type(e).__name__}",
+            detail="리뷰 읽음 처리 중 오류가 발생했습니다",
         )
     return api_response({
         "marked_count": marked_count,

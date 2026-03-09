@@ -16,13 +16,13 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from schemas.common import ApiResponseModel, api_response
 
-from .deps import get_upload_job_service
+from .deps import get_upload_job_service, require_internal_auth
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["upload"])
+router = APIRouter(tags=["upload"], dependencies=[Depends(require_internal_auth)])
 
-# 파일 크기 제한 (100MB)
-MAX_FILE_SIZE = 100 * 1024 * 1024
+# 파일 크기 제한 (50MB)
+MAX_FILE_SIZE = 50 * 1024 * 1024
 
 ALLOWED_EXTENSIONS = {".xlsx", ".csv"}
 
@@ -66,7 +66,18 @@ async def api_upload_reviews(
             f"허용: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
         )
 
-    # 2. 파일 읽기 + 크기 검증
+    # 2. 파일 크기 사전 검증 (메모리 로드 전 차단)
+    if file.size is not None and file.size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"파일 크기 초과: "
+                f"{file.size / 1024 / 1024:.1f}MB "
+                f"(최대: {MAX_FILE_SIZE / 1024 / 1024:.0f}MB)"
+            ),
+        )
+
+    # 3. 파일 읽기 + 크기 재검증
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(

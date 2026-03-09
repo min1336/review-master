@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import json
+import logging
 import sys
 from contextlib import asynccontextmanager
-from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
 # 프로젝트 경로 설정
@@ -17,34 +16,10 @@ sys.path.insert(0, str(APP_DIR))
 sys.path.insert(0, str(APP_DIR.parent))
 
 from core.config import get_settings
+from core.response import TZAwareJSONResponse
 
 settings = get_settings()
-
-
-# ============================================================
-# TZ-Aware JSON Response (안전망)
-# ============================================================
-class _TZAwareEncoder(json.JSONEncoder):
-    """naive datetime에 자동으로 +00:00 offset을 부착하는 인코더."""
-
-    def default(self, obj: Any) -> Any:
-        if isinstance(obj, datetime):
-            if obj.tzinfo is None:
-                from core.timezone import UTC
-                obj = obj.replace(tzinfo=UTC)
-            return obj.isoformat()
-        return super().default(obj)
-
-
-class TZAwareJSONResponse(JSONResponse):
-    """모든 API 응답에서 datetime이 항상 offset을 포함하도록 보장."""
-
-    def render(self, content: Any) -> bytes:
-        return json.dumps(
-            content,
-            cls=_TZAwareEncoder,
-            ensure_ascii=False,
-        ).encode("utf-8")
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -59,11 +34,11 @@ async def lifespan(app: FastAPI):
     db_url = settings.get_database_url()
     if db_url:
         init_db(db_url)
-        print("[Startup] Database engine initialized (asyncpg)")
+        logger.info("[Startup] Database engine initialized (asyncpg)")
 
-    print("\n" + "=" * 60)
-    print("Review Summary AI - FastAPI 운영팀 모니터링 대시보드")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("Review Summary AI - FastAPI 운영팀 모니터링 대시보드")
+    logger.info("=" * 60)
 
     # 고아 작업 복구 (서버 재시작 시 processing 상태로 방치된 작업 정리)
     await _recover_stale_report_jobs()
@@ -72,6 +47,9 @@ async def lifespan(app: FastAPI):
     await _prewarm_nlp_models()
 
     yield
+
+    # httpx 클라이언트 종료
+    await _close_http_clients()
 
     # 엔진 종료
     if settings.get_database_url():
@@ -96,9 +74,9 @@ async def _prewarm_nlp_models():
             get_kiwi()
             get_hybrid_classifier()
             get_sentiment_analyzer()
-            print("[Startup] NLP 모델 프리로드 완료 (Kiwi, Classifier, Sentiment)")
+            logger.info("[Startup] NLP 모델 프리로드 완료 (Kiwi, Classifier, Sentiment)")
         except Exception as e:
-            print(f"[Startup] NLP 모델 프리로드 실패 (무시됨): {e}")
+            logger.warning("[Startup] NLP 모델 프리로드 실패 (무시됨): %s", e)
 
     await asyncio.to_thread(_load)
 
@@ -118,9 +96,20 @@ async def _recover_stale_report_jobs():
             )
             await session.commit()
             if recovered > 0:
-                print(f"[Startup] 고아 리포트 작업 {recovered}개 복구됨")
+                logger.info("[Startup] 고아 리포트 작업 %d개 복구됨", recovered)
     except Exception as e:
-        print(f"[Startup] 고아 작업 복구 실패 (무시됨): {e}")
+        logger.warning("[Startup] 고아 작업 복구 실패 (무시됨): %s", e)
+
+
+async def _close_http_clients():
+    """모듈 레벨 httpx 클라이언트 정리"""
+    try:
+        from api.v1.endpoints.n8n import _http_client
+        if _http_client is not None:
+            await _http_client.aclose()
+            logger.info("[Shutdown] httpx client closed")
+    except Exception:
+        pass
 
 
 # ============================================================
@@ -132,6 +121,18 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
     default_response_class=TZAwareJSONResponse,
+)
+
+# CORS 미들웨어 (Public API 외부 도메인 호출 허용)
+# cors_origins 설정 시 해당 도메인만 허용 + credentials 활성화
+# 미설정(빈 리스트) 시 전체 허용 (credentials 비활성화 — 브라우저 스펙 준수)
+_cors_origins = settings.cors_origins or ["*"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=_cors_origins != ["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -215,7 +216,7 @@ if __name__ == "__main__":
     settings = get_settings()
     env_port = int(os.environ.get("PORT", 0))
     port = env_port if 1024 <= env_port <= 65535 else _find_free_port()
-    print(f"\n[Dev] Starting on port {port}")
+    logger.info("[Dev] Starting on port %d", port)
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
