@@ -27,7 +27,7 @@ async def api_categories(
         return api_list_response(categories)
     except Exception as e:
         logger.exception("카테고리 목록 조회 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="카테고리 목록 조회 중 오류가 발생했습니다") from e
 
 
 @router.post("/categories", status_code=201, response_model=ApiResponseModel[dict])
@@ -39,7 +39,7 @@ async def api_create_category(
         result = await service.create_category(data.model_dump())
         return api_response(result)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail="카테고리 생성 중 오류가 발생했습니다") from e
 
 @router.get("/list", response_model=ApiListResponseModel[dict])
 async def api_tags(
@@ -53,18 +53,18 @@ async def api_tags(
 ) -> dict[str, Any]:
     """태그 목록"""
     try:
-        tags = await service.get_tags(
+        tags, total = await service.get_tags(
             category_id=category_id,
             sentiment=sentiment,
             group_name=group_name,
             is_active=is_active,
+            limit=limit,
+            offset=offset,
         )
-        total = len(tags)
-        paginated = tags[offset : offset + limit]
-        return api_list_response(paginated, total=total, limit=limit, offset=offset)
+        return api_list_response(tags, total=total, limit=limit, offset=offset)
     except Exception as e:
         logger.exception("태그 목록 조회 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="태그 목록 조회 중 오류가 발생했습니다") from e
 
 @router.post("/batch", response_model=ApiResponseModel[dict])
 async def api_tags_batch(
@@ -88,7 +88,7 @@ async def api_create_tag(
         result = await service.create_tag(data.model_dump())
         return api_response(result)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail="태그 생성 중 오류가 발생했습니다") from e
 
 
 @router.put("/{tag_id}", response_model=ApiResponseModel[dict])
@@ -102,7 +102,7 @@ async def api_update_tag(
         return api_response(result)
     except Exception as e:
         logger.exception("태그 수정 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="태그 수정 중 오류가 발생했습니다") from e
 
 
 @router.delete("/{tag_id}", response_model=ApiResponseModel[dict])
@@ -115,4 +115,4 @@ async def api_delete_tag(
         return api_response()
     except Exception as e:
         logger.exception("태그 삭제 오류")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="태그 삭제 중 오류가 발생했습니다") from e

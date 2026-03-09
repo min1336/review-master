@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -39,8 +39,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class RealtimeResultDTO:
+class RealtimeResultDTO(BaseModel):
     """실시간 처리 결과 DTO"""
 
     branch_id: int
@@ -48,15 +47,6 @@ class RealtimeResultDTO:
     tags: list[dict]  # [{"name": "직원친절", "sentiment": "positive"}, ...]
     saved: bool
     error: str | None = None
-
-    def to_dict(self) -> dict:
-        return {
-            "branch_id": self.branch_id,
-            "sentiment": self.sentiment,
-            "tags": self.tags,
-            "saved": self.saved,
-            "error": self.error,
-        }
 
 
 class RealtimePipeline(BasePipeline):
@@ -319,6 +309,7 @@ class RealtimePipeline(BasePipeline):
 
         pos_delta = 1 if sentiment == "positive" else 0
         neg_delta = 1 if sentiment == "negative" else 0
+        neu_delta = 1 if sentiment == "neutral" else 0
 
         stmt = pg_insert(bt_tbl).values(
             branch_id=branch_id,
@@ -326,7 +317,7 @@ class RealtimePipeline(BasePipeline):
             period_type="all",
             positive_count=pos_delta,
             negative_count=neg_delta,
-            neutral_count=0,
+            neutral_count=neu_delta,
             count=1,
             weighted_score=1.0,
         )
@@ -335,6 +326,7 @@ class RealtimePipeline(BasePipeline):
             set_={
                 "positive_count": bt_tbl.c.positive_count + stmt.excluded.positive_count,
                 "negative_count": bt_tbl.c.negative_count + stmt.excluded.negative_count,
+                "neutral_count": bt_tbl.c.neutral_count + stmt.excluded.neutral_count,
                 "count": bt_tbl.c.count + stmt.excluded.count,
                 "weighted_score": func.coalesce(bt_tbl.c.weighted_score, 0.0) + stmt.excluded.weighted_score,
             },

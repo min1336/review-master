@@ -49,33 +49,45 @@ async def migrate_sentiments(
 
     session = factory()
     try:
-        # sentiment가 null인 리뷰 조회
-        stmt = select(BranchReviewORM).where(BranchReviewORM.sentiment.is_(None))
+        # sentiment가 null인 리뷰 총 개수 조회
+        from sqlalchemy import func
+
+        count_stmt = select(func.count(BranchReviewORM.id)).where(
+            BranchReviewORM.sentiment.is_(None)
+        )
         if branch_id:
-            stmt = stmt.where(BranchReviewORM.branch_id == branch_id)
+            count_stmt = count_stmt.where(BranchReviewORM.branch_id == branch_id)
 
-        result = await session.execute(stmt)
-        reviews = result.scalars().all()
-
-        total = len(reviews)
+        count_result = await session.execute(count_stmt)
+        total = count_result.scalar_one()
         print(f"\nsentiment가 null인 리뷰: {total:,}개")
 
         if dry_run:
             print("Dry-run 모드 - 실제 업데이트 없음")
             return {"total": total, "updated": 0, "dry_run": True}
 
+        # 배치 단위로 리뷰를 조회하여 메모리 절약
+        stmt = select(BranchReviewORM).where(BranchReviewORM.sentiment.is_(None))
+        if branch_id:
+            stmt = stmt.where(BranchReviewORM.branch_id == branch_id)
+        stmt = stmt.execution_options(yield_per=batch_size)
+
+        result = await session.execute(stmt)
+
         updated = 0
         errors = 0
+        i = 0
 
-        for i, review in enumerate(reviews, 1):
+        for review in result.scalars():
+            i += 1
             content = review.content or ""
 
             if not content or len(content.strip()) < 5:
                 continue
 
             # 감정 분석
-            result = analyzer.analyze(content)
-            sentiment = result.sentiment
+            analysis_result = analyzer.analyze(content)
+            sentiment = analysis_result.sentiment
 
             try:
                 await session.execute(

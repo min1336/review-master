@@ -17,6 +17,6 @@ class SentimentService:
         """감정통계 조회"""
         return await self.sentiment_repo.get_stats(branch_id)
 
-    async def get_all_stats(self) -> list[dict]:
-        """전체 지점 감정통계"""
-        return await self.sentiment_repo.get_all_stats()
+    async def get_all_stats(self, page: int = 1, limit: int = 50) -> tuple[list[dict], int]:
+        """전체 지점 감정통계 (페이지네이션)"""
+        return await self.sentiment_repo.get_all_stats(page=page, limit=limit)

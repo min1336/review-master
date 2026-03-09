@@ -65,15 +65,11 @@ class BaseRepository[T: BaseModel](ABC):
 
     async def get_by_id(self, id: int) -> T | None:
         """ID로 단일 조회"""
-        try:
-            result = await self._session.execute(
-                select(self.orm_model).where(self.orm_model.id == id)
-            )
-            row = result.scalar_one_or_none()
-            return self._to_pydantic(row) if row else None
-        except Exception as e:
-            logger.error("get_by_id(%s) 실패: %s", id, e)
-            return None
+        result = await self._session.execute(
+            select(self.orm_model).where(self.orm_model.id == id)
+        )
+        row = result.scalar_one_or_none()
+        return self._to_pydantic(row) if row else None
 
     async def get_all(self, limit: int = 100, offset: int = 0) -> list[T]:
         """전체 목록 조회"""

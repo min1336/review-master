@@ -26,6 +26,8 @@ class ServiceContainer:
     _athena_initialized: bool = False
     _athena_lock: threading.Lock = threading.Lock()
     _realtime_pipeline: object | None = None
+    _llm_provider: object | None = None
+    _llm_lock: threading.Lock = threading.Lock()
 
     @classmethod
     def get_athena_client(cls):
@@ -53,3 +55,20 @@ class ServiceContainer:
 
             cls._realtime_pipeline = RealtimePipeline()
         return cls._realtime_pipeline
+
+    @classmethod
+    def get_llm_provider(cls):
+        """LLM Provider 싱글턴 반환"""
+        if cls._llm_provider is None:
+            with cls._llm_lock:
+                if cls._llm_provider is None:
+                    from core.config import get_settings
+                    from infrastructure.llm.openai_provider import OpenAIProvider
+
+                    settings = get_settings()
+                    cls._llm_provider = OpenAIProvider(
+                        api_key=settings.openai_api_key.get_secret_value(),
+                        model=settings.openai_model,
+                        rpm=settings.openai_rpm,
+                    )
+        return cls._llm_provider

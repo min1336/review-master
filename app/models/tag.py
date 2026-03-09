@@ -39,7 +39,7 @@ class Tag(BaseModel):
 
 
 class KeywordMapping(BaseModel):
-    """keyword_tag_mappings 테이블 엔티티"""
+    """keyword_mappings 테이블 엔티티"""
 
     id: int | None = None
     keyword: str
@@ -66,7 +66,6 @@ class BranchTag(BaseModel):
     neutral_count: int = 0
     weighted_score: float | None = 0
     rank: int | None = None
-    created_at: datetime | None = None
     # 조인 데이터
     tags: Tag | None = None
 

@@ -113,115 +113,109 @@ class SyncService:
                 error="athena_client_not_configured",
             )
 
-        session = get_session_factory()()
-        try:
-            metadata_repo = SyncMetadataRepository(session)
+        async with get_session_factory()() as session:
+            try:
+                metadata_repo = SyncMetadataRepository(session)
 
-            # 1. 조회 기간 결정: 명시적 date_from이 있으면 사용, 없으면 last_sync_at
-            if date_from:
-                since = parse_date_str(date_from)
-            else:
-                since = await metadata_repo.get_last_sync_at(SYNC_TYPE)
-                if not since:
-                    since = utc_now() - timedelta(days=7)
+                # 1. 조회 기간 결정: 명시적 date_from이 있으면 사용, 없으면 last_sync_at
+                if date_from:
+                    since = parse_date_str(date_from)
+                else:
+                    since = await metadata_repo.get_last_sync_at(SYNC_TYPE)
+                    if not since:
+                        since = utc_now() - timedelta(days=7)
 
-            until = None
-            if date_to:
-                until = parse_date_str(date_to, end_of_day=True)
+                until = None
+                if date_to:
+                    until = parse_date_str(date_to, end_of_day=True)
 
-            # 2. 날짜 범위를 1일 단위로 분할
-            day_ranges = _generate_day_ranges(since, until)
-            total_days = len(day_ranges)
+                # 2. 날짜 범위를 1일 단위로 분할
+                day_ranges = _generate_day_ranges(since, until)
+                total_days = len(day_ranges)
 
-            # 2. 날짜 범위를 1일 단위로 분할
-            day_ranges = _generate_day_ranges(since, until)
-            total_days = len(day_ranges)
+                range_desc = f"{since.strftime('%Y-%m-%d')}~{date_to or '현재'}"
+                logger.info(f"동기화 시작: {range_desc} ({total_days}일 청크)")
+                logger.info(f"[DailyPipeline] 시작: {range_desc} ({total_days}일 청크)")
 
-            range_desc = f"{since.strftime('%Y-%m-%d')}~{date_to or '현재'}"
-            logger.info(f"동기화 시작: {range_desc} ({total_days}일 청크)")
-            print(f"[DailyPipeline] 시작: {range_desc} ({total_days}일 청크)")
+                if progress_callback:
+                    await progress_callback(5, f"동기화 시작 ({range_desc}, {total_days}일)")
 
-            if progress_callback:
-                await progress_callback(5, f"동기화 시작 ({range_desc}, {total_days}일)")
+                # 3. 날짜 청크별 처리: Athena 조회 → 중복 제거 → upsert → pipeline
+                total_synced = 0
+                total_new = 0
+                total_processed = 0
+                chunk_errors: list[str] = []
 
-            # 3. 날짜 청크별 처리: Athena 조회 → 중복 제거 → upsert → pipeline
-            total_synced = 0
-            total_new = 0
-            total_processed = 0
-            chunk_errors: list[str] = []
+                for day_idx, (chunk_since, chunk_until) in enumerate(day_ranges):
+                    try:
+                        synced, new, processed = await self._process_day_chunk(
+                            chunk_since,
+                            chunk_until,
+                            day_idx,
+                            total_days,
+                            progress_callback,
+                        )
+                        total_synced += synced
+                        total_new += new
+                        total_processed += processed
+                    except Exception as e:
+                        day_label = chunk_since.strftime("%m-%d")
+                        logger.error(
+                            f"청크 {day_idx + 1}/{total_days} ({day_label}) 실패: {e}",
+                            exc_info=True,
+                        )
+                        chunk_errors.append(f"{day_label}: {e}")
 
-            for day_idx, (chunk_since, chunk_until) in enumerate(day_ranges):
-                try:
-                    synced, new, processed = await self._process_day_chunk(
-                        chunk_since,
-                        chunk_until,
-                        day_idx,
-                        total_days,
-                        progress_callback,
+                # 4. last_sync_at 업데이트 (모든 청크 완료 후 1회)
+                if progress_callback:
+                    await progress_callback(95, "메타데이터 업데이트")
+                await metadata_repo.update_last_sync_at(SYNC_TYPE)
+
+                await session.commit()
+                duration = (utc_now() - start_time).total_seconds()
+
+                # 5. 결과 응답 생성
+                if total_synced == 0 and not chunk_errors:
+                    return SyncResultResponse(
+                        success=True,
+                        message="신규 리뷰가 없습니다",
+                        synced_count=0,
+                        new_reviews=0,
+                        duration_seconds=duration,
                     )
-                    total_synced += synced
-                    total_new += new
-                    total_processed += processed
-                except Exception as e:
-                    day_label = chunk_since.strftime("%m-%d")
-                    logger.error(
-                        f"청크 {day_idx + 1}/{total_days} ({day_label}) 실패: {e}",
-                        exc_info=True,
-                    )
-                    chunk_errors.append(f"{day_label}: {e}")
 
-            # 4. last_sync_at 업데이트 (모든 청크 완료 후 1회)
-            if progress_callback:
-                await progress_callback(95, "메타데이터 업데이트")
-            await metadata_repo.update_last_sync_at(SYNC_TYPE)
-
-            await session.commit()
-            duration = (utc_now() - start_time).total_seconds()
-
-            # 5. 결과 응답 생성
-            if total_synced == 0 and not chunk_errors:
-                return SyncResultResponse(
-                    success=True,
-                    message="신규 리뷰가 없습니다",
-                    synced_count=0,
-                    new_reviews=0,
-                    duration_seconds=duration,
+                failed_count = total_synced - total_processed
+                logger.info(
+                    f"동기화 완료: {total_synced}개 저장, {total_processed}개 분석, "
+                    f"{failed_count}개 실패 ({duration:.1f}초)"
                 )
 
-            failed_count = total_synced - total_processed
-            logger.info(
-                f"동기화 완료: {total_synced}개 저장, {total_processed}개 분석, "
-                f"{failed_count}개 실패 ({duration:.1f}초)"
-            )
+                if chunk_errors:
+                    return SyncResultResponse(
+                        success=total_synced > 0,
+                        message=f"{total_synced}개 저장 (일부 실패: {len(chunk_errors)}일)",
+                        synced_count=total_synced,
+                        new_reviews=total_new,
+                        duration_seconds=duration,
+                        error="; ".join(chunk_errors),
+                    )
 
-            if chunk_errors:
                 return SyncResultResponse(
-                    success=total_synced > 0,
-                    message=f"{total_synced}개 저장 (일부 실패: {len(chunk_errors)}일)",
+                    success=True,
+                    message=f"{total_synced}개 리뷰 저장 + {total_processed}개 분석 완료",
                     synced_count=total_synced,
                     new_reviews=total_new,
                     duration_seconds=duration,
-                    error="; ".join(chunk_errors),
                 )
 
-            return SyncResultResponse(
-                success=True,
-                message=f"{total_synced}개 리뷰 저장 + {total_processed}개 분석 완료",
-                synced_count=total_synced,
-                new_reviews=total_new,
-                duration_seconds=duration,
-            )
-
-        except Exception as e:
-            logger.error(f"동기화 실패: {e}", exc_info=True)
-            return SyncResultResponse(
-                success=False,
-                message="동기화 실행 중 오류가 발생했습니다",
-                error="sync_failed",
-                duration_seconds=(utc_now() - start_time).total_seconds(),
-            )
-        finally:
-            await session.close()
+            except Exception as e:
+                logger.error(f"동기화 실패: {e}", exc_info=True)
+                return SyncResultResponse(
+                    success=False,
+                    message="동기화 실행 중 오류가 발생했습니다",
+                    error="sync_failed",
+                    duration_seconds=(utc_now() - start_time).total_seconds(),
+                )
 
     async def _process_day_chunk(
         self,

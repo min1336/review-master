@@ -107,36 +107,32 @@ class BranchTagRepository(BaseRepository[BranchTag]):
         self, branch_id: int, period_type: str, tags_data: list[dict]
     ) -> int:
         """지점별 태그 집계 저장"""
-        success_count = 0
-        for tag in tags_data:
-            try:
-                values = {
-                    "branch_id": branch_id,
-                    "tag_id": tag["tag_id"],
-                    "period_type": period_type,
-                    "count": tag.get("count", 0),
-                    "weighted_score": tag.get("weighted_score", 0),
-                    "rank": tag.get("rank"),
-                }
-                stmt = pg_insert(BranchTagORM.__table__).values(**values)
-                update_cols = {
-                    k: v
-                    for k, v in values.items()
-                    if k not in ("branch_id", "tag_id", "period_type")
-                }
-                stmt = stmt.on_conflict_do_update(
-                    index_elements=["branch_id", "tag_id", "period_type"],
-                    set_=update_cols,
-                )
-                await self._session.execute(stmt)
-                success_count += 1
-            except Exception as e:
-                tag_id = tag.get("tag_id")
-                logger.warning(
-                    f"Failed to upsert branch tag for branch {branch_id}, "
-                    f"tag {tag_id}: {e}"
-                )
-        return success_count
+        if not tags_data:
+            return 0
+
+        rows = [
+            {
+                "branch_id": branch_id,
+                "tag_id": tag["tag_id"],
+                "period_type": period_type,
+                "count": tag.get("count", 0),
+                "weighted_score": tag.get("weighted_score", 0),
+                "rank": tag.get("rank"),
+            }
+            for tag in tags_data
+        ]
+
+        stmt = pg_insert(BranchTagORM.__table__).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["branch_id", "tag_id", "period_type"],
+            set_={
+                "count": stmt.excluded.count,
+                "weighted_score": stmt.excluded.weighted_score,
+                "rank": stmt.excluded.rank,
+            },
+        )
+        await self._session.execute(stmt)
+        return len(rows)
 
     async def get_tag_stats_by_period(
         self, branch_id: int, start_date: datetime, end_date: datetime,

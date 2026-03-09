@@ -10,9 +10,9 @@ class ReviewInput(BaseModel):
 
     branch_id: int = Field(..., description="업체 ID")
     content: str = Field(default="", description="리뷰 내용")
-    rating_service: float | None = Field(default=None, description="서비스 평점 (1-5)")
-    rating_car: float | None = Field(default=None, description="차량 평점 (1-5)")
-    rating_convenience: float | None = Field(default=None, description="편의성 평점 (1-5)")
+    rating_service: float | None = Field(default=None, ge=1.0, le=5.0, description="서비스 평점 (1-5)")
+    rating_car: float | None = Field(default=None, ge=1.0, le=5.0, description="차량 평점 (1-5)")
+    rating_convenience: float | None = Field(default=None, ge=1.0, le=5.0, description="편의성 평점 (1-5)")
 
 
 class ProcessResult(BaseModel):

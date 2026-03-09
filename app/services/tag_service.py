@@ -31,15 +31,25 @@ class TagService:
         sentiment: str | None = None,
         group_name: str | None = None,
         is_active: bool = True,
-    ) -> list[dict]:
-        """태그 목록"""
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> tuple[list[dict], int]:
+        """태그 목록 (페이지네이션 지원). (tags, total) 튜플 반환."""
         tags = await self.tag_repo.get_all_with_filters(
             category_id=category_id,
             sentiment=sentiment,
             group_name=group_name,
             is_active=is_active,
+            limit=limit,
+            offset=offset,
         )
-        return [t.model_dump() for t in tags]
+        total = await self.tag_repo.count_with_filters(
+            category_id=category_id,
+            sentiment=sentiment,
+            group_name=group_name,
+            is_active=is_active,
+        )
+        return [t.model_dump() for t in tags], total
 
     async def get_tag_groups(self) -> list[dict]:
         """태그 그룹 목록"""

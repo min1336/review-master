@@ -34,11 +34,6 @@ def get_provider(provider_type: str = None) -> LLMProvider:
     Args:
         provider_type: 'openai' (기본값)
     """
-    from core.config import get_settings
+    from core.container import ServiceContainer
 
-    settings = get_settings()
-    return OpenAIProvider(
-        api_key=settings.openai_api_key.get_secret_value(),
-        model=settings.openai_model,
-        rpm=settings.openai_rpm,
-    )
+    return ServiceContainer.get_llm_provider()

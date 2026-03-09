@@ -1,7 +1,7 @@
 """
 분석 모듈
 
-- 키워드 추출 (MeCab 기반)
+- 키워드 추출 (Kiwi 기반)
 - 태그 분류 (HybridClassifier: ABSA + 임베딩)
 - ABSA (Aspect-Based Sentiment Analysis)
 - 청킹 (절 단위 분리)

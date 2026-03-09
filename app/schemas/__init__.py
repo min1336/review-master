@@ -28,16 +28,6 @@ from .dto import (
     SummaryWithTagsDTO,
     TagSentimentCountDTO,
 )
-from .entities import (
-    Affiliate,
-    BranchTag,
-    Category,
-    KeywordMapping,
-    Review,
-    SentimentStats,
-    Summary,
-    Tag,
-)
 from .summary import RegenerateRequest, SummaryUpdate
 from .tag import (
     BulkMappingRequest,
@@ -75,15 +65,6 @@ __all__ = [
     "SummaryStatsDTO",
     "SummaryWithTagsDTO",
     "TagSentimentCountDTO",
-    # entities
-    "Affiliate",
-    "BranchTag",
-    "Category",
-    "KeywordMapping",
-    "Review",
-    "SentimentStats",
-    "Summary",
-    "Tag",
     # summary
     "RegenerateRequest",
     "SummaryUpdate",

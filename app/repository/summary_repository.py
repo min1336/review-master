@@ -16,6 +16,12 @@ from .orm_models import BranchReviewORM, BranchSummaryHistoryORM, BranchSummaryO
 logger = logging.getLogger(__name__)
 
 
+ALLOWED_SORT_COLUMNS = {
+    "branch_id", "branch_name", "region", "status",
+    "review_count", "avg_rating", "updated_at", "created_at",
+}
+
+
 class SummaryRepository(BaseRepository[Summary]):
     """branch_summaries 테이블 Repository"""
 
@@ -61,6 +67,9 @@ class SummaryRepository(BaseRepository[Summary]):
                 )
         elif region:
             stmt = stmt.where(BranchSummaryORM.region.ilike(f"%{region}%"))
+
+        if sort_by not in ALLOWED_SORT_COLUMNS:
+            sort_by = "branch_id"
 
         is_desc = order.lower() == "desc"
         sort_col = getattr(BranchSummaryORM, sort_by)

@@ -19,6 +19,11 @@ def resolve_period_or_dates(
     """period 프리셋 또는 start_date+end_date -> UTC datetime 범위."""
     if period:
         return resolve_period(period)
+    if bool(start_date) != bool(end_date):
+        raise HTTPException(
+            status_code=error_status,
+            detail="start_date와 end_date를 함께 지정해야 합니다",
+        )
     if start_date and end_date:
         validate_date_range_d(start_date, end_date)
         return date_to_utc(start_date), date_to_utc(end_date, end_of_day=True)

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
 
@@ -45,14 +45,14 @@ class TagRepository(BaseRepository[Tag]):
             )
         return Tag(**data)
 
-    async def get_all_with_filters(
+    def _build_filter_stmt(
         self,
         category_id: int | None = None,
         sentiment: str | None = None,
         group_name: str | None = None,
         is_active: bool = True,
-    ) -> list[Tag]:
-        """필터링된 태그 목록"""
+    ):
+        """공통 필터 조건을 적용한 base statement 반환 (select 컬럼은 호출처에서 결정)"""
         stmt = select(TagORM)
 
         if group_name:
@@ -65,13 +65,59 @@ class TagRepository(BaseRepository[Tag]):
         if is_active is not None:
             stmt = stmt.where(TagORM.is_active == is_active)
 
+        return stmt
+
+    async def get_all_with_filters(
+        self,
+        category_id: int | None = None,
+        sentiment: str | None = None,
+        group_name: str | None = None,
+        is_active: bool = True,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[Tag]:
+        """필터링된 태그 목록 (DB-level 페이지네이션 지원)"""
+        stmt = self._build_filter_stmt(
+            category_id=category_id,
+            sentiment=sentiment,
+            group_name=group_name,
+            is_active=is_active,
+        )
         stmt = stmt.order_by(TagORM.name)
+
+        if offset is not None:
+            stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+
         result = await self._session.execute(stmt)
         rows = result.scalars().all()
 
         if category_id is not None:
             return [self._tag_from_orm(row) for row in rows]
         return [self._to_pydantic(row) for row in rows]
+
+    async def count_with_filters(
+        self,
+        category_id: int | None = None,
+        sentiment: str | None = None,
+        group_name: str | None = None,
+        is_active: bool = True,
+    ) -> int:
+        """필터 조건에 맞는 태그 총 개수"""
+        stmt = select(func.count(TagORM.id))
+
+        if group_name:
+            stmt = stmt.where(TagORM.group_name == group_name)
+        elif category_id is not None:
+            stmt = stmt.where(TagORM.category_id == category_id)
+        if sentiment:
+            stmt = stmt.where(TagORM.sentiment == sentiment)
+        if is_active is not None:
+            stmt = stmt.where(TagORM.is_active == is_active)
+
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
 
     async def get_by_name(self, name: str) -> Tag | None:
         """이름으로 조회"""
@@ -268,31 +314,27 @@ class MappingRepository(BaseRepository[KeywordMapping]):
 
     async def bulk_create(self, mappings: list[dict]) -> int:
         """일괄 생성"""
-        success_count = 0
-        for mapping in mappings:
-            try:
-                stmt = (
-                    pg_insert(KeywordMappingORM.__table__)
-                    .values(
-                        keyword=mapping["keyword"],
-                        tag_id=mapping["tag_id"],
-                        is_auto=mapping.get("is_auto", True),
-                        confidence=mapping.get("confidence", 1.0),
-                    )
-                    .on_conflict_do_update(
-                        index_elements=["keyword"],
-                        set_={
-                            "tag_id": mapping["tag_id"],
-                            "is_auto": mapping.get("is_auto", True),
-                            "confidence": mapping.get("confidence", 1.0),
-                        },
-                    )
-                )
-                await self._session.execute(stmt)
-                success_count += 1
-            except Exception as e:
-                keyword = mapping.get("keyword")
-                logger.warning(
-                    f"Failed to upsert mapping for keyword '{keyword}': {e}"
-                )
-        return success_count
+        if not mappings:
+            return 0
+
+        rows = [
+            {
+                "keyword": m["keyword"],
+                "tag_id": m["tag_id"],
+                "is_auto": m.get("is_auto", True),
+                "confidence": m.get("confidence", 1.0),
+            }
+            for m in mappings
+        ]
+
+        stmt = pg_insert(KeywordMappingORM.__table__).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["keyword"],
+            set_={
+                "tag_id": stmt.excluded.tag_id,
+                "is_auto": stmt.excluded.is_auto,
+                "confidence": stmt.excluded.confidence,
+            },
+        )
+        await self._session.execute(stmt)
+        return len(rows)

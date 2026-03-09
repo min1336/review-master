@@ -175,7 +175,7 @@ class ReportJobService:
                     )
                     await session.commit()
                 except Exception:
-                    pass
+                    logger.error("작업 상태 기록 실패", exc_info=True)
             finally:
                 self._running_jobs.pop(job_id, None)
 

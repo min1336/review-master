@@ -20,7 +20,7 @@ class TagUpdate(BaseModel):
     name: str | None = None
     group_name: str | None = None
     color: str | None = None
-    sentiment: str | None = None
+    sentiment: str | None = Field(default=None, pattern="^(positive|negative|neutral)$")
     is_active: bool | None = None
 
 

@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import datetime, timedelta
 
-from sqlalchemy import delete, func, select, text, update
+from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from models.review import Review
@@ -276,7 +276,7 @@ class BranchReviewRepository(BaseRepository[Review]):
         conditions = [
             BranchReviewORM.branch_id == branch_id,
             BranchReviewORM.sentiment == "negative",
-            BranchReviewORM.rating_service <= 3,
+            or_(BranchReviewORM.rating_service <= 3, BranchReviewORM.rating_service.is_(None)),
             BranchReviewORM.content.isnot(None),
             BranchReviewORM.content != "",
             BranchReviewORM.deleted_at.is_(None),

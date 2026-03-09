@@ -240,8 +240,7 @@ class SummaryQueryMixin:
         from repository.car_model_repository import CarModelRepository
         from repository.database import get_session_factory
 
-        session = get_session_factory()()
-        try:
+        async with get_session_factory()() as session:
             repo = CarModelRepository(session)
 
             try:
@@ -280,8 +279,6 @@ class SummaryQueryMixin:
                     car_data[car]["review_count"] = count_result.scalar_one() or 0
                 except Exception:
                     car_data[car]["review_count"] = 0
-        finally:
-            await session.close()
 
         car_models_dto: list[CarModelDTO] = []
         for car, data in sorted(car_data.items()):

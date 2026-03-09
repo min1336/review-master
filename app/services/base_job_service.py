@@ -101,6 +101,17 @@ class BaseJobService(ABC, Generic[StateT, ResponseT]):
                 return job
         return None
 
+    def get_active_job(self) -> ResponseT | None:
+        """활성(pending/processing) 작업의 응답 DTO를 반환. 없으면 None."""
+        active = self._find_active_job()
+        if active is None:
+            return None
+        return self._to_response(active)
+
+    def has_active_job(self) -> bool:
+        """활성(pending/processing) 작업이 존재하는지 여부"""
+        return self._find_active_job() is not None
+
     @abstractmethod
     def _to_response(self, state: StateT) -> ResponseT:
         """상태를 응답 DTO로 변환"""

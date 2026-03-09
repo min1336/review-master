@@ -63,8 +63,7 @@ class SummaryGenerationMixin:
         branch_name = summary_data.get("branch_name", f"지점 {branch_id}")
 
         # 2. 기간별 리뷰 수 확인 및 적절한 기간 선택
-        session = get_session_factory()()
-        try:
+        async with get_session_factory()() as session:
             end_date = utc_now()
             selected_period = None
             review_count = 0
@@ -117,8 +116,6 @@ class SummaryGenerationMixin:
             representative_reviews = await self._fetch_representative_reviews(
                 session, branch_id, start_date, mode
             )
-        finally:
-            await session.close()
 
         period_key = selected_period["key"]
         period_field = selected_period["field"]
@@ -269,8 +266,7 @@ class SummaryGenerationMixin:
         now = utc_now()
         start_period = (now - timedelta(days=months * 30)).strftime("%Y-%m")
 
-        session = get_session_factory()()
-        try:
+        async with get_session_factory()() as session:
             stmt = (
                 select(
                     MonthlyTagStatsORM.tag_id,
@@ -313,8 +309,6 @@ class SummaryGenerationMixin:
                 from domain.analysis.patterns import normalize_category_name
                 cat_name = normalize_category_name(t.category.name) if t.category else "기타"
                 tag_info[t.id] = (t.name, cat_name)
-        finally:
-            await session.close()
 
         from collections import defaultdict
         category_groups: dict[str, list[dict]] = defaultdict(list)

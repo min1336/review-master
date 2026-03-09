@@ -71,7 +71,7 @@ async def api_get_reviews(
         logger.error(f"Failed to get filtered reviews: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"리뷰를 불러오는데 실패했습니다: {e}",
+            detail="리뷰를 불러오는데 실패했습니다",
         )
 
 

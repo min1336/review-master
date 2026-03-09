@@ -13,6 +13,9 @@ class Review(BaseModel):
     review_id: str | None = None
     content: str | None = None
     rating: float | None = None
+    rating_service: float | None = None
+    rating_car: float | None = None
+    rating_convenience: float | None = None
     sentiment: str | None = None
     keywords: list[str] | None = None
     review_date: datetime | None = None

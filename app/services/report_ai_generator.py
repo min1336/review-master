@@ -1,6 +1,6 @@
 """리포트 AI 텍스트 생성기
 
-3개 LLM 호출(기간 요약, 업체 평가, 차량 평가)을 병렬로 실행합니다.
+3개 LLM 호출(기간 요약, 업체 평가, 차량 평가)을 순차로 실행합니다.
 _generate_affiliate_text / _generate_vehicle_text의 공통 구조를
 _generate_evaluation_text로 통합하여 중복을 제거합니다.
 """
@@ -36,7 +36,7 @@ class ReportAIGenerator:
         self.athena_client = athena_client
 
     async def generate_all(self, data: dict, report_config=None) -> dict:
-        """3개 LLM 호출 병렬 실행 (Step 3 오케스트레이터)
+        """3개 LLM 호출 순차 실행 (Step 3 오케스트레이터)
 
         Args:
             data: 이전 단계에서 수집된 데이터

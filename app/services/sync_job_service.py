@@ -103,23 +103,22 @@ class SyncJobService(BaseJobService[SyncJobState, SyncJobStatusResponse]):
 
             athena_client = ServiceContainer.get_athena_client()
 
-            session = get_session_factory()()
-            try:
-                review_repo = BranchReviewRepository(session)
-                sync_service = SyncService(review_repo, athena_client)
+            factory = get_session_factory()
+            async with factory() as session:
+                try:
+                    review_repo = BranchReviewRepository(session)
+                    sync_service = SyncService(review_repo, athena_client)
 
-                result = await sync_service.sync_reviews(
-                    progress_callback=progress_callback,
-                    date_from=date_from,
-                    date_to=date_to,
-                )
-                await session.commit()
-                gc.collect()
-            except Exception:
-                await session.rollback()
-                raise
-            finally:
-                await session.close()
+                    result = await sync_service.sync_reviews(
+                        progress_callback=progress_callback,
+                        date_from=date_from,
+                        date_to=date_to,
+                    )
+                    await session.commit()
+                    gc.collect()
+                except Exception:
+                    await session.rollback()
+                    raise
 
             state.status = "completed"
             state.progress = 100

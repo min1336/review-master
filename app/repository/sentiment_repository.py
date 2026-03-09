@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from schemas.dto import SentimentStatsDTO
@@ -25,28 +25,17 @@ class SentimentRepository:
     async def get_stats(self, branch_id: int | None = None) -> SentimentStatsDTO:
         """감정통계 조회 — monthly_sentiment_stats에서 월별 데이터 집계"""
         stmt = select(
-            MonthlySentimentStatsORM.positive_count,
-            MonthlySentimentStatsORM.negative_count,
-            MonthlySentimentStatsORM.neutral_count,
+            func.coalesce(func.sum(MonthlySentimentStatsORM.positive_count), 0).label("pos"),
+            func.coalesce(func.sum(MonthlySentimentStatsORM.negative_count), 0).label("neg"),
+            func.coalesce(func.sum(MonthlySentimentStatsORM.neutral_count), 0).label("neu"),
         )
         if branch_id:
             stmt = stmt.where(MonthlySentimentStatsORM.branch_id == branch_id)
 
         result = await self._session.execute(stmt)
-        rows = result.all()
+        row = result.one()
 
-        if not rows:
-            return SentimentStatsDTO(
-                positive=0, negative=0, neutral=0,
-                total=0, positive_ratio=0, negative_ratio=0,
-            )
-
-        pos = neg = neu = 0
-        for row in rows:
-            pos += row.positive_count or 0
-            neg += row.negative_count or 0
-            neu += row.neutral_count or 0
-
+        pos, neg, neu = int(row.pos), int(row.neg), int(row.neu)
         total = pos + neg + neu
         return SentimentStatsDTO(
             positive=pos,
@@ -57,42 +46,42 @@ class SentimentRepository:
             negative_ratio=round(neg / total * 100, 2) if total > 0 else 0,
         )
 
-    async def get_all_stats(self) -> list[dict]:
-        """전체 지점 감정통계 목록 — monthly_sentiment_stats에서 지점별 집계"""
-        stmt = select(
-            MonthlySentimentStatsORM.branch_id,
-            MonthlySentimentStatsORM.positive_count,
-            MonthlySentimentStatsORM.negative_count,
-            MonthlySentimentStatsORM.neutral_count,
+    async def get_all_stats(self, page: int = 1, limit: int = 50) -> tuple[list[dict], int]:
+        """전체 지점 감정통계 목록 — monthly_sentiment_stats에서 지점별 집계 (DB 페이지네이션)"""
+        # count 쿼리
+        count_stmt = select(func.count(func.distinct(MonthlySentimentStatsORM.branch_id)))
+        total_count = (await self._session.execute(count_stmt)).scalar() or 0
+
+        # 데이터 쿼리 (LIMIT/OFFSET)
+        offset = (page - 1) * limit
+        stmt = (
+            select(
+                MonthlySentimentStatsORM.branch_id,
+                func.coalesce(func.sum(MonthlySentimentStatsORM.positive_count), 0).label("pos"),
+                func.coalesce(func.sum(MonthlySentimentStatsORM.negative_count), 0).label("neg"),
+                func.coalesce(func.sum(MonthlySentimentStatsORM.neutral_count), 0).label("neu"),
+            )
+            .group_by(MonthlySentimentStatsORM.branch_id)
+            .order_by(MonthlySentimentStatsORM.branch_id)
+            .offset(offset)
+            .limit(limit)
         )
 
         result = await self._session.execute(stmt)
         rows = result.all()
 
-        if not rows:
-            return []
-
-        branch_map: dict[int, dict[str, int]] = {}
-        for row in rows:
-            bid = row.branch_id
-            if bid not in branch_map:
-                branch_map[bid] = {"positive": 0, "negative": 0, "neutral": 0}
-            branch_map[bid]["positive"] += row.positive_count or 0
-            branch_map[bid]["negative"] += row.negative_count or 0
-            branch_map[bid]["neutral"] += row.neutral_count or 0
-
         stats_list = []
-        for bid in sorted(branch_map):
-            c = branch_map[bid]
-            total = c["positive"] + c["negative"] + c["neutral"]
+        for row in rows:
+            pos, neg, neu = int(row.pos), int(row.neg), int(row.neu)
+            total = pos + neg + neu
             stats_list.append({
-                "branch_id": bid,
-                "positive_count": c["positive"],
-                "negative_count": c["negative"],
-                "neutral_count": c["neutral"],
+                "branch_id": row.branch_id,
+                "positive_count": pos,
+                "negative_count": neg,
+                "neutral_count": neu,
                 "total_count": total,
-                "positive_ratio": round(c["positive"] / total * 100, 2) if total > 0 else 0,
-                "negative_ratio": round(c["negative"] / total * 100, 2) if total > 0 else 0,
+                "positive_ratio": round(pos / total * 100, 2) if total > 0 else 0,
+                "negative_ratio": round(neg / total * 100, 2) if total > 0 else 0,
             })
 
-        return stats_list
+        return stats_list, total_count

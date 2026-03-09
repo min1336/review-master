@@ -51,5 +51,5 @@ async def api_get_public_summary(
         logger.exception("Public summary fetch failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="요약 조회 중 오류가 발생했습니다",
         ) from e

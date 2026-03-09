@@ -271,24 +271,23 @@ class UploadJobService(BaseJobService[UploadJobState, UploadJobStatusResponse]):
             from repository.review_repository import BranchReviewRepository
 
             # --- Phase 1: upsert_batch (별도 세션, 완료 후 커밋) ---
-            session = get_session_factory()()
+            factory = get_session_factory()
             upserted_count = 0
-            try:
-                review_repo = BranchReviewRepository(session)
-                upserted_count = await review_repo.upsert_batch(raw_rows)
+            async with factory() as session:
+                try:
+                    review_repo = BranchReviewRepository(session)
+                    upserted_count = await review_repo.upsert_batch(raw_rows)
 
-                # 데드락 방지: UnifiedPipeline이 별도 세션으로 같은 행을 UPDATE하므로
-                # 행 잠금을 해제해야 함 (sync_service.py:122-124 패턴)
-                await session.commit()
-                logger.info(
-                    "업로드 upsert 완료: %d건 (job=%s)",
-                    upserted_count, state.job_id,
-                )
-            except Exception:
-                await session.rollback()
-                raise
-            finally:
-                await session.close()
+                    # 데드락 방지: UnifiedPipeline이 별도 세션으로 같은 행을 UPDATE하므로
+                    # 행 잠금을 해제해야 함 (sync_service.py:122-124 패턴)
+                    await session.commit()
+                    logger.info(
+                        "업로드 upsert 완료: %d건 (job=%s)",
+                        upserted_count, state.job_id,
+                    )
+                except Exception:
+                    await session.rollback()
+                    raise
 
             state.progress = 30
             state.message = f"{upserted_count}건 저장 완료, 분석 시작"

@@ -148,7 +148,7 @@ class SyncMetadataRepository:
             return True
         except Exception as e:
             logger.error(f"Failed to release lock: {e}")
-            return False
+            raise
 
     async def is_running(self, sync_type: str = "new_review") -> bool:
         """동기화 실행 중인지 확인"""

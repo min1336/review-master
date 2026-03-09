@@ -31,7 +31,6 @@ async def main() -> None:
 
     parser = argparse.ArgumentParser(description="전지점 요약 배치 생성")
     parser.add_argument("--limit", type=int, default=0, help="처리할 지점 수 제한 (0=전체)")
-    parser.add_argument("--concurrency", type=int, default=5, help="동시 처리 수 (기본: 5)")
     args = parser.parse_args()
 
     from sqlalchemy import func, select, text
@@ -111,8 +110,8 @@ async def main() -> None:
     finally:
         await session.close()
 
-    # 3. AI 요약 생성 (세마포어로 동시성 제어)
-    logger.info("=== Step 3: AI 요약 생성 (동시성=%d) ===", args.concurrency)
+    # 3. AI 요약 생성 (순차 처리)
+    logger.info("=== Step 3: AI 요약 생성 ===")
 
     from repository.branch_tag_repository import BranchTagRepository
     from repository.review_repository import BranchReviewRepository
@@ -120,7 +119,6 @@ async def main() -> None:
     from repository.summary_repository import SummaryRepository
     from services.summary_service import SummaryService
 
-    semaphore = asyncio.Semaphore(args.concurrency)
     success_count = 0
     fail_count = 0
     skip_count = 0
@@ -128,70 +126,69 @@ async def main() -> None:
     async def generate_one(branch_info: dict, idx: int) -> None:
         nonlocal success_count, fail_count, skip_count
 
-        async with semaphore:
-            session = factory()
-            try:
-                summary_repo = SummaryRepository(session)
-                branch_tag_repo = BranchTagRepository(session)
-                review_repo = BranchReviewRepository(session)
-                sentiment_repo = SentimentRepository(session)
+        session = factory()
+        try:
+            summary_repo = SummaryRepository(session)
+            branch_tag_repo = BranchTagRepository(session)
+            review_repo = BranchReviewRepository(session)
+            sentiment_repo = SentimentRepository(session)
 
-                # 이미 요약이 있으면 건너뛰기
-                existing = await summary_repo.get_by_branch_id(branch_info["branch_id"])
-                if existing:
-                    data = existing.model_dump() if hasattr(existing, 'model_dump') else existing
-                    if any(data.get(f) for f in ["summary_1m", "summary_3m", "summary_6m", "summary_1y", "summary_all"]):
-                        success_count += 1
-                        logger.info(
-                            "  [%d/%d] 지점 %d — 이미 요약 있음 (skip)",
-                            idx + 1, len(target_branches), branch_info["branch_id"],
-                        )
-                        return
-
-                svc = SummaryService(
-                    summary_repo, branch_tag_repo, review_repo, sentiment_repo
-                )
-
-                result = await svc.generate_summary_with_data(
-                    branch_info["branch_id"],
-                    save_to_db=True,
-                    mode="marketing",
-                )
-                await session.commit()
-
-                if result.get("success"):
+            # 이미 요약이 있으면 건너뛰기
+            existing = await summary_repo.get_by_branch_id(branch_info["branch_id"])
+            if existing:
+                data = existing.model_dump() if hasattr(existing, 'model_dump') else existing
+                if any(data.get(f) for f in ["summary_1m", "summary_3m", "summary_6m", "summary_1y", "summary_all"]):
                     success_count += 1
-                    period = result.get("period", "?")
                     logger.info(
-                        "  [%d/%d] 지점 %d (%s) — %s 요약 생성 OK",
-                        idx + 1, len(target_branches),
-                        branch_info["branch_id"],
-                        branch_info["branch_name"],
-                        period,
+                        "  [%d/%d] 지점 %d — 이미 요약 있음 (skip)",
+                        idx + 1, len(target_branches), branch_info["branch_id"],
                     )
-                else:
-                    error = result.get("error", "unknown")
-                    if "부족" in str(error):
-                        skip_count += 1
-                    else:
-                        fail_count += 1
-                    logger.warning(
-                        "  [%d/%d] 지점 %d — %s",
-                        idx + 1, len(target_branches),
-                        branch_info["branch_id"],
-                        error,
-                    )
-            except Exception as e:
-                fail_count += 1
-                logger.error(
-                    "  [%d/%d] 지점 %d 오류: %s",
+                    return
+
+            svc = SummaryService(
+                summary_repo, branch_tag_repo, review_repo, sentiment_repo
+            )
+
+            result = await svc.generate_summary_with_data(
+                branch_info["branch_id"],
+                save_to_db=True,
+                mode="marketing",
+            )
+            await session.commit()
+
+            if result.get("success"):
+                success_count += 1
+                period = result.get("period", "?")
+                logger.info(
+                    "  [%d/%d] 지점 %d (%s) — %s 요약 생성 OK",
                     idx + 1, len(target_branches),
                     branch_info["branch_id"],
-                    e,
+                    branch_info["branch_name"],
+                    period,
                 )
-                await session.rollback()
-            finally:
-                await session.close()
+            else:
+                error = result.get("error", "unknown")
+                if "부족" in str(error):
+                    skip_count += 1
+                else:
+                    fail_count += 1
+                logger.warning(
+                    "  [%d/%d] 지점 %d — %s",
+                    idx + 1, len(target_branches),
+                    branch_info["branch_id"],
+                    error,
+                )
+        except Exception as e:
+            fail_count += 1
+            logger.error(
+                "  [%d/%d] 지점 %d 오류: %s",
+                idx + 1, len(target_branches),
+                branch_info["branch_id"],
+                e,
+            )
+            await session.rollback()
+        finally:
+            await session.close()
 
     # 순차 배치 실행 (API rate limit 방지)
     for i, b in enumerate(target_branches):

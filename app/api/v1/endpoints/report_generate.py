@@ -17,6 +17,7 @@ from schemas.common import ApiResponseModel, api_response, validate_date_range_d
 from schemas.report import ReportRequest
 from services.report_job_service import ReportJobService
 
+from core.config import get_settings
 from .deps import get_report_job_service
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ async def api_generate_report_async(
         )
         return api_response({
             "job_id": job_id,
-            "poll_url": f"/api/reports/{branch_id}/job/{job_id}",
+            "poll_url": f"{get_settings().api_prefix}/reports/{branch_id}/job/{job_id}",
         })
     except Exception as e:
         logger.exception("비동기 리포트 생성 요청 실패")

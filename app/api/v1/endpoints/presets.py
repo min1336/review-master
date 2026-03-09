@@ -21,7 +21,7 @@ router = APIRouter(tags=["presets"])
     response_model=dict,
 )
 async def list_presets(
-    branch_type: str | None = Query(None, regex="^(airport|tourist|city)$"),
+    branch_type: str | None = Query(None, pattern="^(airport|tourist|city)$"),
     service: PresetService = Depends(get_preset_service),
 ):
     """프리셋 목록 조회"""

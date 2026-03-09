@@ -43,6 +43,44 @@ from .sentiment_core import (
 logger = logging.getLogger(__name__)
 
 
+def resolve_tag_conflicts(
+    tag_sentiments: dict[str, dict[str, list[str]]], has_concession: bool
+) -> dict[str, dict[str, list[str]]]:
+    """동일 카테고리 positive+negative 충돌 해소
+
+    Args:
+        tag_sentiments: {태그: {"positive": [...], "negative": [...], "neutral": [...]}}
+        has_concession: 양보/반전 구문 존재 여부
+
+    Returns:
+        충돌이 해소된 동일 구조의 dict (빈 태그는 제거됨)
+    """
+    resolved = {}
+    for tag, sentiments in tag_sentiments.items():
+        if not any(sentiments.values()):
+            continue
+        pos_kws = sentiments.get("positive", [])
+        neg_kws = sentiments.get("negative", [])
+        neu_kws = sentiments.get("neutral", [])
+
+        if pos_kws and neg_kws:
+            # 반전 구문이면서 부정 근거가 약할 때만 긍정 우선
+            if has_concession and len(neg_kws) <= 1:
+                resolved[tag] = {"positive": pos_kws, "negative": [], "neutral": neu_kws}
+            elif len(pos_kws) >= len(neg_kws):
+                resolved[tag] = {"positive": pos_kws, "negative": [], "neutral": neu_kws}
+            else:
+                resolved[tag] = {"positive": [], "negative": neg_kws, "neutral": neu_kws}
+        else:
+            resolved[tag] = sentiments
+
+    return {
+        tag: sentiments
+        for tag, sentiments in resolved.items()
+        if any(sentiments.values())
+    }
+
+
 @dataclass
 class AspectOpinion:
     """Aspect-Opinion-Sentiment 결과"""
@@ -472,30 +510,7 @@ class RuleBasedABSA:
         has_concession = bool(CONCESSION_REGEX.search(review))
 
         # 동일 카테고리 positive+negative 충돌 해소
-        resolved = {}
-        for tag, sentiments in result.items():
-            if not any(sentiments.values()):
-                continue
-            pos_kws = sentiments.get("positive", [])
-            neg_kws = sentiments.get("negative", [])
-            neu_kws = sentiments.get("neutral", [])
-
-            if pos_kws and neg_kws:
-                # 반전 구문이면서 부정 근거가 약할 때만 긍정 우선
-                if has_concession and len(neg_kws) <= 1:
-                    resolved[tag] = {"positive": pos_kws, "negative": [], "neutral": neu_kws}
-                elif len(pos_kws) >= len(neg_kws):
-                    resolved[tag] = {"positive": pos_kws, "negative": [], "neutral": neu_kws}
-                else:
-                    resolved[tag] = {"positive": [], "negative": neg_kws, "neutral": neu_kws}
-            else:
-                resolved[tag] = sentiments
-
-        return {
-            tag: sentiments
-            for tag, sentiments in resolved.items()
-            if any(sentiments.values())
-        }
+        return resolve_tag_conflicts(dict(result), has_concession)
 
     # =========================================================================
     # 유틸리티 메서드

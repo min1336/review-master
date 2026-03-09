@@ -19,15 +19,15 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import csv
 import logging
-import re
 import sys
 import time
 from pathlib import Path
 
 # app/ 디렉토리를 sys.path에 추가 (run_auto_mapping.py 패턴)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from scripts._csv_utils import load_csv
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,78 +37,6 @@ logger = logging.getLogger(__name__)
 
 # CSV 경로: 프로젝트 루트의 data/reviewList.csv
 CSV_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "review_list.csv"
-
-# 리뷰 상태 변환 맵 (한국어 → 영어)
-STATUS_MAP = {
-    "정상": "normal",
-    "블라인드": "blind",
-    "삭제": "deleted",
-}
-
-_HTML_TAG_RE = re.compile(r"<[^>]+>")
-
-
-def strip_null(text: str) -> str:
-    """PostgreSQL이 거부하는 null byte(\x00) 제거"""
-    return text.replace("\x00", "") if text else text
-
-
-def strip_html(text: str) -> str:
-    """<br> 등 HTML 태그 + null byte 제거 후 공백 정리"""
-    if not text:
-        return ""
-    cleaned = _HTML_TAG_RE.sub(" ", text)
-    cleaned = cleaned.replace("\x00", "")
-    # 연속 공백 축소
-    return re.sub(r"\s{2,}", " ", cleaned).strip()
-
-
-def load_csv(path: Path) -> tuple[list[dict], list[dict]]:
-    """
-    CSV를 읽어 두 가지 형태로 반환.
-
-    Returns:
-        raw_rows  : 원본 CSV rows (한국어 키, upsert_batch 직접 전달용)
-        mapped_rows: 영어 키 변환 rows (UnifiedPipeline.run() 전달용)
-    """
-    if not path.exists():
-        raise FileNotFoundError(f"CSV 파일 없음: {path}")
-
-    raw_rows: list[dict] = []
-    mapped_rows: list[dict] = []
-
-    with path.open(encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            # raw_rows: 한국어 키 그대로, null byte만 제거
-            raw_rows.append({k: strip_null(v) if isinstance(v, str) else v for k, v in row.items()})
-
-            # mapped_rows: 파이프라인용 영어 키 변환
-            status_kr = (row.get("리뷰상태") or "").strip()
-            status_en = STATUS_MAP.get(status_kr, status_kr)
-
-            content_raw = row.get("리뷰내용") or ""
-            content_clean = strip_html(content_raw)
-
-            # NOTE: from_athena_row()는 car_type 키를 사용 (dto.py:111)
-            mapped_rows.append({
-                "review_id": row.get("리뷰번호", "").strip(),
-                "branch_id": row.get("지점번호", "").strip(),
-                "content": content_clean,
-                "branch_name": (row.get("예약_지점명") or "").strip(),
-                "company_name": (row.get("예약_업체명") or "").strip(),
-                "rating_service": (row.get("지점평점(친절/편의성)") or "").strip(),
-                "rating_car": (row.get("차량평점") or "").strip(),
-                "rating_convenience": (row.get("인수/반납편의성") or "").strip(),
-                "helpful_count": (row.get("도움돼요수") or "0").strip(),
-                "review_date": (row.get("등록일시") or "").strip(),
-                "status": status_en,
-                "car_type": (row.get("차량모델") or "").strip(),
-                "rent_type": (row.get("렌트타입") or "").strip(),
-            })
-
-    logger.info("CSV 로드 완료: %d건 (%s)", len(raw_rows), path.name)
-    return raw_rows, mapped_rows
 
 
 async def progress(pct: int, message: str) -> None:
@@ -134,7 +62,7 @@ async def main() -> None:
 
     # 1. CSV 로드
     logger.info("=== CSV 로드 시작 ===")
-    raw_rows, mapped_rows = load_csv(CSV_PATH)
+    raw_rows, mapped_rows = load_csv(CSV_PATH, include_raw=True)
     total = len(raw_rows)
     logger.info("총 %d건 로드 완료", total)
 

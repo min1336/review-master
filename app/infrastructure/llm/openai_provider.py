@@ -5,11 +5,14 @@ OpenAI GPT Provider
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 
 from .base import LLMProvider, LLMResponse
 from .rate_limiter import RateLimiter
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAIProvider(LLMProvider):
@@ -60,11 +63,11 @@ class OpenAIProvider(LLMProvider):
             self._available = True
             return True
         except ImportError:
-            print("⚠️ openai 패키지 미설치")
+            logger.warning("openai 패키지 미설치")
             self._available = False
             return False
         except Exception as e:
-            print(f"⚠️ OpenAI 초기화 실패: {e}")
+            logger.warning(f"OpenAI 초기화 실패: {e}")
             self._available = False
             return False
 
@@ -123,7 +126,7 @@ class OpenAIProvider(LLMProvider):
             if "429" in error_msg or "rate" in error_msg.lower():
                 if _retry_count < max_retries:
                     wait_time = 60 * (2 ** _retry_count)
-                    print(f"  ⏳ Rate limit 초과, {wait_time}초 대기 후 재시도 ({_retry_count + 1}/{max_retries})...")
+                    logger.warning(f"Rate limit 초과, {wait_time}초 대기 후 재시도 ({_retry_count + 1}/{max_retries})...")
                     time.sleep(wait_time)
                     return self.generate(
                         prompt, system_prompt, max_tokens, temperature,
@@ -156,7 +159,7 @@ class OpenAIProvider(LLMProvider):
         except ImportError:
             return False
         except Exception as e:
-            print(f"⚠️ AsyncOpenAI 초기화 실패: {e}")
+            logger.warning(f"AsyncOpenAI 초기화 실패: {e}")
             return False
 
     async def async_generate(
@@ -202,7 +205,7 @@ class OpenAIProvider(LLMProvider):
             if "429" in error_msg or "rate" in error_msg.lower():
                 if _retry_count < max_retries:
                     wait_time = 60 * (2 ** _retry_count)
-                    print(f"  ⏳ Rate limit 초과 (async), {wait_time}초 대기 후 재시도 ({_retry_count + 1}/{max_retries})...")
+                    logger.warning(f"Rate limit 초과 (async), {wait_time}초 대기 후 재시도 ({_retry_count + 1}/{max_retries})...")
                     await asyncio.sleep(wait_time)
                     return await self.async_generate(
                         prompt, system_prompt, max_tokens, temperature,

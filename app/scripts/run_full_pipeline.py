@@ -12,14 +12,14 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import csv
 import logging
-import re
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from scripts._csv_utils import load_csv
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,55 +28,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 CSV_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "review_list.csv"
-
-STATUS_MAP = {
-    "정상": "normal",
-    "블라인드": "blind",
-    "삭제": "deleted",
-}
-
-_HTML_TAG_RE = re.compile(r"<[^>]+>")
-
-
-def strip_html(text: str) -> str:
-    if not text:
-        return ""
-    cleaned = _HTML_TAG_RE.sub(" ", text)
-    cleaned = cleaned.replace("\x00", "")
-    return re.sub(r"\s{2,}", " ", cleaned).strip()
-
-
-def load_csv_mapped(path: Path) -> list[dict]:
-    """CSV -> 파이프라인용 영어 키 변환 rows"""
-    if not path.exists():
-        raise FileNotFoundError(f"CSV 파일 없음: {path}")
-
-    rows: list[dict] = []
-    with path.open(encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            status_kr = (row.get("리뷰상태") or "").strip()
-            status_en = STATUS_MAP.get(status_kr, status_kr)
-            content_clean = strip_html(row.get("리뷰내용") or "")
-
-            rows.append({
-                "review_id": row.get("리뷰번호", "").strip(),
-                "branch_id": row.get("지점번호", "").strip(),
-                "content": content_clean,
-                "branch_name": (row.get("예약_지점명") or "").strip(),
-                "company_name": (row.get("예약_업체명") or "").strip(),
-                "rating_service": (row.get("지점평점(친절/편의성)") or "").strip(),
-                "rating_car": (row.get("차량평점") or "").strip(),
-                "rating_convenience": (row.get("인수/반납편의성") or "").strip(),
-                "helpful_count": (row.get("도움돼요수") or "0").strip(),
-                "review_date": (row.get("등록일시") or "").strip(),
-                "status": status_en,
-                "car_type": (row.get("차량모델") or "").strip(),
-                "rent_type": (row.get("렌트타입") or "").strip(),
-            })
-
-    logger.info("CSV 로드 완료: %d건 (%s)", len(rows), path.name)
-    return rows
 
 
 async def main() -> None:
@@ -98,7 +49,7 @@ async def main() -> None:
 
     # 1. CSV 로드
     logger.info("=== CSV 로드 ===")
-    mapped_rows = load_csv_mapped(CSV_PATH)
+    mapped_rows = load_csv(CSV_PATH)
     total = len(mapped_rows)
     load_time = time.time() - start
     logger.info("로드 완료: %d건 (%.1fs)", total, load_time)

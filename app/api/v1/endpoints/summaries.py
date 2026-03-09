@@ -16,7 +16,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from schemas.common import ApiListResponseModel, ApiResponseModel, api_list_response, api_response, parse_date
 from schemas.dto import PendingSummaryResultDTO, RegionStatsDTO, SummaryStatsDTO
-from schemas.entities import Summary
+from models.summary import Summary
 from schemas.summary import RegenerateRequest, SummaryUpdate
 from services.summary_service import SummaryService
 
@@ -37,6 +37,8 @@ async def api_summaries(
     offset: int = Query(0, ge=0),
     sort_by: str = Query("branch_id"),
     order: str = Query("asc", pattern="^(asc|desc)$"),
+    # NOTE: str | None 유지 — parse_date()가 end_of_day 처리(23:59:59)를 수행하므로
+    # FastAPI 내장 date 타입으로 변경 시 end_of_day 로직이 누락됨
     review_date_from: str | None = Query(
         None, description="시작일 (YYYY-MM-DD) - 이 기간에 리뷰가 있는 업체만 표시"
     ),
@@ -146,7 +148,7 @@ async def api_apply_pending_summary(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="요약 적용 중 오류가 발생했습니다") from e
 
 
 @router.post("/{branch_id}/discard-pending", response_model=ApiResponseModel[PendingSummaryResultDTO])

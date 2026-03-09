@@ -115,7 +115,7 @@ class ReportJobRepository:
             return True
         except Exception as e:
             logger.error(f"작업 상태 업데이트 실패: {e}")
-            return False
+            raise
 
     async def update_progress(self, job_id: str | UUID, progress: int) -> bool:
         """진행률만 업데이트"""

@@ -85,6 +85,9 @@ def resolve_period(period: str) -> tuple[datetime, datetime]:
 
     if period == "all":
         start = datetime(2020, 1, 1, tzinfo=now.tzinfo)
+    elif period not in months_map:
+        valid = ", ".join(sorted(months_map.keys())) + ", all"
+        raise ValueError(f"Invalid period '{period}'. Valid values: {valid}")
     else:
         start = end - relativedelta(months=months_map[period])
 

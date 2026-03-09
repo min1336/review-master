@@ -100,16 +100,13 @@ class VehicleAnalyzer:
         """
         from repository.database import get_session_factory
 
-        session = get_session_factory()()
-        try:
+        async with get_session_factory()() as session:
             if start_date and end_date:
                 return await self._get_vehicle_analysis_from_reviews(
                     session, branch_id, start_date, end_date
                 )
 
             return await self._get_vehicle_analysis_from_monthly_stats(branch_id)
-        finally:
-            await session.close()
 
     async def get_vehicle_tags_raw(
         self,
@@ -135,17 +132,15 @@ class VehicleAnalyzer:
         period_from = start_date.strftime("%Y-%m") if start_date else None
         period_to = end_date.strftime("%Y-%m") if end_date else None
 
-        session = get_session_factory()()
-        try:
-            repo = CarModelRepository(session)
-            return await repo.get_vehicle_tags_raw(
-                branch_id, period_from=period_from, period_to=period_to
-            )
-        except Exception as e:
-            logger.warning(f"차량 태그 raw 조회 실패 (branch_id={branch_id}): {e}")
-            return {}
-        finally:
-            await session.close()
+        async with get_session_factory()() as session:
+            try:
+                repo = CarModelRepository(session)
+                return await repo.get_vehicle_tags_raw(
+                    branch_id, period_from=period_from, period_to=period_to
+                )
+            except Exception as e:
+                logger.warning(f"차량 태그 raw 조회 실패 (branch_id={branch_id}): {e}")
+                return {}
 
     def build_vehicle_rankings(
         self,
@@ -290,15 +285,13 @@ class VehicleAnalyzer:
         from repository.car_model_repository import CarModelRepository
         from repository.database import get_session_factory
 
-        session = get_session_factory()()
-        try:
-            repo = CarModelRepository(session)
-            car_data = await repo.get_vehicle_analysis_data(branch_id)
-        except Exception as e:
-            logger.warning(f"차량별 분석 조회 실패 (branch_id={branch_id}): {e}")
-            return []
-        finally:
-            await session.close()
+        async with get_session_factory()() as session:
+            try:
+                repo = CarModelRepository(session)
+                car_data = await repo.get_vehicle_analysis_data(branch_id)
+            except Exception as e:
+                logger.warning(f"차량별 분석 조회 실패 (branch_id={branch_id}): {e}")
+                return []
 
         if not car_data:
             return []

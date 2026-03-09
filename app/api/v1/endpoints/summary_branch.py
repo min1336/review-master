@@ -22,7 +22,6 @@ router = APIRouter(tags=["summaries"])
 @router.post("/{branch_id}/regenerate", response_model=ApiResponseModel[dict])
 async def api_regenerate_summary(
     branch_id: int,
-    mode: str = Query("marketing", pattern="^(marketing|operational)$"),
     pending: bool = Query(True, description="True=승인 대기, False=즉시 적용"),
     service: SummaryService = Depends(get_summary_service),
 ) -> dict[str, Any]:
@@ -48,7 +47,7 @@ async def api_regenerate_summary(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="요약 재생성 중 오류가 발생했습니다") from e
 
 
 @router.get("/{branch_id}/reviews", response_model=ApiResponseModel[BranchReviewsDTO])
@@ -91,7 +90,7 @@ async def api_branch_reviews(
         )
         return api_response(result.model_dump(by_alias=True))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="리뷰 목록 조회 중 오류가 발생했습니다") from e
 
 
 @router.get("/{branch_id}/car-models", response_model=ApiResponseModel[BranchCarModelsDTO])

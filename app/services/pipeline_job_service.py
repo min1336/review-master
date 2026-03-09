@@ -78,14 +78,12 @@ class PipelineJobService(BaseJobService[PipelineJobState, PipelineJobStatusRespo
         from services.upload_job_service import UploadJobService
 
         sync_svc = SyncJobService.get_instance()
-        for job in sync_svc._jobs.values():
-            if job.status in ("pending", "processing"):
-                raise HTTPException(409, "동기화 작업이 실행 중입니다")
+        if sync_svc.has_active_job():
+            raise HTTPException(409, "동기화 작업이 실행 중입니다")
 
         upload_svc = UploadJobService.get_instance()
-        for job in upload_svc._jobs.values():
-            if job.status in ("pending", "processing"):
-                raise HTTPException(409, "업로드 작업이 실행 중입니다")
+        if upload_svc.has_active_job():
+            raise HTTPException(409, "업로드 작업이 실행 중입니다")
 
     async def _run_job(
         self,
@@ -106,21 +104,20 @@ class PipelineJobService(BaseJobService[PipelineJobState, PipelineJobStatusRespo
             from repository.review_repository import BranchReviewRepository
 
             # --- Phase 1: 전체 리뷰 카운트 조회 ---
-            session = get_session_factory()()
-            try:
-                review_repo = BranchReviewRepository(session)
-                count_result = await review_repo.search_with_filters(
-                    date_from=date_from,
-                    date_to=date_to,
-                    limit=0,
-                    offset=0,
-                )
-                total = count_result.total
-            except Exception:
-                await session.rollback()
-                raise
-            finally:
-                await session.close()
+            factory = get_session_factory()
+            async with factory() as session:
+                try:
+                    review_repo = BranchReviewRepository(session)
+                    count_result = await review_repo.search_with_filters(
+                        date_from=date_from,
+                        date_to=date_to,
+                        limit=0,
+                        offset=0,
+                    )
+                    total = count_result.total
+                except Exception:
+                    await session.rollback()
+                    raise
 
             if total == 0:
                 state.status = "completed"
@@ -144,24 +141,22 @@ class PipelineJobService(BaseJobService[PipelineJobState, PipelineJobStatusRespo
                 state.current_chunk = chunk_idx + 1
 
                 # 청크별 새 세션으로 리뷰 로드
-                session = get_session_factory()()
-                try:
-                    review_repo = BranchReviewRepository(session)
-                    chunk_result = await review_repo.search_with_filters(
-                        date_from=date_from,
-                        date_to=date_to,
-                        limit=chunk_size,
-                        offset=offset,
-                    )
-                    reviews = chunk_result.reviews
+                async with factory() as session:
+                    try:
+                        review_repo = BranchReviewRepository(session)
+                        chunk_result = await review_repo.search_with_filters(
+                            date_from=date_from,
+                            date_to=date_to,
+                            limit=chunk_size,
+                            offset=offset,
+                        )
+                        reviews = chunk_result.reviews
 
-                    # 데드락 방지: 로드 세션 커밋 후 닫기
-                    await session.commit()
-                except Exception:
-                    await session.rollback()
-                    raise
-                finally:
-                    await session.close()
+                        # 데드락 방지: 로드 세션 커밋 후 닫기
+                        await session.commit()
+                    except Exception:
+                        await session.rollback()
+                        raise
 
                 if not reviews:
                     break

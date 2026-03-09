@@ -165,7 +165,7 @@ class ReportRepository:
             return result.rowcount > 0
         except Exception as e:
             logger.error(f"리포트 삭제 실패: {e}")
-            return False
+            raise
 
     async def mark_as_viewed(self, report_id: int) -> bool:
         """리포트 조회 표시"""

@@ -30,7 +30,7 @@ from collections import defaultdict
 
 import numpy as np
 
-from .absa import RuleBasedABSA
+from .absa import RuleBasedABSA, resolve_tag_conflicts
 from core.constants import (
     CONTEXT_WINDOW_SIZE,
     EMBEDDING_MODEL,
@@ -432,29 +432,7 @@ class HybridClassifier:
         has_concession = bool(CONCESSION_REGEX.search(review))
 
         # 동일 카테고리 positive+negative 충돌 해소 (ABSA 후 임베딩 추가로 발생 가능)
-        resolved = {}
-        for tag, sentiments in result.items():
-            if not any(sentiments.values()):
-                continue
-            pos_kws = sentiments.get("positive", [])
-            neg_kws = sentiments.get("negative", [])
-            neu_kws = sentiments.get("neutral", [])
-
-            if pos_kws and neg_kws:
-                if has_concession and len(neg_kws) <= 1:
-                    resolved[tag] = {"positive": pos_kws, "negative": [], "neutral": neu_kws}
-                elif len(pos_kws) >= len(neg_kws):
-                    resolved[tag] = {"positive": pos_kws, "negative": [], "neutral": neu_kws}
-                else:
-                    resolved[tag] = {"positive": [], "negative": neg_kws, "neutral": neu_kws}
-            else:
-                resolved[tag] = sentiments
-
-        return {
-            tag: sentiments
-            for tag, sentiments in resolved.items()
-            if any(sentiments.values())
-        }
+        return resolve_tag_conflicts(dict(result), has_concession)
 
     def get_review_summary(self, review: str, keywords: list[str] = None) -> dict:
         """
