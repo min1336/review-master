@@ -194,7 +194,8 @@ class ReportAIGenerator:
             content = response.content if hasattr(response, "content") else str(response)
             content = strip_markdown_formatting(content).strip()
 
-            # 숫자 할루시네이션 교정: 원본 데이터 건수와 비교
+            # 숫자 할루시네이션 교정: 테이블에 표시되는 건수만 기준으로 사용
+            # (tag_details의 개별 태그 건수는 카테고리 집계와 다를 수 있으므로 제외)
             canonical = set()
             for t in self._to_dicts(top_positive):
                 c = t.get("count", 0)
@@ -204,11 +205,6 @@ class ReportAIGenerator:
                 c = t.get("count", 0)
                 if c > 0:
                     canonical.add(c)
-            for t in filtered_tags:
-                for key in ("positive", "negative", "total"):
-                    v = t.get(key, 0)
-                    if v > 0:
-                        canonical.add(v)
             return self._fix_number_hallucinations(content, canonical)
 
         except Exception as e:
