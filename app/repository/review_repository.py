@@ -505,9 +505,10 @@ class BranchReviewRepository(BaseRepository[Review]):
     async def get_review_ids_by_date_range(
         self, since: datetime, until: datetime,
     ) -> set[int]:
-        """지정 기간의 review_id 집합 조회 (ghost review 감지용)
+        """지정 기간의 활성 review_id 집합 조회 (ghost review 감지용)
 
         Athena REVIEW_QUERY와 동일한 경계: review_date > since AND review_date <= until
+        soft-deleted 행은 제외한다.
         """
         stmt = (
             select(BranchReviewORM.review_id)
@@ -515,16 +516,23 @@ class BranchReviewRepository(BaseRepository[Review]):
                 BranchReviewORM.review_date > since,
                 BranchReviewORM.review_date <= until,
                 BranchReviewORM.review_id.isnot(None),
+                BranchReviewORM.deleted_at.is_(None),
             )
         )
         result = await self._session.execute(stmt)
         return {row[0] for row in result.all()}
 
     async def get_all_review_ids(self) -> set[int]:
-        """전체 review_id 집합 조회 (일괄 ghost review 정리용)"""
+        """전체 활성 review_id 집합 조회 (일괄 ghost review 정리용)
+
+        soft-deleted 행은 제외한다.
+        """
         stmt = (
             select(BranchReviewORM.review_id)
-            .where(BranchReviewORM.review_id.isnot(None))
+            .where(
+                BranchReviewORM.review_id.isnot(None),
+                BranchReviewORM.deleted_at.is_(None),
+            )
         )
         result = await self._session.execute(stmt)
         return {row[0] for row in result.all()}
@@ -556,7 +564,10 @@ class BranchReviewRepository(BaseRepository[Review]):
                 result = await self._session.execute(stmt)
                 deleted_count += result.rowcount
             except Exception as e:
-                logger.warning(f"Failed to delete reviews batch: {e}")
+                logger.error(
+                    f"Failed to delete reviews batch (data integrity risk): {e}"
+                )
+                raise
 
         if deleted_count > 0:
             logger.info(f"Deleted {deleted_count} ghost reviews + related tag mappings")

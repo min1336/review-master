@@ -356,6 +356,10 @@ class SyncService:
         await self._review_repo.commit()
 
         logger.info(f"Ghost review 정리 완료: {deleted}개 삭제")
+        logger.warning(
+            "branch_tags 통계가 삭제된 ghost review를 포함할 수 있습니다. "
+            "정확한 통계를 위해 동기화를 다시 실행하거나 수동 재집계가 필요합니다."
+        )
         if progress_callback:
             await progress_callback(100, f"Ghost review {deleted}개 삭제 완료")
 
