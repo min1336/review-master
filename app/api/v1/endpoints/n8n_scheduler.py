@@ -13,17 +13,20 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from croniter import croniter
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select, text
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from repository.database import get_session_factory
-from repository.orm_models import BranchSummaryORM
+from repository.orm_models import BranchSummaryORM, ScheduleGroupORM, SchedulerTargetORM
 from schemas.common import ApiResponseModel, api_response
 
+from .deps import require_internal_auth
+
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["n8n-scheduler"])
+router = APIRouter(tags=["n8n-scheduler"], dependencies=[Depends(require_internal_auth)])
 
 N8N_BASE = "https://n8n-cloud.carmore.kr"
 N8N_API_TIMEOUT = httpx.Timeout(connect=10.0, read=30.0, write=30.0, pool=5.0)
@@ -291,7 +294,7 @@ async def update_schedule(body: ScheduleRequest) -> dict[str, Any]:
     except httpx.HTTPError as e:
         logger.error("n8n schedule update failed: %s", e)
         raise HTTPException(
-            status_code=502, detail=f"n8n API 오류: {e}"
+            status_code=502, detail="n8n API 오류가 발생했습니다"
         ) from e
 
     return api_response({
@@ -319,7 +322,7 @@ async def toggle_workflow(body: ToggleRequest) -> dict[str, Any]:
     except httpx.HTTPError as e:
         logger.error("n8n toggle failed: %s", e)
         raise HTTPException(
-            status_code=502, detail=f"n8n API 오류: {e}"
+            status_code=502, detail="n8n API 오류가 발생했습니다"
         ) from e
 
     status_text = "활성화" if body.active else "비활성화"
@@ -351,7 +354,7 @@ async def trigger_workflow(body: TriggerRequest) -> dict[str, Any]:
     except httpx.HTTPError as e:
         logger.error("n8n trigger failed: %s", e)
         raise HTTPException(
-            status_code=502, detail=f"n8n 웹훅 오류: {e}"
+            status_code=502, detail="n8n 웹훅 오류가 발생했습니다"
         ) from e
 
 
@@ -378,12 +381,23 @@ async def validate_cron(body: CronValidateRequest) -> dict[str, Any]:
     })
 
 
-# ── Supabase 헬퍼 ─────────────────────────────────────
+# ── 세션 헬퍼 ─────────────────────────────────────
 
 
-async def _get_db() -> AsyncSession:
-    session = get_session_factory()()
-    return session
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def _db_session():
+    """세션 컨텍스트 매니저 — 예외 시 rollback 보장."""
+    session: AsyncSession = get_session_factory()()
+    try:
+        yield session
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
 
 
 # ── 지점 목록 조회 ────────────────────────────────────
@@ -392,35 +406,33 @@ async def _get_db() -> AsyncSession:
 @router.get("/branches", response_model=ApiResponseModel[list])
 async def list_available_branches() -> dict[str, Any]:
     """선택 가능한 전체 지점 목록 (branch_summaries 테이블)"""
-    session = await _get_db()
-    try:
-        stmt = (
-            select(
-                BranchSummaryORM.branch_id,
-                BranchSummaryORM.branch_name,
-                BranchSummaryORM.region,
-                BranchSummaryORM.review_count,
+    async with _db_session() as session:
+        try:
+            stmt = (
+                select(
+                    BranchSummaryORM.branch_id,
+                    BranchSummaryORM.branch_name,
+                    BranchSummaryORM.region,
+                    BranchSummaryORM.review_count,
+                )
+                .order_by(BranchSummaryORM.branch_name)
             )
-            .order_by(BranchSummaryORM.branch_name)
-        )
-        result = await session.execute(stmt)
-        rows = [
-            {
-                "branch_id": r.branch_id,
-                "branch_name": r.branch_name,
-                "region": r.region,
-                "review_count": r.review_count,
-            }
-            for r in result.all()
-        ]
-        return api_response(rows)
-    except Exception as e:
-        logger.error("branches fetch failed: %s", e)
-        raise HTTPException(
-            status_code=502, detail="지점 목록 조회 실패"
-        ) from e
-    finally:
-        await session.close()
+            result = await session.execute(stmt)
+            rows = [
+                {
+                    "branch_id": r.branch_id,
+                    "branch_name": r.branch_name,
+                    "region": r.region,
+                    "review_count": r.review_count,
+                }
+                for r in result.all()
+            ]
+            return api_response(rows)
+        except Exception as e:
+            logger.error("branches fetch failed: %s", e)
+            raise HTTPException(
+                status_code=502, detail="지점 목록 조회 실패"
+            ) from e
 
 
 # ── 스케줄 그룹 관리 엔드포인트 ───────────────────────
@@ -443,31 +455,44 @@ async def _resolve_branch_names(
     }
 
 
-async def _upsert_group_targets(
+async def _replace_group_targets(
     session: AsyncSession, group_id: int, workflow_id: str, branch_ids: list[int],
 ) -> int:
-    """그룹의 대상 지점을 교체한다. 삽입된 행 수를 반환."""
+    """그룹의 대상 지점을 교체한다 (ORM). 삽입된 행 수를 반환."""
     await session.execute(
-        text("DELETE FROM scheduler_targets WHERE group_id = :gid"),
-        {"gid": group_id},
+        delete(SchedulerTargetORM).where(SchedulerTargetORM.group_id == group_id)
     )
     if not branch_ids:
         return 0
     name_map = await _resolve_branch_names(session, branch_ids)
     for bid in branch_ids:
-        await session.execute(
-            text(
-                "INSERT INTO scheduler_targets (workflow_id, group_id, branch_id, branch_name) "
-                "VALUES (:wid, :gid, :bid, :bname)"
-            ),
-            {
-                "wid": workflow_id,
-                "gid": group_id,
-                "bid": bid,
-                "bname": name_map.get(bid, ""),
-            },
-        )
+        session.add(SchedulerTargetORM(
+            workflow_id=workflow_id,
+            group_id=group_id,
+            branch_id=bid,
+            branch_name=name_map.get(bid, ""),
+        ))
+    await session.flush()
     return len(branch_ids)
+
+
+def _group_to_dict(group: ScheduleGroupORM) -> dict[str, Any]:
+    """ORM 모델을 응답용 dict로 변환한다."""
+    return {
+        "id": group.id,
+        "workflow_id": group.workflow_id,
+        "group_name": group.group_name,
+        "cron_expression": group.cron_expression,
+        "created_at": group.created_at,
+        "updated_at": group.updated_at,
+        "targets": [
+            {"branch_id": t.branch_id, "branch_name": t.branch_name}
+            for t in group.targets
+        ],
+        "target_count": len(group.targets),
+        "cron_description": _describe_cron(group.cron_expression),
+        "next_runs": _next_runs(group.cron_expression, 3),
+    }
 
 
 @router.get("/groups/{workflow_id}", response_model=ApiResponseModel[list])
@@ -475,50 +500,22 @@ async def list_groups(workflow_id: str) -> dict[str, Any]:
     """워크플로의 스케줄 그룹 목록 + 각 그룹의 대상 지점 조회"""
     _validate_workflow_id(workflow_id)
 
-    session = await _get_db()
-    try:
-        # 그룹 목록
-        groups_result = await session.execute(
-            text(
-                "SELECT * FROM schedule_groups "
-                "WHERE workflow_id = :wid ORDER BY created_at"
-            ),
-            {"wid": workflow_id},
-        )
-        groups = [dict(r) for r in groups_result.mappings().all()]
-
-        # 전체 대상 지점
-        targets_result = await session.execute(
-            text(
-                "SELECT group_id, branch_id, branch_name "
-                "FROM scheduler_targets WHERE workflow_id = :wid"
-            ),
-            {"wid": workflow_id},
-        )
-        targets_by_group: dict[int, list[dict[str, Any]]] = {}
-        for t in targets_result.mappings().all():
-            gid = t["group_id"]
-            targets_by_group.setdefault(gid, []).append({
-                "branch_id": t["branch_id"],
-                "branch_name": t["branch_name"],
-            })
-
-        # 그룹에 대상 정보 첨부
-        for g in groups:
-            gid = g["id"]
-            g["targets"] = targets_by_group.get(gid, [])
-            g["target_count"] = len(g["targets"])
-            g["cron_description"] = _describe_cron(g.get("cron_expression", ""))
-            g["next_runs"] = _next_runs(g.get("cron_expression", ""), 3)
-
-        return api_response(groups)
-    except Exception as e:
-        logger.error("groups fetch failed: %s", e)
-        raise HTTPException(
-            status_code=502, detail="스케줄 그룹 조회 실패"
-        ) from e
-    finally:
-        await session.close()
+    async with _db_session() as session:
+        try:
+            stmt = (
+                select(ScheduleGroupORM)
+                .options(selectinload(ScheduleGroupORM.targets))
+                .where(ScheduleGroupORM.workflow_id == workflow_id)
+                .order_by(ScheduleGroupORM.created_at)
+            )
+            result = await session.execute(stmt)
+            groups = [_group_to_dict(g) for g in result.scalars().all()]
+            return api_response(groups)
+        except Exception as e:
+            logger.error("groups fetch failed: %s", e)
+            raise HTTPException(
+                status_code=502, detail="스케줄 그룹 조회 실패"
+            ) from e
 
 
 @router.post("/groups/{workflow_id}", response_model=ApiResponseModel[dict])
@@ -528,39 +525,37 @@ async def create_group(
     """새 스케줄 그룹 생성"""
     _validate_workflow_id(workflow_id)
 
-    session = await _get_db()
-    try:
-        # 그룹 생성
-        group_result = await session.execute(
-            text(
-                "INSERT INTO schedule_groups (workflow_id, group_name, cron_expression) "
-                "VALUES (:wid, :gname, :cron) RETURNING *"
-            ),
-            {
-                "wid": workflow_id,
-                "gname": body.group_name,
-                "cron": body.cron_expression,
-            },
-        )
-        group = dict(group_result.mappings().one())
+    async with _db_session() as session:
+        try:
+            group = ScheduleGroupORM(
+                workflow_id=workflow_id,
+                group_name=body.group_name,
+                cron_expression=body.cron_expression,
+            )
+            session.add(group)
+            await session.flush()
 
-        # 대상 지점 설정
-        count = await _upsert_group_targets(
-            session, group["id"], workflow_id, body.branch_ids,
-        )
+            count = await _replace_group_targets(
+                session, group.id, workflow_id, body.branch_ids,
+            )
 
-        await session.commit()
-        return api_response({
-            "message": f"'{body.group_name}' 그룹이 생성되었습니다 ({count}개 지점)",
-            "group": group,
-        })
-    except Exception as e:
-        logger.error("group create failed: %s", e)
-        raise HTTPException(
-            status_code=502, detail="스케줄 그룹 생성 실패"
-        ) from e
-    finally:
-        await session.close()
+            await session.commit()
+            return api_response({
+                "message": f"'{body.group_name}' 그룹이 생성되었습니다 ({count}개 지점)",
+                "group": {
+                    "id": group.id,
+                    "workflow_id": group.workflow_id,
+                    "group_name": group.group_name,
+                    "cron_expression": group.cron_expression,
+                    "created_at": group.created_at,
+                    "updated_at": group.updated_at,
+                },
+            })
+        except Exception as e:
+            logger.error("group create failed: %s", e)
+            raise HTTPException(
+                status_code=502, detail="스케줄 그룹 생성 실패"
+            ) from e
 
 
 @router.put("/groups/{group_id}", response_model=ApiResponseModel[dict])
@@ -568,81 +563,59 @@ async def update_group(
     group_id: int, body: GroupUpdateRequest,
 ) -> dict[str, Any]:
     """스케줄 그룹 수정 (이름, 크론, 대상 지점)"""
-    session = await _get_db()
-    try:
-        # 기존 그룹 확인
-        existing = await session.execute(
-            text("SELECT * FROM schedule_groups WHERE id = :gid"),
-            {"gid": group_id},
-        )
-        row = existing.mappings().one_or_none()
-        if not row:
-            raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
+    async with _db_session() as session:
+        try:
+            stmt = select(ScheduleGroupORM).where(ScheduleGroupORM.id == group_id)
+            result = await session.execute(stmt)
+            group = result.scalar_one_or_none()
+            if not group:
+                raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
 
-        group = dict(row)
+            if body.group_name is not None:
+                group.group_name = body.group_name
+            if body.cron_expression is not None:
+                group.cron_expression = body.cron_expression
 
-        # 그룹 메타데이터 업데이트
-        set_clauses = ["updated_at = now()"]
-        params: dict[str, Any] = {"gid": group_id}
-        if body.group_name is not None:
-            set_clauses.append("group_name = :gname")
-            params["gname"] = body.group_name
-        if body.cron_expression is not None:
-            set_clauses.append("cron_expression = :cron")
-            params["cron"] = body.cron_expression
+            target_count = None
+            if body.branch_ids is not None:
+                target_count = await _replace_group_targets(
+                    session, group_id, group.workflow_id, body.branch_ids,
+                )
 
-        await session.execute(
-            text(
-                f"UPDATE schedule_groups SET {', '.join(set_clauses)} WHERE id = :gid"
-            ),
-            params,
-        )
+            await session.commit()
 
-        # 대상 지점 업데이트
-        target_count = None
-        if body.branch_ids is not None:
-            target_count = await _upsert_group_targets(
-                session, group_id, group["workflow_id"], body.branch_ids,
-            )
+            msg = "그룹이 수정되었습니다"
+            if target_count is not None:
+                msg += f" ({target_count}개 지점)"
 
-        await session.commit()
-
-        msg = "그룹이 수정되었습니다"
-        if target_count is not None:
-            msg += f" ({target_count}개 지점)"
-
-        return api_response({"message": msg})
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("group update failed: %s", e)
-        raise HTTPException(
-            status_code=502, detail="스케줄 그룹 수정 실패"
-        ) from e
-    finally:
-        await session.close()
+            return api_response({"message": msg})
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("group update failed: %s", e)
+            raise HTTPException(
+                status_code=502, detail="스케줄 그룹 수정 실패"
+            ) from e
 
 
 @router.delete("/groups/{group_id}", response_model=ApiResponseModel[dict])
 async def delete_group(group_id: int) -> dict[str, Any]:
     """스케줄 그룹 삭제 (CASCADE로 대상 지점도 삭제)"""
-    session = await _get_db()
-    try:
-        result = await session.execute(
-            text("DELETE FROM schedule_groups WHERE id = :gid RETURNING id"),
-            {"gid": group_id},
-        )
-        if not result.scalar_one_or_none():
-            raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
+    async with _db_session() as session:
+        try:
+            stmt = select(ScheduleGroupORM).where(ScheduleGroupORM.id == group_id)
+            result = await session.execute(stmt)
+            group = result.scalar_one_or_none()
+            if not group:
+                raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
 
-        await session.commit()
-        return api_response({"message": "그룹이 삭제되었습니다"})
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("group delete failed: %s", e)
-        raise HTTPException(
-            status_code=502, detail="스케줄 그룹 삭제 실패"
-        ) from e
-    finally:
-        await session.close()
+            await session.delete(group)
+            await session.commit()
+            return api_response({"message": "그룹이 삭제되었습니다"})
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("group delete failed: %s", e)
+            raise HTTPException(
+                status_code=502, detail="스케줄 그룹 삭제 실패"
+            ) from e

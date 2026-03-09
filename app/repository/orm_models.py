@@ -477,6 +477,42 @@ class BranchSchedulerSettingsORM(Base):
 
 
 # ============================================================
+# 스케줄러 그룹/타겟
+# ============================================================
+
+
+class ScheduleGroupORM(Base):
+    __tablename__ = "schedule_groups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workflow_id: Mapped[str] = mapped_column(String(50))
+    group_name: Mapped[str] = mapped_column(String(200))
+    cron_expression: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    targets: Mapped[list[SchedulerTargetORM]] = relationship(
+        back_populates="group", cascade="all, delete-orphan",
+    )
+
+
+class SchedulerTargetORM(Base):
+    __tablename__ = "scheduler_targets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workflow_id: Mapped[str] = mapped_column(String(50))
+    group_id: Mapped[int] = mapped_column(ForeignKey("schedule_groups.id", ondelete="CASCADE"))
+    branch_id: Mapped[int] = mapped_column(Integer)
+    branch_name: Mapped[str] = mapped_column(String(200), default="")
+
+    group: Mapped[ScheduleGroupORM] = relationship(back_populates="targets")
+
+
+# ============================================================
 # 프롬프트 프리셋
 # ============================================================
 
