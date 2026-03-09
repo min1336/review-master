@@ -785,7 +785,6 @@ class ReportService:
                     branch_id=branch_id,
                     review_date_from=start_date,
                     review_date_to=end_date,
-                    limit=10,
                 )
                 collected["negative_reviews"] = neg_rows
             except Exception as e:

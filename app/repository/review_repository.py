@@ -271,12 +271,14 @@ class BranchReviewRepository(BaseRepository[Review]):
         branch_id: int,
         review_date_from: datetime | None = None,
         review_date_to: datetime | None = None,
-        limit: int = 10,
     ) -> list[dict]:
-        """부정 리뷰 조회 (리포트 하단 나열용)"""
+        """부정 리뷰 조회 (리포트 하단 나열용) — 3점 이하 + sentiment=negative, 전건"""
         conditions = [
             BranchReviewORM.branch_id == branch_id,
             BranchReviewORM.sentiment == "negative",
+            BranchReviewORM.rating_service <= 3,
+            BranchReviewORM.content.isnot(None),
+            BranchReviewORM.content != "",
             BranchReviewORM.deleted_at.is_(None),
         ]
         if review_date_from:
@@ -293,7 +295,6 @@ class BranchReviewRepository(BaseRepository[Review]):
             )
             .where(*conditions)
             .order_by(BranchReviewORM.review_date.desc())
-            .limit(limit)
         )
         result = await self._session.execute(stmt)
         return [
