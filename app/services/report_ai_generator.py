@@ -192,7 +192,24 @@ class ReportAIGenerator:
             )
 
             content = response.content if hasattr(response, "content") else str(response)
-            return strip_markdown_formatting(content).strip()
+            content = strip_markdown_formatting(content).strip()
+
+            # 숫자 할루시네이션 교정: 원본 데이터 건수와 비교
+            canonical = set()
+            for t in self._to_dicts(top_positive):
+                c = t.get("count", 0)
+                if c > 0:
+                    canonical.add(c)
+            for t in self._to_dicts(top_negative):
+                c = t.get("count", 0)
+                if c > 0:
+                    canonical.add(c)
+            for t in filtered_tags:
+                for key in ("positive", "negative", "total"):
+                    v = t.get(key, 0)
+                    if v > 0:
+                        canonical.add(v)
+            return self._fix_number_hallucinations(content, canonical)
 
         except Exception as e:
             logger.error(f"{label} 평가 텍스트 생성 실패: {e}")
@@ -317,6 +334,21 @@ class ReportAIGenerator:
             validation_mode = "report" if tag_sentiments else "summary"
             content = self._clean_llm_response(content, validation_mode)
 
+            # 숫자 할루시네이션 교정
+            canonical_nums: set[int] = {total_reviews}
+            if sentiment_stats:
+                for _k in ("positive", "negative", "neutral", "total"):
+                    _v = sentiment_stats.get(_k, 0)
+                    if _v > 0:
+                        canonical_nums.add(_v)
+            if tag_sentiments:
+                for _t in tag_sentiments:
+                    for _k in ("positive", "negative", "neutral", "total"):
+                        _v = _t.get(_k, 0)
+                        if _v > 0:
+                            canonical_nums.add(_v)
+            content = self._fix_number_hallucinations(content, canonical_nums)
+
             # 리포트 모드 내용 품질 검증
             if tag_sentiments and sentiment_stats:
                 neg_ratio = 0
@@ -381,6 +413,47 @@ class ReportAIGenerator:
             logger.warning("정제 후에도 검증 실패: %s", errors_after)
 
         return content
+
+    # ----------------------------------------------------------------
+    # 숫자 할루시네이션 교정
+    # ----------------------------------------------------------------
+
+    @staticmethod
+    def _fix_number_hallucinations(
+        text: str,
+        canonical_numbers: set[int],
+        threshold: float = 0.05,
+    ) -> str:
+        """LLM 텍스트의 숫자 할루시네이션 교정 (N건 패턴).
+
+        canonical_numbers(원본 데이터의 정확한 건수)와 비교하여
+        ±threshold(기본 5%) 이내의 근사값을 정확한 값으로 교체한다.
+        10 미만의 숫자는 무시한다.
+        """
+        valid = {n for n in canonical_numbers if n >= 10}
+        if not valid:
+            return text
+
+        def _replace(match: re.Match) -> str:
+            raw = match.group(1).replace(",", "")
+            try:
+                n = int(raw)
+            except ValueError:
+                return match.group(0)
+            if n < 10 or n in valid:
+                return match.group(0)
+            best, best_diff = None, float("inf")
+            for canon in valid:
+                diff = abs(n - canon)
+                if diff / canon <= threshold and diff < best_diff:
+                    best, best_diff = canon, diff
+            if best is not None:
+                logger.info(f"숫자 할루시네이션 교정: {n}건 → {best}건")
+                fmt = f"{best:,}" if "," in match.group(1) else str(best)
+                return f"{fmt}건"
+            return match.group(0)
+
+        return re.sub(r"([\d,]+)건", _replace, text)
 
     # ----------------------------------------------------------------
     # 헬퍼
