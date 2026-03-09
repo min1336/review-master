@@ -309,7 +309,7 @@
             justify-content: flex-end;
         }
 
-        /* Buttons - Compact */
+        /* Buttons — 분석 페이지용 compact 크기 오버라이드 (색상은 shared-theme.css 상속) */
         .btn {
             padding: 6px 12px;
             border: none;
@@ -321,15 +321,6 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: var(--primary-hover);
         }
 
         .btn-secondary {
@@ -543,12 +534,6 @@
             border-top-color: var(--primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
         }
 
         .spinning {
@@ -779,15 +764,7 @@
             animation: spin 1s linear infinite;
         }
 
-        @keyframes spin {
-            from {
-                transform: rotate(0deg);
-            }
-
-            to {
-                transform: rotate(360deg);
-            }
-        }
+        /* @keyframes spin: shared-theme.css에서 정의됨 */
 
         /* 동기화 프로그레스 오버레이 */
         .sync-progress-overlay {
@@ -883,7 +860,7 @@
         <!-- New Reviews Section -->
         <div class="review-card" style="margin-bottom: var(--spacing-lg);">
             <div class="review-header" style="user-select: none; display: flex; align-items: center;">
-                <div class="review-title" style="cursor: pointer;" onclick="toggleNewReviews()">
+                <div class="review-title" style="cursor: pointer;" onclick="toggleNewReviews()" onkeydown="if(event.key==='Enter')toggleNewReviews()" tabindex="0" role="button">
                     신규 리뷰 <span class="review-count" id="newReviewCount">(0)</span>
                     <svg id="toggleIcon" class="toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                         stroke-width="2"
@@ -1069,6 +1046,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+    <script>window.__INTERNAL_API_KEY__={{ internal_api_key | tojson }};</script>
     <script>{{ shared_utils_js | safe }}</script>
     <script>
         // API Prefix

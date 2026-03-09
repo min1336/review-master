@@ -503,8 +503,6 @@
             animation: spin 0.8s linear infinite;
         }
 
-        @keyframes spin { to { transform: rotate(360deg); } }
-
         .error-banner {
             background: var(--error-light);
             color: #991b1b;
@@ -535,6 +533,7 @@
     </div>
 
     <!-- Shared Utils (escapeHtml, escapeAttr, debounce, showToast, apiRequest) -->
+    <script>window.__INTERNAL_API_KEY__={{ internal_api_key | tojson }};</script>
     <script>{{ shared_utils_js | safe }}</script>
 
     <script>
