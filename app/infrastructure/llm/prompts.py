@@ -583,10 +583,16 @@ class RichSummaryPromptBuilder:
             if neg_ratio >= IMPROVEMENT_NEGATIVE_RATIO:
                 negative_tags.append(f"{name}(부정 {neg}건/{total}건)")
 
-        # 전체 감정 건수
+        # 전체 감정 비율 (태그 멘션 기반이므로 비율로만 표시)
         total_sentiment = sentiment_stats.get("total", 0)
         pos_count = sentiment_stats.get("positive", 0)
         neg_count = sentiment_stats.get("negative", 0)
+        if total_sentiment > 0:
+            pos_pct = round(pos_count / total_sentiment * 100)
+            neg_pct = round(neg_count / total_sentiment * 100)
+        else:
+            pos_pct = 0
+            neg_pct = 0
 
         # 부정률 20%+ 태그 개수
         high_neg_count = len(negative_tags)
@@ -607,7 +613,7 @@ class RichSummaryPromptBuilder:
 - 지점명: {branch_name}
 - 분석 기간: {start_date} ~ {end_date}
 - 총 리뷰 수: {total_reviews}건
-- 전체 긍정: {pos_count}건, 부정: {neg_count}건 (총 {total_sentiment}건)
+- 전체 좋은 평가 비율: {pos_pct}%, 불만 비율: {neg_pct}%
 </data>
 
 <tag_analysis>

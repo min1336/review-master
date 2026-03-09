@@ -331,18 +331,9 @@ class ReportAIGenerator:
             content = self._clean_llm_response(content, validation_mode)
 
             # 숫자 할루시네이션 교정
+            # sentiment_stats/tag_sentiments의 건수는 태그 멘션 합계이므로
+            # canonical에 포함하지 않음 (리뷰 수와 혼동 방지)
             canonical_nums: set[int] = {total_reviews}
-            if sentiment_stats:
-                for _k in ("positive", "negative", "neutral", "total"):
-                    _v = sentiment_stats.get(_k, 0)
-                    if _v > 0:
-                        canonical_nums.add(_v)
-            if tag_sentiments:
-                for _t in tag_sentiments:
-                    for _k in ("positive", "negative", "neutral", "total"):
-                        _v = _t.get(_k, 0)
-                        if _v > 0:
-                            canonical_nums.add(_v)
             content = self._fix_number_hallucinations(content, canonical_nums)
 
             # 리포트 모드 내용 품질 검증
