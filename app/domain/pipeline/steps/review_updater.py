@@ -25,12 +25,20 @@ class ReviewSentimentUpdater:
         """리뷰의 sentiment 컬럼을 업데이트한다."""
         # Group review IDs by sentiment value
         sentiment_groups: dict[str, list[int]] = {}
+        skipped = 0
         for pr in processed:
             if not pr.review.id or pr.review.id == 0:
+                skipped += 1
                 continue
             if pr.sentiment not in sentiment_groups:
                 sentiment_groups[pr.sentiment] = []
             sentiment_groups[pr.sentiment].append(pr.review.id)
+
+        if skipped:
+            logger.warning(
+                "review_id 누락으로 sentiment 업데이트 건너뜀: %s/%s건",
+                skipped, len(processed),
+            )
 
         updated = 0
         failed = 0

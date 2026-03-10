@@ -23,10 +23,11 @@ import logging
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from repository.orm_models import (
+    BranchReviewORM,
     BranchTagORM,
     MonthlySentimentStatsORM,
     TagORM,
@@ -88,6 +89,7 @@ class RealtimePipeline(BasePipeline):
                 error="branch_id 필수",
             )
 
+        review_id = review_data.get("review_id")
         content = review_data.get("content", "").strip()
         ratings = {
             "service": review_data.get("rating_service"),
@@ -103,8 +105,8 @@ class RealtimePipeline(BasePipeline):
                 sentiment = self._analyze_by_rating(ratings)
                 tags = []
 
-            # 2. DB 저장 (증분 업데이트)
-            await self._save_results(branch_id, sentiment, tags)
+            # 2. DB 저장 (증분 업데이트 + 개별 리뷰 sentiment 업데이트)
+            await self._save_results(branch_id, sentiment, tags, review_id)
 
             logger.info(
                 f"리뷰 처리 완료: branch={branch_id}, sentiment={sentiment}, tags={len(tags)}개"
@@ -118,7 +120,7 @@ class RealtimePipeline(BasePipeline):
             )
 
         except Exception as e:
-            logger.error(f"리뷰 처리 실패: {e}", exc_info=True)
+            logger.error("리뷰 처리 실패: %s", e, exc_info=True)
             return RealtimeResultDTO(
                 branch_id=branch_id,
                 sentiment="neutral",
@@ -216,20 +218,30 @@ class RealtimePipeline(BasePipeline):
         branch_id: int,
         sentiment: str,
         tags: list[dict],
+        review_id: int | None = None,
     ) -> None:
         """
         DB 저장 (트랜잭션으로 증분 업데이트)
 
-        1. monthly_sentiment_stats: 전체 감정 +1
-        2. branch_tags: 태그별 감정 +1
+        1. branch_reviews.sentiment: 개별 리뷰 감정 업데이트
+        2. monthly_sentiment_stats: 전체 감정 +1
+        3. branch_tags: 태그별 감정 +1
         """
         session = await self._get_session()
 
         try:
-            # 1. 전체 감정 통계 증분
+            # 1. 개별 리뷰 sentiment 업데이트
+            if review_id:
+                await session.execute(
+                    update(BranchReviewORM)
+                    .where(BranchReviewORM.review_id == review_id)
+                    .values(sentiment=sentiment)
+                )
+
+            # 2. 전체 감정 통계 증분
             await self._increment_sentiment_stats(session, branch_id, sentiment)
 
-            # 2. 태그별 감정 증분
+            # 3. 태그별 감정 증분
             for tag in tags:
                 tag_name = tag["name"]
                 tag_sentiment = tag["sentiment"]

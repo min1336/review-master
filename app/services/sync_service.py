@@ -134,8 +134,8 @@ class SyncService:
                 total_days = len(day_ranges)
 
                 range_desc = f"{since.strftime('%Y-%m-%d')}~{date_to or '현재'}"
-                logger.info(f"동기화 시작: {range_desc} ({total_days}일 청크)")
-                logger.info(f"[DailyPipeline] 시작: {range_desc} ({total_days}일 청크)")
+                logger.info("동기화 시작: %s (%s일 청크)", range_desc, total_days)
+                logger.info("[DailyPipeline] 시작: %s (%s일 청크)", range_desc, total_days)
 
                 if progress_callback:
                     await progress_callback(5, f"동기화 시작 ({range_desc}, {total_days}일)")
@@ -209,7 +209,7 @@ class SyncService:
                 )
 
             except Exception as e:
-                logger.error(f"동기화 실패: {e}", exc_info=True)
+                logger.error("동기화 실패: %s", e, exc_info=True)
                 return SyncResultResponse(
                     success=False,
                     message="동기화 실행 중 오류가 발생했습니다",
@@ -240,7 +240,7 @@ class SyncService:
         )
 
         if not athena_reviews:
-            logger.info(f"[{day_label}] 리뷰 없음, 건너뜀")
+            logger.info("[%s] 리뷰 없음, 건너뜀", day_label)
             return 0, 0, 0
 
         # 2. 중복 제거
@@ -255,7 +255,7 @@ class SyncService:
         del athena_reviews, seen_ids
         gc.collect()
 
-        logger.info(f"[{day_label}] Athena 조회 완료: {len(reviews)}개")
+        logger.info("[%s] Athena 조회 완료: %s개", day_label, len(reviews))
 
         # 3. branch_reviews에 원본 저장 (is_new=true)
         review_ids: list[int] = []
@@ -288,7 +288,12 @@ class SyncService:
         result = await self._pipeline.run(reviews, chunk_cb)
         processed_count = result.processed_reviews
 
-        logger.info(f"[{day_label}] 파이프라인 완료: {processed_count}개 처리")
+        if result.failed_steps:
+            logger.warning(
+                "[%s] 파이프라인 일부 실패: %s", day_label, result.failed_steps,
+            )
+
+        logger.info("[%s] 파이프라인 완료: %s개 처리", day_label, processed_count)
 
         # 5. Ghost review 정리: 해당 기간 내 로컬에만 존재하는 리뷰 삭제
         athena_id_set = set(review_ids)
@@ -299,7 +304,7 @@ class SyncService:
         if ghost_ids:
             deleted = await self._review_repo.delete_by_review_ids(list(ghost_ids))
             await self._review_repo.commit()
-            logger.info(f"[{day_label}] Ghost review {deleted}개 삭제 (Athena 비활성)")
+            logger.info("[%s] Ghost review %s개 삭제 (Athena 비활성)", day_label, deleted)
 
         # 6. 메모리 해제
         del reviews
@@ -327,14 +332,14 @@ class SyncService:
         active_ids = await asyncio.to_thread(
             self._athena_client.fetch_all_active_review_ids,
         )
-        logger.info(f"Athena 활성 리뷰: {len(active_ids)}개")
+        logger.info("Athena 활성 리뷰: %s개", len(active_ids))
 
         if progress_callback:
             await progress_callback(40, f"활성 리뷰 {len(active_ids)}개 확인")
 
         # 2. 로컬 DB 전체 review_id 조회
         local_ids = await self._review_repo.get_all_review_ids()
-        logger.info(f"로컬 리뷰: {len(local_ids)}개")
+        logger.info("로컬 리뷰: %s개", len(local_ids))
 
         if progress_callback:
             await progress_callback(60, f"로컬 리뷰 {len(local_ids)}개 확인")
@@ -347,7 +352,7 @@ class SyncService:
                 await progress_callback(100, "Ghost review 없음")
             return 0
 
-        logger.info(f"Ghost review {len(ghost_ids)}개 감지 — 삭제 시작")
+        logger.info("Ghost review %s개 감지 — 삭제 시작", len(ghost_ids))
         if progress_callback:
             await progress_callback(70, f"Ghost review {len(ghost_ids)}개 삭제 중...")
 
@@ -355,7 +360,7 @@ class SyncService:
         deleted = await self._review_repo.delete_by_review_ids(list(ghost_ids))
         await self._review_repo.commit()
 
-        logger.info(f"Ghost review 정리 완료: {deleted}개 삭제")
+        logger.info("Ghost review 정리 완료: %s개 삭제", deleted)
         logger.warning(
             "branch_tags 통계가 삭제된 ghost review를 포함할 수 있습니다. "
             "정확한 통계를 위해 동기화를 다시 실행하거나 수동 재집계가 필요합니다."

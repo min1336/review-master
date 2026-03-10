@@ -9,6 +9,7 @@ class ReviewInput(BaseModel):
     """리뷰 입력 스키마"""
 
     branch_id: int = Field(..., description="업체 ID")
+    review_id: int | None = Field(default=None, description="리뷰 ID (branch_reviews.review_id)")
     content: str = Field(default="", description="리뷰 내용")
     rating_service: float | None = Field(default=None, ge=1.0, le=5.0, description="서비스 평점 (1-5)")
     rating_car: float | None = Field(default=None, ge=1.0, le=5.0, description="차량 평점 (1-5)")

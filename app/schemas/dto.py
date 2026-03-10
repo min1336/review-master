@@ -805,8 +805,18 @@ class AnalysisReviewDTO(BaseModel):
             # 평점은 다 높은데 내용이 부정이면 → 중립
             return "neutral"
         else:
-            # 평점 높고 내용도 부정 아님 → 기존 감정 유지 (없으면 neutral)
-            return content_sentiment or "neutral"
+            # 평점 높고 내용도 부정 아님 → 기존 감정 유지
+            if content_sentiment:
+                return content_sentiment
+            # DB에 sentiment 없는 경우: 평점 기반 판단
+            if ratings:
+                avg = sum(ratings) / len(ratings)
+                if avg >= 3.5:
+                    return "positive"
+                if avg >= 3.0:
+                    return "neutral"
+                return "negative"
+            return "neutral"
 
 
 class AnalysisReviewListDTO(BaseModel):
