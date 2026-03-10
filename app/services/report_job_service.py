@@ -8,8 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable, Awaitable
-from uuid import UUID
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,7 +76,7 @@ class ReportJobService:
         job_id = str(job["id"])
 
         # 백그라운드 태스크가 독립 세션으로 작업을 조회할 수 있도록 즉시 커밋
-        await self.job_repo._session.commit()
+        await self.job_repo.commit()
 
         # 백그라운드 태스크로 리포트 생성 시작
         task = asyncio.create_task(
@@ -161,10 +160,10 @@ class ReportJobService:
 
                 await job_repo.update_status(job_id, "completed", progress=100)
                 await session.commit()
-                logger.info(f"리포트 작업 완료: {job_id}")
+                logger.info("리포트 작업 완료: %s", job_id)
 
             except Exception:
-                logger.exception(f"리포트 작업 실패: {job_id}")
+                logger.exception("리포트 작업 실패: %s", job_id)
                 try:
                     await session.rollback()
                     job_repo = self._create_job_repo(session)

@@ -138,9 +138,9 @@ class SummaryGenerationMixin:
                     "total": stats.total,
                 }
             except Exception as e:
-                logger.warning(f"감정 통계 조회 실패 (branch_id={branch_id}): {e}")
+                logger.warning("감정 통계 조회 실패 (branch_id=%s): %s", branch_id, e)
                 try:
-                    await self.sentiment_repo._session.rollback()
+                    await self.sentiment_repo.rollback()
                 except Exception:
                     pass
 
@@ -184,7 +184,7 @@ class SummaryGenerationMixin:
                 response.content if hasattr(response, "content") else str(response)
             )
         except Exception as e:
-            logger.error(f"LLM 호출 실패 (branch_id={branch_id}): {e}")
+            logger.error("LLM 호출 실패 (branch_id=%s): %s", branch_id, e)
             return {
                 "success": False,
                 "summary": "",
@@ -220,7 +220,7 @@ class SummaryGenerationMixin:
                     f"요약 저장 완료: branch_id={branch_id}, period={period_key}, mode={mode}"
                 )
             except Exception as e:
-                logger.error(f"요약 저장 실패 (branch_id={branch_id}): {e}")
+                logger.error("요약 저장 실패 (branch_id=%s): %s", branch_id, e)
 
         return {
             "success": True,
@@ -248,9 +248,9 @@ class SummaryGenerationMixin:
             )
             return self._group_tags_by_category(branch_tags)
         except Exception as e:
-            logger.warning(f"태그 조회 실패 (branch_id={branch_id}): {e}")
+            logger.warning("태그 조회 실패 (branch_id=%s): %s", branch_id, e)
             try:
-                await self.branch_tag_repo._session.rollback()
+                await self.branch_tag_repo.rollback()
             except Exception:
                 pass
             return []
@@ -395,7 +395,7 @@ class SummaryGenerationMixin:
                     branch_id, start_date, pos_limit, neg_limit
                 )
             except Exception as e:
-                logger.warning(f"Athena 리뷰 샘플링 실패, Supabase 폴백: {e}")
+                logger.warning("Athena 리뷰 샘플링 실패, Supabase 폴백: %s", e)
 
         try:
             pos_stmt = (
@@ -439,7 +439,7 @@ class SummaryGenerationMixin:
             result["negative"] = self._sample_evenly(neg_reviews, neg_limit)
 
         except Exception as e:
-            logger.warning(f"리뷰 샘플링 실패 (branch_id={branch_id}): {e}")
+            logger.warning("리뷰 샘플링 실패 (branch_id=%s): %s", branch_id, e)
 
         return result
 
@@ -536,7 +536,7 @@ class SummaryGenerationMixin:
                 "review_count": result.get("review_count"),
             }
         except Exception as e:
-            logger.error(f"Pending 요약 저장 실패 (branch_id={branch_id}): {e}")
+            logger.error("Pending 요약 저장 실패 (branch_id=%s): %s", branch_id, e)
             return {
                 "success": False,
                 "summary": generated_summary,

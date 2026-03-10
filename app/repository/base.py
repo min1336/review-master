@@ -52,6 +52,10 @@ class BaseRepository[T: BaseModel](ABC):
         """현재 세션 커밋"""
         await self._session.commit()
 
+    async def rollback(self) -> None:
+        """현재 세션 롤백"""
+        await self._session.rollback()
+
     def _to_pydantic(self, row: Base) -> T:
         """ORM 행 → Pydantic 모델 변환"""
         return self.model.model_validate(row, from_attributes=True)
