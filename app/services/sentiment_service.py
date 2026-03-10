@@ -4,13 +4,18 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from schemas.dto import SentimentStatsDTO
+
+if TYPE_CHECKING:
+    from repository.sentiment_repository import SentimentRepository
 
 
 class SentimentService:
     """감정통계 비즈니스 로직"""
 
-    def __init__(self, sentiment_repo):
+    def __init__(self, sentiment_repo: SentimentRepository):
         self.sentiment_repo = sentiment_repo
 
     async def get_stats(self, branch_id: int | None = None) -> SentimentStatsDTO:

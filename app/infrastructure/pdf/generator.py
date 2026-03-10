@@ -62,7 +62,7 @@ class PDFGenerator:
             if cache["regular"] and cache["bold"]:
                 break
         if cache["regular"]:
-            logger.info(f"Found Korean font: {cache['regular']}")
+            logger.info("Found Korean font: %s", cache['regular'])
         else:
             logger.warning(
                 "Korean font not found. Install with: "
@@ -94,7 +94,7 @@ class PDFGenerator:
             try:
                 return self._generate_html_pdf(report)
             except Exception as e:
-                logger.warning(f"weasyprint PDF 생성 실패, FPDF2 fallback: {e}")
+                logger.warning("weasyprint PDF 생성 실패, FPDF2 fallback: %s", e)
         if isinstance(report.top_tags_detail, list):
             return self._generate_new_format(report)
         return self._generate_legacy_format(report)

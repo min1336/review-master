@@ -89,7 +89,7 @@ class MonthlyCarModelStatsUpdater:
             for row in result.all():
                 model_id_cache[row.model_name] = row.id
         except Exception as e:
-            logger.warning(f"car_models_master 조회 실패: {e}")
+            logger.warning("car_models_master 조회 실패: %s", e)
             return 0
 
         # 3. tags에서 tag_id 일괄 조회
@@ -103,7 +103,7 @@ class MonthlyCarModelStatsUpdater:
             for row in result.all():
                 tag_id_cache[row.name] = row.id
         except Exception as e:
-            logger.warning(f"tags 조회 실패: {e}")
+            logger.warning("tags 조회 실패: %s", e)
             return 0
 
         # 3b. tags 테이블에 없는 서브태그 자동 생성
@@ -161,7 +161,7 @@ class MonthlyCarModelStatsUpdater:
                     f"(model={model_name}): {e}"
                 )
 
-        logger.info(f"monthly_car_model_tag_stats 저장 완료: {saved}건")
+        logger.info("monthly_car_model_tag_stats 저장 완료: %s건", saved)
         return saved
 
     @staticmethod
@@ -226,7 +226,7 @@ class MonthlyCarModelStatsUpdater:
                 for row in result.all():
                     cat_name_to_id[row.name] = row.id
             except Exception as e:
-                logger.warning(f"categories 조회 실패: {e}")
+                logger.warning("categories 조회 실패: %s", e)
 
         for name in missing_names:
             cat_name = subtag_to_cat.get(name)
@@ -253,4 +253,4 @@ class MonthlyCarModelStatsUpdater:
                     if row is not None:
                         tag_id_cache[name] = row
             except Exception as e:
-                logger.warning(f"서브태그 생성 실패 (name={name}): {e}")
+                logger.warning("서브태그 생성 실패 (name=%s): %s", name, e)

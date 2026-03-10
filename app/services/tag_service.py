@@ -5,6 +5,11 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from repository.branch_tag_repository import BranchTagRepository
+    from repository.tag_repository import CategoryRepository, MappingRepository, TagRepository
 
 def _get_classifier():
     from domain.analysis._singletons import get_hybrid_classifier
@@ -15,7 +20,13 @@ def _get_classifier():
 class TagService:
     """태그 비즈니스 로직"""
 
-    def __init__(self, tag_repo, branch_tag_repo, category_repo=None, mapping_repo=None):
+    def __init__(
+        self,
+        tag_repo: TagRepository,
+        branch_tag_repo: BranchTagRepository,
+        category_repo: CategoryRepository | None = None,
+        mapping_repo: MappingRepository | None = None,
+    ):
         self.tag_repo = tag_repo
         self.branch_tag_repo = branch_tag_repo
         self.category_repo = category_repo

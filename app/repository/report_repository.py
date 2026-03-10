@@ -50,7 +50,7 @@ class ReportRepository:
                 return self._to_dict(row)
             return None
         except Exception as e:
-            logger.debug(f"리포트 조회 실패 (없음): {e}")
+            logger.debug("리포트 조회 실패 (없음): %s", e)
             return None
 
     async def get_latest_by_branch(self, branch_id: int) -> dict | None:
@@ -68,7 +68,7 @@ class ReportRepository:
                 return self._to_dict(row)
             return None
         except Exception as e:
-            logger.error(f"최신 리포트 조회 실패: {e}")
+            logger.error("최신 리포트 조회 실패: %s", e)
             return None
 
     async def get_all_by_branch(
@@ -100,7 +100,7 @@ class ReportRepository:
             result = await self._session.execute(stmt)
             return [dict(row._mapping) for row in result.all()]
         except Exception as e:
-            logger.error(f"리포트 목록 조회 실패: {e}")
+            logger.error("리포트 목록 조회 실패: %s", e)
             return []
 
     async def save(
@@ -151,7 +151,7 @@ class ReportRepository:
                 return dict(row)
             return None
         except Exception as e:
-            logger.error(f"리포트 저장 실패: {e}")
+            logger.error("리포트 저장 실패: %s", e)
             raise
 
     async def delete(self, report_id: int) -> bool:
@@ -164,7 +164,7 @@ class ReportRepository:
             result = await self._session.execute(stmt)
             return result.rowcount > 0
         except Exception as e:
-            logger.error(f"리포트 삭제 실패: {e}")
+            logger.error("리포트 삭제 실패: %s", e)
             raise
 
     async def mark_as_viewed(self, report_id: int) -> bool:
@@ -178,7 +178,7 @@ class ReportRepository:
             await self._session.execute(stmt)
             return True
         except Exception as e:
-            logger.error(f"리포트 조회 표시 실패: {e}")
+            logger.error("리포트 조회 표시 실패: %s", e)
             return False
 
     async def get_unviewed_count(self, branch_id: int | None = None) -> int:
@@ -195,7 +195,7 @@ class ReportRepository:
             result = await self._session.execute(stmt)
             return result.scalar_one()
         except Exception as e:
-            logger.error(f"미조회 리포트 개수 조회 실패: {e}")
+            logger.error("미조회 리포트 개수 조회 실패: %s", e)
             return 0
 
     async def get_report_history(
@@ -228,7 +228,7 @@ class ReportRepository:
             result = await self._session.execute(stmt)
             return [dict(row._mapping) for row in result.all()]
         except Exception as e:
-            logger.error(f"리포트 히스토리 조회 실패: {e}")
+            logger.error("리포트 히스토리 조회 실패: %s", e)
             return []
 
     async def delete_by_branch_and_period(

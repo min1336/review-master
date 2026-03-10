@@ -10,8 +10,7 @@ import asyncio
 import gc
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from schemas.pipeline_console import PipelineJobStatusResponse
 from services.base_job_service import BaseJobService, BaseJobState

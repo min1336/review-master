@@ -4,11 +4,16 @@ Carmore 연동 Service - 외부 API 연동 비즈니스 로직
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from repository.affiliate_repository import AffiliateRepository
+
 
 class CarmoreService:
     """Carmore API 연동 비즈니스 로직"""
 
-    def __init__(self, affiliate_repo):
+    def __init__(self, affiliate_repo: AffiliateRepository):
         self.affiliate_repo = affiliate_repo
 
     async def get_affiliates(

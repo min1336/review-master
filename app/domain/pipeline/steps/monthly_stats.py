@@ -102,7 +102,7 @@ class MonthlyStatsUpdater:
                     "review_count": row.review_count or 0,
                 }
         except Exception as e:
-            logger.warning(f"monthly_rating_stats 배치 조회 실패: {e}")
+            logger.warning("monthly_rating_stats 배치 조회 실패: %s", e)
 
         # 증분 평균 계산 + 배치 upsert (1회 INSERT)
         upsert_rows = []
@@ -144,9 +144,9 @@ class MonthlyStatsUpdater:
                 await session.execute(stmt)
                 saved = len(upsert_rows)
             except Exception as e:
-                logger.warning(f"monthly_rating_stats 배치 upsert 실패: {e}")
+                logger.warning("monthly_rating_stats 배치 upsert 실패: %s", e)
 
-        logger.info(f"monthly_rating_stats 저장 완료: {saved}건")
+        logger.info("monthly_rating_stats 저장 완료: %s건", saved)
         return saved
 
     # ------------------------------------------------------------------
@@ -201,9 +201,9 @@ class MonthlyStatsUpdater:
                 await session.execute(stmt)
                 saved = len(upsert_rows)
             except Exception as e:
-                logger.warning(f"monthly_sentiment_stats 배치 upsert 실패: {e}")
+                logger.warning("monthly_sentiment_stats 배치 upsert 실패: %s", e)
 
-        logger.info(f"monthly_sentiment_stats 저장 완료: {saved}건")
+        logger.info("monthly_sentiment_stats 저장 완료: %s건", saved)
         return saved
 
     # ------------------------------------------------------------------
@@ -244,7 +244,7 @@ class MonthlyStatsUpdater:
             for row in result.all():
                 tag_id_cache[row.name] = row.id
         except Exception as e:
-            logger.warning(f"tags 배치 조회 실패: {e}")
+            logger.warning("tags 배치 조회 실패: %s", e)
             return 0
 
         # SQL-level increment 배치 upsert (branch별 그룹핑)
@@ -289,7 +289,7 @@ class MonthlyStatsUpdater:
                     f"monthly_tag_stats 배치 upsert 실패 (branch={branch_id}): {e}"
                 )
 
-        logger.info(f"monthly_tag_stats 저장 완료: {saved}건")
+        logger.info("monthly_tag_stats 저장 완료: %s건", saved)
         return saved
 
     # ------------------------------------------------------------------

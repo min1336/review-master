@@ -188,7 +188,7 @@ class SummaryQueryMixin:
                 result.car_models = await self.review_repo.get_distinct_car_models(branch_id)
                 return result
             except Exception as e:
-                logger.warning(f"Athena 리뷰 조회 실패, Supabase 폴백: {e}")
+                logger.warning("Athena 리뷰 조회 실패, Supabase 폴백: %s", e)
 
         return await self.review_repo.get_by_branch(
             branch_id=branch_id,
@@ -246,7 +246,7 @@ class SummaryQueryMixin:
             try:
                 rows = await repo.get_car_model_tags(branch_id, car_model)
             except Exception as e:
-                logger.warning(f"차량 태그 조회 실패 (branch_id={branch_id}): {e}")
+                logger.warning("차량 태그 조회 실패 (branch_id=%s): %s", branch_id, e)
                 return BranchCarModelsDTO(branch_id=branch_id, car_models=[])
 
             if not rows:

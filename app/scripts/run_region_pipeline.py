@@ -95,14 +95,14 @@ def fetch_reviews_from_athena(branch_ids: list[int]) -> list[dict]:
     offset = 0
 
     while True:
-        logger.info(f"  Athena 조회: offset={offset}, limit={ATHENA_PAGE_SIZE}")
+        logger.info("  Athena 조회: offset=%s, limit=%s", offset, ATHENA_PAGE_SIZE)
         reviews, total = athena.fetch_reviews_with_filters(
             branch_ids=branch_ids,
             limit=ATHENA_PAGE_SIZE,
             offset=offset,
         )
         all_reviews.extend(reviews)
-        logger.info(f"  → {len(reviews)}건 (누적: {len(all_reviews)}/{total})")
+        logger.info("  → %s건 (누적: %s/%s)", len(reviews), len(all_reviews), total)
 
         if len(reviews) < ATHENA_PAGE_SIZE:
             break

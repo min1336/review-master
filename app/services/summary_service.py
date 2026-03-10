@@ -9,10 +9,18 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from services.summary_approval_mixin import SummaryApprovalMixin
 from services.summary_generation_mixin import SummaryGenerationMixin
 from services.summary_query_mixin import SummaryQueryMixin
+
+if TYPE_CHECKING:
+    from infrastructure.athena.client import AthenaClient
+    from repository.branch_tag_repository import BranchTagRepository
+    from repository.review_repository import BranchReviewRepository
+    from repository.sentiment_repository import SentimentRepository
+    from repository.summary_repository import SummaryRepository
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +28,14 @@ logger = logging.getLogger(__name__)
 class SummaryService(SummaryQueryMixin, SummaryGenerationMixin, SummaryApprovalMixin):
     """요약 비즈니스 로직 (Mixin 조합)"""
 
-    def __init__(self, summary_repo, branch_tag_repo, review_repo, sentiment_repo=None, athena_client=None):
+    def __init__(
+        self,
+        summary_repo: SummaryRepository,
+        branch_tag_repo: BranchTagRepository,
+        review_repo: BranchReviewRepository,
+        sentiment_repo: SentimentRepository | None = None,
+        athena_client: AthenaClient | None = None,
+    ):
         self.summary_repo = summary_repo
         self.branch_tag_repo = branch_tag_repo
         self.review_repo = review_repo

@@ -357,7 +357,7 @@ class AthenaClient:
                     ids.add(int(raw))
                 except (ValueError, TypeError):
                     pass
-        logger.info(f"Athena: 활성 리뷰 ID {len(ids)}개 조회 완료")
+        logger.info("Athena: 활성 리뷰 ID %s개 조회 완료", len(ids))
         return ids
 
     def fetch_reviews_with_filters(
@@ -423,7 +423,7 @@ class AthenaClient:
         safe_offset = int(offset)
         query = SEARCH_QUERY_BASE + "\n".join(where_parts) + f"\n{order_clause}\nOFFSET {safe_offset}\nLIMIT {safe_limit}"
 
-        logger.info(f"Athena 필터 검색: branch_ids={branch_ids}, date={date_from}~{date_to}")
+        logger.info("Athena 필터 검색: branch_ids=%s, date=%s~%s", branch_ids, date_from, date_to)
 
         try:
             rows = self._execute_query(query)
@@ -440,11 +440,11 @@ class AthenaClient:
 
             result = (rows, total)
             self._search_cache.set(cache_params, result)
-            logger.info(f"Athena 필터 검색 완료: {len(rows)}개 / 전체 {total}개")
+            logger.info("Athena 필터 검색 완료: %s개 / 전체 %s개", len(rows), total)
             return result
 
         except Exception as e:
-            logger.error(f"Athena 필터 검색 실패: {e}")
+            logger.error("Athena 필터 검색 실패: %s", e)
             raise
 
     def fetch_reviews_by_branch(
@@ -532,15 +532,15 @@ class AthenaClient:
         if limit:
             query += f"\nLIMIT {int(limit)}"
 
-        logger.info(f"Athena 쿼리 실행: since={since}, until={until}")
+        logger.info("Athena 쿼리 실행: since=%s, until=%s", since, until)
         logger.debug("Athena 쿼리 (처음 500자): %s...", query[:500])
 
         try:
             result = self._execute_query(query)
-            logger.info(f"Athena 쿼리 완료: {len(result)}개 리뷰 조회")
+            logger.info("Athena 쿼리 완료: %s개 리뷰 조회", len(result))
             return result
         except Exception as e:
-            logger.error(f"Athena 쿼리 실패: {e}")
+            logger.error("Athena 쿼리 실패: %s", e)
             raise
 
     def _execute_query(self, query: str, timeout: int = 300) -> list[dict]:
@@ -562,7 +562,7 @@ class AthenaClient:
         )
 
         query_execution_id = response["QueryExecutionId"]
-        logger.info(f"쿼리 실행 ID: {query_execution_id}")
+        logger.info("쿼리 실행 ID: %s", query_execution_id)
 
         # 쿼리 완료 대기
         state = "RUNNING"
@@ -578,7 +578,7 @@ class AthenaClient:
                 )
                 state = status["QueryExecution"]["Status"]["State"]
             except Exception as e:
-                logger.warning(f"쿼리 상태 조회 실패 ({elapsed}초): {e}")
+                logger.warning("쿼리 상태 조회 실패 (%s초): %s", elapsed, e)
                 if elapsed >= timeout:
                     raise RuntimeError(
                         f"Athena 쿼리 상태 조회 실패 (타임아웃 {timeout}초): {e}"
@@ -586,7 +586,7 @@ class AthenaClient:
                 continue
 
             if elapsed % 10 == 0:
-                logger.info(f"쿼리 상태: {state} ({elapsed}초 경과)")
+                logger.info("쿼리 상태: %s (%s초 경과)", state, elapsed)
 
         if state != "SUCCEEDED":
             error_msg = status["QueryExecution"]["Status"].get(
@@ -651,5 +651,5 @@ class AthenaClient:
             self._client.list_databases(CatalogName="AwsDataCatalog", MaxResults=1)
             return True
         except Exception as e:
-            logger.error(f"Athena 연결 테스트 실패: {e}")
+            logger.error("Athena 연결 테스트 실패: %s", e)
             return False

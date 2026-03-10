@@ -60,7 +60,7 @@ class RateLimiter:
         # 락 해제 후 대기 (다른 스레드 블로킹 방지)
         if sleep_time > 0:
             if sleep_time > 1:
-                logger.warning(f"Rate limit 도달, {sleep_time:.1f}초 대기...")
+                logger.warning("Rate limit 도달, %.1f초 대기...", sleep_time)
             time.sleep(sleep_time)
 
         # 대기 후 요청 기록

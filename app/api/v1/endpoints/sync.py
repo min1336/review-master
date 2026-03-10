@@ -71,7 +71,7 @@ async def api_cleanup_ghost_reviews(
     try:
         deleted = await sync_service.cleanup_ghost_reviews()
     except Exception as e:
-        logger.error(f"Ghost review 정리 실패: {e}", exc_info=True)
+        logger.error("Ghost review 정리 실패: %s", e, exc_info=True)
         raise HTTPException(
             status_code=502,
             detail="Ghost review 정리 중 오류가 발생했습니다",
@@ -91,7 +91,7 @@ async def api_mark_reviews_as_read(
     try:
         marked_count = await sync_service.mark_reviews_as_read(request.review_ids)
     except Exception as e:
-        logger.error(f"리뷰 읽음 처리 실패: {e}", exc_info=True)
+        logger.error("리뷰 읽음 처리 실패: %s", e, exc_info=True)
         raise HTTPException(
             status_code=502,
             detail="리뷰 읽음 처리 중 오류가 발생했습니다",

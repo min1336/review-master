@@ -124,17 +124,17 @@ class SyncJobService(BaseJobService[SyncJobState, SyncJobStatusResponse]):
             state.progress = 100
             state.message = result.message
             state.result = result
-            logger.info(f"동기화 작업 완료: {state.job_id}")
+            logger.info("동기화 작업 완료: %s", state.job_id)
 
         except asyncio.CancelledError:
             state.status = "failed"
             state.error = "작업이 취소되었습니다"
-            logger.info(f"동기화 작업 취소됨: {state.job_id}")
+            logger.info("동기화 작업 취소됨: %s", state.job_id)
         except Exception as e:
             state.status = "failed"
             state.error = str(e)
             state.message = "동기화 중 오류 발생"
-            logger.exception(f"동기화 작업 실패: {state.job_id}")
+            logger.exception("동기화 작업 실패: %s", state.job_id)
 
     def _to_response(self, state: SyncJobState) -> SyncJobStatusResponse:
         return SyncJobStatusResponse(

@@ -36,7 +36,7 @@ class CarModelTagAggregator:
             for pr in processed
             if pr.review.car_model.strip()
         }
-        logger.info(f"차량 마스터/관계 갱신 완료: {len(car_models)}개 차량")
+        logger.info("차량 마스터/관계 갱신 완료: %s개 차량", len(car_models))
         return {"cars_processed": len(car_models)}
 
     async def _upsert_car_models_master(
@@ -63,9 +63,9 @@ class CarModelTagAggregator:
                     )
                 )
                 await session.execute(stmt)
-            logger.info(f"car_models_master upsert 완료: {len(model_names)}개 모델")
+            logger.info("car_models_master upsert 완료: %s개 모델", len(model_names))
         except Exception as e:
-            logger.warning(f"car_models_master upsert 실패: {e}")
+            logger.warning("car_models_master upsert 실패: %s", e)
 
     async def _upsert_branch_car_models(
         self, session: AsyncSession, processed: list[ProcessedReviewDTO]
@@ -91,7 +91,7 @@ class CarModelTagAggregator:
             for row in result.all():
                 model_id_cache[row.model_name] = row.id
         except Exception as e:
-            logger.warning(f"car_models_master 조회 실패: {e}")
+            logger.warning("car_models_master 조회 실패: %s", e)
             return
 
         rows: list[dict] = []
@@ -117,6 +117,6 @@ class CarModelTagAggregator:
                     )
                 )
                 await session.execute(stmt)
-            logger.info(f"branch_car_models upsert 완료: {len(rows)}건")
+            logger.info("branch_car_models upsert 완료: %s건", len(rows))
         except Exception as e:
-            logger.warning(f"branch_car_models upsert 실패: {e}")
+            logger.warning("branch_car_models upsert 실패: %s", e)

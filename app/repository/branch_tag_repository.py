@@ -10,13 +10,12 @@ from datetime import datetime
 
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from models.tag import BranchTag
 
 from .base import BaseRepository
-from .orm_models import BranchTagORM, CategoryORM, TagORM
+from .orm_models import BranchTagORM, TagORM
 
 logger = logging.getLogger(__name__)
 

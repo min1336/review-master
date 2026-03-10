@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timedelta
 
@@ -139,7 +138,7 @@ class BranchReviewRepository(BaseRepository[Review]):
                 await self._session.execute(stmt)
                 success_count += len(batch)
             except Exception as e:
-                logger.warning(f"Failed to upsert branch reviews batch: {e}")
+                logger.warning("Failed to upsert branch reviews batch: %s", e)
 
         return success_count
 
@@ -570,6 +569,6 @@ class BranchReviewRepository(BaseRepository[Review]):
                 raise
 
         if deleted_count > 0:
-            logger.info(f"Deleted {deleted_count} ghost reviews + related tag mappings")
+            logger.info("Deleted %s ghost reviews + related tag mappings", deleted_count)
 
         return deleted_count

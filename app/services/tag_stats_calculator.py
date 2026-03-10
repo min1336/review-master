@@ -54,7 +54,7 @@ class TagStatsCalculator:
             if len(period_tags) >= MIN_PERIOD_TAG_COUNT:
                 return self._compute_from_rpc_rows(period_tags)
         except Exception as e:
-            logger.warning(f"RPC 태그 조회 실패, fallback: {e}")
+            logger.warning("RPC 태그 조회 실패, fallback: %s", e)
 
         # Fallback: branch_tags "all" (대시보드 태그 배지용으로 유지됨)
         try:
@@ -62,7 +62,7 @@ class TagStatsCalculator:
                 branch_id, period_type="all", limit=100
             )
         except Exception as e:
-            logger.warning(f"태그 조회 실패 (branch_id={branch_id}): {e}")
+            logger.warning("태그 조회 실패 (branch_id=%s): %s", branch_id, e)
             return {}
 
         if not all_tags:

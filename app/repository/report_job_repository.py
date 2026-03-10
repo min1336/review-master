@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, select, update
 
 from core.timezone import utc_now
 
@@ -62,7 +62,7 @@ class ReportJobRepository:
                 return dict(row)
             return None
         except Exception as e:
-            logger.error(f"작업 생성 실패: {e}")
+            logger.error("작업 생성 실패: %s", e)
             raise
 
     async def get_by_id(self, job_id: str | UUID) -> dict[str, Any] | None:
@@ -78,7 +78,7 @@ class ReportJobRepository:
                 return self._to_dict(row)
             return None
         except Exception as e:
-            logger.debug(f"작업 조회 실패 (없음): {e}")
+            logger.debug("작업 조회 실패 (없음): %s", e)
             return None
 
     async def update_status(
@@ -114,7 +114,7 @@ class ReportJobRepository:
             await self._session.execute(stmt)
             return True
         except Exception as e:
-            logger.error(f"작업 상태 업데이트 실패: {e}")
+            logger.error("작업 상태 업데이트 실패: %s", e)
             raise
 
     async def update_progress(self, job_id: str | UUID, progress: int) -> bool:
@@ -133,7 +133,7 @@ class ReportJobRepository:
             result = await self._session.execute(stmt)
             return [self._to_dict(row) for row in result.scalars().all()]
         except Exception as e:
-            logger.error(f"대기 작업 조회 실패: {e}")
+            logger.error("대기 작업 조회 실패: %s", e)
             return []
 
     async def get_by_branch_and_period(
@@ -162,7 +162,7 @@ class ReportJobRepository:
                 return self._to_dict(row)
             return None
         except Exception as e:
-            logger.debug(f"작업 조회 실패: {e}")
+            logger.debug("작업 조회 실패: %s", e)
             return None
 
     async def get_active_by_branch_and_period(
@@ -188,7 +188,7 @@ class ReportJobRepository:
                 return self._to_dict(row)
             return None
         except Exception as e:
-            logger.debug(f"활성 작업 조회 실패: {e}")
+            logger.debug("활성 작업 조회 실패: %s", e)
             return None
 
     async def cleanup_old_jobs(self, days: int = 7) -> int:
@@ -205,7 +205,7 @@ class ReportJobRepository:
             result = await self._session.execute(stmt)
             return len(result.all())
         except Exception as e:
-            logger.error(f"오래된 작업 정리 실패: {e}")
+            logger.error("오래된 작업 정리 실패: %s", e)
             return 0
 
     async def mark_stale_jobs_failed(
@@ -227,8 +227,8 @@ class ReportJobRepository:
             result = await self._session.execute(stmt)
             count = len(result.all())
             if count > 0:
-                logger.info(f"고아 작업 {count}개를 failed로 마킹")
+                logger.info("고아 작업 %s개를 failed로 마킹", count)
             return count
         except Exception as e:
-            logger.error(f"고아 작업 복구 실패: {e}")
+            logger.error("고아 작업 복구 실패: %s", e)
             return 0

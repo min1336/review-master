@@ -36,7 +36,7 @@ async def api_get_filter_options(
         return api_response(result.model_dump(by_alias=True))
 
     except Exception as e:
-        logger.error(f"Failed to get filter options: {e}")
+        logger.error("Failed to get filter options: %s", e)
         raise HTTPException(
             status_code=500,
             detail="필터 옵션을 불러오는데 실패했습니다.",
@@ -68,7 +68,7 @@ async def api_get_reviews(
         return api_response(result.model_dump(by_alias=True))
 
     except Exception as e:
-        logger.error(f"Failed to get filtered reviews: {e}", exc_info=True)
+        logger.error("Failed to get filtered reviews: %s", e, exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="리뷰를 불러오는데 실패했습니다",
@@ -103,7 +103,7 @@ async def api_export_reviews_to_excel(
         )
 
     except Exception as e:
-        logger.error(f"Failed to export reviews: {e}")
+        logger.error("Failed to export reviews: %s", e)
         raise HTTPException(
             status_code=500,
             detail="리뷰 내보내기에 실패했습니다.",

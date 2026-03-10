@@ -56,13 +56,13 @@ class UnifiedPipeline:
             processed_reviews=0, total_branches=0,
             summaries_generated=0, started_at=started_at,
         )
-        logger.info(f"통합 파이프라인 시작: {len(reviews)}개 리뷰")
+        logger.info("통합 파이프라인 시작: %s개 리뷰", len(reviews))
 
         try:
             factory = get_session_factory()
             session = factory()
         except Exception as e:
-            logger.error(f"DB 연결 실패: {e}")
+            logger.error("DB 연결 실패: %s", e)
             result.error_message = str(e)
             result.finished_at = utc_now()
             return result
@@ -79,14 +79,14 @@ class UnifiedPipeline:
                     input_count=len(reviews), output_count=len(processed),
                     duration_seconds=round(time.monotonic() - t0, 3),
                 ))
-                logger.info(f"Step 1 완료: {len(processed)}/{len(reviews)}개 처리")
+                logger.info("Step 1 완료: %s/%s개 처리", len(processed), len(reviews))
                 # 전처리 후 raw dict 리스트 해제 (ProcessedReviewDTO로 변환 완료)
                 reviews.clear()
                 gc.collect()
                 if progress_callback:
                     await progress_callback(50, "전처리 완료")
             except Exception as e:
-                logger.error(f"Step 1(preprocessor) 실패: {e}")
+                logger.error("Step 1(preprocessor) 실패: %s", e)
                 result.add_step(PipelineStepResultDTO(
                     step_name="preprocessor", success=False,
                     input_count=len(reviews), output_count=0,
@@ -114,11 +114,11 @@ class UnifiedPipeline:
                     input_count=input_count, output_count=s2,
                     duration_seconds=round(time.monotonic() - t0, 3),
                 ))
-                logger.info(f"Step 2 완료: {s2}개 sentiment 업데이트")
+                logger.info("Step 2 완료: %s개 sentiment 업데이트", s2)
                 if progress_callback:
                     await progress_callback(60, "감정 업데이트 완료")
             except Exception as e:
-                logger.error(f"Step 2(review_updater) 실패: {e}")
+                logger.error("Step 2(review_updater) 실패: %s", e)
                 result.add_step(PipelineStepResultDTO(
                     step_name="review_updater", success=False,
                     input_count=input_count, output_count=0,
@@ -139,12 +139,12 @@ class UnifiedPipeline:
                     input_count=input_count, output_count=s4 if isinstance(s4, int) else 0,
                     duration_seconds=round(time.monotonic() - t0, 3),
                 ))
-                logger.info(f"Step 4 완료: {s4}")
+                logger.info("Step 4 완료: %s", s4)
                 tag_aggregation_ok = True
                 if progress_callback:
                     await progress_callback(80, "태그 집계 완료")
             except Exception as e:
-                logger.error(f"Step 4(tag_aggregator) 실패: {e}")
+                logger.error("Step 4(tag_aggregator) 실패: %s", e)
                 result.add_step(PipelineStepResultDTO(
                     step_name="tag_aggregator", success=False,
                     input_count=input_count, output_count=0,
@@ -162,11 +162,11 @@ class UnifiedPipeline:
                     input_count=input_count, output_count=s5 if isinstance(s5, int) else 0,
                     duration_seconds=round(time.monotonic() - t0, 3),
                 ))
-                logger.info(f"Step 5 완료: {s5}")
+                logger.info("Step 5 완료: %s", s5)
                 if progress_callback:
                     await progress_callback(85, "차량 마스터/관계 갱신 완료")
             except Exception as e:
-                logger.error(f"Step 5(car_model_master) 실패: {e}")
+                logger.error("Step 5(car_model_master) 실패: %s", e)
                 result.add_step(PipelineStepResultDTO(
                     step_name="car_model_master", success=False,
                     input_count=input_count, output_count=0,
@@ -184,11 +184,11 @@ class UnifiedPipeline:
                     input_count=input_count, output_count=s6,
                     duration_seconds=round(time.monotonic() - t0, 3),
                 ))
-                logger.info(f"Step 6 완료: {s6}개 지점 키워드 갱신")
+                logger.info("Step 6 완료: %s개 지점 키워드 갱신", s6)
                 if progress_callback:
                     await progress_callback(90, "키워드 갱신 완료")
             except Exception as e:
-                logger.error(f"Step 6(keyword_manager) 실패: {e}")
+                logger.error("Step 6(keyword_manager) 실패: %s", e)
                 result.add_step(PipelineStepResultDTO(
                     step_name="keyword_manager", success=False,
                     input_count=input_count, output_count=0,
@@ -209,11 +209,11 @@ class UnifiedPipeline:
                         input_count=input_count, output_count=s7,
                         duration_seconds=round(time.monotonic() - t0, 3),
                     ))
-                    logger.info(f"Step 7 완료: {s7}개 review_tag_mappings 저장")
+                    logger.info("Step 7 완료: %s개 review_tag_mappings 저장", s7)
                     if progress_callback:
                         await progress_callback(92, "리뷰 태그 매핑 완료")
                 except Exception as e:
-                    logger.error(f"Step 7(review_tag_mapper) 실패: {e}")
+                    logger.error("Step 7(review_tag_mapper) 실패: %s", e)
                     result.add_step(PipelineStepResultDTO(
                         step_name="review_tag_mapper", success=False,
                         input_count=input_count, output_count=0,
@@ -235,11 +235,11 @@ class UnifiedPipeline:
                         input_count=input_count, output_count=total_monthly,
                         duration_seconds=round(time.monotonic() - t0, 3),
                     ))
-                    logger.info(f"Step 8 완료: {s8}")
+                    logger.info("Step 8 완료: %s", s8)
                     if progress_callback:
                         await progress_callback(95, "월별 통계 완료")
                 except Exception as e:
-                    logger.error(f"Step 8(monthly_stats) 실패: {e}")
+                    logger.error("Step 8(monthly_stats) 실패: %s", e)
                     result.add_step(PipelineStepResultDTO(
                         step_name="monthly_stats", success=False,
                         input_count=input_count, output_count=0,
@@ -260,11 +260,11 @@ class UnifiedPipeline:
                         input_count=input_count, output_count=s9,
                         duration_seconds=round(time.monotonic() - t0, 3),
                     ))
-                    logger.info(f"Step 9 완료: {s9}개 monthly_car_model_tag_stats 저장")
+                    logger.info("Step 9 완료: %s개 monthly_car_model_tag_stats 저장", s9)
                     if progress_callback:
                         await progress_callback(98, "차량 월별 통계 완료")
                 except Exception as e:
-                    logger.error(f"Step 9(monthly_car_model_stats) 실패: {e}")
+                    logger.error("Step 9(monthly_car_model_stats) 실패: %s", e)
                     result.add_step(PipelineStepResultDTO(
                         step_name="monthly_car_model_stats", success=False,
                         input_count=input_count, output_count=0,
@@ -275,11 +275,11 @@ class UnifiedPipeline:
             # 성공한 step은 커밋 (실패한 step은 savepoint에서 이미 rollback됨)
             await session.commit()
             if result.failed_steps:
-                logger.warning(f"일부 단계 실패 (savepoint rollback): {result.failed_steps}")
+                logger.warning("일부 단계 실패 (savepoint rollback): %s", result.failed_steps)
 
         except Exception as e:
             await session.rollback()
-            logger.error(f"파이프라인 트랜잭션 실패: {e}")
+            logger.error("파이프라인 트랜잭션 실패: %s", e)
             result.error_message = str(e)
             result.finished_at = utc_now()
             return result

@@ -67,7 +67,7 @@ class OpenAIProvider(LLMProvider):
             self._available = False
             return False
         except Exception as e:
-            logger.warning(f"OpenAI 초기화 실패: {e}")
+            logger.warning("OpenAI 초기화 실패: %s", e)
             self._available = False
             return False
 
@@ -126,7 +126,7 @@ class OpenAIProvider(LLMProvider):
             if "429" in error_msg or "rate" in error_msg.lower():
                 if _retry_count < max_retries:
                     wait_time = 60 * (2 ** _retry_count)
-                    logger.warning(f"Rate limit 초과, {wait_time}초 대기 후 재시도 ({_retry_count + 1}/{max_retries})...")
+                    logger.warning("Rate limit 초과, %s초 대기 후 재시도 (%s/%s)...", wait_time, _retry_count + 1, max_retries)
                     time.sleep(wait_time)
                     return self.generate(
                         prompt, system_prompt, max_tokens, temperature,
@@ -159,7 +159,7 @@ class OpenAIProvider(LLMProvider):
         except ImportError:
             return False
         except Exception as e:
-            logger.warning(f"AsyncOpenAI 초기화 실패: {e}")
+            logger.warning("AsyncOpenAI 초기화 실패: %s", e)
             return False
 
     async def async_generate(
@@ -205,7 +205,7 @@ class OpenAIProvider(LLMProvider):
             if "429" in error_msg or "rate" in error_msg.lower():
                 if _retry_count < max_retries:
                     wait_time = 60 * (2 ** _retry_count)
-                    logger.warning(f"Rate limit 초과 (async), {wait_time}초 대기 후 재시도 ({_retry_count + 1}/{max_retries})...")
+                    logger.warning("Rate limit 초과 (async), %s초 대기 후 재시도 (%s/%s)...", wait_time, _retry_count + 1, max_retries)
                     await asyncio.sleep(wait_time)
                     return await self.async_generate(
                         prompt, system_prompt, max_tokens, temperature,

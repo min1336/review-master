@@ -36,7 +36,7 @@ class PresetRepository:
                 or row.branch_type == branch_type
             ]
         except Exception as e:
-            logger.error(f"프리셋 목록 조회 실패: {e}")
+            logger.error("프리셋 목록 조회 실패: %s", e)
             return []
 
     async def get_by_id(self, preset_id: int) -> dict | None:
@@ -58,7 +58,7 @@ class PresetRepository:
             await self._session.refresh(preset)
             return self._to_dict(preset)
         except Exception as e:
-            logger.error(f"프리셋 생성 실패: {e}")
+            logger.error("프리셋 생성 실패: %s", e)
             raise
 
     async def update(self, preset_id: int, data: dict) -> dict | None:
@@ -77,7 +77,7 @@ class PresetRepository:
             row = await self._session.get(PromptPresetORM, preset_id)
             return self._to_dict(row) if row else None
         except Exception as e:
-            logger.error(f"프리셋 수정 실패: {e}")
+            logger.error("프리셋 수정 실패: %s", e)
             raise
 
     async def delete(self, preset_id: int) -> bool:
@@ -87,7 +87,7 @@ class PresetRepository:
             result = await self._session.execute(stmt)
             return result.rowcount > 0
         except Exception as e:
-            logger.error(f"프리셋 삭제 실패: {e}")
+            logger.error("프리셋 삭제 실패: %s", e)
             return False
 
     @staticmethod

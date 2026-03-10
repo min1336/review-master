@@ -34,7 +34,7 @@ class SyncMetadataRepository:
             )
             return result.scalar_one_or_none()
         except Exception as e:
-            logger.debug(f"No sync metadata found for {sync_type}: {e}")
+            logger.debug("No sync metadata found for %s: %s", sync_type, e)
             return None
 
     async def update_last_sync_at(
@@ -62,7 +62,7 @@ class SyncMetadataRepository:
             await self._session.flush()
             return True
         except Exception as e:
-            logger.error(f"Failed to update last_sync_at: {e}")
+            logger.error("Failed to update last_sync_at: %s", e)
             return False
 
     async def acquire_lock(self, sync_type: str = "new_review") -> bool:
@@ -109,7 +109,7 @@ class SyncMetadataRepository:
                 return False
 
         except Exception as e:
-            logger.error(f"Failed to acquire lock: {e}")
+            logger.error("Failed to acquire lock: %s", e)
             return False
 
     async def _release_stale_lock(self, sync_type: str) -> None:
@@ -133,7 +133,7 @@ class SyncMetadataRepository:
                     f"(timeout: {LOCK_TIMEOUT_MINUTES}min)"
                 )
         except Exception as e:
-            logger.debug(f"Failed to release stale lock: {e}")
+            logger.debug("Failed to release stale lock: %s", e)
 
     async def release_lock(self, sync_type: str = "new_review") -> bool:
         """동기화 락 해제"""
@@ -147,7 +147,7 @@ class SyncMetadataRepository:
             await self._session.flush()
             return True
         except Exception as e:
-            logger.error(f"Failed to release lock: {e}")
+            logger.error("Failed to release lock: %s", e)
             raise
 
     async def is_running(self, sync_type: str = "new_review") -> bool:

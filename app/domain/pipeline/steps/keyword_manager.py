@@ -82,10 +82,10 @@ class KeywordManager:
                     session, branch_id, keywords_data
                 )
             except Exception as e:
-                logger.warning(f"지점 {branch_id} 키워드 업데이트 실패: {e}")
+                logger.warning("지점 %s 키워드 업데이트 실패: %s", branch_id, e)
                 continue
 
-        logger.info(f"총 {updated_branches}개 지점 키워드 업데이트 완료")
+        logger.info("총 %s개 지점 키워드 업데이트 완료", updated_branches)
         return updated_branches
 
     async def _update_branch(

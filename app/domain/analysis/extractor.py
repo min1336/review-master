@@ -53,12 +53,6 @@ class KeywordExtractor:
 
         return self._kiwi
 
-    @property
-    def is_kiwi_available(self) -> bool:
-        """Kiwi 사용 가능 여부"""
-        _ = self.kiwi  # 초기화 트리거
-        return self._kiwi_available
-
     def extract(self, text: str) -> list[str]:
         """
         텍스트에서 키워드 추출
@@ -109,74 +103,4 @@ class KeywordExtractor:
             w for w in words if w not in self.stopwords and len(w) >= self.min_length
         ]
 
-    def extract_batch(self, texts: list[str]) -> list[list[str]]:
-        """
-        배치 키워드 추출
-
-        Args:
-            texts: 텍스트 리스트
-
-        Returns:
-            키워드 리스트의 리스트
-        """
-        return [self.extract(text) for text in texts]
-
-    # ========== 청킹 지원 메서드 ==========
-
-    def extract_from_chunks(self, chunks: list[str]) -> list[list[str]]:
-        """
-        청크별 키워드 추출
-
-        Args:
-            chunks: 절 단위 청크 리스트
-
-        Returns:
-            청크별 키워드 리스트 [[청크1 키워드], [청크2 키워드], ...]
-        """
-        return [self.extract(chunk) for chunk in chunks]
-
-    def extract_with_chunking(self, text: str, chunker: ClauseChunker = None) -> dict:
-        """
-        텍스트를 청킹 후 키워드 추출
-
-        Args:
-            text: 입력 텍스트
-            chunker: ClauseChunker 인스턴스 (None이면 내부 생성)
-
-        Returns:
-            {
-                'chunks': ['절1', '절2', ...],
-                'keywords_per_chunk': [['키워드1'], ['키워드2'], ...],
-                'flat_keywords': ['키워드1', '키워드2', ...]  # 중복 제거된 전체 키워드
-            }
-        """
-        if not text or not text.strip():
-            return {"chunks": [], "keywords_per_chunk": [], "flat_keywords": []}
-
-        # 청커 초기화
-        if chunker is None:
-            from .chunker import ClauseChunker
-
-            chunker = ClauseChunker()
-
-        # 청킹
-        chunks = chunker.chunk(text)
-
-        # 청크별 키워드 추출
-        keywords_per_chunk = self.extract_from_chunks(chunks)
-
-        # 전체 키워드 (중복 제거, 순서 유지)
-        seen = set()
-        flat_keywords = []
-        for kw_list in keywords_per_chunk:
-            for kw in kw_list:
-                if kw not in seen:
-                    seen.add(kw)
-                    flat_keywords.append(kw)
-
-        return {
-            "chunks": chunks,
-            "keywords_per_chunk": keywords_per_chunk,
-            "flat_keywords": flat_keywords,
-        }
 

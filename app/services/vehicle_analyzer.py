@@ -139,7 +139,7 @@ class VehicleAnalyzer:
                     branch_id, period_from=period_from, period_to=period_to
                 )
             except Exception as e:
-                logger.warning(f"차량 태그 raw 조회 실패 (branch_id={branch_id}): {e}")
+                logger.warning("차량 태그 raw 조회 실패 (branch_id=%s): %s", branch_id, e)
                 return {}
 
     def build_vehicle_rankings(
@@ -290,7 +290,7 @@ class VehicleAnalyzer:
                 repo = CarModelRepository(session)
                 car_data = await repo.get_vehicle_analysis_data(branch_id)
             except Exception as e:
-                logger.warning(f"차량별 분석 조회 실패 (branch_id={branch_id}): {e}")
+                logger.warning("차량별 분석 조회 실패 (branch_id=%s): %s", branch_id, e)
                 return []
 
         if not car_data:
@@ -332,7 +332,7 @@ class VehicleAnalyzer:
                 offset += batch_size
 
         except Exception as e:
-            logger.warning(f"기간별 차량 분석 조회 실패 (branch_id={branch_id}): {e}")
+            logger.warning("기간별 차량 분석 조회 실패 (branch_id=%s): %s", branch_id, e)
             return []
 
         if not all_rows:
@@ -409,7 +409,7 @@ class VehicleAnalyzer:
             result = await session.execute(stmt)
             rows = result.all()
         except Exception as e:
-            logger.warning(f"차량 태그 직접 조회 실패 (branch_id={branch_id}): {e}")
+            logger.warning("차량 태그 직접 조회 실패 (branch_id=%s): %s", branch_id, e)
             return {}
 
         car_tags: dict[str, dict] = {}

@@ -128,10 +128,10 @@ class AnalysisService:
             )
 
         except ConnectionError as e:
-            logger.error(f"Database connection failed: {e}")
+            logger.error("Database connection failed: %s", e)
             raise DatabaseConnectionError(f"DB 연결 실패: {e}") from e
         except Exception as e:
-            logger.error(f"Failed to get filter options: {e}")
+            logger.error("Failed to get filter options: %s", e)
             raise FilterOptionsError(f"필터 옵션 조회 실패: {e}") from e
 
     async def get_filtered_reviews(
@@ -269,10 +269,10 @@ class AnalysisService:
             )
 
         except ConnectionError as e:
-            logger.error(f"Database connection failed: {e}")
+            logger.error("Database connection failed: %s", e)
             raise DatabaseConnectionError(f"DB 연결 실패: {e}") from e
         except Exception as e:
-            logger.error(f"Failed to get filtered reviews: {e}")
+            logger.error("Failed to get filtered reviews: %s", e)
             raise ReviewSearchError(f"리뷰 검색 실패: {e}") from e
 
     async def _search_via_athena(
@@ -330,7 +330,7 @@ class AnalysisService:
             return AnalysisReviewListDTO(reviews=reviews, total=total)
 
         except Exception as e:
-            logger.warning(f"Athena 검색 실패, Supabase 폴백: {e}")
+            logger.warning("Athena 검색 실패, Supabase 폴백: %s", e)
             # Supabase 폴백
             result = await self.review_repo.search_with_filters(
                 branch_ids=branch_ids,

@@ -208,7 +208,7 @@ class ReportAIGenerator:
             return self._fix_number_hallucinations(content, canonical)
 
         except Exception as e:
-            logger.error(f"{label} 평가 텍스트 생성 실패: {e}")
+            logger.error("%s 평가 텍스트 생성 실패: %s", label, e)
             return ""
 
     # ----------------------------------------------------------------
@@ -244,7 +244,7 @@ class ReportAIGenerator:
                             )
                             return saved_summary
             except Exception as e:
-                logger.warning(f"DB 요약 조회 실패 (branch_id={branch_id}): {e}")
+                logger.warning("DB 요약 조회 실패 (branch_id=%s): %s", branch_id, e)
 
         # 2. DB에 없으면 LLM 호출
         from infrastructure.llm import get_provider
@@ -353,7 +353,7 @@ class ReportAIGenerator:
 
             return content
         except Exception as e:
-            logger.error(f"기간 요약 생성 실패: {e}")
+            logger.error("기간 요약 생성 실패: %s", e)
 
         # 기본 요약
         start_str = start_date.strftime('%Y년 %m월')
@@ -435,7 +435,7 @@ class ReportAIGenerator:
                 if diff / canon <= threshold and diff < best_diff:
                     best, best_diff = canon, diff
             if best is not None:
-                logger.info(f"숫자 할루시네이션 교정: {n}건 → {best}건")
+                logger.info("숫자 할루시네이션 교정: %s건 → %s건", n, best)
                 fmt = f"{best:,}" if "," in match.group(1) else str(best)
                 return f"{fmt}건"
             return match.group(0)
@@ -471,7 +471,7 @@ class ReportAIGenerator:
                 if sample_reviews:
                     return sample_reviews
             except Exception as e:
-                logger.warning(f"Athena 대표 리뷰 조회 실패, Supabase 폴백: {e}")
+                logger.warning("Athena 대표 리뷰 조회 실패, Supabase 폴백: %s", e)
 
         # Supabase 폴백
         if self.review_repo:
@@ -486,7 +486,7 @@ class ReportAIGenerator:
                     r.get("content", "") for r in result.reviews if r.get("content")
                 ]
             except Exception as e:
-                logger.warning(f"대표 리뷰 조회 실패: {e}")
+                logger.warning("대표 리뷰 조회 실패: %s", e)
         return sample_reviews
 
     @staticmethod

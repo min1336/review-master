@@ -43,5 +43,5 @@ async def api_process_review(
         })
 
     except Exception as e:
-        logger.error(f"리뷰 처리 실패: {e}", exc_info=True)
+        logger.error("리뷰 처리 실패: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="리뷰 처리 중 내부 오류가 발생했습니다")

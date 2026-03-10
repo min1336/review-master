@@ -9,7 +9,6 @@ AI 리포트 서비스
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from datetime import datetime
 
@@ -438,7 +437,7 @@ class ReportService:
                         category_trends=[TrendItem(**t) for t in trend_data["category_trends"]],
                     )
         except Exception as e:
-            logger.warning(f"트렌드 비교 산출 실패 (무시): {e}")
+            logger.warning("트렌드 비교 산출 실패 (무시): %s", e)
 
         # --- 2. 벤치마크 ---
         try:
@@ -479,7 +478,7 @@ class ReportService:
                     total_branches_national=len(all_ratings),
                 )
         except Exception as e:
-            logger.warning(f"벤치마크 산출 실패 (무시): {e}")
+            logger.warning("벤치마크 산출 실패 (무시): %s", e)
 
         # --- 3. 우선순위 액션 ---
         try:
@@ -526,7 +525,7 @@ class ReportService:
 
             insights["priority_actions"] = actions[:5]
         except Exception as e:
-            logger.warning(f"우선순위 액션 산출 실패 (무시): {e}")
+            logger.warning("우선순위 액션 산출 실패 (무시): %s", e)
 
         return insights
 
@@ -652,7 +651,7 @@ class ReportService:
                     report_data=report.model_dump(),
                 )
             except Exception as e:
-                logger.warning(f"리포트 저장 실패 (생성은 성공): {e}")
+                logger.warning("리포트 저장 실패 (생성은 성공): %s", e)
 
         return report
 
@@ -715,7 +714,7 @@ class ReportService:
                 )
                 collected["total_reviews"] = period_count
             except Exception as e:
-                logger.warning(f"기간별 리뷰 수 조회 실패: {e}")
+                logger.warning("기간별 리뷰 수 조회 실패: %s", e)
 
         # 태그 커버리지 조회 (신뢰도 표기용)
         if self.review_repo:
@@ -732,7 +731,7 @@ class ReportService:
                     "ratio": round(tagged_count / total * 100) if total > 0 else 0,
                 }
             except Exception as e:
-                logger.warning(f"태그 커버리지 조회 실패: {e}")
+                logger.warning("태그 커버리지 조회 실패: %s", e)
 
         # Step 2: 태그 분석 (20-40%) — config에 따라 스킵 가능
         await update_progress(20)
@@ -788,7 +787,7 @@ class ReportService:
                 )
                 collected["negative_reviews"] = neg_rows
             except Exception as e:
-                logger.warning(f"부정 리뷰 조회 실패: {e}")
+                logger.warning("부정 리뷰 조회 실패: %s", e)
 
         # Step 4: 리포트 조립 및 저장 (85-100%)
         await update_progress(85)

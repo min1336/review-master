@@ -58,9 +58,9 @@ class TagEmbeddingManager:
 
         for tag, vector in zip(tags, vectors, strict=False):
             embeddings[tag] = vector
-            logger.debug(f"  {tag}: shape={vector.shape}")
+            logger.debug("  %s: shape=%s", tag, vector.shape)
 
-        logger.info(f"태그 임베딩 계산 완료: {len(embeddings)}개 그룹")
+        logger.info("태그 임베딩 계산 완료: %s개 그룹", len(embeddings))
         return embeddings
 
     def save(self, embeddings: dict[str, np.ndarray] | None = None) -> bool:
@@ -85,11 +85,11 @@ class TagEmbeddingManager:
 
             # npz 형식으로 저장
             np.savez(self.cache_path, **embeddings)
-            logger.info(f"태그 임베딩 저장 완료: {self.cache_path}")
+            logger.info("태그 임베딩 저장 완료: %s", self.cache_path)
             return True
 
         except Exception as e:
-            logger.error(f"태그 임베딩 저장 실패: {e}")
+            logger.error("태그 임베딩 저장 실패: %s", e)
             return False
 
     def load(self) -> dict[str, np.ndarray] | None:
@@ -100,17 +100,17 @@ class TagEmbeddingManager:
             {태그명: 임베딩벡터} 딕셔너리 또는 None
         """
         if not os.path.exists(self.cache_path):
-            logger.debug(f"캐시 파일 없음: {self.cache_path}")
+            logger.debug("캐시 파일 없음: %s", self.cache_path)
             return None
 
         try:
             data = np.load(self.cache_path)
             embeddings = {key: data[key] for key in data.files}
-            logger.info(f"태그 임베딩 로드 완료: {len(embeddings)}개 그룹")
+            logger.info("태그 임베딩 로드 완료: %s개 그룹", len(embeddings))
             return embeddings
 
         except Exception as e:
-            logger.error(f"태그 임베딩 로드 실패: {e}")
+            logger.error("태그 임베딩 로드 실패: %s", e)
             return None
 
     def get_or_compute(self) -> dict[str, np.ndarray]:

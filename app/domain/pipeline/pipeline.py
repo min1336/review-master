@@ -64,7 +64,7 @@ class BasePipeline(ABC):
                 self._session_factory = get_session_factory()
                 logger.info("DB 세션 팩토리 연결 완료")
             except Exception as e:
-                logger.warning(f"DB 세션 팩토리 획득 실패: {e}")
+                logger.warning("DB 세션 팩토리 획득 실패: %s", e)
                 raise
         return self._session_factory()
 
@@ -129,13 +129,13 @@ class BasePipeline(ABC):
         text_lower = text.lower()
         for pattern in LexiconConfig.PROFANITY_PATTERNS:
             if pattern in text_lower:
-                logger.debug(f"욕설 필터: {text[:30]}...")
+                logger.debug("욕설 필터: %s...", text[:30])
                 return None
 
         # 3. 광고 필터
         for pattern in LexiconConfig.AD_PATTERNS:
             if pattern in text_lower:
-                logger.debug(f"광고 필터: {text[:30]}...")
+                logger.debug("광고 필터: %s...", text[:30])
                 return None
 
         return review

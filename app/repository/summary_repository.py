@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
-from sqlalchemy import delete, func, or_, select, text, update
+from sqlalchemy import delete, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.timezone import utc_now
@@ -260,11 +260,11 @@ class SummaryRepository(BaseRepository[Summary]):
             row = result.mappings().one_or_none()
 
             if row:
-                logger.info(f"요약 히스토리 저장: branch_id={branch_id}, by={generated_by}")
+                logger.info("요약 히스토리 저장: branch_id=%s, by=%s", branch_id, generated_by)
                 return dict(row)
             return None
         except Exception as e:
-            logger.error(f"요약 히스토리 저장 실패: {e}")
+            logger.error("요약 히스토리 저장 실패: %s", e)
             return None
 
     async def get_history(
@@ -283,7 +283,7 @@ class SummaryRepository(BaseRepository[Summary]):
             result = await self._session.execute(stmt)
             return [self._to_dict(row) for row in result.scalars().all()]
         except Exception as e:
-            logger.error(f"요약 히스토리 조회 실패: {e}")
+            logger.error("요약 히스토리 조회 실패: %s", e)
             return []
 
     # ============================================================
@@ -304,7 +304,7 @@ class SummaryRepository(BaseRepository[Summary]):
             result = await self._session.execute(stmt)
             return [self._to_pydantic(row) for row in result.scalars().all()]
         except Exception as e:
-            logger.error(f"Pending 요약 조회 실패: {e}")
+            logger.error("Pending 요약 조회 실패: %s", e)
             return []
 
     async def set_pending_summary(
@@ -327,11 +327,11 @@ class SummaryRepository(BaseRepository[Summary]):
             row = result.mappings().one_or_none()
 
             if row:
-                logger.info(f"Pending 요약 설정: branch_id={branch_id}")
+                logger.info("Pending 요약 설정: branch_id=%s", branch_id)
                 return self.model(**row)
             return None
         except Exception as e:
-            logger.error(f"Pending 요약 설정 실패: {e}")
+            logger.error("Pending 요약 설정 실패: %s", e)
             return None
 
     async def approve_pending_summary(self, branch_id: int) -> Summary | None:
@@ -340,7 +340,7 @@ class SummaryRepository(BaseRepository[Summary]):
             # 현재 pending_summaries 조회
             current = await self.get_by_branch_id(branch_id)
             if not current or not current.pending_summaries:
-                logger.warning(f"승인할 pending 요약 없음: branch_id={branch_id}")
+                logger.warning("승인할 pending 요약 없음: branch_id=%s", branch_id)
                 return None
 
             pending = current.pending_summaries
@@ -380,11 +380,11 @@ class SummaryRepository(BaseRepository[Summary]):
             row = result.mappings().one_or_none()
 
             if row:
-                logger.info(f"Pending 요약 승인 완료: branch_id={branch_id}")
+                logger.info("Pending 요약 승인 완료: branch_id=%s", branch_id)
                 return self.model(**row)
             return None
         except Exception as e:
-            logger.error(f"Pending 요약 승인 실패: {e}")
+            logger.error("Pending 요약 승인 실패: %s", e)
             return None
 
     async def reject_pending_summary(self, branch_id: int) -> Summary | None:
@@ -403,9 +403,9 @@ class SummaryRepository(BaseRepository[Summary]):
             row = result.mappings().one_or_none()
 
             if row:
-                logger.info(f"Pending 요약 거부: branch_id={branch_id}")
+                logger.info("Pending 요약 거부: branch_id=%s", branch_id)
                 return self.model(**row)
             return None
         except Exception as e:
-            logger.error(f"Pending 요약 거부 실패: {e}")
+            logger.error("Pending 요약 거부 실패: %s", e)
             return None

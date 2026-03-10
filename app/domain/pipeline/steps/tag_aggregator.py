@@ -83,7 +83,7 @@ class TagAggregator:
                     if row.category_id is None:
                         null_category_tags.add(row.name)
             except Exception as e:
-                logger.warning(f"tags 배치 조회 실패: {e}")
+                logger.warning("tags 배치 조회 실패: %s", e)
                 null_category_tags = set()
 
             # 캐시에 없는 태그 + category_id가 NULL인 기존 태그 → upsert 대상
@@ -120,7 +120,7 @@ class TagAggregator:
                     for cat_row in cat_result.all():
                         category_name_to_id[cat_row.name] = cat_row.id
                 except Exception as e:
-                    logger.warning(f"categories 조회 실패: {e}")
+                    logger.warning("categories 조회 실패: %s", e)
 
             GROUP_TO_TAG_TYPE = {"affiliate": "company", "vehicle": "vehicle"}
 
@@ -155,7 +155,7 @@ class TagAggregator:
                     if row is not None:
                         tag_id_cache[tag_name] = row
                 except Exception as e:
-                    logger.warning(f"태그 upsert 실패 (tag={tag_name}): {e}")
+                    logger.warning("태그 upsert 실패 (tag=%s): %s", tag_name, e)
                     continue
 
         # 3. keyword_mappings 배치 upsert
@@ -180,7 +180,7 @@ class TagAggregator:
                 )
                 await session.execute(stmt)
             except Exception as e:
-                logger.warning(f"keyword_mappings 배치 upsert 실패: {e}")
+                logger.warning("keyword_mappings 배치 upsert 실패: %s", e)
 
         # 4. branch_tags 배치 upsert (SQL-level increment — SELECT 불필요)
         bt_tbl = BranchTagORM.__table__

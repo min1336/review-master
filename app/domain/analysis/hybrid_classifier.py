@@ -120,7 +120,7 @@ class HybridClassifier:
             return True
 
         try:
-            logger.info(f"임베딩 모델 로딩 중: {self.model_name}")
+            logger.info("임베딩 모델 로딩 중: %s", self.model_name)
 
             from fastembed import TextEmbedding
 
@@ -145,11 +145,11 @@ class HybridClassifier:
             return True
 
         except ImportError as e:
-            logger.error(f"fastembed 패키지가 필요합니다: {e}")
+            logger.error("fastembed 패키지가 필요합니다: %s", e)
             return False
 
         except Exception as e:
-            logger.error(f"초기화 실패: {e}")
+            logger.error("초기화 실패: %s", e)
             return False
 
     def _ensure_initialized(self):
@@ -484,7 +484,3 @@ class HybridClassifier:
             return self._tag_manager.get_tag_color(tag_name)
         return "#6b7280"
 
-    @property
-    def is_initialized(self) -> bool:
-        """초기화 여부"""
-        return self._initialized

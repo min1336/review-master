@@ -43,7 +43,7 @@ class ReviewTagMapper:
             for row in result.all():
                 tag_id_cache[row.name] = row.id
         except Exception as e:
-            logger.warning(f"tags 배치 조회 실패: {e}")
+            logger.warning("tags 배치 조회 실패: %s", e)
             return 0
 
         # 2. 매핑 행 생성
@@ -94,7 +94,7 @@ class ReviewTagMapper:
                 await session.execute(stmt)
                 saved += len(batch)
             except Exception as e:
-                logger.warning(f"review_tag_mappings upsert 실패 (batch {i}): {e}")
+                logger.warning("review_tag_mappings upsert 실패 (batch %s): %s", i, e)
 
-        logger.info(f"review_tag_mappings 저장 완료: {saved}건")
+        logger.info("review_tag_mappings 저장 완료: %s건", saved)
         return saved
