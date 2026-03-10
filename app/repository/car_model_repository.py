@@ -10,7 +10,6 @@ import logging
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from .orm_models import (
     BranchCarModelORM,
@@ -29,64 +28,54 @@ class CarModelRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def _get_branch_car_model_ids(
-        self, branch_id: int, car_model_name: str | None = None,
-    ) -> tuple[dict[int, str], dict[str, int]]:
-        """branch_car_models + car_models_master에서 지점 차량 조회
-
-        Returns:
-            (id_to_name, name_to_id) 매핑 튜플
-        """
-        stmt = (
-            select(BranchCarModelORM)
-            .options(selectinload(BranchCarModelORM.car_model))
-            .where(BranchCarModelORM.branch_id == branch_id)
-        )
-        result = await self._session.execute(stmt)
-        rows = result.scalars().all()
-
-        id_to_name: dict[int, str] = {}
-        name_to_id: dict[str, int] = {}
-        for row in rows:
-            master = row.car_model
-            if not master:
-                continue
-            mid = master.id
-            name = master.model_name or ""
-            if mid and name:
-                if car_model_name and name != car_model_name:
-                    continue
-                id_to_name[mid] = name
-                name_to_id[name] = mid
-
-        return id_to_name, name_to_id
-
-    async def _fetch_tag_stats_rows(
+    async def _fetch_joined_stats(
         self,
-        car_model_ids: list[int],
-        batch_size: int = 100,
+        branch_id: int,
+        car_model_name: str | None = None,
         period_from: str | None = None,
         period_to: str | None = None,
-    ) -> list[MonthlyCarModelTagStatsORM]:
-        """monthly_car_model_tag_stats에서 태그 통계 행 일괄 조회
+    ) -> list:
+        """branch_car_models → car_models_master → monthly_car_model_tag_stats → tags → categories
+        를 단일 JOIN 쿼리로 조회.
 
-        Args:
-            period_from: 시작 기간 (YYYY-MM). None이면 제한 없음.
-            period_to: 종료 기간 (YYYY-MM). None이면 제한 없음.
+        Returns:
+            Row 목록. 각 Row: car_model_id, model_name, tag_id, tag_name,
+            category_name, period, positive_count, negative_count, neutral_count
         """
-        all_rows: list[MonthlyCarModelTagStatsORM] = []
-        for i in range(0, len(car_model_ids), batch_size):
-            batch_ids = car_model_ids[i : i + batch_size]
-            conditions = [MonthlyCarModelTagStatsORM.car_model_id.in_(batch_ids)]
-            if period_from:
-                conditions.append(MonthlyCarModelTagStatsORM.period >= period_from)
-            if period_to:
-                conditions.append(MonthlyCarModelTagStatsORM.period <= period_to)
-            result = await self._session.execute(
-                select(MonthlyCarModelTagStatsORM).where(*conditions)
+        stmt = (
+            select(
+                CarModelsMasterORM.id.label("car_model_id"),
+                CarModelsMasterORM.model_name,
+                MonthlyCarModelTagStatsORM.tag_id,
+                MonthlyCarModelTagStatsORM.period,
+                MonthlyCarModelTagStatsORM.positive_count,
+                MonthlyCarModelTagStatsORM.negative_count,
+                MonthlyCarModelTagStatsORM.neutral_count,
+                TagORM.name.label("tag_name"),
+                CategoryORM.name.label("category_name"),
             )
-            all_rows.extend(result.scalars().all())
-        return all_rows
+            .join(
+                BranchCarModelORM,
+                BranchCarModelORM.car_model_id == CarModelsMasterORM.id,
+            )
+            .join(
+                MonthlyCarModelTagStatsORM,
+                MonthlyCarModelTagStatsORM.car_model_id == CarModelsMasterORM.id,
+            )
+            .join(TagORM, TagORM.id == MonthlyCarModelTagStatsORM.tag_id)
+            .outerjoin(CategoryORM, CategoryORM.id == TagORM.category_id)
+            .where(BranchCarModelORM.branch_id == branch_id)
+        )
+
+        if car_model_name:
+            stmt = stmt.where(CarModelsMasterORM.model_name == car_model_name)
+        if period_from:
+            stmt = stmt.where(MonthlyCarModelTagStatsORM.period >= period_from)
+        if period_to:
+            stmt = stmt.where(MonthlyCarModelTagStatsORM.period <= period_to)
+
+        result = await self._session.execute(stmt)
+        return result.all()
 
     async def get_car_model_tags(
         self, branch_id: int, car_model: str | None = None,
@@ -100,23 +89,22 @@ class CarModelRepository:
             [{car_model, tag_name, positive_count, negative_count,
               neutral_count, total_count}, ...]
         """
-        id_to_name, _ = await self._get_branch_car_model_ids(branch_id, car_model)
-        if not id_to_name:
+        rows = await self._fetch_joined_stats(branch_id, car_model_name=car_model)
+        if not rows:
             return []
-
-        car_model_ids = list(id_to_name.keys())
-        all_rows = await self._fetch_tag_stats_rows(car_model_ids)
-        if not all_rows:
-            return []
-
-        # tag_id → name 매핑
-        tag_ids = list({row.tag_id for row in all_rows})
-        tag_id_to_name = await self._get_tag_names(tag_ids)
 
         # (car_model_id, tag_id)별 집계 (전 기간 합산)
         agg: dict[tuple[int, int], dict] = {}
-        for row in all_rows:
-            key = (row.car_model_id, row.tag_id)
+        id_to_name: dict[int, str] = {}
+        tag_id_to_name: dict[int, str] = {}
+
+        for row in rows:
+            cm_id = row.car_model_id
+            tag_id = row.tag_id
+            id_to_name[cm_id] = row.model_name or ""
+            tag_id_to_name[tag_id] = row.tag_name or "기타"
+
+            key = (cm_id, tag_id)
             if key not in agg:
                 agg[key] = {"positive": 0, "negative": 0, "neutral": 0}
             agg[key]["positive"] += row.positive_count or 0
@@ -154,35 +142,35 @@ class CarModelRepository:
             {car_model: {"total_positive": N, "total_negative": N, "total_count": N,
              "tags": {tag_name: {"positive": N, "negative": N, "total": N, "category_name": str}}}}
         """
-        id_to_name, _ = await self._get_branch_car_model_ids(branch_id)
-        if not id_to_name:
-            return {}
-
-        car_model_ids = list(id_to_name.keys())
-        all_rows = await self._fetch_tag_stats_rows(
-            car_model_ids, period_from=period_from, period_to=period_to
+        rows = await self._fetch_joined_stats(
+            branch_id, period_from=period_from, period_to=period_to
         )
-        if not all_rows:
+        if not rows:
             return {}
 
-        # tag_id → (name, category_name) 매핑
-        tag_ids = list({row.tag_id for row in all_rows})
-        tag_info_map = await self._get_tag_info_with_category(tag_ids)
+        from domain.analysis.patterns import normalize_category_name
 
         # (car_model_id, tag_id)별 집계
         agg: dict[tuple[int, int], dict] = {}
-        for row in all_rows:
-            key = (row.car_model_id, row.tag_id)
+        meta: dict[tuple[int, int], tuple[str, str, str]] = {}  # → (model_name, tag_name, cat_name)
+
+        for row in rows:
+            cm_id = row.car_model_id
+            tag_id = row.tag_id
+            key = (cm_id, tag_id)
+
             if key not in agg:
                 agg[key] = {"positive": 0, "negative": 0, "neutral": 0}
+                cat_name = normalize_category_name(row.category_name) if row.category_name else ""
+                meta[key] = (row.model_name or "기타", row.tag_name or "기타", cat_name)
+
             agg[key]["positive"] += row.positive_count or 0
             agg[key]["negative"] += row.negative_count or 0
             agg[key]["neutral"] += row.neutral_count or 0
 
         car_data: dict[str, dict] = {}
         for (cm_id, tag_id), counts in agg.items():
-            car_model_name = id_to_name.get(cm_id, "기타")
-            tag_name, cat_name = tag_info_map.get(tag_id, ("기타", ""))
+            car_model_name, tag_name, cat_name = meta[(cm_id, tag_id)]
             total = counts["positive"] + counts["negative"] + counts["neutral"]
 
             if car_model_name not in car_data:
@@ -211,32 +199,30 @@ class CarModelRepository:
             {car_model: {"total_count": N, "total_positive": N, "total_negative": N,
              "tags": {tag_name: {"positive": N, "negative": N, "neutral": N, "total": N}}}}
         """
-        id_to_name, _ = await self._get_branch_car_model_ids(branch_id)
-        if not id_to_name:
+        rows = await self._fetch_joined_stats(branch_id)
+        if not rows:
             return {}
-
-        car_model_ids = list(id_to_name.keys())
-        all_rows = await self._fetch_tag_stats_rows(car_model_ids)
-        if not all_rows:
-            return {}
-
-        tag_ids = list({row.tag_id for row in all_rows})
-        tag_id_to_name = await self._get_tag_names(tag_ids)
 
         # (car_model_id, tag_id)별 집계
         agg: dict[tuple[int, int], dict] = {}
-        for row in all_rows:
-            key = (row.car_model_id, row.tag_id)
+        meta: dict[tuple[int, int], tuple[str, str]] = {}  # → (model_name, tag_name)
+
+        for row in rows:
+            cm_id = row.car_model_id
+            tag_id = row.tag_id
+            key = (cm_id, tag_id)
+
             if key not in agg:
                 agg[key] = {"positive": 0, "negative": 0, "neutral": 0}
+                meta[key] = (row.model_name or "기타", row.tag_name or "기타")
+
             agg[key]["positive"] += row.positive_count or 0
             agg[key]["negative"] += row.negative_count or 0
             agg[key]["neutral"] += row.neutral_count or 0
 
         car_data: dict[str, dict] = {}
         for (cm_id, tag_id), counts in agg.items():
-            car_model_name = id_to_name.get(cm_id, "기타")
-            tag_name = tag_id_to_name.get(tag_id, "기타")
+            car_model_name, tag_name = meta[(cm_id, tag_id)]
             total = counts["positive"] + counts["negative"] + counts["neutral"]
 
             if car_model_name not in car_data:
@@ -258,37 +244,3 @@ class CarModelRepository:
             }
 
         return car_data
-
-    # ------------------------------------------------------------------
-    # 내부 헬퍼
-    # ------------------------------------------------------------------
-
-    async def _get_tag_names(self, tag_ids: list[int]) -> dict[int, str]:
-        """tag_id → name 매핑"""
-        if not tag_ids:
-            return {}
-        result = await self._session.execute(
-            select(TagORM.id, TagORM.name).where(TagORM.id.in_(tag_ids))
-        )
-        return {row.id: row.name for row in result.all()}
-
-    async def _get_tag_info_with_category(
-        self, tag_ids: list[int],
-    ) -> dict[int, tuple[str, str]]:
-        """tag_id → (tag_name, category_name) 매핑"""
-        if not tag_ids:
-            return {}
-        result = await self._session.execute(
-            select(TagORM)
-            .options(selectinload(TagORM.category))
-            .where(TagORM.id.in_(tag_ids))
-        )
-        rows = result.scalars().all()
-
-        from domain.analysis.patterns import normalize_category_name
-
-        mapping: dict[int, tuple[str, str]] = {}
-        for row in rows:
-            cat_name = normalize_category_name(row.category.name) if row.category else ""
-            mapping[row.id] = (row.name, cat_name)
-        return mapping

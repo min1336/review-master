@@ -77,52 +77,49 @@ class BranchTagRepository(BaseRepository[BranchTag]):
         if not branch_ids:
             return {}
 
-        # 태그 이름 조회
-        tags_result = await self._session.execute(
-            select(TagORM.id, TagORM.name)
-        )
-        tag_names = {row.id: row.name for row in tags_result.all()}
-
-        # 지점별 태그 조회
-        stmt = (
+        # 쿼리 A: branch_tags JOIN tags — branch_ids 필터 + 태그 이름 동시 조회
+        stmt_a = (
             select(
                 BranchTagORM.branch_id,
                 BranchTagORM.tag_id,
                 BranchTagORM.count,
+                TagORM.name.label("tag_name"),
             )
+            .join(TagORM, BranchTagORM.tag_id == TagORM.id)
             .where(BranchTagORM.branch_id.in_(branch_ids))
             .where(BranchTagORM.period_type == period_type)
             .where(BranchTagORM.count > 0)
         )
-        result = await self._session.execute(stmt)
-        rows = result.all()
+        result_a = await self._session.execute(stmt_a)
+        rows = result_a.all()
 
         if not rows:
             return {str(bid): [] for bid in branch_ids}
 
-        # IDF 계산: 각 태그가 몇 개 업체에 등장하는지
+        # 쿼리 B: IDF 집계 + total_branches 스칼라 서브쿼리 통합
+        total_sq = (
+            select(func.count(BranchTagORM.branch_id.distinct()))
+            .where(BranchTagORM.period_type == period_type)
+            .where(BranchTagORM.count > 0)
+            .scalar_subquery()
+        )
         idf_stmt = (
             select(
                 BranchTagORM.tag_id,
                 func.count(BranchTagORM.branch_id.distinct()).label("bc"),
+                total_sq.label("total_branches"),
             )
             .where(BranchTagORM.period_type == period_type)
             .where(BranchTagORM.count > 0)
             .group_by(BranchTagORM.tag_id)
         )
         idf_result = await self._session.execute(idf_stmt)
-        tag_bc = {r.tag_id: r.bc for r in idf_result.all()}
+        idf_rows = idf_result.all()
 
-        total_branches_result = await self._session.execute(
-            select(func.count(BranchTagORM.branch_id.distinct()))
-            .where(BranchTagORM.period_type == period_type)
-            .where(BranchTagORM.count > 0)
-        )
-        total_branches = total_branches_result.scalar() or 1
-
+        total_branches = idf_rows[0].total_branches if idf_rows else 1
         idf = {
-            tid: math.log(total_branches / max(bc, 1)) + 1
-            for tid, bc in tag_bc.items()
+            r.tag_id: math.log(total_branches / max(r.bc, 1)) + 1
+            for r in idf_rows
         }
 
         # 업체별 태그 총합 (TF 정규화용)
@@ -136,7 +133,7 @@ class BranchTagRepository(BaseRepository[BranchTag]):
             tf = row.count / max(branch_totals[row.branch_id], 1)
             score = tf * idf.get(row.tag_id, 1.0)
             scored[str(row.branch_id)].append(
-                {"name": tag_names.get(row.tag_id, "unknown"), "count": row.count, "_score": score}
+                {"name": row.tag_name, "count": row.count, "_score": score}
             )
 
         # 업체별 TF-IDF 순으로 정렬 후 top_n 추출

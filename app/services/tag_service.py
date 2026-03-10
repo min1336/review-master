@@ -7,9 +7,13 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from core.cache import TTLCache
+
 if TYPE_CHECKING:
     from repository.branch_tag_repository import BranchTagRepository
     from repository.tag_repository import CategoryRepository, MappingRepository, TagRepository
+
+_tag_cache = TTLCache(300)
 
 def _get_classifier():
     from domain.analysis._singletons import get_hybrid_classifier
@@ -74,17 +78,21 @@ class TagService:
     async def create_tag(self, data: dict) -> dict | None:
         """태그 생성"""
         result = await self.tag_repo.create_dict(data)
+        _tag_cache.invalidate()
         return result.model_dump() if result else None
 
     async def update_tag(self, tag_id: int, data: dict) -> dict | None:
         """태그 수정"""
         data["updated_at"] = "now()"
         result = await self.tag_repo.update(tag_id, data)
+        _tag_cache.invalidate()
         return result.model_dump() if result else None
 
     async def delete_tag(self, tag_id: int) -> bool:
         """태그 삭제"""
-        return await self.tag_repo.delete(tag_id)
+        deleted = await self.tag_repo.delete(tag_id)
+        _tag_cache.invalidate()
+        return deleted
 
     # ============================================================
     # 지점별 태그
@@ -123,8 +131,14 @@ class TagService:
 
     async def get_categories(self, is_active: bool = True) -> list:
         """카테고리 목록"""
+        cache_key = f"categories:{is_active}"
+        cached = _tag_cache.get(cache_key)
+        if cached is not None:
+            return cached
         categories = await self._require_category_repo().get_all_active(is_active)
-        return [c.model_dump() for c in categories]
+        result = [c.model_dump() for c in categories]
+        _tag_cache.set(cache_key, result)
+        return result
 
     async def get_category(self, category_id: int) -> dict | None:
         """카테고리 상세"""
@@ -134,16 +148,20 @@ class TagService:
     async def create_category(self, data: dict) -> dict | None:
         """카테고리 생성"""
         result = await self._require_category_repo().create_dict(data)
+        _tag_cache.invalidate()
         return result.model_dump() if result else None
 
     async def update_category(self, category_id: int, data: dict) -> dict | None:
         """카테고리 수정"""
         result = await self._require_category_repo().update(category_id, data)
+        _tag_cache.invalidate()
         return result.model_dump() if result else None
 
     async def delete_category(self, category_id: int) -> bool:
         """카테고리 삭제"""
-        return await self._require_category_repo().delete_with_tags(category_id)
+        deleted = await self._require_category_repo().delete_with_tags(category_id)
+        _tag_cache.invalidate()
+        return deleted
 
     # ============================================================
     # 키워드 매핑

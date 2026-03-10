@@ -12,6 +12,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from core.cache import TTLCache
 from schemas.dto import (
     AnalysisReviewDTO,
     AnalysisReviewListDTO,
@@ -31,6 +32,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 1000
 FILTER_QUERY_LIMIT = 10000  # 필터 옵션 조회 시 최대 개수
+
+# 필터 옵션 캐시 (5분 TTL, 무효화 없음)
+# 지점/업체/지역 데이터는 동기화 시에만 변경되므로 5분 지연 허용
+_filter_cache = TTLCache(300)
 
 
 # ==============================================================================
@@ -91,6 +96,10 @@ class AnalysisService:
             FilterOptionsError: 필터 옵션 조회 실패 시
             DatabaseConnectionError: DB 연결 실패 시
         """
+        cached = _filter_cache.get("filter_options")
+        if cached is not None:
+            return cached
+
         try:
             # summaries를 한 번만 조회하여 재사용 (성능 최적화)
             summaries = await self.summary_repo.get_all_with_filters(
@@ -120,12 +129,14 @@ class AnalysisService:
                 g: sorted(groups[g]) for g in REGION_GROUP_ORDER if g in groups
             }
 
-            return FilterOptionsDTO(
+            result = FilterOptionsDTO(
                 regions=regions,
                 region_groups=region_groups,
                 companies=companies,
                 branches=branches,
             )
+            _filter_cache.set("filter_options", result)
+            return result
 
         except ConnectionError as e:
             logger.error("Database connection failed: %s", e)

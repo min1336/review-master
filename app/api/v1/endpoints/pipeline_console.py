@@ -5,8 +5,8 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-import threading
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -152,7 +152,7 @@ class ConfigUpdateRequest(BaseModel):
     model_config = {"extra": "allow"}
 
 
-_config_lock = threading.Lock()
+_config_lock = asyncio.Lock()
 
 
 @router.put("/config")
@@ -169,7 +169,7 @@ async def update_config(body: ConfigUpdateRequest) -> dict:
     updated: dict[str, dict[str, object]] = {}
     errors: list[str] = []
 
-    with _config_lock:
+    async with _config_lock:
         for group, fields in body.model_dump().items():
             if not isinstance(fields, dict):
                 continue

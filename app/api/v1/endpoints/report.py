@@ -55,26 +55,45 @@ async def api_batch_download_pdf(
     async def _build_zip() -> tuple[bytes, int]:
         buf = io.BytesIO()
         skipped: list[int] = []
-        pdf_count = 0
 
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for branch_id in req.branch_ids:
-                try:
-                    report = await service.get_saved_report(
-                        branch_id, parsed_start, parsed_end,
-                    )
-                    if report is None:
-                        skipped.append(branch_id)
-                        continue
-
-                    pdf_bytes = await service.generate_pdf(report)
-                    safe_name = re.sub(r'[\\/:*?"<>|]', '_', report.branch_name)
-                    filename = f"AI_Report_{safe_name}_{date_label}.pdf"
-                    zf.writestr(filename, pdf_bytes)
-                    pdf_count += 1
-                except Exception:
-                    logger.exception("Batch PDF: branch %d 처리 실패", branch_id)
+        # Phase 1: 리포트 조회 (순차 — 세션 공유)
+        branch_reports: list[tuple[int, Any]] = []
+        for branch_id in req.branch_ids:
+            try:
+                report = await service.get_saved_report(
+                    branch_id, parsed_start, parsed_end,
+                )
+                if report is None:
                     skipped.append(branch_id)
+                else:
+                    branch_reports.append((branch_id, report))
+            except Exception:
+                logger.exception("Batch PDF: branch %d 조회 실패", branch_id)
+                skipped.append(branch_id)
+
+        # Phase 2: PDF 생성 (병렬 — Semaphore(5))
+        sem = asyncio.Semaphore(5)
+
+        async def _gen_pdf(report: Any) -> bytes:
+            async with sem:
+                return await service.generate_pdf(report)
+
+        pdf_results = await asyncio.gather(
+            *[_gen_pdf(rpt) for _, rpt in branch_reports],
+            return_exceptions=True,
+        )
+
+        pdf_count = 0
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for (branch_id, report), pdf_result in zip(branch_reports, pdf_results):
+                if isinstance(pdf_result, Exception):
+                    logger.error("Batch PDF: branch %d PDF 생성 실패: %s", branch_id, pdf_result)
+                    skipped.append(branch_id)
+                    continue
+                safe_name = re.sub(r'[\\/:*?"<>|]', '_', report.branch_name)
+                filename = f"AI_Report_{safe_name}_{date_label}.pdf"
+                zf.writestr(filename, pdf_result)
+                pdf_count += 1
 
             if skipped:
                 skip_text = f"리포트 미생성 업체 ID: {', '.join(map(str, skipped))}\n"

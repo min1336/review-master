@@ -146,3 +146,92 @@ class SyncJobService(BaseJobService[SyncJobState, SyncJobStatusResponse]):
             result=state.result,
             created_at=state.created_at,
         )
+
+    async def submit_cleanup_job(self) -> SyncJobStatusResponse:
+        """비동기 ghost cleanup 작업 제출
+
+        동기화 작업과 상호 배제: 동시에 하나의 작업만 실행 가능.
+        """
+        active = self._find_active_job()
+        if active is not None:
+            elapsed = (utc_now() - active.last_activity_at).total_seconds()
+            task_dead = active.task is None or active.task.done()
+
+            if task_dead or elapsed > _JOB_STALE_TIMEOUT_SECONDS:
+                active.status = "failed"
+                if task_dead:
+                    active.error = "작업이 비정상 종료되었습니다"
+                else:
+                    active.error = f"작업 시간 초과 ({int(elapsed)}초)"
+                    if active.task:
+                        active.task.cancel()
+                logger.warning(
+                    "Stale job expired (cleanup submit): %s (elapsed=%.0fs, task_dead=%s)",
+                    active.job_id, elapsed, task_dead,
+                )
+            else:
+                return self._to_response(active)
+
+        self._prune_old_jobs()
+
+        job_id = self._generate_job_id()
+        state = SyncJobState(job_id=job_id)
+        self._jobs[job_id] = state
+
+        task = asyncio.create_task(self._run_cleanup_job(state))
+        state.task = task
+
+        return self._to_response(state)
+
+    async def _run_cleanup_job(self, state: SyncJobState) -> None:
+        """백그라운드에서 ghost cleanup 실행"""
+        state.status = "processing"
+        state.progress = 0
+        state.message = "Ghost review 정리 준비 중"
+        try:
+            async def progress_callback(progress: int, message: str) -> None:
+                state.progress = progress
+                state.message = message
+                state.last_activity_at = utc_now()
+
+            from core.container import ServiceContainer
+            from repository.database import get_session_factory
+            from repository.review_repository import BranchReviewRepository
+            from services.sync_service import SyncService
+
+            athena_client = ServiceContainer.get_athena_client()
+
+            factory = get_session_factory()
+            async with factory() as session:
+                try:
+                    review_repo = BranchReviewRepository(session)
+                    sync_service = SyncService(review_repo, athena_client)
+
+                    deleted = await sync_service.cleanup_ghost_reviews(
+                        progress_callback=progress_callback,
+                    )
+                    await session.commit()
+                except Exception:
+                    await session.rollback()
+                    raise
+
+            state.status = "completed"
+            state.progress = 100
+            msg = f"Ghost review {deleted}개 삭제 완료" if deleted else "Ghost review 없음"
+            state.message = msg
+            state.result = SyncResultResponse(
+                success=True,
+                message=msg,
+                synced_count=deleted,
+            )
+            logger.info("Ghost cleanup 완료: %s, 삭제=%d", state.job_id, deleted)
+
+        except asyncio.CancelledError:
+            state.status = "failed"
+            state.error = "작업이 취소되었습니다"
+            logger.info("Ghost cleanup 취소됨: %s", state.job_id)
+        except Exception as e:
+            state.status = "failed"
+            state.error = str(e)
+            state.message = "Ghost review 정리 중 오류 발생"
+            logger.exception("Ghost cleanup 실패: %s", state.job_id)

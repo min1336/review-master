@@ -157,19 +157,25 @@ class TagRepository(BaseRepository[Tag]):
         return Tag(**row)
 
     async def get_groups(self) -> list[dict]:
-        """고유 그룹 목록"""
-        tags = await self.get_all_with_filters()
-        groups: dict[str, dict] = {}
-        for tag in tags:
-            gname = tag.group_name or "기타"
-            if gname not in groups:
-                groups[gname] = {
-                    "group_name": gname,
-                    "color": tag.color or "#667eea",
-                    "count": 0,
-                }
-            groups[gname]["count"] += 1
-        return list(groups.values())
+        """고유 그룹 목록 (DB 집계)"""
+        stmt = (
+            select(
+                func.coalesce(TagORM.group_name, "기타").label("gname"),
+                func.min(TagORM.color).label("color"),
+                func.count().label("cnt"),
+            )
+            .where(TagORM.is_active == True)
+            .group_by(func.coalesce(TagORM.group_name, "기타"))
+        )
+        result = await self._session.execute(stmt)
+        return [
+            {
+                "group_name": row.gname,
+                "color": row.color or "#667eea",
+                "count": row.cnt,
+            }
+            for row in result.all()
+        ]
 
 
 class CategoryRepository(BaseRepository[Category]):
@@ -281,36 +287,23 @@ class MappingRepository(BaseRepository[KeywordMapping]):
         return result.rowcount > 0
 
     async def get_unmapped_keywords(self, limit: int = 100) -> list[dict]:
-        """매핑되지 않은 키워드 목록 (배치 최적화)"""
-        from collections import Counter
-
-        # 모든 키워드와 카운트를 한 번에 조회
-        all_kw_result = await self._session.execute(
-            select(BranchKeywordORM.keyword)
+        """매핑되지 않은 키워드 목록 (단일 쿼리 최적화)"""
+        mapped_subq = select(KeywordMappingORM.keyword)
+        stmt = (
+            select(
+                BranchKeywordORM.keyword,
+                func.sum(BranchKeywordORM.count).label("total_count"),
+            )
+            .where(BranchKeywordORM.keyword.notin_(mapped_subq))
+            .group_by(BranchKeywordORM.keyword)
+            .order_by(func.sum(BranchKeywordORM.count).desc())
+            .limit(limit)
         )
-        all_keywords = all_kw_result.scalars().all()
-        if not all_keywords:
-            return []
-
-        # 키워드별 카운트 계산 (메모리에서)
-        keyword_counts = Counter(all_keywords)
-
-        # 매핑된 키워드 조회
-        mapped_result = await self._session.execute(
-            select(KeywordMappingORM.keyword)
-        )
-        mapped_keywords = set(mapped_result.scalars().all())
-
-        # 매핑되지 않은 키워드만 필터링하고 카운트 기준 정렬
-        unmapped_with_counts = [
-            {"keyword": kw, "count": count}
-            for kw, count in keyword_counts.items()
-            if kw not in mapped_keywords
+        result = await self._session.execute(stmt)
+        return [
+            {"keyword": row.keyword, "count": int(row.total_count)}
+            for row in result.all()
         ]
-
-        # 카운트 기준 내림차순 정렬 후 limit 적용
-        unmapped_with_counts.sort(key=lambda x: x["count"], reverse=True)
-        return unmapped_with_counts[:limit]
 
     async def bulk_create(self, mappings: list[dict]) -> int:
         """일괄 생성"""

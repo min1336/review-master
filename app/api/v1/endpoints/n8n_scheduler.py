@@ -6,6 +6,7 @@ n8n REST API(/api/v1/workflows)를 호출하여 워크플로의
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any
@@ -189,45 +190,50 @@ def _validate_workflow_id(workflow_id: str) -> None:
 @router.get("/workflows", response_model=ApiResponseModel[list])
 async def list_scheduler_workflows() -> dict[str, Any]:
     """관리 대상 워크플로 목록 + 현재 스케줄 조회"""
-    results: list[dict[str, Any]] = []
+
+    async def _fetch_workflow(
+        client: httpx.AsyncClient, wf_id: str, meta: dict[str, str]
+    ) -> dict[str, Any]:
+        try:
+            resp = await client.get(
+                f"{N8N_BASE}/api/v1/workflows/{wf_id}",
+                headers=_api_headers(),
+            )
+            resp.raise_for_status()
+            wf = resp.json()
+            cron_expr = _extract_cron(wf)
+            return {
+                "id": wf_id,
+                "name": wf.get("name", meta["name"]),
+                "description": meta["desc"],
+                "active": wf.get("active", False),
+                "cron_expression": cron_expr,
+                "cron_description": (
+                    _describe_cron(cron_expr) if cron_expr else "스케줄 없음"
+                ),
+                "next_runs": _next_runs(cron_expr) if cron_expr else [],
+                "updated_at": wf.get("updatedAt", ""),
+            }
+        except httpx.HTTPError as e:
+            logger.error("n8n workflow fetch failed %s: %s", wf_id, e)
+            return {
+                "id": wf_id,
+                "name": meta["name"],
+                "description": meta["desc"],
+                "active": None,
+                "cron_expression": "",
+                "cron_description": "조회 실패",
+                "next_runs": [],
+                "updated_at": "",
+                "error": str(e),
+            }
 
     async with httpx.AsyncClient(timeout=N8N_API_TIMEOUT) as client:
-        for wf_id, meta in MANAGED_WORKFLOWS.items():
-            try:
-                resp = await client.get(
-                    f"{N8N_BASE}/api/v1/workflows/{wf_id}",
-                    headers=_api_headers(),
-                )
-                resp.raise_for_status()
-                wf = resp.json()
-                cron_expr = _extract_cron(wf)
-                results.append({
-                    "id": wf_id,
-                    "name": wf.get("name", meta["name"]),
-                    "description": meta["desc"],
-                    "active": wf.get("active", False),
-                    "cron_expression": cron_expr,
-                    "cron_description": (
-                        _describe_cron(cron_expr) if cron_expr else "스케줄 없음"
-                    ),
-                    "next_runs": _next_runs(cron_expr) if cron_expr else [],
-                    "updated_at": wf.get("updatedAt", ""),
-                })
-            except httpx.HTTPError as e:
-                logger.error("n8n workflow fetch failed %s: %s", wf_id, e)
-                results.append({
-                    "id": wf_id,
-                    "name": meta["name"],
-                    "description": meta["desc"],
-                    "active": None,
-                    "cron_expression": "",
-                    "cron_description": "조회 실패",
-                    "next_runs": [],
-                    "updated_at": "",
-                    "error": str(e),
-                })
+        results = await asyncio.gather(
+            *[_fetch_workflow(client, wf_id, meta) for wf_id, meta in MANAGED_WORKFLOWS.items()]
+        )
 
-    return api_response(results)
+    return api_response(list(results))
 
 
 @router.post("/schedule", response_model=ApiResponseModel[dict])
