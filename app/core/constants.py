@@ -14,7 +14,7 @@ LIGHTWEIGHT_MODE = os.getenv("LIGHTWEIGHT_MODE", "false").lower() in ("true", "1
 
 # -- 임베딩 / 분류 --
 EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-SIMILARITY_THRESHOLD = 0.35
+SIMILARITY_THRESHOLD = 0.50
 CONTEXT_WINDOW_SIZE = 50
 
 # -- 평점 임계값 --
