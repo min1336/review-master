@@ -1210,6 +1210,12 @@
             select.value = '';
             updateRegionSelect();
             updateBranchSelect();
+
+            // 지역 선택 후 업체·지점 드롭다운 자동 열기
+            if (selectedSimplified.length > 0) {
+                document.getElementById('branchSearchInput').value = '';
+                openBranchDropdown();
+            }
         }
 
         // Render branch chips with "업체명 > 지점명" format (DOM API)
