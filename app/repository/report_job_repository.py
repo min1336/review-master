@@ -29,6 +29,10 @@ class ReportJobRepository:
     def __init__(self, session: AsyncSession):
         self._session = session
 
+    async def commit(self) -> None:
+        """현재 세션 커밋"""
+        await self._session.commit()
+
     @staticmethod
     def _to_dict(row: ReportJobORM) -> dict[str, Any]:
         return {c.key: getattr(row, c.key) for c in row.__table__.columns}
