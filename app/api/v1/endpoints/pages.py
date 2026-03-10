@@ -10,11 +10,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from core.config import get_settings
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-router = APIRouter(tags=["pages"])
+from .deps import require_page_auth
+
+router = APIRouter(tags=["pages"], dependencies=[Depends(require_page_auth)])
 settings = get_settings()
 
 # 템플릿 디렉토리 설정
@@ -33,7 +35,6 @@ def _page_context() -> dict:
         "base_path": settings.api_prefix.replace("/api", ""),
         "carmore_admin_url": settings.carmore_admin_url,
         "shared_utils_js": _shared_utils_js,
-        "internal_api_key": settings.internal_api_key.get_secret_value(),
     }
 
 

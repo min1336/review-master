@@ -62,11 +62,15 @@ async def _call_n8n(path: str) -> dict[str, Any]:
 _SLACK_BOT_BASE = "http://slack-bot:8080"
 
 
-@router.post("/webhook/jotform-cancellation")
+@router.post("/webhook/jotform-cancellation", dependencies=[Depends(require_internal_auth)])
 async def jotform_cancellation_proxy(request: Request) -> dict[str, Any]:
     """Jotform webhook → slack-bot 프록시. n8n 외부 경로 제약 우회용."""
     body = await request.body()
+    if len(body) > 1_000_000:
+        raise HTTPException(status_code=413, detail="페이로드가 너무 큽니다 (1MB 제한)")
     content_type = request.headers.get("content-type", "")
+    if content_type and "form" not in content_type and "json" not in content_type:
+        raise HTTPException(status_code=400, detail="지원하지 않는 Content-Type")
     client = _get_client()
     try:
         resp = await client.post(

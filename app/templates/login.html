@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review Summary AI</title>
+    <link rel="stylesheet" href="{{ base_path }}/static/css/shared-theme.css">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: var(--bg-primary);
+        }
+        .login-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 40px;
+            max-width: 380px;
+            width: 100%;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+        }
+        .login-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+        .login-subtitle {
+            color: var(--text-tertiary);
+            margin-bottom: 24px;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--border-primary);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+        }
+        .btn-login {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent-primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn-login:hover {
+            opacity: 0.9;
+        }
+        .error-msg {
+            background: #fef2f2;
+            color: #dc2626;
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 0.85rem;
+            border: 1px solid #fecaca;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="login-title">Review Summary AI</div>
+        <div class="login-subtitle">운영팀 모니터링 대시보드에 접근하려면 인증이 필요합니다.</div>
+        {% if error == 'invalid' %}
+        <div class="error-msg">인증 키가 올바르지 않습니다.</div>
+        {% elif error == 'not_configured' %}
+        <div class="error-msg">서버에 INTERNAL_API_KEY가 설정되지 않았습니다.</div>
+        {% elif error == 'expired' %}
+        <div class="error-msg">세션이 만료되었습니다. 다시 로그인해주세요.</div>
+        {% endif %}
+        <form method="POST" action="{{ base_path }}/login">
+            <div class="form-group">
+                <label for="api_key">Internal API Key</label>
+                <input type="password" id="api_key" name="api_key"
+                       placeholder="API 키를 입력하세요" required autofocus>
+            </div>
+            <input type="hidden" name="next_url" value="{{ next_url }}">
+            <button type="submit" class="btn-login">로그인</button>
+        </form>
+    </div>
+</body>
+</html>

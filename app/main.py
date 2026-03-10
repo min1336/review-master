@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 # 프로젝트 경로 설정
@@ -108,8 +108,8 @@ async def _close_http_clients():
         if _http_client is not None:
             await _http_client.aclose()
             logger.info("[Shutdown] httpx client closed")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[Shutdown] httpx client 종료 실패: %s", e)
 
 
 # ============================================================
@@ -123,17 +123,31 @@ app = FastAPI(
     default_response_class=TZAwareJSONResponse,
 )
 
-# CORS 미들웨어 (Public API 외부 도메인 호출 허용)
+# CORS 미들웨어
 # cors_origins 설정 시 해당 도메인만 허용 + credentials 활성화
-# 미설정(빈 리스트) 시 전체 허용 (credentials 비활성화 — 브라우저 스펙 준수)
-_cors_origins = settings.cors_origins or ["*"]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_credentials=_cors_origins != ["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# 미설정(빈 리스트) 시: 프로덕션은 same-origin만, 개발은 전체 허용
+_cors_origins = settings.cors_origins
+if not _cors_origins:
+    if settings.debug:
+        _cors_origins = ["*"]
+        logger.warning("[CORS] debug 모드 — 모든 origin 허용")
+    else:
+        _cors_origins = []
+        logger.info("[CORS] cors_origins 미설정 — same-origin만 허용")
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=_cors_origins != ["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+# 요청 추적 미들웨어 — 모든 요청에 X-Request-ID 부여 (로그 역추적용)
+# ※ 미들웨어 스택은 역순 실행: 마지막 add_middleware가 가장 먼저 실행됨
+from core.middleware import RequestTracingMiddleware
+
+app.add_middleware(RequestTracingMiddleware)
 
 
 # ============================================================
@@ -142,41 +156,63 @@ app.add_middleware(
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> TZAwareJSONResponse:
     """HTTPException을 통일된 Envelope 형식으로 변환"""
+    req_id = getattr(request.state, "request_id", "-")
     return TZAwareJSONResponse(
         status_code=exc.status_code,
-        content={"success": False, "error": exc.detail, "detail": exc.detail},
+        content={"success": False, "error": exc.detail, "detail": exc.detail, "request_id": req_id},
     )
 
 
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError) -> TZAwareJSONResponse:
     """ValueError를 400 Bad Request로 변환"""
+    req_id = getattr(request.state, "request_id", "-")
+    logger.warning("[%s] ValueError: %s", req_id, exc)
     return TZAwareJSONResponse(
         status_code=400,
-        content={"success": False, "error": "Bad Request", "detail": str(exc)},
+        content={"success": False, "error": "Bad Request", "detail": str(exc), "request_id": req_id},
     )
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> TZAwareJSONResponse:
-    """처리되지 않은 예외를 500 Internal Server Error로 변환"""
-    detail = str(exc) if settings.debug else "Internal server error"
+    """처리되지 않은 예외를 500 Internal Server Error로 변환 — 상세는 서버 로그에만 기록"""
+    req_id = getattr(request.state, "request_id", "-")
+    logger.exception("[%s] Unhandled %s", req_id, type(exc).__name__)
     return TZAwareJSONResponse(
         status_code=500,
-        content={"success": False, "error": "Internal Server Error", "detail": detail},
+        content={"success": False, "error": "Internal Server Error", "detail": "Internal server error", "request_id": req_id},
     )
+
+
+# PageAuthRequired — 미인증 페이지 접근 시 로그인으로 리다이렉트
+from api.v1.endpoints.auth import PageAuthRequired  # noqa: E402
+
+
+@app.exception_handler(PageAuthRequired)
+async def page_auth_redirect(request: Request, exc: PageAuthRequired) -> RedirectResponse:
+    base_path = settings.api_prefix.replace("/api", "")
+    next_path = f"{base_path}{exc.next_url}" if exc.next_url != "/" else ""
+    login_url = f"{base_path}/login"
+    if next_path:
+        login_url += f"?next={next_path}"
+    return RedirectResponse(url=login_url, status_code=303)
 
 
 # ============================================================
 # Routers
 # ============================================================
 from api.v1.api import api_router
+from api.v1.endpoints.auth import router as auth_router
 from api.v1.endpoints.pages import router as pages_router
 from api.v1.endpoints.public_summary import router as public_summary_router
 from api.v1.endpoints.public_report import router as public_report_router
 
 # API 라우터 (/api/*)
 app.include_router(api_router, prefix="/api")
+
+# 인증 라우터 (/login, /logout)
+app.include_router(auth_router)
 
 # Public API 라우터 - 외부 연동용 (구체적 경로를 먼저 등록)
 app.include_router(public_report_router, prefix="/public/report")  # AI 리포트 외부 제공

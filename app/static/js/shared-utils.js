@@ -115,16 +115,16 @@ function showToast(message, type, duration) {
 
 async function fetchRetry(url, options) {
     if (!options) options = {};
-    // 내부 API 인증 헤더 자동 첨부
-    if (window.__INTERNAL_API_KEY__) {
-        if (!options.headers) options.headers = {};
-        if (!options.headers['X-Internal-Key']) {
-            options.headers['X-Internal-Key'] = window.__INTERNAL_API_KEY__;
-        }
-    }
+    // 인증은 세션 쿠키(HttpOnly)로 자동 전송됨 — API 키를 JS에 노출하지 않음
     var maxRetries = 2;
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
         var response = await fetch(url, options);
+        if (response.status === 401) {
+            // 세션 만료 → 로그인 페이지로 리다이렉트
+            var basePath = window.__BASE_PATH__ || '';
+            window.location.href = basePath + '/login?error=expired&next=' + encodeURIComponent(window.location.pathname);
+            return response;
+        }
         if ((response.status === 502 || response.status === 503) && attempt < maxRetries) {
             await new Promise(function (r) { setTimeout(r, 300 * (attempt + 1)); });
             continue;
