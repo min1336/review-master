@@ -5,10 +5,11 @@
 from __future__ import annotations
 
 import logging
+import math
 from collections import defaultdict
 from datetime import datetime
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
 
@@ -68,7 +69,11 @@ class BranchTagRepository(BaseRepository[BranchTag]):
     async def get_batch_top_tags(
         self, branch_ids: list[int], period_type: str = "all", top_n: int = 3
     ) -> dict:
-        """여러 지점의 TOP N 태그 일괄 조회"""
+        """여러 지점의 TOP N 태그 일괄 조회 (TF-IDF 정규화 랭킹)
+
+        TF-IDF 가중치로 정렬하여 모든 업체에 공통인 태그(사고 처리 등)의
+        순위를 낮추고 업체별 특색 있는 태그를 상위로 올린다.
+        """
         if not branch_ids:
             return {}
 
@@ -87,20 +92,65 @@ class BranchTagRepository(BaseRepository[BranchTag]):
             )
             .where(BranchTagORM.branch_id.in_(branch_ids))
             .where(BranchTagORM.period_type == period_type)
-            .order_by(BranchTagORM.count.desc())
+            .where(BranchTagORM.count > 0)
         )
         result = await self._session.execute(stmt)
+        rows = result.all()
 
-        # 지점별 그룹화
-        branch_tags: dict[str, list] = defaultdict(list)
-        for row in result.all():
-            bid = str(row.branch_id)
-            if len(branch_tags[bid]) < top_n:
-                branch_tags[bid].append(
-                    {"name": tag_names.get(row.tag_id, "unknown"), "count": row.count}
-                )
+        if not rows:
+            return {str(bid): [] for bid in branch_ids}
 
-        return {str(bid): branch_tags.get(str(bid), []) for bid in branch_ids}
+        # IDF 계산: 각 태그가 몇 개 업체에 등장하는지
+        idf_stmt = (
+            select(
+                BranchTagORM.tag_id,
+                func.count(BranchTagORM.branch_id.distinct()).label("bc"),
+            )
+            .where(BranchTagORM.period_type == period_type)
+            .where(BranchTagORM.count > 0)
+            .group_by(BranchTagORM.tag_id)
+        )
+        idf_result = await self._session.execute(idf_stmt)
+        tag_bc = {r.tag_id: r.bc for r in idf_result.all()}
+
+        total_branches_result = await self._session.execute(
+            select(func.count(BranchTagORM.branch_id.distinct()))
+            .where(BranchTagORM.period_type == period_type)
+            .where(BranchTagORM.count > 0)
+        )
+        total_branches = total_branches_result.scalar() or 1
+
+        idf = {
+            tid: math.log(total_branches / max(bc, 1)) + 1
+            for tid, bc in tag_bc.items()
+        }
+
+        # 업체별 태그 총합 (TF 정규화용)
+        branch_totals: dict[int, int] = defaultdict(int)
+        for row in rows:
+            branch_totals[row.branch_id] += row.count
+
+        # TF-IDF 스코어 계산 및 정렬
+        scored: dict[str, list] = defaultdict(list)
+        for row in rows:
+            tf = row.count / max(branch_totals[row.branch_id], 1)
+            score = tf * idf.get(row.tag_id, 1.0)
+            scored[str(row.branch_id)].append(
+                {"name": tag_names.get(row.tag_id, "unknown"), "count": row.count, "_score": score}
+            )
+
+        # 업체별 TF-IDF 순으로 정렬 후 top_n 추출
+        result_dict: dict[str, list] = {}
+        for bid in branch_ids:
+            bid_str = str(bid)
+            tags = scored.get(bid_str, [])
+            tags.sort(key=lambda t: t["_score"], reverse=True)
+            result_dict[bid_str] = [
+                {"name": t["name"], "count": t["count"]}
+                for t in tags[:top_n]
+            ]
+
+        return result_dict
 
     async def upsert_branch_tags(
         self, branch_id: int, period_type: str, tags_data: list[dict]

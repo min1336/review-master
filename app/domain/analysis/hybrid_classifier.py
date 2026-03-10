@@ -64,10 +64,21 @@ class HybridClassifier:
     DEFAULT_THRESHOLD = SIMILARITY_THRESHOLD
 
     # 임베딩 분류에 부적합한 범용 키워드 (문맥 없이 카테고리 결정 불가)
+    # ABSA가 문맥 기반으로 이 키워드를 처리하므로, 규칙/임베딩 매칭에서 제외
     _GENERIC_KEYWORDS: set[str] = {
         "상태", "필요", "부분", "장소", "개선", "괜찮",
         "불편", "정도", "느낌", "전체", "전반",
+        # 고빈도 범용어 — 거의 모든 리뷰에 등장하여 태그 편향 유발
+        "처리", "해결", "서비스", "도움",
+        # 일반 품질 형용사 — 배달/픽업 외 다양한 문맥에서 사용
+        "간편", "간단", "복잡", "빠르게", "편하게", "쉽게",
+        "원활", "순조", "매끄럽", "수월", "절차",
+        # 과다 매칭 단어
+        "바로", "기다",
     }
+
+    # 리뷰 1건당 카테고리별 최대 키워드 수 (과다 기여 방지)
+    _MAX_KEYWORDS_PER_CATEGORY: int = 3
 
     def __init__(
         self,
@@ -432,7 +443,17 @@ class HybridClassifier:
         has_concession = bool(CONCESSION_REGEX.search(review))
 
         # 동일 카테고리 positive+negative 충돌 해소 (ABSA 후 임베딩 추가로 발생 가능)
-        return resolve_tag_conflicts(dict(result), has_concession)
+        resolved = resolve_tag_conflicts(dict(result), has_concession)
+
+        # 카테고리별 키워드 수 상한 적용 (한 리뷰가 특정 카테고리를 과다 부풀리는 것 방지)
+        cap = self._MAX_KEYWORDS_PER_CATEGORY
+        for cat, sentiments in resolved.items():
+            for sent_type in ("positive", "negative", "neutral"):
+                kws = sentiments.get(sent_type, [])
+                if len(kws) > cap:
+                    sentiments[sent_type] = kws[:cap]
+
+        return resolved
 
     def get_review_summary(self, review: str, keywords: list[str] = None) -> dict:
         """
