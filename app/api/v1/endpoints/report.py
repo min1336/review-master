@@ -34,17 +34,23 @@ router = APIRouter(tags=["report"])
 # ================================================================
 
 _batch_pdf_jobs: dict[str, dict[str, Any]] = {}
-_BATCH_PDF_MAX_JOBS = 10
 _BATCH_PDF_TTL = 600  # 10분
+_BATCH_PDF_ZIP_TTL = 120  # 완료 후 2분 내 미다운로드 시 zip_bytes 해제
 
 
 def _cleanup_stale_jobs() -> None:
-    """TTL 초과 작업 제거 (메모리 누수 방지)"""
+    """TTL 초과 작업 제거 + 완료된 작업의 zip_bytes 조기 해제"""
     now = time.monotonic()
     stale = [k for k, v in _batch_pdf_jobs.items()
              if now - v.get("created_at", 0) > _BATCH_PDF_TTL]
     for k in stale:
         _batch_pdf_jobs.pop(k, None)
+    # 완료 후 2분 경과한 작업의 zip_bytes 해제 (메모리 절약)
+    for v in _batch_pdf_jobs.values():
+        if (v["status"] in ("completed", "failed")
+                and v.get("zip_bytes") is not None
+                and now - v.get("created_at", 0) > _BATCH_PDF_ZIP_TTL):
+            v["zip_bytes"] = None
 
 
 @router.post("/batch-pdf", status_code=202, response_model=ApiResponseModel[dict])
@@ -185,7 +191,7 @@ async def _run_batch_pdf_job(
             job["skipped"] = skipped
             return
 
-        # Phase 2: PDF 생성 (병렬, Semaphore(3))
+        # Phase 2: PDF 생성 (순차, Semaphore(1) — 1CPU/1024m 환경)
         pdf_gen = PDFGenerator()
         sem = asyncio.Semaphore(1)
         completed_count = 0
