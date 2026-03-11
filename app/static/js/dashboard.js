@@ -3541,9 +3541,9 @@
                     const batchJobId = batchResult.data?.job_id;
                     if (!batchJobId) throw new Error('batch-pdf job_id 없음');
 
-                    // 4단계: ZIP 생성 폴링 (최대 180초)
+                    // 4단계: ZIP 생성 폴링 (최대 300초)
                     let zipDone = false;
-                    for (let i = 0; i < 90; i++) {
+                    for (let i = 0; i < 150; i++) {
                         if (abortController.signal.aborted) throw new DOMException('Aborted', 'AbortError');
                         await new Promise(resolve => setTimeout(resolve, 2000));
 

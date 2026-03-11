@@ -187,7 +187,7 @@ async def _run_batch_pdf_job(
 
         # Phase 2: PDF 생성 (병렬, Semaphore(3))
         pdf_gen = PDFGenerator()
-        sem = asyncio.Semaphore(3)
+        sem = asyncio.Semaphore(2)
         completed_count = 0
 
         async def _gen_pdf(report: ReportData) -> bytes:
