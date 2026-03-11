@@ -388,47 +388,13 @@ async def require_internal_auth(
     request: Request,
     x_internal_key: str | None = Header(default=None, alias="X-Internal-Key"),
 ) -> None:
-    """내부 API 인증 — X-Internal-Key 헤더 또는 세션 쿠키
-
-    INTERNAL_API_KEY 미설정 시 인증을 건너뛰되 경고 로그를 남긴다.
-    """
-    from core.config import get_settings
-
-    settings = get_settings()
-    expected = settings.internal_api_key.get_secret_value()
-    if not expected:
-        return
-
-    # 1) X-Internal-Key 헤더 (n8n, 스크립트 등 프로그래밍 방식)
-    if x_internal_key and hmac.compare_digest(x_internal_key, expected):
-        return
-
-    # 2) 세션 쿠키 (브라우저 대시보드)
-    from api.v1.endpoints.auth import SESSION_COOKIE_NAME, validate_session
-
-    if validate_session(request.cookies.get(SESSION_COOKIE_NAME)):
-        return
-
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Internal API key required",
-    )
+    """내부 API 인증 — 비활성화됨"""
+    return
 
 
 async def require_page_auth(request: Request) -> None:
-    """페이지 접근 시 세션 쿠키 검증 — 미인증 시 로그인 페이지로 리다이렉트"""
-    from core.config import get_settings
-
-    settings = get_settings()
-    if not settings.internal_api_key.get_secret_value():
-        return
-
-    from api.v1.endpoints.auth import SESSION_COOKIE_NAME, PageAuthRequired, validate_session
-
-    if validate_session(request.cookies.get(SESSION_COOKIE_NAME)):
-        return
-
-    raise PageAuthRequired(next_url=request.url.path)
+    """페이지 접근 인증 — 비활성화됨"""
+    return
 
 
 async def require_public_api_key(
