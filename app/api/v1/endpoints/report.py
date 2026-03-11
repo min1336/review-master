@@ -10,11 +10,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 import uuid
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import Response
 from core.timezone import date_to_utc
 from schemas.common import ApiResponseModel, api_response, validate_date_range_d
@@ -34,6 +35,16 @@ router = APIRouter(tags=["report"])
 
 _batch_pdf_jobs: dict[str, dict[str, Any]] = {}
 _BATCH_PDF_MAX_JOBS = 10
+_BATCH_PDF_TTL = 600  # 10분
+
+
+def _cleanup_stale_jobs() -> None:
+    """TTL 초과 작업 제거 (메모리 누수 방지)"""
+    now = time.monotonic()
+    stale = [k for k, v in _batch_pdf_jobs.items()
+             if now - v.get("created_at", 0) > _BATCH_PDF_TTL]
+    for k in stale:
+        _batch_pdf_jobs.pop(k, None)
 
 
 @router.post("/batch-pdf", status_code=202, response_model=ApiResponseModel[dict])
@@ -48,12 +59,7 @@ async def api_batch_download_pdf(
     """
     validate_date_range_d(req.start_date, req.end_date)
 
-    # 오래된 작업 정리
-    if len(_batch_pdf_jobs) >= _BATCH_PDF_MAX_JOBS:
-        done = [k for k, v in _batch_pdf_jobs.items()
-                if v["status"] in ("completed", "failed")]
-        for k in done:
-            _batch_pdf_jobs.pop(k, None)
+    _cleanup_stale_jobs()
 
     job_id = uuid.uuid4().hex[:12]
     _batch_pdf_jobs[job_id] = {
@@ -65,6 +71,7 @@ async def api_batch_download_pdf(
         "skipped": [],
         "error": None,
         "filename": f"AI_Reports_{req.start_date}_{req.end_date}.zip",
+        "created_at": time.monotonic(),
     }
 
     asyncio.create_task(_run_batch_pdf_job(
@@ -75,7 +82,9 @@ async def api_batch_download_pdf(
 
 
 @router.get("/batch-pdf/job/{job_id}", response_model=ApiResponseModel[dict])
-async def api_batch_pdf_status(job_id: str) -> dict[str, Any]:
+async def api_batch_pdf_status(
+    job_id: str = Path(..., pattern=r"^[0-9a-f]{12}$"),
+) -> dict[str, Any]:
     """일괄 PDF 작업 상태 조회"""
     job = _batch_pdf_jobs.get(job_id)
     if not job:
@@ -92,7 +101,9 @@ async def api_batch_pdf_status(job_id: str) -> dict[str, Any]:
 
 
 @router.get("/batch-pdf/download/{job_id}")
-async def api_batch_pdf_download(job_id: str) -> Response:
+async def api_batch_pdf_download(
+    job_id: str = Path(..., pattern=r"^[0-9a-f]{12}$"),
+) -> Response:
     """완성된 ZIP 파일 다운로드"""
     import urllib.parse
 

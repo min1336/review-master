@@ -3250,11 +3250,18 @@
                 return Array.from(state.selectedBranches);
             }
 
+            const MAX_BATCH_SELECT = 5;
+
             function updateBranchSelection() {
                 const checkboxes = document.querySelectorAll('.branch-checkbox');
                 checkboxes.forEach(cb => {
                     const id = parseInt(cb.dataset.branchId);
                     if (cb.checked) {
+                        if (state.selectedBranches.size >= MAX_BATCH_SELECT && !state.selectedBranches.has(id)) {
+                            cb.checked = false;
+                            showToast(`최대 ${MAX_BATCH_SELECT}개까지 선택 가능합니다.`, 'error');
+                            return;
+                        }
                         state.selectedBranches.add(id);
                     } else {
                         state.selectedBranches.delete(id);
@@ -3276,15 +3283,28 @@
                 const selectAll = getElement('select-all-branch');
                 if (!selectAll) return;
                 const checkboxes = document.querySelectorAll('.branch-checkbox');
-                checkboxes.forEach(cb => {
-                    cb.checked = selectAll.checked;
-                    const id = parseInt(cb.dataset.branchId);
-                    if (selectAll.checked) {
-                        state.selectedBranches.add(id);
-                    } else {
-                        state.selectedBranches.delete(id);
+                if (selectAll.checked) {
+                    let count = 0;
+                    checkboxes.forEach(cb => {
+                        const id = parseInt(cb.dataset.branchId);
+                        if (count < MAX_BATCH_SELECT) {
+                            cb.checked = true;
+                            state.selectedBranches.add(id);
+                            count++;
+                        } else {
+                            cb.checked = false;
+                        }
+                    });
+                    if (checkboxes.length > MAX_BATCH_SELECT) {
+                        showToast(`최대 ${MAX_BATCH_SELECT}개까지 선택됩니다.`, 'info');
+                        selectAll.checked = false;
                     }
-                });
+                } else {
+                    checkboxes.forEach(cb => {
+                        cb.checked = false;
+                        state.selectedBranches.delete(parseInt(cb.dataset.branchId));
+                    });
+                }
                 updateBranchSelection();
             }
 
@@ -3326,11 +3346,21 @@
                 const modal = document.getElementById('batch-period-modal');
                 const countEl = document.getElementById('batch-period-count');
                 if (countEl) countEl.textContent = branchIds.length;
-                modal.classList.add('active');
 
                 const periodBtns = modal.querySelectorAll('.batch-period-btn');
                 const confirmBtn = document.getElementById('batch-confirm-btn');
+                const closeBtn = modal.querySelector('.modal-close');
+                const cancelBtn = document.getElementById('batch-cancel-btn');
                 let selectedPeriod = '1y';
+
+                // 모달 열 때 상태 초기화
+                selectPeriod('1y');
+                const startInput = document.getElementById('batch-start-date');
+                const endInput = document.getElementById('batch-end-date');
+                if (startInput) startInput.value = '';
+                if (endInput) endInput.value = '';
+
+                modal.classList.add('active');
 
                 function selectPeriod(period) {
                     selectedPeriod = period;
@@ -3362,6 +3392,8 @@
                     modal.classList.remove('active');
                     periodBtns.forEach(b => b.removeEventListener('click', onPeriodClick));
                     if (confirmBtn) confirmBtn.removeEventListener('click', onConfirm);
+                    if (closeBtn) closeBtn.removeEventListener('click', cleanup);
+                    if (cancelBtn) cancelBtn.removeEventListener('click', cleanup);
                 }
 
                 function onPeriodClick(e) {
@@ -3392,6 +3424,8 @@
 
                 periodBtns.forEach(b => b.addEventListener('click', onPeriodClick));
                 if (confirmBtn) confirmBtn.addEventListener('click', onConfirm);
+                if (closeBtn) closeBtn.addEventListener('click', cleanup);
+                if (cancelBtn) cancelBtn.addEventListener('click', cleanup);
             }
 
             async function _executeBatchPDF(branchIds, startDate, endDate) {
