@@ -10,8 +10,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import uuid
 from datetime import date
-
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -29,60 +29,175 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["report"])
 
 # ================================================================
-# 고정 경로 (Fixed-path routes) — path parameter 라우트보다 위에 배치
+# Batch PDF 비동기 작업 (인메모리)
 # ================================================================
 
+_batch_pdf_jobs: dict[str, dict[str, Any]] = {}
+_BATCH_PDF_MAX_JOBS = 10
 
-@router.post("/batch-pdf")
+
+@router.post("/batch-pdf", status_code=202, response_model=ApiResponseModel[dict])
 async def api_batch_download_pdf(
     req: BatchPdfRequest,
-    service: ReportService = Depends(get_report_service),
-) -> Response:
-    """선택된 업체들의 PDF를 ZIP으로 일괄 다운로드
+) -> dict[str, Any]:
+    """일괄 PDF ZIP 생성 — 비동기 작업 제출
 
-    캐시된 리포트만 포함하며, 미생성 업체는 skipped 목록으로 반환.
-    ZIP 내 각 PDF 파일명: AI_Report_{업체명}_{기간}.pdf
+    백그라운드에서 ZIP을 생성하여 504 타임아웃 방지.
+    GET /batch-pdf/job/{job_id}로 상태 폴링,
+    GET /batch-pdf/download/{job_id}로 완성된 ZIP 다운로드.
     """
-    import io
-    import zipfile
+    validate_date_range_d(req.start_date, req.end_date)
+
+    # 오래된 작업 정리
+    if len(_batch_pdf_jobs) >= _BATCH_PDF_MAX_JOBS:
+        done = [k for k, v in _batch_pdf_jobs.items()
+                if v["status"] in ("completed", "failed")]
+        for k in done:
+            _batch_pdf_jobs.pop(k, None)
+
+    job_id = uuid.uuid4().hex[:12]
+    _batch_pdf_jobs[job_id] = {
+        "status": "processing",
+        "progress": 0,
+        "message": "ZIP 생성 준비 중",
+        "zip_bytes": None,
+        "pdf_count": 0,
+        "skipped": [],
+        "error": None,
+        "filename": f"AI_Reports_{req.start_date}_{req.end_date}.zip",
+    }
+
+    asyncio.create_task(_run_batch_pdf_job(
+        job_id, list(req.branch_ids), req.start_date, req.end_date,
+    ))
+
+    return api_response({"job_id": job_id, "status": "processing"})
+
+
+@router.get("/batch-pdf/job/{job_id}", response_model=ApiResponseModel[dict])
+async def api_batch_pdf_status(job_id: str) -> dict[str, Any]:
+    """일괄 PDF 작업 상태 조회"""
+    job = _batch_pdf_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
+    return api_response({
+        "job_id": job_id,
+        "status": job["status"],
+        "progress": job["progress"],
+        "message": job["message"],
+        "pdf_count": job["pdf_count"],
+        "skipped": job["skipped"],
+        "error": job["error"],
+    })
+
+
+@router.get("/batch-pdf/download/{job_id}")
+async def api_batch_pdf_download(job_id: str) -> Response:
+    """완성된 ZIP 파일 다운로드"""
     import urllib.parse
 
-    validate_date_range_d(req.start_date, req.end_date)
-    parsed_start = date_to_utc(req.start_date)
-    parsed_end = date_to_utc(req.end_date, end_of_day=True)
-    date_label = f"{req.start_date}_{req.end_date}"
+    job = _batch_pdf_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
+    if job["status"] != "completed":
+        raise HTTPException(status_code=409, detail="아직 완료되지 않았습니다")
+    if not job["zip_bytes"]:
+        raise HTTPException(status_code=404, detail="ZIP 파일이 없습니다")
 
-    async def _build_zip() -> tuple[bytes, int]:
-        buf = io.BytesIO()
+    zip_bytes = job["zip_bytes"]
+    filename = job.get("filename", "AI_Reports.zip")
+    encoded = urllib.parse.quote(filename)
+
+    # 다운로드 후 메모리 정리
+    _batch_pdf_jobs.pop(job_id, None)
+
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
+
+
+async def _run_batch_pdf_job(
+    job_id: str,
+    branch_ids: list[int],
+    start_date: date,
+    end_date: date,
+) -> None:
+    """백그라운드에서 리포트 조회 → PDF 생성 → ZIP 패킹"""
+    import io
+    import json as _json
+    import zipfile
+
+    job = _batch_pdf_jobs.get(job_id)
+    if not job:
+        return
+
+    try:
+        from infrastructure.pdf.generator import PDFGenerator
+        from repository.database import get_session_factory
+        from repository.report_repository import ReportRepository
+        from schemas.report import ReportData
+
+        parsed_start = date_to_utc(start_date)
+        parsed_end = date_to_utc(end_date, end_of_day=True)
+        date_label = f"{start_date}_{end_date}"
         skipped: list[int] = []
 
-        # Phase 1: 리포트 조회 (순차 — 세션 공유)
-        branch_reports: list[tuple[int, Any]] = []
-        for branch_id in req.branch_ids:
-            try:
-                report = await service.get_saved_report(
-                    branch_id, parsed_start, parsed_end,
-                )
-                if report is None:
+        # Phase 1: 리포트 데이터 조회
+        job["message"] = "리포트 데이터 조회 중"
+        branch_reports: list[tuple[int, ReportData]] = []
+
+        factory = get_session_factory()
+        async with factory() as session:
+            repo = ReportRepository(session)
+            for i, branch_id in enumerate(branch_ids):
+                try:
+                    saved = await repo.get_by_branch_and_period(
+                        branch_id, parsed_start, parsed_end,
+                    )
+                    if not saved:
+                        skipped.append(branch_id)
+                        continue
+                    report_data = saved.get("report_data")
+                    if isinstance(report_data, str):
+                        report_data = _json.loads(report_data)
+                    branch_reports.append((branch_id, ReportData(**report_data)))
+                except Exception:
+                    logger.exception("Batch PDF: branch %d 조회 실패", branch_id)
                     skipped.append(branch_id)
-                else:
-                    branch_reports.append((branch_id, report))
-            except Exception:
-                logger.exception("Batch PDF: branch %d 조회 실패", branch_id)
-                skipped.append(branch_id)
+                job["progress"] = int((i + 1) / len(branch_ids) * 30)
 
-        # Phase 2: PDF 생성 (병렬 — Semaphore(5))
-        sem = asyncio.Semaphore(5)
+        if not branch_reports:
+            job["status"] = "failed"
+            job["error"] = "생성된 리포트가 없습니다"
+            job["skipped"] = skipped
+            return
 
-        async def _gen_pdf(report: Any) -> bytes:
+        # Phase 2: PDF 생성 (병렬, Semaphore(3))
+        pdf_gen = PDFGenerator()
+        sem = asyncio.Semaphore(3)
+        completed_count = 0
+
+        async def _gen_pdf(report: ReportData) -> bytes:
+            nonlocal completed_count
             async with sem:
-                return await service.generate_pdf(report)
+                result = await asyncio.to_thread(pdf_gen.generate_simple, report)
+                completed_count += 1
+                job["progress"] = 30 + int(completed_count / len(branch_reports) * 60)
+                job["message"] = f"PDF 생성 중 ({completed_count}/{len(branch_reports)})"
+                return result
 
         pdf_results = await asyncio.gather(
             *[_gen_pdf(rpt) for _, rpt in branch_reports],
             return_exceptions=True,
         )
 
+        # Phase 3: ZIP 패킹
+        job["message"] = "ZIP 파일 생성 중"
+        job["progress"] = 90
+
+        buf = io.BytesIO()
         pdf_count = 0
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             for (branch_id, report), pdf_result in zip(branch_reports, pdf_results):
@@ -91,8 +206,7 @@ async def api_batch_download_pdf(
                     skipped.append(branch_id)
                     continue
                 safe_name = re.sub(r'[\\/:*?"<>|]', '_', report.branch_name)
-                filename = f"AI_Report_{safe_name}_{date_label}.pdf"
-                zf.writestr(filename, pdf_result)
+                zf.writestr(f"AI_Report_{safe_name}_{date_label}.pdf", pdf_result)
                 pdf_count += 1
 
             if skipped:
@@ -100,31 +214,25 @@ async def api_batch_download_pdf(
                 skip_text += "해당 업체는 개별 리포트를 먼저 생성해주세요."
                 zf.writestr("_skipped.txt", skip_text)
 
-        return buf.getvalue(), pdf_count
+        if pdf_count == 0:
+            job["status"] = "failed"
+            job["error"] = "PDF 생성에 모두 실패했습니다"
+            job["skipped"] = skipped
+            return
 
-    try:
-        zip_bytes, pdf_count = await asyncio.wait_for(_build_zip(), timeout=120)
-    except asyncio.TimeoutError:
-        raise HTTPException(
-            status_code=504, detail="일괄 PDF 생성 시간 초과 (120초). 선택 수를 줄여주세요.",
-        )
+        job["status"] = "completed"
+        job["progress"] = 100
+        job["message"] = f"{pdf_count}개 PDF 생성 완료"
+        job["pdf_count"] = pdf_count
+        job["skipped"] = skipped
+        job["zip_bytes"] = buf.getvalue()
+        logger.info("Batch PDF 완료: job=%s, pdf_count=%d", job_id, pdf_count)
 
-    if pdf_count == 0:
-        raise HTTPException(
-            status_code=404,
-            detail="선택된 업체의 리포트가 모두 미생성 상태입니다. 개별 리포트를 먼저 생성해주세요.",
-        )
-
-    zip_filename = f"AI_Reports_{date_label}.zip"
-    encoded_filename = urllib.parse.quote(zip_filename)
-
-    return Response(
-        content=zip_bytes,
-        media_type="application/zip",
-        headers={
-            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
-        },
-    )
+    except Exception as e:
+        logger.exception("Batch PDF job 실패: %s", job_id)
+        job["status"] = "failed"
+        job["error"] = str(e)
+        job["message"] = "ZIP 생성 중 오류 발생"
 
 
 # ================================================================

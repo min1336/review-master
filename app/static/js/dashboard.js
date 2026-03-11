@@ -561,7 +561,7 @@
 
                 return `
                 <tr class="clickable-row" data-branch-id="${row.branch_id}" data-summary="${fullSummary}" style="vertical-align: middle; cursor: pointer; transition: background-color 0.2s;">
-                    <td style="text-align: center; padding: 4px;" onclick="event.stopPropagation();">
+                    <td style="text-align: center; padding: 4px;">
                         <input type="checkbox" class="branch-checkbox" data-branch-id="${row.branch_id}" onchange="window.dashboardHandlers.updateBranchSelection()" style="cursor: pointer; accent-color: var(--primary);">
                     </td>
                     <td style="text-align: center; color: var(--grey-3); font-size: 11px;">${toMetroRegion(row.region)}</td>
@@ -573,7 +573,7 @@
                             ${row.affiliate_name && row.branch_name ? `<span class="branch-name">${escapeHtml(row.branch_name)}</span>` : ''}
                         </div>
                     </td>
-                    <td class="summary-cell" style="font-size: 13px; color: var(--grey-3); line-height: 1.5;">${summaryPreview}</td>
+                    <td class="summary-cell" style="font-size: 13px; color: var(--grey-3); line-height: 1.5; cursor: pointer;">${summaryPreview}</td>
                     <td style="text-align: center; font-weight: 600; color: #f59e0b;">⭐ ${rating}</td>
                     <td style="text-align: center; font-weight: 600; font-size: 15px;">${row.review_count?.toLocaleString() || 0}</td>
                 </tr>
@@ -584,15 +584,25 @@
                 const rows = document.querySelectorAll('.clickable-row');
                 rows.forEach(row => {
                     row.addEventListener('click', function (e) {
-                        // Prevent row click if clicking on interactive elements
-                        if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.closest('button') || e.target.closest('a')) {
+                        if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.closest('a')) {
                             return;
                         }
 
                         const branchId = this.getAttribute('data-branch-id');
-                        if (branchId) {
+                        if (!branchId) return;
+
+                        // 요약 컬럼 클릭 → 상세 모달
+                        if (e.target.closest('.summary-cell')) {
                             window.dashboardHandlers.showDetail(parseInt(branchId));
+                            return;
                         }
+
+                        // 나머지 영역 클릭 → 체크박스 토글
+                        const cb = this.querySelector('.branch-checkbox');
+                        if (cb && e.target !== cb) {
+                            cb.checked = !cb.checked;
+                        }
+                        window.dashboardHandlers.updateBranchSelection();
                     });
 
                     // Add hover effect
@@ -961,7 +971,8 @@
                     // Batch PDF handlers
                     downloadBatchPDF,
                     updateBranchSelection,
-                    toggleSelectAllBranch
+                    toggleSelectAllBranch,
+                    clearBranchSelection
                 };
 
                 window.handleSort = handleSort;
@@ -3277,6 +3288,14 @@
                 updateBranchSelection();
             }
 
+            function clearBranchSelection() {
+                state.selectedBranches.clear();
+                document.querySelectorAll('.branch-checkbox').forEach(cb => { cb.checked = false; });
+                const selectAll = getElement('select-all-branch');
+                if (selectAll) selectAll.checked = false;
+                updateBranchSelection();
+            }
+
             function restoreBranchCheckboxes() {
                 const checkboxes = document.querySelectorAll('.branch-checkbox');
                 checkboxes.forEach(cb => {
@@ -3292,59 +3311,131 @@
                 if (countEl) countEl.textContent = state.selectedBranches.size;
             }
 
-            async function downloadBatchPDF() {
+            function downloadBatchPDF() {
                 const branchIds = getSelectedBranchIds();
                 if (branchIds.length === 0) {
                     showToast('업체를 선택해주세요.', 'error');
                     return;
                 }
-                if (branchIds.length > 30) {
-                    showToast('최대 30개까지 선택 가능합니다.', 'error');
+                if (branchIds.length > 5) {
+                    showToast('일괄 리포트는 최대 5개까지 선택 가능합니다.', 'error');
                     return;
                 }
 
-                const dateFilter = getDateFilter();
-                let startDate = dateFilter.from;
-                let endDate = dateFilter.to;
+                // 기간 선택 모달 표시
+                const modal = document.getElementById('batch-period-modal');
+                const countEl = document.getElementById('batch-period-count');
+                if (countEl) countEl.textContent = branchIds.length;
+                modal.classList.add('active');
 
-                if (!startDate || !endDate) {
-                    const today = new Date();
-                    const oneYearAgo = new Date(today);
-                    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-                    endDate = formatDateForAPI(today);
-                    startDate = formatDateForAPI(oneYearAgo);
+                const periodBtns = modal.querySelectorAll('.batch-period-btn');
+                const confirmBtn = document.getElementById('batch-confirm-btn');
+                let selectedPeriod = '1y';
+
+                function selectPeriod(period) {
+                    selectedPeriod = period;
+                    periodBtns.forEach(b => {
+                        const isActive = b.dataset.period === period;
+                        b.style.outline = isActive ? '2px solid var(--primary)' : 'none';
+                        b.style.outlineOffset = isActive ? '1px' : '0';
+                    });
+                    // 프리셋 선택 시 직접 입력 초기화
+                    const s = document.getElementById('batch-start-date');
+                    const e = document.getElementById('batch-end-date');
+                    if (s) s.value = '';
+                    if (e) e.value = '';
                 }
 
+                function calcDates(period) {
+                    const today = new Date();
+                    const endDate = formatDateForAPI(today);
+                    let start = new Date(today);
+                    if (period === '1m') start.setMonth(start.getMonth() - 1);
+                    else if (period === '3m') start.setMonth(start.getMonth() - 3);
+                    else if (period === '6m') start.setMonth(start.getMonth() - 6);
+                    else if (period === '1y') start.setFullYear(start.getFullYear() - 1);
+                    else start = new Date('2020-01-01');
+                    return { startDate: formatDateForAPI(start), endDate };
+                }
+
+                function cleanup() {
+                    modal.classList.remove('active');
+                    periodBtns.forEach(b => b.removeEventListener('click', onPeriodClick));
+                    if (confirmBtn) confirmBtn.removeEventListener('click', onConfirm);
+                }
+
+                function onPeriodClick(e) {
+                    selectPeriod(e.target.dataset.period);
+                }
+
+                function onConfirm() {
+                    const customStart = document.getElementById('batch-start-date').value;
+                    const customEnd = document.getElementById('batch-end-date').value;
+
+                    let startDate, endDate;
+                    if (customStart && customEnd) {
+                        if (customStart > customEnd) {
+                            showToast('시작일이 종료일보다 늦습니다.', 'error');
+                            return;
+                        }
+                        startDate = customStart;
+                        endDate = customEnd;
+                    } else {
+                        const dates = calcDates(selectedPeriod);
+                        startDate = dates.startDate;
+                        endDate = dates.endDate;
+                    }
+
+                    cleanup();
+                    _executeBatchPDF(branchIds, startDate, endDate);
+                }
+
+                periodBtns.forEach(b => b.addEventListener('click', onPeriodClick));
+                if (confirmBtn) confirmBtn.addEventListener('click', onConfirm);
+            }
+
+            async function _executeBatchPDF(branchIds, startDate, endDate) {
                 const btn = getElement('btn-batch-pdf');
                 const originalText = btn ? btn.textContent : '';
+                const abortController = new AbortController();
+                const onEsc = (e) => { if (e.key === 'Escape') abortController.abort(); };
+                document.addEventListener('keydown', onEsc);
+
                 if (btn) {
                     btn.disabled = true;
-                    btn.textContent = `리포트 생성 중... (0/${branchIds.length})`;
+                    btn.textContent = '리포트 생성 준비 중...';
                 }
 
                 try {
-                    // 1단계: 모든 업체에 비동기 생성 작업 제출
+                    // 1단계: 비동기 생성 작업 제출 (3개씩 동시)
                     const jobs = [];
-                    for (const branchId of branchIds) {
-                        try {
-                            const submitResponse = await fetchRetry(`${API_PREFIX}/reports/${branchId}/generate/async`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ start_date: startDate, end_date: endDate })
-                            });
+                    const concurrency = 3;
+                    for (let i = 0; i < branchIds.length; i += concurrency) {
+                        if (abortController.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+                        const chunk = branchIds.slice(i, i + concurrency);
+                        if (btn) btn.textContent = `작업 제출 중... (${i}/${branchIds.length})`;
 
-                            if (!submitResponse.ok) {
-                                const error = await submitResponse.json().catch(() => ({}));
-                                console.warn(`Branch ${branchId} 생성 요청 실패:`, error.detail);
-                                continue;
-                            }
+                        const results = await Promise.allSettled(
+                            chunk.map(async (branchId) => {
+                                const res = await fetchRetry(`${API_PREFIX}/reports/${branchId}/generate/async`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ start_date: startDate, end_date: endDate }),
+                                    signal: abortController.signal,
+                                });
+                                if (!res.ok) throw new Error(`Branch ${branchId} 실패`);
+                                const result = await res.json();
+                                if (result.success && result.data?.job_id) {
+                                    return { branchId, jobId: result.data.job_id };
+                                }
+                                throw new Error(`Branch ${branchId}: job_id 없음`);
+                            })
+                        );
 
-                            const submitResult = await submitResponse.json();
-                            if (submitResult.success && submitResult.data?.job_id) {
-                                jobs.push({ branchId, jobId: submitResult.data.job_id, done: false, failed: false });
+                        for (const r of results) {
+                            if (r.status === 'fulfilled') {
+                                jobs.push({ ...r.value, done: false, failed: false });
                             }
-                        } catch (e) {
-                            console.warn(`Branch ${branchId} 생성 요청 오류:`, e.message);
                         }
                     }
 
@@ -3352,11 +3443,14 @@
                         throw new Error('리포트 생성 요청에 모두 실패했습니다.');
                     }
 
+                    if (btn) btn.textContent = `리포트 생성 중... (0/${jobs.length})`;
+
                     // 2단계: 모든 작업 병렬 폴링 (최대 120초)
                     let pollCount = 0;
                     const maxPolls = CONFIG.POLLING.MAX_POLLS;
 
                     while (pollCount < maxPolls) {
+                        if (abortController.signal.aborted) throw new DOMException('Aborted', 'AbortError');
                         const pending = jobs.filter(j => !j.done && !j.failed);
                         if (pending.length === 0) break;
 
@@ -3364,29 +3458,24 @@
 
                         await Promise.allSettled(pending.map(async (job) => {
                             try {
-                                const statusResponse = await fetchRetry(
-                                    `${API_PREFIX}/reports/${job.branchId}/job/${job.jobId}`
+                                const res = await fetchRetry(
+                                    `${API_PREFIX}/reports/${job.branchId}/job/${job.jobId}`,
+                                    { signal: abortController.signal }
                                 );
-                                if (!statusResponse.ok) return;
-
-                                const statusResult = await statusResponse.json();
-                                const jobData = statusResult.data;
-
-                                if (jobData.status === 'completed') {
-                                    job.done = true;
-                                } else if (jobData.status === 'failed') {
+                                if (!res.ok) return;
+                                const result = await res.json();
+                                if (result.data.status === 'completed') job.done = true;
+                                else if (result.data.status === 'failed') {
                                     job.failed = true;
-                                    console.warn(`Branch ${job.branchId} 생성 실패:`, jobData.error_message);
+                                    console.warn(`Branch ${job.branchId} 생성 실패:`, result.data.error_message);
                                 }
                             } catch (e) {
-                                console.warn(`Branch ${job.branchId} 상태 조회 오류:`, e.message);
+                                if (e.name === 'AbortError') throw e;
                             }
                         }));
 
                         const doneCount = jobs.filter(j => j.done || j.failed).length;
-                        if (btn) {
-                            btn.textContent = `리포트 생성 중... (${doneCount}/${jobs.length})`;
-                        }
+                        if (btn) btn.textContent = `리포트 생성 중... (${doneCount}/${jobs.length})`;
                         pollCount++;
                     }
 
@@ -3395,26 +3484,60 @@
                         throw new Error('모든 리포트 생성에 실패했습니다. 잠시 후 다시 시도해주세요.');
                     }
 
-                    // 3단계: 생성 완료된 리포트 ZIP 다운로드
-                    if (btn) btn.textContent = 'PDF 다운로드 중...';
+                    // 3단계: 비동기 ZIP 생성 제출
+                    if (btn) btn.textContent = 'PDF 생성 중...';
 
-                    const completedBranchIds = completedJobs.map(j => j.branchId);
-                    const response = await fetchRetry(`${API_PREFIX}/reports/batch-pdf`, {
+                    const batchRes = await fetchRetry(`${API_PREFIX}/reports/batch-pdf`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            branch_ids: completedBranchIds,
+                            branch_ids: completedJobs.map(j => j.branchId),
                             start_date: startDate,
-                            end_date: endDate
-                        })
+                            end_date: endDate,
+                        }),
+                        signal: abortController.signal,
                     });
 
-                    if (!response.ok) {
-                        const errData = await response.json().catch(() => ({}));
-                        throw new Error(errData.detail || 'PDF 다운로드 실패');
+                    if (!batchRes.ok) {
+                        const errData = await batchRes.json().catch(() => ({}));
+                        throw new Error(errData.detail || 'PDF 생성 요청 실패');
                     }
 
-                    const blob = await response.blob();
+                    const batchResult = await batchRes.json();
+                    const batchJobId = batchResult.data?.job_id;
+                    if (!batchJobId) throw new Error('batch-pdf job_id 없음');
+
+                    // 4단계: ZIP 생성 폴링 (최대 180초)
+                    let zipDone = false;
+                    for (let i = 0; i < 90; i++) {
+                        if (abortController.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+
+                        const statusRes = await fetchRetry(
+                            `${API_PREFIX}/reports/batch-pdf/job/${batchJobId}`,
+                            { signal: abortController.signal }
+                        );
+                        if (!statusRes.ok) continue;
+
+                        const statusData = (await statusRes.json()).data;
+                        if (btn) btn.textContent = statusData.message || 'PDF 생성 중...';
+
+                        if (statusData.status === 'completed') { zipDone = true; break; }
+                        if (statusData.status === 'failed') throw new Error(statusData.error || 'PDF 생성 실패');
+                    }
+
+                    if (!zipDone) throw new Error('PDF 생성 시간 초과. 잠시 후 다시 시도해주세요.');
+
+                    // 5단계: ZIP 다운로드
+                    if (btn) btn.textContent = '다운로드 중...';
+
+                    const dlRes = await fetchRetry(
+                        `${API_PREFIX}/reports/batch-pdf/download/${batchJobId}`,
+                        { signal: abortController.signal }
+                    );
+                    if (!dlRes.ok) throw new Error('ZIP 다운로드 실패');
+
+                    const blob = await dlRes.blob();
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
@@ -3431,9 +3554,14 @@
                         showToast(`${completedJobs.length}개 업체 리포트 다운로드 완료`, 'success');
                     }
                 } catch (e) {
-                    console.error('Batch report error:', e);
-                    showToast(e.message || '일괄 리포트 생성에 실패했습니다.', 'error');
+                    if (e.name === 'AbortError') {
+                        showToast('일괄 다운로드가 취소되었습니다.', 'info');
+                    } else {
+                        console.error('Batch report error:', e);
+                        showToast(e.message || '일괄 리포트 생성에 실패했습니다.', 'error');
+                    }
                 } finally {
+                    document.removeEventListener('keydown', onEsc);
                     if (btn) {
                         btn.disabled = false;
                         btn.textContent = originalText;
