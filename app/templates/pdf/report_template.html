@@ -390,9 +390,6 @@
                     {% endif %}
                 </div>
             </div>
-            {% if report.affiliate_evaluation.ai_text %}
-            <div class="ai-text-box">{{ report.affiliate_evaluation.ai_text }}</div>
-            {% endif %}
         </div>
         {% endif %}
 
@@ -422,66 +419,10 @@
                     {% endif %}
                 </div>
             </div>
-            {% if report.vehicle_evaluation.ai_text %}
-            <div class="ai-text-box">{{ report.vehicle_evaluation.ai_text }}</div>
-            {% endif %}
         </div>
         {% endif %}
 
-        <!-- 4. 트렌드 비교 -->
-        {% if report.trend_comparison %}
-        <div class="section">
-            <div class="section-title">트렌드 비교</div>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-card-label">이전 기간</div>
-                    <div style="font-size:10pt;color:#374151;">{{ report.trend_comparison.previous_period }}</div>
-                    <div class="stat-card-detail">{{ report.trend_comparison.previous_total_reviews }}건</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-card-label">현재 기간</div>
-                    <div style="font-size:10pt;color:#374151;">{{ report.trend_comparison.current_period }}</div>
-                    <div class="stat-card-detail">{{ report.trend_comparison.current_total_reviews }}건</div>
-                </div>
-            </div>
-            <div class="stats-grid">
-                <div class="change-card {{ 'good' if report.trend_comparison.overall_positive_change >= 0 else 'bad' }}">
-                    <div class="change-label">긍정률 변화</div>
-                    <div class="change-value {{ 'good' if report.trend_comparison.overall_positive_change >= 0 else 'bad' }}">{{ '+' if report.trend_comparison.overall_positive_change >= 0 }}{{ report.trend_comparison.overall_positive_change }}%p</div>
-                </div>
-                <div class="change-card {{ 'good' if report.trend_comparison.overall_negative_change <= 0 else 'bad' }}">
-                    <div class="change-label">부정률 변화</div>
-                    <div class="change-value {{ 'good' if report.trend_comparison.overall_negative_change <= 0 else 'bad' }}">{{ '+' if report.trend_comparison.overall_negative_change >= 0 }}{{ report.trend_comparison.overall_negative_change }}%p</div>
-                </div>
-            </div>
-            {% if report.trend_comparison.category_trends %}
-            <table class="trend-table">
-                <thead>
-                    <tr>
-                        <th>카테고리</th>
-                        <th>이전</th>
-                        <th>현재</th>
-                        <th>변화</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for t in report.trend_comparison.category_trends %}
-                    <tr>
-                        <td>{{ t.category_name }}</td>
-                        <td>{{ t.previous_ratio }}%</td>
-                        <td>{{ t.current_ratio }}%</td>
-                        <td style="font-weight:600;color:{{ '#10b981' if t.direction == 'up' else '#ef4444' if t.direction == 'down' else '#6b7280' }};">
-                            {{ '▲' if t.direction == 'up' else '▼' if t.direction == 'down' else '―' }} {{ '+' if t.change >= 0 }}{{ t.change }}%p
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% endif %}
-        </div>
-        {% endif %}
-
-        <!-- 6. 벤치마크 -->
+        <!-- 벤치마크 -->
         {% if report.benchmark %}
         <div class="section">
             <div class="section-title">벤치마크</div>

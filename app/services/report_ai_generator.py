@@ -77,36 +77,7 @@ class ReportAIGenerator:
                 report_config=cfg,
             )
 
-        # 2. 업체 평가 텍스트 (기간 요약 텍스트를 전달하여 중복 방지)
-        if cfg.output.include_affiliate_eval:
-            affiliate_ai_text = await self._generate_evaluation_text(
-                branch_name=data["branch_name"],
-                tag_details=data.get("tag_details", []),
-                category_filter=AFFILIATE_CATEGORIES,
-                prompt_method="create_affiliate_evaluation_prompt",
-                top_positive=data.get("top_positive_tags", []),
-                top_negative=data.get("top_negative_tags", []),
-                sample_reviews=None,
-                label="업체",
-                report_config=cfg,
-                prior_texts=[period_summary] if period_summary else [],
-            )
-
-        # 3. 차량 평가 텍스트 (기간 요약 + 업체 평가 텍스트를 전달)
-        if cfg.output.include_vehicle_eval:
-            prior = [t for t in [period_summary, affiliate_ai_text] if t]
-            vehicle_ai_text = await self._generate_evaluation_text(
-                branch_name=data["branch_name"],
-                tag_details=data.get("tag_details", []),
-                category_filter=VEHICLE_CATEGORIES,
-                prompt_method="create_vehicle_evaluation_prompt",
-                top_positive=data.get("top_liked_vehicles", []),
-                top_negative=data.get("top_disliked_vehicles", []),
-                sample_reviews=sample_reviews,
-                label="차량",
-                report_config=cfg,
-                prior_texts=prior,
-            )
+        # 업체/차량 평가 AI 텍스트는 사용하지 않으므로 생성 스킵
 
         return {
             "period_summary": period_summary,

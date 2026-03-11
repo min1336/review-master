@@ -19,7 +19,7 @@ class ReportOutputConfig(BaseModel):
     include_period_summary: bool = True
     include_affiliate_eval: bool = True
     include_vehicle_eval: bool = True
-    include_trend_comparison: bool = True
+    include_trend_comparison: bool = False
     include_benchmark: bool = True
     include_priority_actions: bool = False
     summary_max_length: int = Field(300, ge=150, le=1000)

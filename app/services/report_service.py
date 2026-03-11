@@ -582,7 +582,7 @@ class ReportService:
             affiliate_eval = AffiliateEvaluation(
                 top_positive=tags.get("top_positive_tags", []),
                 top_negative=tags.get("top_negative_tags", []),
-                ai_text=ai.get("affiliate_ai_text", ""),
+                ai_text="",
             )
 
         vehicle_eval = None
@@ -590,7 +590,7 @@ class ReportService:
             vehicle_eval = VehicleEvaluation(
                 top_liked=top_liked,
                 top_disliked=top_disliked,
-                ai_text=ai.get("vehicle_ai_text", ""),
+                ai_text="",
             )
 
         report = ReportData(

@@ -211,8 +211,8 @@ class TestReportServiceDelegation:
         assert len(report.strengths_detail) == 1
         assert report.strengths_detail[0].category_name == "서비스"
         assert len(report.top_tags_detail) == 1
-        assert report.affiliate_evaluation.ai_text == "업체 평가 텍스트"
-        assert report.vehicle_evaluation.ai_text == "차량 평가 텍스트"
+        assert report.affiliate_evaluation.ai_text == ""
+        assert report.vehicle_evaluation.ai_text == ""
         mock_report_repo.save.assert_called_once()
 
     @pytest.mark.asyncio

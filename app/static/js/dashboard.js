@@ -1734,7 +1734,7 @@
                         include_period_summary: true,
                         include_affiliate_eval: true,
                         include_vehicle_eval: true,
-                        include_trend_comparison: true,
+                        include_trend_comparison: false,
                         include_benchmark: true,
                         include_priority_actions: false,
                         summary_max_length: 300,
@@ -1769,7 +1769,7 @@
                 reportState.config = {
                     output: {
                         include_period_summary: true, include_affiliate_eval: true,
-                        include_vehicle_eval: true, include_trend_comparison: true,
+                        include_vehicle_eval: true, include_trend_comparison: false,
                         include_benchmark: true, include_priority_actions: false,
                         summary_max_length: 300, eval_max_length: 150,
                     },
@@ -2242,7 +2242,6 @@
                 buildSettingsCheckbox(section, '기간 요약', 'output', 'include_period_summary');
                 buildSettingsCheckbox(section, '업체 평가', 'output', 'include_affiliate_eval');
                 buildSettingsCheckbox(section, '차량 평가', 'output', 'include_vehicle_eval');
-                buildSettingsCheckbox(section, '트렌드 비교', 'output', 'include_trend_comparison');
                 buildSettingsCheckbox(section, '벤치마크', 'output', 'include_benchmark');
                 buildSettingsSlider(section, '요약 분량', 'output', 'summary_max_length', 150, 1000, 50, '자');
                 buildSettingsSlider(section, '평가 분량', 'output', 'eval_max_length', 100, 400, 50, '자');
@@ -3015,9 +3014,6 @@
                         el('div', { className: 'report-section-title', textContent: '업체 평가' }),
                         el('div', { style: { display: 'flex', gap: '16px' } }, [affPosBox, affNegBox])
                     ]);
-                    if (aff.ai_text) {
-                        affSection.appendChild(el('div', { className: 'report-summary-box', style: { marginTop: '12px', borderLeftColor: '#6366f1' }, textContent: aff.ai_text }));
-                    }
                     body.appendChild(affSection);
                 }
 
@@ -3037,67 +3033,7 @@
                         el('div', { className: 'report-section-title', textContent: '차량 평가' }),
                         el('div', { style: { display: 'flex', gap: '16px' } }, [vehLikedBox, vehDislikedBox])
                     ]);
-                    if (veh.ai_text) {
-                        vehSection.appendChild(el('div', { className: 'report-summary-box', style: { marginTop: '12px', borderLeftColor: '#6366f1' }, textContent: veh.ai_text }));
-                    }
                     body.appendChild(vehSection);
-                }
-
-                // 섹션 4: 트렌드 비교
-                if (data.trend_comparison) {
-                    var tc = data.trend_comparison;
-                    var trendSection = el('div', { className: 'report-section' }, [
-                        el('div', { className: 'report-section-title', textContent: '트렌드 비교' }),
-                        el('div', { style: { display: 'flex', gap: '12px', marginBottom: '12px' } }, [
-                            el('div', { style: { flex: '1', background: 'var(--grey-8)', borderRadius: '8px', padding: '12px', textAlign: 'center' } }, [
-                                el('div', { style: { fontSize: '12px', color: 'var(--grey-5)', marginBottom: '4px' }, textContent: '이전 기간' }),
-                                el('div', { style: { fontSize: '13px', color: 'var(--grey-3)' }, textContent: tc.previous_period }),
-                                el('div', { style: { fontSize: '12px', color: 'var(--grey-5)', marginTop: '2px' }, textContent: tc.previous_total_reviews + '건' })
-                            ]),
-                            el('div', { style: { flex: '1', background: 'var(--grey-8)', borderRadius: '8px', padding: '12px', textAlign: 'center' } }, [
-                                el('div', { style: { fontSize: '12px', color: 'var(--grey-5)', marginBottom: '4px' }, textContent: '현재 기간' }),
-                                el('div', { style: { fontSize: '13px', color: 'var(--grey-3)' }, textContent: tc.current_period }),
-                                el('div', { style: { fontSize: '12px', color: 'var(--grey-5)', marginTop: '2px' }, textContent: tc.current_total_reviews + '건' })
-                            ])
-                        ]),
-                        el('div', { style: { display: 'flex', gap: '12px', marginBottom: '12px' } }, [
-                            el('div', { style: { flex: '1', background: tc.overall_positive_change >= 0 ? 'rgba(16,185,129,0.06)' : 'rgba(239,68,68,0.06)', border: '1px solid ' + (tc.overall_positive_change >= 0 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'), borderRadius: '8px', padding: '12px', textAlign: 'center' } }, [
-                                el('div', { style: { fontSize: '12px', color: 'var(--grey-5)' }, textContent: '긍정률 변화' }),
-                                el('div', { style: { fontSize: '18px', fontWeight: '700', color: tc.overall_positive_change >= 0 ? '#10b981' : '#ef4444' }, textContent: (tc.overall_positive_change >= 0 ? '+' : '') + tc.overall_positive_change + '%p' })
-                            ]),
-                            el('div', { style: { flex: '1', background: tc.overall_negative_change <= 0 ? 'rgba(16,185,129,0.06)' : 'rgba(239,68,68,0.06)', border: '1px solid ' + (tc.overall_negative_change <= 0 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'), borderRadius: '8px', padding: '12px', textAlign: 'center' } }, [
-                                el('div', { style: { fontSize: '12px', color: 'var(--grey-5)' }, textContent: '부정률 변화' }),
-                                el('div', { style: { fontSize: '18px', fontWeight: '700', color: tc.overall_negative_change <= 0 ? '#10b981' : '#ef4444' }, textContent: (tc.overall_negative_change >= 0 ? '+' : '') + tc.overall_negative_change + '%p' })
-                            ])
-                        ])
-                    ]);
-
-                    // 카테고리 트렌드 테이블
-                    var catTrends = tc.category_trends || [];
-                    if (catTrends.length > 0) {
-                        var thead = el('thead', {}, [
-                            el('tr', { style: { background: 'var(--grey-8)' } }, [
-                                el('th', { style: { padding: '8px 12px', textAlign: 'left', color: 'var(--grey-4)', fontWeight: '600' }, textContent: '카테고리' }),
-                                el('th', { style: { padding: '8px 12px', textAlign: 'center', color: 'var(--grey-4)', fontWeight: '600' }, textContent: '이전' }),
-                                el('th', { style: { padding: '8px 12px', textAlign: 'center', color: 'var(--grey-4)', fontWeight: '600' }, textContent: '현재' }),
-                                el('th', { style: { padding: '8px 12px', textAlign: 'center', color: 'var(--grey-4)', fontWeight: '600' }, textContent: '변화' })
-                            ])
-                        ]);
-                        var tbody = el('tbody');
-                        catTrends.forEach(function (t) {
-                            var dirIcon = t.direction === 'up' ? '\u25B2' : t.direction === 'down' ? '\u25BC' : '\u2015';
-                            var dirColor = t.direction === 'up' ? '#10b981' : t.direction === 'down' ? '#ef4444' : 'var(--grey-4)';
-                            tbody.appendChild(el('tr', { style: { borderTop: '1px solid var(--grey-7)' } }, [
-                                el('td', { style: { padding: '8px 12px', color: 'var(--grey-3)' }, textContent: t.category_name }),
-                                el('td', { style: { padding: '8px 12px', textAlign: 'center', color: 'var(--grey-4)' }, textContent: t.previous_ratio + '%' }),
-                                el('td', { style: { padding: '8px 12px', textAlign: 'center', color: 'var(--grey-3)' }, textContent: t.current_ratio + '%' }),
-                                el('td', { style: { padding: '8px 12px', textAlign: 'center', fontWeight: '600', color: dirColor }, textContent: dirIcon + ' ' + (t.change >= 0 ? '+' : '') + t.change + '%p' })
-                            ]));
-                        });
-                        var trendTable = el('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: '13px' } }, [thead, tbody]);
-                        trendSection.appendChild(el('div', { style: { border: '1px solid var(--grey-7)', borderRadius: '8px', overflow: 'hidden' } }, [trendTable]));
-                    }
-                    body.appendChild(trendSection);
                 }
 
                 // 섹션 5: 벤치마크
