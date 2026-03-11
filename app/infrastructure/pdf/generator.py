@@ -88,9 +88,12 @@ class PDFGenerator:
     # PDF 생성 (public)
     # ================================================================
 
-    def generate_simple(self, report: ReportData) -> bytes:
-        """PDF 생성 — weasyprint 우선, FPDF2 fallback"""
-        if _HAS_WEASYPRINT:
+    def generate_simple(self, report: ReportData, *, lightweight: bool = False) -> bytes:
+        """PDF 생성 — weasyprint 우선, FPDF2 fallback
+
+        lightweight=True: FPDF2 강제 사용 (일괄 PDF 등 리소스 제한 환경)
+        """
+        if not lightweight and _HAS_WEASYPRINT:
             try:
                 return self._generate_html_pdf(report)
             except Exception as e:
