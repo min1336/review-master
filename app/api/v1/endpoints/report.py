@@ -187,13 +187,13 @@ async def _run_batch_pdf_job(
 
         # Phase 2: PDF 생성 (병렬, Semaphore(3))
         pdf_gen = PDFGenerator()
-        sem = asyncio.Semaphore(2)
+        sem = asyncio.Semaphore(1)
         completed_count = 0
 
         async def _gen_pdf(report: ReportData) -> bytes:
             nonlocal completed_count
             async with sem:
-                result = await asyncio.to_thread(pdf_gen.generate_simple, report, lightweight=True)
+                result = await asyncio.to_thread(pdf_gen.generate_simple, report)
                 completed_count += 1
                 job["progress"] = 30 + int(completed_count / len(branch_reports) * 60)
                 job["message"] = f"PDF 생성 중 ({completed_count}/{len(branch_reports)})"
