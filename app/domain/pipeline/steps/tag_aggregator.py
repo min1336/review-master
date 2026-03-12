@@ -26,7 +26,24 @@ class TagAggregator:
         self, session: AsyncSession, processed: list[ProcessedReviewDTO]
     ) -> dict:
         """tag_sentiments 기반으로 tags, keyword_mappings, branch_tags 갱신"""
-        # 1. 지점별 태그+감정 메모리 집계
+        branch_tag_data, all_keywords_with_tags = self._collect_branch_tag_data(processed)
+
+        tag_id_cache = await self._resolve_tag_ids(session, branch_tag_data)
+
+        await self._upsert_keyword_mappings(session, all_keywords_with_tags, tag_id_cache)
+
+        await self._upsert_branch_tags(session, branch_tag_data, tag_id_cache)
+
+        return {"branches": len(branch_tag_data), "tags": len(tag_id_cache)}
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _collect_branch_tag_data(
+        self, processed: list[ProcessedReviewDTO]
+    ) -> tuple[dict[int, dict[str, dict]], dict[str, str]]:
+        """Step 1: 지점별 태그+감정 메모리 집계, 키워드→태그 매핑 수집"""
         branch_tag_data: dict[int, dict[str, dict]] = {}
         all_keywords_with_tags: dict[str, str] = {}
         today = utc_now()
@@ -65,100 +82,143 @@ class TagAggregator:
                     if kw not in all_keywords_with_tags:
                         all_keywords_with_tags[kw] = tag_name
 
-        # 2. tags 배치 조회 -> 없는 것만 개별 upsert
+        return branch_tag_data, all_keywords_with_tags
+
+    async def _resolve_tag_ids(
+        self, session: AsyncSession, branch_tag_data: dict[int, dict[str, dict]]
+    ) -> dict[str, int]:
+        """Step 2: tags 배치 조회 → 없는 것만 개별 upsert, tag_id_cache 반환"""
         tag_id_cache: dict[str, int] = {}
         all_tag_names: set[str] = set()
         for tag_data in branch_tag_data.values():
             all_tag_names.update(tag_data.keys())
 
-        if all_tag_names:
+        if not all_tag_names:
+            return tag_id_cache
+
+        null_category_tags = await self._fetch_existing_tags(session, all_tag_names, tag_id_cache)
+
+        missing_tags = (all_tag_names - set(tag_id_cache.keys())) | null_category_tags
+        await self._upsert_missing_tags(session, missing_tags, tag_id_cache)
+
+        return tag_id_cache
+
+    async def _fetch_existing_tags(
+        self,
+        session: AsyncSession,
+        all_tag_names: set[str],
+        tag_id_cache: dict[str, int],
+    ) -> set[str]:
+        """tags 테이블 배치 조회, category_id가 NULL인 태그 집합 반환"""
+        null_category_tags: set[str] = set()
+        try:
+            result = await session.execute(
+                select(TagORM.id, TagORM.name, TagORM.category_id)
+                .where(TagORM.name.in_(list(all_tag_names)))
+            )
+            for row in result.all():
+                tag_id_cache[row.name] = row.id
+                if row.category_id is None:
+                    null_category_tags.add(row.name)
+        except Exception as e:
+            logger.warning("tags 배치 조회 실패: %s", e)
+        return null_category_tags
+
+    async def _upsert_missing_tags(
+        self,
+        session: AsyncSession,
+        missing_tags: set[str],
+        tag_id_cache: dict[str, int],
+    ) -> None:
+        """캐시에 없거나 category_id가 NULL인 태그를 upsert하여 tag_id_cache 갱신"""
+        if not missing_tags:
+            return
+
+        # tag_name → (category_name, group) 매핑 빌드 (circular import 방지: 함수 내 import)
+        from domain.analysis.patterns import TAG_REGISTRY
+
+        tag_to_category_name: dict[str, str] = {}
+        tag_to_group: dict[str, str] = {}
+        for cat_name, cat_meta in TAG_REGISTRY.items():
+            tag_to_category_name[cat_name] = cat_name
+            tag_to_group[cat_name] = cat_meta.group
+            for sub_tag_name in cat_meta.tags:
+                tag_to_category_name[sub_tag_name] = cat_name
+                tag_to_group[sub_tag_name] = cat_meta.group
+
+        category_name_to_id = await self._fetch_category_ids(
+            session, missing_tags, tag_to_category_name
+        )
+
+        GROUP_TO_TAG_TYPE = {"affiliate": "company", "vehicle": "vehicle"}
+
+        for tag_name in missing_tags:
             try:
-                result = await session.execute(
-                    select(TagORM.id, TagORM.name, TagORM.category_id)
-                    .where(TagORM.name.in_(list(all_tag_names)))
+                cat_name = tag_to_category_name.get(tag_name)
+                cat_id = category_name_to_id.get(cat_name) if cat_name else None
+                group = tag_to_group.get(tag_name)
+                tag_type = GROUP_TO_TAG_TYPE.get(group)
+
+                insert_values: dict = {"name": tag_name, "is_active": True}
+                update_set: dict = {"is_active": True}
+                if cat_id is not None:
+                    insert_values["category_id"] = cat_id
+                    update_set["category_id"] = cat_id
+                if tag_type is not None:
+                    insert_values["tag_type"] = tag_type
+                    update_set["tag_type"] = tag_type
+
+                stmt = (
+                    pg_insert(TagORM.__table__)
+                    .values(**insert_values)
+                    .on_conflict_do_update(
+                        index_elements=["name"],
+                        set_=update_set,
+                    )
+                    .returning(TagORM.__table__.c.id)
                 )
-                null_category_tags: set[str] = set()
-                for row in result.all():
-                    tag_id_cache[row.name] = row.id
-                    if row.category_id is None:
-                        null_category_tags.add(row.name)
+                result = await session.execute(stmt)
+                row = result.scalar_one_or_none()
+                if row is not None:
+                    tag_id_cache[tag_name] = row
             except Exception as e:
-                logger.warning("tags 배치 조회 실패: %s", e)
-                null_category_tags = set()
+                logger.warning("태그 upsert 실패 (tag=%s): %s", tag_name, e)
+                continue
 
-            # 캐시에 없는 태그 + category_id가 NULL인 기존 태그 → upsert 대상
-            missing_tags = (all_tag_names - set(tag_id_cache.keys())) | null_category_tags
+    async def _fetch_category_ids(
+        self,
+        session: AsyncSession,
+        missing_tags: set[str],
+        tag_to_category_name: dict[str, str],
+    ) -> dict[str, int]:
+        """categories 테이블에서 category_name → category_id 조회"""
+        category_name_to_id: dict[str, int] = {}
+        needed_cat_names = {
+            tag_to_category_name[t]
+            for t in missing_tags
+            if t in tag_to_category_name
+        }
+        if not needed_cat_names:
+            return category_name_to_id
+        try:
+            cat_result = await session.execute(
+                select(CategoryORM.id, CategoryORM.name).where(
+                    CategoryORM.name.in_(list(needed_cat_names))
+                )
+            )
+            for cat_row in cat_result.all():
+                category_name_to_id[cat_row.name] = cat_row.id
+        except Exception as e:
+            logger.warning("categories 조회 실패: %s", e)
+        return category_name_to_id
 
-            # tag_name → (category_name, group) 매핑 빌드 (circular import 방지: 함수 내 import)
-            from domain.analysis.patterns import TAG_REGISTRY
-
-            tag_to_category_name: dict[str, str] = {}
-            tag_to_group: dict[str, str] = {}
-            for cat_name, cat_meta in TAG_REGISTRY.items():
-                # 카테고리 이름 자체도 태그로 쓰일 수 있음 (ABSA 경로)
-                tag_to_category_name[cat_name] = cat_name
-                tag_to_group[cat_name] = cat_meta.group
-                # 세분화 서브태그
-                for sub_tag_name in cat_meta.tags:
-                    tag_to_category_name[sub_tag_name] = cat_name
-                    tag_to_group[sub_tag_name] = cat_meta.group
-
-            # categories 테이블에서 category_name → category_id 조회
-            category_name_to_id: dict[str, int] = {}
-            needed_cat_names = {
-                tag_to_category_name[t]
-                for t in missing_tags
-                if t in tag_to_category_name
-            }
-            if needed_cat_names:
-                try:
-                    cat_result = await session.execute(
-                        select(CategoryORM.id, CategoryORM.name).where(
-                            CategoryORM.name.in_(list(needed_cat_names))
-                        )
-                    )
-                    for cat_row in cat_result.all():
-                        category_name_to_id[cat_row.name] = cat_row.id
-                except Exception as e:
-                    logger.warning("categories 조회 실패: %s", e)
-
-            GROUP_TO_TAG_TYPE = {"affiliate": "company", "vehicle": "vehicle"}
-
-            for tag_name in missing_tags:
-                try:
-                    cat_name = tag_to_category_name.get(tag_name)
-                    cat_id = category_name_to_id.get(cat_name) if cat_name else None
-                    group = tag_to_group.get(tag_name)
-                    tag_type = GROUP_TO_TAG_TYPE.get(group)
-
-                    insert_values: dict = {"name": tag_name, "is_active": True}
-                    update_set: dict = {"is_active": True}
-                    if cat_id is not None:
-                        insert_values["category_id"] = cat_id
-                        # on_conflict: category_id가 NULL이면 덮어쓰기
-                        update_set["category_id"] = cat_id
-                    if tag_type is not None:
-                        insert_values["tag_type"] = tag_type
-                        update_set["tag_type"] = tag_type
-
-                    stmt = (
-                        pg_insert(TagORM.__table__)
-                        .values(**insert_values)
-                        .on_conflict_do_update(
-                            index_elements=["name"],
-                            set_=update_set,
-                        )
-                        .returning(TagORM.__table__.c.id)
-                    )
-                    result = await session.execute(stmt)
-                    row = result.scalar_one_or_none()
-                    if row is not None:
-                        tag_id_cache[tag_name] = row
-                except Exception as e:
-                    logger.warning("태그 upsert 실패 (tag=%s): %s", tag_name, e)
-                    continue
-
-        # 3. keyword_mappings 배치 upsert
+    async def _upsert_keyword_mappings(
+        self,
+        session: AsyncSession,
+        all_keywords_with_tags: dict[str, str],
+        tag_id_cache: dict[str, int],
+    ) -> None:
+        """Step 3: keyword_mappings 배치 upsert"""
         keyword_rows: list[dict] = []
         for keyword, tag_name in all_keywords_with_tags.items():
             tag_id = tag_id_cache.get(tag_name)
@@ -167,22 +227,30 @@ class TagAggregator:
                     {"keyword": keyword, "tag_id": tag_id, "is_auto": True}
                 )
 
-        if keyword_rows:
-            try:
-                kw_tbl = KeywordMappingORM.__table__
-                stmt = pg_insert(kw_tbl).values(keyword_rows)
-                stmt = stmt.on_conflict_do_update(
-                    index_elements=["keyword"],
-                    set_={
-                        "tag_id": stmt.excluded.tag_id,
-                        "is_auto": stmt.excluded.is_auto,
-                    },
-                )
-                await session.execute(stmt)
-            except Exception as e:
-                logger.warning("keyword_mappings 배치 upsert 실패: %s", e)
+        if not keyword_rows:
+            return
 
-        # 4. branch_tags 배치 upsert (SQL-level increment — SELECT 불필요)
+        try:
+            kw_tbl = KeywordMappingORM.__table__
+            stmt = pg_insert(kw_tbl).values(keyword_rows)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["keyword"],
+                set_={
+                    "tag_id": stmt.excluded.tag_id,
+                    "is_auto": stmt.excluded.is_auto,
+                },
+            )
+            await session.execute(stmt)
+        except Exception as e:
+            logger.warning("keyword_mappings 배치 upsert 실패: %s", e)
+
+    async def _upsert_branch_tags(
+        self,
+        session: AsyncSession,
+        branch_tag_data: dict[int, dict[str, dict]],
+        tag_id_cache: dict[str, int],
+    ) -> None:
+        """Step 4: branch_tags 배치 upsert (SQL-level increment — SELECT 불필요)"""
         bt_tbl = BranchTagORM.__table__
         for branch_id, tag_data in branch_tag_data.items():
             upsert_rows = []
@@ -230,5 +298,3 @@ class TagAggregator:
                     f"branch_tags 업데이트 실패 (branch_id={branch_id}): {e}"
                 )
                 continue
-
-        return {"branches": len(branch_tag_data), "tags": len(tag_id_cache)}
