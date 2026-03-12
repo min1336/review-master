@@ -202,25 +202,105 @@ class ReportAIGenerator:
     ) -> str:
         """기간 요약 생성 (DB 저장된 요약 우선 사용)"""
         # 1. DB에 저장된 요약 확인 (토큰 절약)
-        if not tag_sentiments and branch_id and self.summary_repo:
-            try:
-                summary = await self.summary_repo.get_by_branch_id(branch_id)
-                if summary:
-                    summary_data = summary.model_dump()
-                    for field in ["summary_1m", "summary_3m", "summary_6m", "summary_1y", "summary_all"]:
-                        saved_summary = summary_data.get(field)
-                        if saved_summary:
-                            logger.info(
-                                f"DB 저장 요약 사용: branch_id={branch_id}, field={field}"
-                            )
-                            return saved_summary
-            except Exception as e:
-                logger.warning("DB 요약 조회 실패 (branch_id=%s): %s", branch_id, e)
+        cached = await self._fetch_cached_summary(branch_id, tag_sentiments)
+        if cached:
+            return cached
 
         # 2. DB에 없으면 LLM 호출
         from infrastructure.llm import get_provider
-        from infrastructure.llm.prompts import RichSummaryPromptBuilder
 
+        tag_sentiments_for_prompt, sentiment_stats_for_prompt, start_date_str, end_date_str = (
+            self._prepare_prompt_data(
+                top_tags, tag_sentiments, sentiment_stats, total_reviews, start_date, end_date
+            )
+        )
+
+        system_prompt, user_prompt, max_tokens = self._build_period_prompt(
+            branch_name=branch_name,
+            start_date_str=start_date_str,
+            end_date_str=end_date_str,
+            total_reviews=total_reviews,
+            tag_sentiments=tag_sentiments,
+            tag_sentiments_for_prompt=tag_sentiments_for_prompt,
+            sentiment_stats_for_prompt=sentiment_stats_for_prompt,
+            sample_reviews=sample_reviews,
+            vehicle_summary=vehicle_summary,
+        )
+
+        report_mode = tag_sentiments is not None
+        temperature = 0.5 if report_mode else 0.7
+
+        # 커스텀 설정 적용
+        if report_config and report_mode:
+            system_prompt, user_prompt, temperature, max_tokens = (
+                self._apply_custom_config_period(
+                    system_prompt, user_prompt, report_config, temperature
+                )
+            )
+
+        try:
+            llm_provider = get_provider()
+            response = await llm_provider.async_generate(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+
+            content = response.content if hasattr(response, "content") else str(response)
+
+            # LLM 응답 품질 검증 및 자동 정제
+            validation_mode = "report" if tag_sentiments else "summary"
+            content = self._clean_llm_response(content, validation_mode)
+
+            # 숫자 할루시네이션 교정
+            # sentiment_stats/tag_sentiments의 건수는 태그 멘션 합계이므로
+            # canonical에 포함하지 않음 (리뷰 수와 혼동 방지)
+            canonical_nums: set[int] = {total_reviews}
+            content = self._fix_number_hallucinations(content, canonical_nums)
+
+            # 리포트 모드 내용 품질 검증
+            self._validate_period_content(content, tag_sentiments, sentiment_stats, branch_id)
+
+            return content
+        except Exception as e:
+            logger.error("기간 요약 생성 실패: %s", e)
+
+        return self._fallback_summary(branch_name, start_date, end_date, total_reviews, top_tags)
+
+    async def _fetch_cached_summary(
+        self,
+        branch_id: int | None,
+        tag_sentiments: list[dict] | None,
+    ) -> str | None:
+        """DB에 저장된 기간 요약 반환 (없으면 None)"""
+        if tag_sentiments or not branch_id or not self.summary_repo:
+            return None
+        try:
+            summary = await self.summary_repo.get_by_branch_id(branch_id)
+            if summary:
+                summary_data = summary.model_dump()
+                for field in ["summary_1m", "summary_3m", "summary_6m", "summary_1y", "summary_all"]:
+                    saved_summary = summary_data.get(field)
+                    if saved_summary:
+                        logger.info(
+                            f"DB 저장 요약 사용: branch_id={branch_id}, field={field}"
+                        )
+                        return saved_summary
+        except Exception as e:
+            logger.warning("DB 요약 조회 실패 (branch_id=%s): %s", branch_id, e)
+        return None
+
+    @staticmethod
+    def _prepare_prompt_data(
+        top_tags: list[str],
+        tag_sentiments: list[dict] | None,
+        sentiment_stats: dict | None,
+        total_reviews: int,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> tuple[list[dict], dict, str, str]:
+        """프롬프트 입력 데이터 준비 (tag_sentiments, sentiment_stats, 날짜 문자열)"""
         if tag_sentiments:
             tag_sentiments_for_prompt = tag_sentiments
         else:
@@ -241,6 +321,22 @@ class ReportAIGenerator:
 
         start_date_str = start_date.strftime("%Y년 %m월 %d일")
         end_date_str = end_date.strftime("%Y년 %m월 %d일")
+        return tag_sentiments_for_prompt, sentiment_stats_for_prompt, start_date_str, end_date_str
+
+    @staticmethod
+    def _build_period_prompt(
+        branch_name: str,
+        start_date_str: str,
+        end_date_str: str,
+        total_reviews: int,
+        tag_sentiments: list[dict] | None,
+        tag_sentiments_for_prompt: list[dict],
+        sentiment_stats_for_prompt: dict,
+        sample_reviews: list[str] | None,
+        vehicle_summary: str | None,
+    ) -> tuple[str, str, int]:
+        """기간 요약 프롬프트 구성, (system_prompt, user_prompt, max_tokens) 반환"""
+        from infrastructure.llm.prompts import RichSummaryPromptBuilder
 
         if tag_sentiments:
             system_prompt, user_prompt = RichSummaryPromptBuilder.create_report_prompt(
@@ -267,66 +363,65 @@ class ReportAIGenerator:
             )
             max_tokens = 500
 
-        try:
-            llm_provider = get_provider()
-            report_mode = tag_sentiments is not None
-            temperature = 0.5 if report_mode else 0.7
+        return system_prompt, user_prompt, max_tokens
 
-            # 커스텀 설정 적용
-            if report_config and report_mode:
-                from infrastructure.llm.prompts import RichSummaryPromptBuilder
-                system_prompt, user_prompt = RichSummaryPromptBuilder.apply_custom_config(
-                    system_prompt, user_prompt,
-                    custom_instruction=report_config.prompt.custom_instruction,
-                    perspective=report_config.prompt.analysis_perspective,
-                    tone=report_config.prompt.tone,
-                    max_length=report_config.output.summary_max_length,
-                    detail_level=report_config.prompt.detail_level,
-                    focus_areas=report_config.prompt.focus_areas,
-                )
-                temperature = report_config.prompt.temperature
-                max_tokens = report_config.output.summary_max_length * 2
+    @staticmethod
+    def _apply_custom_config_period(
+        system_prompt: str,
+        user_prompt: str,
+        report_config,
+        temperature: float,
+    ) -> tuple[str, str, float, int]:
+        """커스텀 설정 적용 후 (system_prompt, user_prompt, temperature, max_tokens) 반환"""
+        from infrastructure.llm.prompts import RichSummaryPromptBuilder
 
-            response = await llm_provider.async_generate(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                max_tokens=max_tokens,
-                temperature=temperature,
+        system_prompt, user_prompt = RichSummaryPromptBuilder.apply_custom_config(
+            system_prompt, user_prompt,
+            custom_instruction=report_config.prompt.custom_instruction,
+            perspective=report_config.prompt.analysis_perspective,
+            tone=report_config.prompt.tone,
+            max_length=report_config.output.summary_max_length,
+            detail_level=report_config.prompt.detail_level,
+            focus_areas=report_config.prompt.focus_areas,
+        )
+        temperature = report_config.prompt.temperature
+        max_tokens = report_config.output.summary_max_length * 2
+        return system_prompt, user_prompt, temperature, max_tokens
+
+    def _validate_period_content(
+        self,
+        content: str,
+        tag_sentiments: list[dict] | None,
+        sentiment_stats: dict | None,
+        branch_id: int | None,
+    ) -> None:
+        """리포트 모드 내용 품질 검증 (경고 로깅만 수행)"""
+        if not (tag_sentiments and sentiment_stats):
+            return
+        from infrastructure.llm.validator import validate_report_content
+
+        neg_ratio = 0
+        total = sentiment_stats.get("total", 0)
+        if total > 0:
+            neg_ratio = sentiment_stats.get("negative", 0) / total * 100
+
+        is_content_valid, content_warnings = validate_report_content(
+            content, negative_ratio=neg_ratio
+        )
+        if not is_content_valid:
+            logger.warning(
+                f"리포트 내용 검증 경고 (branch_id={branch_id}): {content_warnings}"
             )
 
-            content = response.content if hasattr(response, "content") else str(response)
-
-            # LLM 응답 품질 검증 및 자동 정제
-            from infrastructure.llm.validator import validate_report_content
-            validation_mode = "report" if tag_sentiments else "summary"
-            content = self._clean_llm_response(content, validation_mode)
-
-            # 숫자 할루시네이션 교정
-            # sentiment_stats/tag_sentiments의 건수는 태그 멘션 합계이므로
-            # canonical에 포함하지 않음 (리뷰 수와 혼동 방지)
-            canonical_nums: set[int] = {total_reviews}
-            content = self._fix_number_hallucinations(content, canonical_nums)
-
-            # 리포트 모드 내용 품질 검증
-            if tag_sentiments and sentiment_stats:
-                neg_ratio = 0
-                total = sentiment_stats.get("total", 0)
-                if total > 0:
-                    neg_ratio = sentiment_stats.get("negative", 0) / total * 100
-
-                is_content_valid, content_warnings = validate_report_content(
-                    content, negative_ratio=neg_ratio
-                )
-                if not is_content_valid:
-                    logger.warning(
-                        f"리포트 내용 검증 경고 (branch_id={branch_id}): {content_warnings}"
-                    )
-
-            return content
-        except Exception as e:
-            logger.error("기간 요약 생성 실패: %s", e)
-
-        # 기본 요약
+    @staticmethod
+    def _fallback_summary(
+        branch_name: str,
+        start_date: datetime,
+        end_date: datetime,
+        total_reviews: int,
+        top_tags: list[str],
+    ) -> str:
+        """LLM 호출 실패 시 기본 요약 텍스트 반환"""
         start_str = start_date.strftime('%Y년 %m월')
         end_str = end_date.strftime('%Y년 %m월')
         base = (
