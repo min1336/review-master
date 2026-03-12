@@ -312,6 +312,7 @@ class NegativeReviewItem(BaseModel):
     content: str = ""
     rating: float = 0.0
     review_date: str = ""
+    vehicle_model: str = ""
 
 
 class TagCoverage(BaseModel):

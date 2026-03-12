@@ -291,6 +291,7 @@ class BranchReviewRepository(BaseRepository[Review]):
                 BranchReviewORM.content,
                 BranchReviewORM.rating_service,
                 BranchReviewORM.review_date,
+                BranchReviewORM.car_model,
             )
             .where(*conditions)
             .order_by(BranchReviewORM.review_date.desc())
@@ -298,9 +299,10 @@ class BranchReviewRepository(BaseRepository[Review]):
         result = await self._session.execute(stmt)
         return [
             {
-                "content": (row.content or "")[:200],
+                "content": row.content or "",
                 "rating": float(row.rating_service) if row.rating_service else 0.0,
                 "review_date": row.review_date.strftime("%Y-%m-%d") if row.review_date else "",
+                "vehicle_model": row.car_model or "",
             }
             for row in result.all()
         ]
