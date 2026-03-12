@@ -7,8 +7,10 @@ import time
 from collections.abc import Awaitable, Callable
 
 from core.timezone import utc_now
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from repository.database import get_session_factory
-from schemas.dto import PipelineResultDTO, PipelineStepResultDTO
+from schemas.dto import PipelineResultDTO, PipelineStepResultDTO, ProcessedReviewDTO
 
 from .steps.preprocessor import ReviewPreprocessor
 from .steps.review_updater import ReviewSentimentUpdater
@@ -40,7 +42,7 @@ class UnifiedPipeline:
         reviews: list[dict],
         result: PipelineResultDTO,
         progress_callback: Callable[[int, str], Awaitable[None]] | None,
-    ) -> list | None:
+    ) -> list[ProcessedReviewDTO] | None:
         """Step 1: 전처리 + 키워드 + 감정 + 태그 분류 (동기). 실패 시 None 반환."""
         t0 = time.monotonic()
         try:
@@ -73,8 +75,8 @@ class UnifiedPipeline:
 
     async def _step_update_review_sentiment(
         self,
-        session,
-        processed: list,
+        session: AsyncSession,
+        processed: list[ProcessedReviewDTO],
         input_count: int,
         result: PipelineResultDTO,
         progress_callback: Callable[[int, str], Awaitable[None]] | None,
@@ -103,8 +105,8 @@ class UnifiedPipeline:
 
     async def _step_aggregate_tags(
         self,
-        session,
-        processed: list,
+        session: AsyncSession,
+        processed: list[ProcessedReviewDTO],
         input_count: int,
         result: PipelineResultDTO,
         progress_callback: Callable[[int, str], Awaitable[None]] | None,
@@ -135,8 +137,8 @@ class UnifiedPipeline:
 
     async def _step_aggregate_car_models(
         self,
-        session,
-        processed: list,
+        session: AsyncSession,
+        processed: list[ProcessedReviewDTO],
         input_count: int,
         result: PipelineResultDTO,
         progress_callback: Callable[[int, str], Awaitable[None]] | None,
@@ -165,8 +167,8 @@ class UnifiedPipeline:
 
     async def _step_update_keywords(
         self,
-        session,
-        processed: list,
+        session: AsyncSession,
+        processed: list[ProcessedReviewDTO],
         input_count: int,
         result: PipelineResultDTO,
         progress_callback: Callable[[int, str], Awaitable[None]] | None,
@@ -195,8 +197,8 @@ class UnifiedPipeline:
 
     async def _step_map_review_tags(
         self,
-        session,
-        processed: list,
+        session: AsyncSession,
+        processed: list[ProcessedReviewDTO],
         input_count: int,
         result: PipelineResultDTO,
         progress_callback: Callable[[int, str], Awaitable[None]] | None,
@@ -225,8 +227,8 @@ class UnifiedPipeline:
 
     async def _step_update_monthly_stats(
         self,
-        session,
-        processed: list,
+        session: AsyncSession,
+        processed: list[ProcessedReviewDTO],
         input_count: int,
         result: PipelineResultDTO,
         progress_callback: Callable[[int, str], Awaitable[None]] | None,
@@ -256,8 +258,8 @@ class UnifiedPipeline:
 
     async def _step_update_monthly_car_model_stats(
         self,
-        session,
-        processed: list,
+        session: AsyncSession,
+        processed: list[ProcessedReviewDTO],
         input_count: int,
         result: PipelineResultDTO,
         progress_callback: Callable[[int, str], Awaitable[None]] | None,
