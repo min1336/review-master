@@ -138,7 +138,21 @@ class PDFGenerator:
         row = 5   # 기본 행 높이
         gap = 3   # 섹션 내 여백
 
-        # ── 헤더 ──
+        self._render_header(pdf, font, w, m, report)
+        self._render_summary(pdf, font, w, row, gap, report)
+        self._render_affiliate_evaluation(pdf, font, w, gap, report)
+        self._render_vehicle_evaluation(pdf, font, w, gap, report)
+        self._render_trend_comparison(pdf, font, w, row, gap, report)
+        self._render_benchmark(pdf, font, w, row, gap, report)
+        self._render_negative_reviews(pdf, font, w, row, gap, report)
+        self._render_footer(pdf, font, w, m, report)
+
+        return bytes(pdf.output())
+
+    def _render_header(
+        self, pdf: FPDF, font: str, w: float, m: float, report: ReportData
+    ) -> None:
+        """헤더: 지점명, 분석 기간, 구분선"""
         pdf.set_font(font, "B", 14)
         pdf.cell(w, 8, f"{report.branch_name} AI 컨설팅 리포트",
                  align="C", new_x="LMARGIN", new_y="NEXT")
@@ -149,216 +163,237 @@ class PDFGenerator:
         pdf.set_text_color(0, 0, 0)
         self._hr(pdf, m, w)
 
-        # ── 1. 요약 ──
-        if report.period_summary:
-            self._section(pdf, font, "1. 요약")
-            pdf.set_font(font, "", 9)
-            pdf.multi_cell(w, row, report.period_summary)
-            pdf.ln(gap)
+    def _render_summary(
+        self, pdf: FPDF, font: str, w: float, row: float, gap: float, report: ReportData
+    ) -> None:
+        """1. 요약 섹션"""
+        if not report.period_summary:
+            return
+        self._section(pdf, font, "1. 요약")
+        pdf.set_font(font, "", 9)
+        pdf.multi_cell(w, row, report.period_summary)
+        pdf.ln(gap)
 
-        # ── 2. 업체 평가 ──
+    def _render_affiliate_evaluation(
+        self, pdf: FPDF, font: str, w: float, gap: float, report: ReportData
+    ) -> None:
+        """2. 업체 평가 섹션 (잘한점 / 개선점 / AI 인사이트)"""
         aff = report.affiliate_evaluation
-        if aff:
-            self._section(pdf, font, "2. 업체 평가")
+        if not aff:
+            return
 
-            # 잘한점 / 개선점 (1줄 요약)
-            pos_tags = (aff.top_positive or [])[:5]
-            if pos_tags:
-                self._sub(pdf, font, "잘한점")
-                pdf.set_font(font, "", 8)
-                pos_line = ", ".join(
-                    f"{self._TAG_SENTENCE_MAP.get(t.tag_name, {}).get('positive', t.tag_name)}({t.count}건)"
-                    for t in pos_tags
-                )
-                pdf.cell(w, 4.5, f"  {pos_line}",
-                         new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(gap)
+        self._section(pdf, font, "2. 업체 평가")
 
-            neg_tags = (aff.top_negative or [])[:5]
-            if neg_tags:
-                self._sub(pdf, font, "개선점")
-                pdf.set_font(font, "", 8)
-                neg_line = ", ".join(
-                    f"{self._TAG_SENTENCE_MAP.get(t.tag_name, {}).get('negative', t.tag_name)}({t.count}건)"
-                    for t in neg_tags
-                )
-                pdf.cell(w, 4.5, f"  {neg_line}",
-                         new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(gap)
-
-            # AI 인사이트
-            if aff.ai_text:
-                pdf.set_font(font, "", 8)
-                pdf.set_text_color(80, 80, 80)
-                pdf.multi_cell(w, 4, aff.ai_text)
-                pdf.set_text_color(0, 0, 0)
-                pdf.ln(gap)
-
-        # ── 3. 차량 평가 ──
-        veh = report.vehicle_evaluation
-        if veh:
-            self._section(pdf, font, "3. 차량 평가")
-
-            # 호평 차량
-            self._vehicle_list(pdf, font, w, "호평 차량", veh.top_liked or [], "호평률")
-
-            # 불만 차량
-            self._vehicle_list(pdf, font, w, "불만 차량", veh.top_disliked or [], "불만률")
-
-            # AI 인사이트
-            if veh.ai_text:
-                pdf.set_font(font, "", 8)
-                pdf.set_text_color(80, 80, 80)
-                pdf.multi_cell(w, 4, veh.ai_text)
-                pdf.set_text_color(0, 0, 0)
-                pdf.ln(gap)
-
-        # ── 4. 트렌드 비교 ──
-        if report.trend_comparison:
-            tc = report.trend_comparison
-            self._section(pdf, font, "4. 트렌드 비교")
-
+        pos_tags = (aff.top_positive or [])[:5]
+        if pos_tags:
+            self._sub(pdf, font, "잘한점")
             pdf.set_font(font, "", 8)
-            pdf.cell(w, row, f"이전 기간: {tc.previous_period} ({tc.previous_total_reviews}건)",
+            pos_line = ", ".join(
+                f"{self._TAG_SENTENCE_MAP.get(t.tag_name, {}).get('positive', t.tag_name)}({t.count}건)"
+                for t in pos_tags
+            )
+            pdf.cell(w, 4.5, f"  {pos_line}",
                      new_x="LMARGIN", new_y="NEXT")
-            pdf.cell(w, row, f"현재 기간: {tc.current_period} ({tc.current_total_reviews}건)",
+        pdf.ln(gap)
+
+        neg_tags = (aff.top_negative or [])[:5]
+        if neg_tags:
+            self._sub(pdf, font, "개선점")
+            pdf.set_font(font, "", 8)
+            neg_line = ", ".join(
+                f"{self._TAG_SENTENCE_MAP.get(t.tag_name, {}).get('negative', t.tag_name)}({t.count}건)"
+                for t in neg_tags
+            )
+            pdf.cell(w, 4.5, f"  {neg_line}",
                      new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(gap)
+        pdf.ln(gap)
 
-            pos_sign = "+" if tc.overall_positive_change >= 0 else ""
-            neg_sign = "+" if tc.overall_negative_change >= 0 else ""
-            pdf.set_font(font, "B", 9)
-            pdf.cell(w, row, f"긍정률 변화: {pos_sign}{tc.overall_positive_change}%p  |  부정률 변화: {neg_sign}{tc.overall_negative_change}%p",
-                     new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(gap)
-
-            if tc.category_trends:
-                col_cat = 50
-                col_prev = 30
-                col_cur = 30
-                col_chg = w - col_cat - col_prev - col_cur
-
-                pdf.set_font(font, "B", 7)
-                pdf.set_fill_color(240, 240, 240)
-                pdf.cell(col_cat, row, " 카테고리", border=1, fill=True)
-                pdf.cell(col_prev, row, " 이전", border=1, fill=True, align="C")
-                pdf.cell(col_cur, row, " 현재", border=1, fill=True, align="C")
-                pdf.cell(col_chg, row, " 변화", border=1, fill=True, align="C")
-                pdf.ln(row)
-
-                pdf.set_font(font, "", 7)
-                for t in tc.category_trends:
-                    arrow = "▲" if t.direction == "up" else ("▼" if t.direction == "down" else "-")
-                    chg_sign = "+" if t.change >= 0 else ""
-                    pdf.cell(col_cat, row, f" {t.category_name}", border=1)
-                    pdf.cell(col_prev, row, f"{t.previous_ratio}%", border=1, align="C")
-                    pdf.cell(col_cur, row, f"{t.current_ratio}%", border=1, align="C")
-                    pdf.cell(col_chg, row, f"{arrow} {chg_sign}{t.change}%p", border=1, align="C")
-                    pdf.ln(row)
-            pdf.ln(gap)
-
-        # ── 5. 벤치마크 ──
-        if report.benchmark:
-            bm = report.benchmark
-            self._section(pdf, font, "5. 벤치마크")
-
-            col_third = (w - 8) / 3
-            pdf.set_font(font, "B", 8)
-            pdf.cell(col_third, row, "이 지점", align="C")
-            pdf.set_x(pdf.get_x() + 4)
-            pdf.cell(col_third, row, f"{bm.region_name or '지역'} 평균", align="C")
-            pdf.set_x(pdf.get_x() + 4)
-            pdf.cell(col_third, row, "전국 평균", align="C")
-            pdf.ln(row)
-
-            pdf.set_font(font, "B", 12)
-            pdf.cell(col_third, 7, f"{bm.branch_rating:.1f}", align="C")
-            pdf.set_x(pdf.get_x() + 4)
-            pdf.cell(col_third, 7, f"{bm.regional_avg_rating:.1f}", align="C")
-            pdf.set_x(pdf.get_x() + 4)
-            pdf.cell(col_third, 7, f"{bm.national_avg_rating:.1f}", align="C")
-            pdf.ln(7)
-
-            pdf.set_font(font, "", 7)
-            pdf.set_text_color(100, 100, 100)
-            pdf.cell(col_third, row, "", align="C")
-            pdf.set_x(pdf.get_x() + 4)
-            pdf.cell(col_third, row, f"상위 {bm.regional_rank_pct}% ({bm.total_branches_in_region}개 지점)", align="C")
-            pdf.set_x(pdf.get_x() + 4)
-            pdf.cell(col_third, row, f"상위 {bm.national_rank_pct}% ({bm.total_branches_national}개 지점)", align="C")
-            pdf.ln(row)
+        if aff.ai_text:
+            pdf.set_font(font, "", 8)
+            pdf.set_text_color(80, 80, 80)
+            pdf.multi_cell(w, 4, aff.ai_text)
             pdf.set_text_color(0, 0, 0)
-
-            if bm.branch_rating > 0:
-                pdf.set_font(font, "", 8)
-                if bm.branch_rating >= bm.regional_avg_rating:
-                    msg = f"이 지점은 {bm.region_name or '해당 지역'} 평균 이상의 평점을 유지하고 있습니다."
-                else:
-                    msg = f"이 지점은 {bm.region_name or '해당 지역'} 평균보다 낮은 평점이므로, 개선 조치가 필요할 수 있습니다."
-                pdf.multi_cell(w, row, msg)
             pdf.ln(gap)
 
-        # ── 6. 부정 리뷰 목록 ──
-        if report.negative_reviews:
-            self._section(pdf, font, "6. 부정 리뷰 목록")
+    def _render_vehicle_evaluation(
+        self, pdf: FPDF, font: str, w: float, gap: float, report: ReportData
+    ) -> None:
+        """3. 차량 평가 섹션 (호평/불만 차량 + AI 인사이트)"""
+        veh = report.vehicle_evaluation
+        if not veh:
+            return
 
-            col_date = 30
-            col_rating = 15
-            col_vehicle = 35
-            col_content = w - col_date - col_rating - col_vehicle
+        self._section(pdf, font, "3. 차량 평가")
+        self._vehicle_list(pdf, font, w, "호평 차량", veh.top_liked or [], "호평률")
+        self._vehicle_list(pdf, font, w, "불만 차량", veh.top_disliked or [], "불만률")
+
+        if veh.ai_text:
+            pdf.set_font(font, "", 8)
+            pdf.set_text_color(80, 80, 80)
+            pdf.multi_cell(w, 4, veh.ai_text)
+            pdf.set_text_color(0, 0, 0)
+            pdf.ln(gap)
+
+    def _render_trend_comparison(
+        self, pdf: FPDF, font: str, w: float, row: float, gap: float, report: ReportData
+    ) -> None:
+        """4. 트렌드 비교 섹션 (기간 요약 + 카테고리별 변화 테이블)"""
+        if not report.trend_comparison:
+            return
+
+        tc = report.trend_comparison
+        self._section(pdf, font, "4. 트렌드 비교")
+
+        pdf.set_font(font, "", 8)
+        pdf.cell(w, row, f"이전 기간: {tc.previous_period} ({tc.previous_total_reviews}건)",
+                 new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(w, row, f"현재 기간: {tc.current_period} ({tc.current_total_reviews}건)",
+                 new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(gap)
+
+        pos_sign = "+" if tc.overall_positive_change >= 0 else ""
+        neg_sign = "+" if tc.overall_negative_change >= 0 else ""
+        pdf.set_font(font, "B", 9)
+        pdf.cell(w, row, f"긍정률 변화: {pos_sign}{tc.overall_positive_change}%p  |  부정률 변화: {neg_sign}{tc.overall_negative_change}%p",
+                 new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(gap)
+
+        if tc.category_trends:
+            col_cat = 50
+            col_prev = 30
+            col_cur = 30
+            col_chg = w - col_cat - col_prev - col_cur
 
             pdf.set_font(font, "B", 7)
             pdf.set_fill_color(240, 240, 240)
-            pdf.cell(col_date, row, " 날짜", border=1, fill=True)
-            pdf.cell(col_rating, row, " 평점", border=1, fill=True, align="C")
-            pdf.cell(col_vehicle, row, " 차량", border=1, fill=True)
-            pdf.cell(col_content, row, " 리뷰 내용", border=1, fill=True)
+            pdf.cell(col_cat, row, " 카테고리", border=1, fill=True)
+            pdf.cell(col_prev, row, " 이전", border=1, fill=True, align="C")
+            pdf.cell(col_cur, row, " 현재", border=1, fill=True, align="C")
+            pdf.cell(col_chg, row, " 변화", border=1, fill=True, align="C")
             pdf.ln(row)
 
             pdf.set_font(font, "", 7)
-            for r in report.negative_reviews:
-                date_str = r.review_date or ""
-                rating_str = str(r.rating) if r.rating else ""
-                vehicle_str = r.vehicle_model or "-"
-                content = (r.content or "").replace("<br>", " ").replace("<br/>", " ").replace("<br />", " ")
+            for t in tc.category_trends:
+                arrow = "▲" if t.direction == "up" else ("▼" if t.direction == "down" else "-")
+                chg_sign = "+" if t.change >= 0 else ""
+                pdf.cell(col_cat, row, f" {t.category_name}", border=1)
+                pdf.cell(col_prev, row, f"{t.previous_ratio}%", border=1, align="C")
+                pdf.cell(col_cur, row, f"{t.current_ratio}%", border=1, align="C")
+                pdf.cell(col_chg, row, f"{arrow} {chg_sign}{t.change}%p", border=1, align="C")
+                pdf.ln(row)
+        pdf.ln(gap)
 
-                # 내용 길이에 따라 multi_cell 사용
-                x_before = pdf.get_x()
-                y_before = pdf.get_y()
+    def _render_benchmark(
+        self, pdf: FPDF, font: str, w: float, row: float, gap: float, report: ReportData
+    ) -> None:
+        """5. 벤치마크 섹션 (지점/지역/전국 평점 비교)"""
+        if not report.benchmark:
+            return
 
-                pdf.cell(col_date, row, f" {date_str}", border="LBT")
+        bm = report.benchmark
+        self._section(pdf, font, "5. 벤치마크")
+
+        col_third = (w - 8) / 3
+        pdf.set_font(font, "B", 8)
+        pdf.cell(col_third, row, "이 지점", align="C")
+        pdf.set_x(pdf.get_x() + 4)
+        pdf.cell(col_third, row, f"{bm.region_name or '지역'} 평균", align="C")
+        pdf.set_x(pdf.get_x() + 4)
+        pdf.cell(col_third, row, "전국 평균", align="C")
+        pdf.ln(row)
+
+        pdf.set_font(font, "B", 12)
+        pdf.cell(col_third, 7, f"{bm.branch_rating:.1f}", align="C")
+        pdf.set_x(pdf.get_x() + 4)
+        pdf.cell(col_third, 7, f"{bm.regional_avg_rating:.1f}", align="C")
+        pdf.set_x(pdf.get_x() + 4)
+        pdf.cell(col_third, 7, f"{bm.national_avg_rating:.1f}", align="C")
+        pdf.ln(7)
+
+        pdf.set_font(font, "", 7)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(col_third, row, "", align="C")
+        pdf.set_x(pdf.get_x() + 4)
+        pdf.cell(col_third, row, f"상위 {bm.regional_rank_pct}% ({bm.total_branches_in_region}개 지점)", align="C")
+        pdf.set_x(pdf.get_x() + 4)
+        pdf.cell(col_third, row, f"상위 {bm.national_rank_pct}% ({bm.total_branches_national}개 지점)", align="C")
+        pdf.ln(row)
+        pdf.set_text_color(0, 0, 0)
+
+        if bm.branch_rating > 0:
+            pdf.set_font(font, "", 8)
+            if bm.branch_rating >= bm.regional_avg_rating:
+                msg = f"이 지점은 {bm.region_name or '해당 지역'} 평균 이상의 평점을 유지하고 있습니다."
+            else:
+                msg = f"이 지점은 {bm.region_name or '해당 지역'} 평균보다 낮은 평점이므로, 개선 조치가 필요할 수 있습니다."
+            pdf.multi_cell(w, row, msg)
+        pdf.ln(gap)
+
+    def _render_negative_reviews(
+        self, pdf: FPDF, font: str, w: float, row: float, gap: float, report: ReportData
+    ) -> None:
+        """6. 부정 리뷰 목록 섹션 (날짜/평점/차량/내용 테이블)"""
+        if not report.negative_reviews:
+            return
+
+        self._section(pdf, font, "6. 부정 리뷰 목록")
+
+        col_date = 30
+        col_rating = 15
+        col_vehicle = 35
+        col_content = w - col_date - col_rating - col_vehicle
+
+        pdf.set_font(font, "B", 7)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(col_date, row, " 날짜", border=1, fill=True)
+        pdf.cell(col_rating, row, " 평점", border=1, fill=True, align="C")
+        pdf.cell(col_vehicle, row, " 차량", border=1, fill=True)
+        pdf.cell(col_content, row, " 리뷰 내용", border=1, fill=True)
+        pdf.ln(row)
+
+        pdf.set_font(font, "", 7)
+        for r in report.negative_reviews:
+            date_str = r.review_date or ""
+            rating_str = str(r.rating) if r.rating else ""
+            vehicle_str = r.vehicle_model or "-"
+            content = (r.content or "").replace("<br>", " ").replace("<br/>", " ").replace("<br />", " ")
+
+            x_before = pdf.get_x()
+            y_before = pdf.get_y()
+
+            pdf.cell(col_date, row, f" {date_str}", border="LBT")
+            pdf.set_text_color(239, 68, 68)
+            pdf.cell(col_rating, row, rating_str, border="BT", align="C")
+            pdf.set_text_color(0, 0, 0)
+            pdf.cell(col_vehicle, row, f" {vehicle_str}", border="BT")
+
+            x_content = pdf.get_x()
+            pdf.multi_cell(col_content, row, f" {content}", border="RBT")
+            y_after = pdf.get_y()
+
+            # multi_cell이 여러 줄이면 앞 셀 높이 보정
+            if y_after - y_before > row:
+                actual_h = y_after - y_before
+                pdf.set_xy(x_before, y_before)
+                pdf.cell(col_date, actual_h, f" {date_str}", border="LBT")
                 pdf.set_text_color(239, 68, 68)
-                pdf.cell(col_rating, row, rating_str, border="BT", align="C")
+                pdf.cell(col_rating, actual_h, rating_str, border="BT", align="C")
                 pdf.set_text_color(0, 0, 0)
-                pdf.cell(col_vehicle, row, f" {vehicle_str}", border="BT")
-
-                # 내용이 길면 줄바꿈 처리
-                x_content = pdf.get_x()
+                pdf.cell(col_vehicle, actual_h, f" {vehicle_str}", border="BT")
+                pdf.set_xy(x_content, y_before)
                 pdf.multi_cell(col_content, row, f" {content}", border="RBT")
-                y_after = pdf.get_y()
 
-                # multi_cell이 여러 줄이면 앞 셀 높이 보정
-                if y_after - y_before > row:
-                    actual_h = y_after - y_before
-                    pdf.set_xy(x_before, y_before)
-                    pdf.cell(col_date, actual_h, f" {date_str}", border="LBT")
-                    pdf.set_text_color(239, 68, 68)
-                    pdf.cell(col_rating, actual_h, rating_str, border="BT", align="C")
-                    pdf.set_text_color(0, 0, 0)
-                    pdf.cell(col_vehicle, actual_h, f" {vehicle_str}", border="BT")
-                    pdf.set_xy(x_content, y_before)
-                    pdf.multi_cell(col_content, row, f" {content}", border="RBT")
+        pdf.ln(gap)
 
-            pdf.ln(gap)
-
-        # ── 푸터 ──
+    def _render_footer(
+        self, pdf: FPDF, font: str, w: float, m: float, report: ReportData
+    ) -> None:
+        """푸터: 구분선 + 생성 정보"""
         self._hr(pdf, m, w)
         pdf.set_font(font, "", 7)
         pdf.set_text_color(150, 150, 150)
         pdf.cell(w, 4, f"Carmore AI  |  {report.generated_at}", align="C")
         pdf.set_text_color(0, 0, 0)
-
-        return bytes(pdf.output())
 
     # ── 심플 헬퍼 ──
 
