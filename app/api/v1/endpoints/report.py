@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 import time
 import uuid
 from datetime import date
@@ -22,7 +21,7 @@ from schemas.common import ApiResponseModel, api_response, validate_date_range_d
 from schemas.report import BatchPdfRequest
 from services.report_service import ReportService
 
-from ._common import resolve_period_or_dates
+from ._common import resolve_period_or_dates, sanitize_pdf_filename
 from .deps import get_report_service
 
 logger = logging.getLogger(__name__)
@@ -222,7 +221,7 @@ async def _run_batch_pdf_job(
                     logger.error("Batch PDF: branch %d PDF 생성 실패: %s", branch_id, pdf_result)
                     skipped.append(branch_id)
                     continue
-                safe_name = re.sub(r'[\\/:*?"<>|]', '_', report.branch_name)
+                safe_name = sanitize_pdf_filename(report.branch_name)
                 zf.writestr(f"AI_Report_{safe_name}_{date_label}.pdf", pdf_result)
                 pdf_count += 1
 
@@ -357,7 +356,7 @@ async def api_download_report_pdf(
 
         pdf_bytes = await service.generate_pdf(report)
 
-        safe_name = re.sub(r'[\\/:*?"<>|]', '_', report.branch_name)
+        safe_name = sanitize_pdf_filename(report.branch_name)
         filename = f"AI_Report_{safe_name}_{date_label}.pdf"
         encoded_filename = urllib.parse.quote(filename)
 

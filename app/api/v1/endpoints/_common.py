@@ -31,3 +31,9 @@ def resolve_period_or_dates(
         status_code=error_status,
         detail="period 또는 start_date+end_date를 지정해야 합니다.",
     )
+
+
+def sanitize_pdf_filename(raw: str) -> str:
+    """PDF 저장/ZIP 엔트리용 파일명 정제 — Windows 예약 문자를 밑줄로 치환."""
+    import re
+    return re.sub(r'[\\/:*?"<>|]', '_', raw)
