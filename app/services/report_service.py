@@ -385,6 +385,135 @@ class ReportService:
         },
     }
 
+    async def _compute_trend_comparison(
+        self,
+        branch_id: int,
+        start_date: datetime,
+        end_date: datetime,
+        tags: dict,
+    ) -> "TrendComparison | None":
+        """이전 기간 대비 트렌드 비교 산출. 이전 기간 리뷰가 없으면 None 반환."""
+        period_length = end_date - start_date
+        prev_end = start_date
+        prev_start = prev_end - period_length
+
+        prev_review_count = 0
+        if self.review_repo:
+            try:
+                prev_review_count = await self.review_repo.count_by_branch(
+                    branch_id, review_date_from=prev_start, review_date_to=prev_end,
+                )
+            except Exception:
+                pass
+
+        if prev_review_count == 0 or not tags.get("tag_by_category"):
+            return None
+
+        prev_tags = await self._step_tags(branch_id, prev_start, prev_end)
+        if not prev_tags.get("tag_by_category"):
+            return None
+
+        from services.tag_stats_calculator import TagStatsCalculator
+        trend_data = TagStatsCalculator.compute_trend(
+            current_category_stats=tags["tag_by_category"],
+            previous_category_stats=prev_tags["tag_by_category"],
+            current_sentiment=tags.get("sentiment_stats", {}),
+            previous_sentiment=prev_tags.get("sentiment_stats", {}),
+        )
+
+        return TrendComparison(
+            previous_period=f"{prev_start.strftime('%Y-%m-%d')} ~ {prev_end.strftime('%Y-%m-%d')}",
+            current_period=f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
+            previous_total_reviews=prev_review_count,
+            current_total_reviews=0,  # _step_build에서 채움
+            overall_positive_change=trend_data["overall_positive_change"],
+            overall_negative_change=trend_data["overall_negative_change"],
+            category_trends=[TrendItem(**t) for t in trend_data["category_trends"]],
+        )
+
+    async def _compute_benchmark(self, branch_id: int) -> "BenchmarkData | None":
+        """지역/전국 벤치마크 산출. 지역 데이터가 없으면 None 반환."""
+        summary = await self.summary_repo.get_by_branch_id(branch_id)
+        branch_rating = summary.avg_rating if summary and summary.avg_rating else 0.0
+        region_name = summary.region if summary else ""
+
+        region_data = await self.summary_repo.get_region_data()
+        if not region_data:
+            return None
+
+        all_ratings = [r["avg_rating"] for r in region_data if r.get("avg_rating")]
+        regional_ratings = [
+            r["avg_rating"] for r in region_data
+            if r.get("avg_rating") and r.get("region") == region_name
+        ]
+
+        national_avg = round(sum(all_ratings) / len(all_ratings), 2) if all_ratings else 0.0
+        regional_avg = round(sum(regional_ratings) / len(regional_ratings), 2) if regional_ratings else 0.0
+
+        national_rank_pct = 0
+        if all_ratings and branch_rating > 0:
+            higher_count = sum(1 for r in all_ratings if r > branch_rating)
+            national_rank_pct = round(higher_count / len(all_ratings) * 100)
+
+        regional_rank_pct = 0
+        if regional_ratings and branch_rating > 0:
+            higher_count = sum(1 for r in regional_ratings if r > branch_rating)
+            regional_rank_pct = round(higher_count / len(regional_ratings) * 100)
+
+        return BenchmarkData(
+            branch_rating=branch_rating,
+            regional_avg_rating=regional_avg,
+            national_avg_rating=national_avg,
+            regional_rank_pct=regional_rank_pct,
+            national_rank_pct=national_rank_pct,
+            region_name=region_name or "",
+            total_branches_in_region=len(regional_ratings),
+            total_branches_national=len(all_ratings),
+        )
+
+    def _compute_priority_actions(self, tags: dict) -> "list[PriorityAction]":
+        """카테고리 부정률 기반 우선순위 액션 목록 산출 (상위 5개)."""
+        category_stats = tags.get("tag_by_category", {})
+        tag_details = tags.get("tag_details", [])
+        actions: list[PriorityAction] = []
+
+        for cat_name, stats in category_stats.items():
+            total = stats.get("total", 0)
+            neg = stats.get("negative", 0)
+            if total == 0 or neg == 0:
+                continue
+            neg_ratio = round(neg / total * 100)
+            if neg_ratio < 15:
+                continue
+
+            suggestion = self.ACTION_SUGGESTIONS.get(cat_name, {})
+            impact = "high" if neg_ratio >= 30 else ("medium" if neg_ratio >= 20 else "low")
+
+            worst_tag = ""
+            worst_neg = 0
+            for td in tag_details:
+                if td.get("category_name") == cat_name and td.get("negative", 0) > worst_neg:
+                    worst_neg = td["negative"]
+                    worst_tag = td.get("tag_name", "")
+
+            actions.append(PriorityAction(
+                rank=0,
+                category_name=cat_name,
+                tag_name=worst_tag,
+                issue=suggestion.get("issue", f"{cat_name} 관련 부정 피드백 발생"),
+                action=suggestion.get("action", f"{cat_name} 영역 점검 및 개선 필요"),
+                impact=impact,
+                effort=suggestion.get("effort", "medium"),
+                negative_ratio=neg_ratio,
+                negative_count=neg,
+            ))
+
+        actions.sort(key=lambda a: a.negative_ratio, reverse=True)
+        for i, action in enumerate(actions):
+            action.rank = i + 1
+
+        return actions[:5]
+
     async def _step_insights(
         self,
         branch_id: int,
@@ -401,129 +530,23 @@ class ReportService:
 
         # --- 1. 트렌드 비교 ---
         try:
-            period_length = end_date - start_date
-            prev_end = start_date
-            prev_start = prev_end - period_length
-
-            # 이전 기간 리뷰 수를 먼저 확인 — 0건이면 비교 무의미 (all-time fallback 방지)
-            prev_review_count = 0
-            if self.review_repo:
-                try:
-                    prev_review_count = await self.review_repo.count_by_branch(
-                        branch_id, review_date_from=prev_start, review_date_to=prev_end,
-                    )
-                except Exception:
-                    pass
-
-            if prev_review_count > 0 and tags.get("tag_by_category"):
-                prev_tags = await self._step_tags(branch_id, prev_start, prev_end)
-
-                if prev_tags.get("tag_by_category"):
-                    from services.tag_stats_calculator import TagStatsCalculator
-                    trend_data = TagStatsCalculator.compute_trend(
-                        current_category_stats=tags["tag_by_category"],
-                        previous_category_stats=prev_tags["tag_by_category"],
-                        current_sentiment=tags.get("sentiment_stats", {}),
-                        previous_sentiment=prev_tags.get("sentiment_stats", {}),
-                    )
-
-                    insights["trend_comparison"] = TrendComparison(
-                        previous_period=f"{prev_start.strftime('%Y-%m-%d')} ~ {prev_end.strftime('%Y-%m-%d')}",
-                        current_period=f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
-                        previous_total_reviews=prev_review_count,
-                        current_total_reviews=0,  # _step_build에서 채움
-                        overall_positive_change=trend_data["overall_positive_change"],
-                        overall_negative_change=trend_data["overall_negative_change"],
-                        category_trends=[TrendItem(**t) for t in trend_data["category_trends"]],
-                    )
+            trend = await self._compute_trend_comparison(branch_id, start_date, end_date, tags)
+            if trend is not None:
+                insights["trend_comparison"] = trend
         except Exception as e:
             logger.warning("트렌드 비교 산출 실패 (무시): %s", e)
 
         # --- 2. 벤치마크 ---
         try:
-            summary = await self.summary_repo.get_by_branch_id(branch_id)
-            branch_rating = summary.avg_rating if summary and summary.avg_rating else 0.0
-            region_name = summary.region if summary else ""
-
-            region_data = await self.summary_repo.get_region_data()
-            if region_data:
-                all_ratings = [r["avg_rating"] for r in region_data if r.get("avg_rating")]
-                regional_ratings = [
-                    r["avg_rating"] for r in region_data
-                    if r.get("avg_rating") and r.get("region") == region_name
-                ]
-
-                national_avg = round(sum(all_ratings) / len(all_ratings), 2) if all_ratings else 0.0
-                regional_avg = round(sum(regional_ratings) / len(regional_ratings), 2) if regional_ratings else 0.0
-
-                # 백분위 계산 (상위 N%)
-                national_rank_pct = 0
-                if all_ratings and branch_rating > 0:
-                    higher_count = sum(1 for r in all_ratings if r > branch_rating)
-                    national_rank_pct = round(higher_count / len(all_ratings) * 100)
-
-                regional_rank_pct = 0
-                if regional_ratings and branch_rating > 0:
-                    higher_count = sum(1 for r in regional_ratings if r > branch_rating)
-                    regional_rank_pct = round(higher_count / len(regional_ratings) * 100)
-
-                insights["benchmark"] = BenchmarkData(
-                    branch_rating=branch_rating,
-                    regional_avg_rating=regional_avg,
-                    national_avg_rating=national_avg,
-                    regional_rank_pct=regional_rank_pct,
-                    national_rank_pct=national_rank_pct,
-                    region_name=region_name or "",
-                    total_branches_in_region=len(regional_ratings),
-                    total_branches_national=len(all_ratings),
-                )
+            benchmark = await self._compute_benchmark(branch_id)
+            if benchmark is not None:
+                insights["benchmark"] = benchmark
         except Exception as e:
             logger.warning("벤치마크 산출 실패 (무시): %s", e)
 
         # --- 3. 우선순위 액션 ---
         try:
-            category_stats = tags.get("tag_by_category", {})
-            tag_details = tags.get("tag_details", [])
-            actions: list[PriorityAction] = []
-
-            for cat_name, stats in category_stats.items():
-                total = stats.get("total", 0)
-                neg = stats.get("negative", 0)
-                if total == 0 or neg == 0:
-                    continue
-                neg_ratio = round(neg / total * 100)
-                if neg_ratio < 15:
-                    continue
-
-                suggestion = self.ACTION_SUGGESTIONS.get(cat_name, {})
-                impact = "high" if neg_ratio >= 30 else ("medium" if neg_ratio >= 20 else "low")
-
-                # 해당 카테고리에서 가장 부정 많은 태그 찾기
-                worst_tag = ""
-                worst_neg = 0
-                for td in tag_details:
-                    if td.get("category_name") == cat_name and td.get("negative", 0) > worst_neg:
-                        worst_neg = td["negative"]
-                        worst_tag = td.get("tag_name", "")
-
-                actions.append(PriorityAction(
-                    rank=0,
-                    category_name=cat_name,
-                    tag_name=worst_tag,
-                    issue=suggestion.get("issue", f"{cat_name} 관련 부정 피드백 발생"),
-                    action=suggestion.get("action", f"{cat_name} 영역 점검 및 개선 필요"),
-                    impact=impact,
-                    effort=suggestion.get("effort", "medium"),
-                    negative_ratio=neg_ratio,
-                    negative_count=neg,
-                ))
-
-            # 영향도 순 정렬 (부정률 내림차순)
-            actions.sort(key=lambda a: a.negative_ratio, reverse=True)
-            for i, action in enumerate(actions):
-                action.rank = i + 1
-
-            insights["priority_actions"] = actions[:5]
+            insights["priority_actions"] = self._compute_priority_actions(tags)
         except Exception as e:
             logger.warning("우선순위 액션 산출 실패 (무시): %s", e)
 
