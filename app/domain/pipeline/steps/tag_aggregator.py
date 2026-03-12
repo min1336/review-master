@@ -96,10 +96,10 @@ class TagAggregator:
         if not all_tag_names:
             return tag_id_cache
 
-        null_category_tags = await self._fetch_existing_tags(session, all_tag_names, tag_id_cache)
+        tag_id_cache, null_category_tags = await self._fetch_existing_tags(session, all_tag_names)
 
         missing_tags = (all_tag_names - set(tag_id_cache.keys())) | null_category_tags
-        await self._upsert_missing_tags(session, missing_tags, tag_id_cache)
+        tag_id_cache = await self._upsert_missing_tags(session, missing_tags, tag_id_cache)
 
         return tag_id_cache
 
@@ -107,9 +107,9 @@ class TagAggregator:
         self,
         session: AsyncSession,
         all_tag_names: set[str],
-        tag_id_cache: dict[str, int],
-    ) -> set[str]:
-        """tags 테이블 배치 조회, category_id가 NULL인 태그 집합 반환"""
+    ) -> tuple[dict[str, int], set[str]]:
+        """tags 테이블 배치 조회, (populated_cache, null_category_tags) 반환"""
+        tag_id_cache: dict[str, int] = {}
         null_category_tags: set[str] = set()
         try:
             result = await session.execute(
@@ -122,17 +122,17 @@ class TagAggregator:
                     null_category_tags.add(row.name)
         except Exception as e:
             logger.warning("tags 배치 조회 실패: %s", e)
-        return null_category_tags
+        return tag_id_cache, null_category_tags
 
     async def _upsert_missing_tags(
         self,
         session: AsyncSession,
         missing_tags: set[str],
         tag_id_cache: dict[str, int],
-    ) -> None:
-        """캐시에 없거나 category_id가 NULL인 태그를 upsert하여 tag_id_cache 갱신"""
+    ) -> dict[str, int]:
+        """캐시에 없거나 category_id가 NULL인 태그를 upsert하여 갱신된 tag_id_cache 반환"""
         if not missing_tags:
-            return
+            return tag_id_cache
 
         # tag_name → (category_name, group) 매핑 빌드 (circular import 방지: 함수 내 import)
         from domain.analysis.patterns import TAG_REGISTRY
@@ -184,6 +184,8 @@ class TagAggregator:
             except Exception as e:
                 logger.warning("태그 upsert 실패 (tag=%s): %s", tag_name, e)
                 continue
+
+        return tag_id_cache
 
     async def _fetch_category_ids(
         self,
