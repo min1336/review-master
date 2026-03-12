@@ -591,26 +591,20 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
             "만탄": TagMeta(keywords=["만땅", "만탄"]),
         },
     ),
-    # ── 배달 (8 tags) ─────────────────────────────
-    "배달": CategoryMeta(
+    # ── 배달/배차 (4 tags) ──────────────────────────
+    "배달/배차": CategoryMeta(
         group="affiliate",
         color="#06b6d4",
         default_tag="딜리버리",
         description=(
-            "딜리버리 배차 픽업 반납 인수 수령 전달 인계 차량인도 반환 절차 "
-            "대기 지연 늦게 늦음 빨리 시간 약속시간 출발 도착 기다림 배달 "
-            "공항 역 터미널 위치 접근성 "
-            "빠른배차 정시도착 간편한반납 원활한절차 "
-            "지연 오래기다림 배차늦음 복잡한절차"
+            "딜리버리 배차 배달 배송 탁송 대기 대기시간 "
+            "배정 지연 늦게 늦음 빨리 시간 약속시간 출발 도착 기다림 "
+            "빠른배차 정시도착 지연 오래기다림 배차늦음"
         ),
-        positive_label="배달 서비스가 우수함",
-        negative_label="배달 서비스가 별로임",
+        positive_label="배달/배차가 우수함",
+        negative_label="배달/배차가 별로임",
         tags={
             "딜리버리": TagMeta(keywords=["딜리버리", "배달", "배송"]),
-            "반납/픽업": TagMeta(keywords=[
-                "반납", "픽업", "인수", "수령", "전달", "인계", "반환",
-                "차량인도", "출차", "입차",
-            ]),
             "배차/시간": TagMeta(keywords=[
                 "배차", "배정", "차량변경", "차종변경", "지연", "늦게", "늦음", "늦었",
                 "기다림", "기다리", "재촉", "독촉", "급하", "빨리빨리", "서두르",
@@ -619,10 +613,42 @@ TAG_REGISTRY: dict[str, CategoryMeta] = {
                 "차종", "대차",
                 "시간약속", "예약취소",
             ]),
-            "위치/접근성": TagMeta(keywords=["위치", "접근성", "역", "터미널"]),
-            "탁송": TagMeta(keywords=["탁송"]),
-            "공항": TagMeta(keywords=["공항"]),
             "대기시간": TagMeta(keywords=["대기", "대기시간"]),
+            "탁송": TagMeta(keywords=["탁송"]),
+        },
+    ),
+    # ── 반납/픽업 (1 tag) ────────────────────────────
+    "반납/픽업": CategoryMeta(
+        group="affiliate",
+        color="#14b8a6",
+        default_tag="반납/픽업",
+        description=(
+            "반납 픽업 인수 수령 전달 인계 반환 차량인도 출차 입차 "
+            "간편한반납 원활한절차 복잡한절차"
+        ),
+        positive_label="반납/픽업이 원활함",
+        negative_label="반납/픽업이 불편함",
+        tags={
+            "반납/픽업": TagMeta(keywords=[
+                "반납", "픽업", "인수", "수령", "전달", "인계", "반환",
+                "차량인도", "출차", "입차",
+            ]),
+        },
+    ),
+    # ── 위치/접근성 (3 tags) ─────────────────────────
+    "위치/접근성": CategoryMeta(
+        group="affiliate",
+        color="#a855f7",
+        default_tag="위치/접근성",
+        description=(
+            "공항 역 터미널 위치 접근성 "
+            "주차장 주차 무료주차 유료주차"
+        ),
+        positive_label="위치/접근성이 좋음",
+        negative_label="위치/접근성이 불편함",
+        tags={
+            "위치/접근성": TagMeta(keywords=["위치", "접근성", "역", "터미널"]),
+            "공항": TagMeta(keywords=["공항"]),
             "주차장": TagMeta(keywords=["주차장", "주차", "무료주차", "유료주차"]),
         },
     ),
@@ -676,7 +702,23 @@ LEGACY_CATEGORY_MAP: dict[str, str] = {
     "차량이 청결함": "청결",
     "사고 처리를 잘해줌": "사고 처리",
     "주유비 부담 없음": "주유비",
-    "배달 서비스가 우수함": "배달",
+    "배달 서비스가 우수함": "배달/배차",
+    "배달": "배달/배차",
+}
+
+
+# 52개 태그명 → 소속 카테고리명 역매핑 (DB 카테고리 오버라이드용)
+TAG_TO_CATEGORY: dict[str, str] = {
+    tag_name: cat_name
+    for cat_name, cat in TAG_REGISTRY.items()
+    for tag_name in cat.tags
+}
+
+# 52개 태그명 → 소속 카테고리 색상
+TAG_TO_CATEGORY_COLOR: dict[str, str] = {
+    tag_name: cat.color
+    for cat_name, cat in TAG_REGISTRY.items()
+    for tag_name in cat.tags
 }
 
 
@@ -685,6 +727,13 @@ def normalize_category_name(name: str) -> str:
     if not name:
         return name or ""
     return LEGACY_CATEGORY_MAP.get(name, name)
+
+
+def resolve_tag_category(tag_name: str, db_category: str = "") -> str:
+    """태그명 기반 카테고리 해석 (TAG_REGISTRY 우선, DB fallback)"""
+    if tag_name in TAG_TO_CATEGORY:
+        return TAG_TO_CATEGORY[tag_name]
+    return normalize_category_name(db_category)
 
 # 7개 카테고리 → 긍정/부정 표시 문장
 CATEGORY_POSITIVE_LABELS: dict[str, str] = {

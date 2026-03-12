@@ -148,7 +148,7 @@ class CarModelRepository:
         if not rows:
             return {}
 
-        from domain.analysis.patterns import normalize_category_name
+        from domain.analysis.patterns import resolve_tag_category
 
         # (car_model_id, tag_id)별 집계
         agg: dict[tuple[int, int], dict] = {}
@@ -161,7 +161,7 @@ class CarModelRepository:
 
             if key not in agg:
                 agg[key] = {"positive": 0, "negative": 0, "neutral": 0}
-                cat_name = normalize_category_name(row.category_name) if row.category_name else ""
+                cat_name = resolve_tag_category(row.tag_name or "", row.category_name or "")
                 meta[key] = (row.model_name or "기타", row.tag_name or "기타", cat_name)
 
             agg[key]["positive"] += row.positive_count or 0

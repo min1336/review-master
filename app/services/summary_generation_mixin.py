@@ -306,8 +306,8 @@ class SummaryGenerationMixin:
 
             tag_info: dict[int, tuple[str, str]] = {}
             for t in tag_rows:
-                from domain.analysis.patterns import normalize_category_name
-                cat_name = normalize_category_name(t.category.name) if t.category else "기타"
+                from domain.analysis.patterns import resolve_tag_category
+                cat_name = resolve_tag_category(t.name, t.category.name) if t.category else "기타"
                 tag_info[t.id] = (t.name, cat_name)
 
         from collections import defaultdict
@@ -350,10 +350,10 @@ class SummaryGenerationMixin:
             if not tag_info:
                 continue
 
-            from domain.analysis.patterns import normalize_category_name
+            from domain.analysis.patterns import resolve_tag_category
             category_name = "기타"
             if tag_info.categories and tag_info.categories.name:
-                category_name = normalize_category_name(tag_info.categories.name)
+                category_name = resolve_tag_category(tag_info.name, tag_info.categories.name)
 
             total = bt.count or 0
             positive = bt.positive_count or 0

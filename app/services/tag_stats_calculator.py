@@ -16,6 +16,7 @@ from domain.analysis.patterns import (
     CATEGORY_NEGATIVE_LABELS,
     CATEGORY_POSITIVE_LABELS,
     normalize_category_name,
+    resolve_tag_category,
 )
 from schemas.report import TagRankItem
 
@@ -131,9 +132,8 @@ class TagStatsCalculator:
             total_neg += neg
             total_neu += neu
 
-            cat_name = normalize_category_name(
-                self._rpc_val(row, "categoryName", "category_name", default="") or ""
-            )
+            db_cat = self._rpc_val(row, "categoryName", "category_name", default="") or ""
+            cat_name = resolve_tag_category(name, db_cat)
             tag_details.append({
                 "tag_name": name, "category_name": cat_name,
                 "positive": pos, "negative": neg, "total": total,
@@ -210,7 +210,8 @@ class TagStatsCalculator:
             total_neg += neg
 
             cat_info = tag_info.get("categories") or {}
-            cat_name = normalize_category_name(cat_info.get("name", ""))
+            db_cat = cat_info.get("name", "")
+            cat_name = resolve_tag_category(name, db_cat)
 
             tag_details.append({
                 "tag_name": name,

@@ -37,7 +37,9 @@
                 '가격',
                 '청결',
                 '외관',
-                '배달'
+                '배달/배차',
+                '반납/픽업',
+                '위치/접근성'
             ]);
 
             const PERIOD_LABELS = Object.freeze({
@@ -2434,7 +2436,7 @@
                 faGrid.className = 'settings-focus-grid';
                 const FOCUS_AREAS = [
                     '직원친절', '외관', '가격', '청결',
-                    '사고 처리', '주유비', '배달',
+                    '사고 처리', '주유비', '배달/배차', '반납/픽업', '위치/접근성',
                 ];
                 FOCUS_AREAS.forEach(area => {
                     const item = document.createElement('label');
@@ -2932,7 +2934,9 @@
                 const TAG_SENTENCE_MAP = {
                     '직원친절': { positive: '직원이 친절함', negative: '직원이 불친절함' },
                     '사고 처리': { positive: '사고 처리를 잘해줌', negative: '사고 처리를 잘 못해줌' },
-                    '배달': { positive: '배달 서비스가 우수함', negative: '배달 서비스가 미흡함' },
+                    '배달/배차': { positive: '배달/배차가 우수함', negative: '배달/배차가 별로임' },
+                    '반납/픽업': { positive: '반납/픽업이 원활함', negative: '반납/픽업이 불편함' },
+                    '위치/접근성': { positive: '위치/접근성이 좋음', negative: '위치/접근성이 불편함' },
                     '가격': { positive: '가격이 저렴함', negative: '가격이 비쌈' },
                     '주유비': { positive: '주유비 부담 없음', negative: '주유비 부담 있음' },
                     '외관': { positive: '차량 외관이 좋음', negative: '차량 외관이 안좋음' },

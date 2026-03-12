@@ -36,7 +36,7 @@ class ReportDataConfig(BaseModel):
 
 VALID_FOCUS_AREAS = [
     "직원친절", "외관", "가격", "청결",
-    "사고 처리", "주유비", "배달",
+    "사고 처리", "주유비", "배달/배차", "반납/픽업", "위치/접근성",
 ]
 
 
