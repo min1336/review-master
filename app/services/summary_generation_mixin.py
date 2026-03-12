@@ -43,12 +43,7 @@ class SummaryGenerationMixin:
         mode: str = "marketing",
     ) -> dict:
         """태그+감정+리뷰 데이터를 활용한 AI 요약 생성"""
-        from infrastructure.llm import get_provider
-        from infrastructure.llm.prompts import (
-            OperationalSummaryPromptBuilder,
-            SummaryPromptBuilder,
-        )
-        from repository.database import get_session_factory
+        from infrastructure.llm.prompts import SummaryPromptBuilder
 
         # 1. 지점 기본 정보 조회
         summary = await self.summary_repo.get_by_branch_id(branch_id)
@@ -62,7 +57,75 @@ class SummaryGenerationMixin:
         summary_data = summary.model_dump()
         branch_name = summary_data.get("branch_name", f"지점 {branch_id}")
 
-        # 2. 기간별 리뷰 수 확인 및 적절한 기간 선택
+        # 2. 기간 선택 + 대표 리뷰 수집
+        period_result = await self._select_period_and_fetch_reviews(
+            branch_id, branch_name, mode
+        )
+        if not period_result["success"]:
+            return period_result
+
+        selected_period = period_result["selected_period"]
+        review_count = period_result["review_count"]
+        start_date = period_result["start_date"]
+        end_date = period_result["end_date"]
+        representative_reviews = period_result["representative_reviews"]
+
+        period_key = selected_period["key"]
+        period_field = selected_period["field"]
+        period_label = selected_period["label"]
+
+        # 3. 태그 + 감정 통계 조회
+        grouped_tag_sentiments, sentiment_stats = await self._fetch_tag_and_sentiment_data(
+            branch_id, period_key
+        )
+
+        # 4. 프롬프트 생성 및 LLM 호출
+        llm_result = await self._call_llm(
+            branch_id=branch_id,
+            mode=mode,
+            branch_name=branch_name,
+            period_label=period_label,
+            period_key=period_key,
+            grouped_tag_sentiments=grouped_tag_sentiments,
+            sentiment_stats=sentiment_stats,
+            review_count=review_count,
+            representative_reviews=representative_reviews,
+        )
+        if not llm_result["success"]:
+            return llm_result
+
+        generated_summary = llm_result["generated_summary"]
+
+        # 5. 검증, 마크다운 정리, DB 저장
+        generated_summary = self._postprocess_summary(
+            branch_id, generated_summary, mode
+        )
+        if save_to_db:
+            await self._save_summary_to_db(
+                branch_id, period_key, period_field, generated_summary, mode
+            )
+
+        return {
+            "success": True,
+            "summary": generated_summary,
+            "period": period_key,
+            "period_label": period_label,
+            "start_date": start_date.strftime("%Y-%m-%d") if start_date else None,
+            "end_date": end_date.strftime("%Y-%m-%d"),
+            "review_count": review_count,
+            "mode": mode,
+        }
+
+    async def _select_period_and_fetch_reviews(
+        self,
+        branch_id: int,
+        branch_name: str,
+        mode: str,
+    ) -> dict:
+        """기간별 리뷰 수를 확인해 적절한 기간을 선택하고, 대표 리뷰를 수집한다."""
+        from infrastructure.llm.prompts import SummaryPromptBuilder
+        from repository.database import get_session_factory
+
         async with get_session_factory()() as session:
             end_date = utc_now()
             selected_period = None
@@ -85,7 +148,7 @@ class SummaryGenerationMixin:
                     selected_period = period_config
                     break
 
-            # 3. 어떤 기간도 30개 이상이 아닌 경우 → 전체 기간으로 폴백
+            # 어떤 기간도 30개 이상이 아닌 경우 → 전체 기간으로 폴백
             if not selected_period:
                 total_result = await session.execute(
                     select(func.count())
@@ -112,21 +175,27 @@ class SummaryGenerationMixin:
                 review_count = total_count
                 start_date = None
 
-            # 6. 감정별 리뷰 샘플링 (다양성 확보)
             representative_reviews = await self._fetch_representative_reviews(
                 session, branch_id, start_date, mode
             )
 
-        period_key = selected_period["key"]
-        period_field = selected_period["field"]
-        period_label = selected_period["label"]
+        return {
+            "success": True,
+            "selected_period": selected_period,
+            "review_count": review_count,
+            "start_date": start_date,
+            "end_date": end_date,
+            "representative_reviews": representative_reviews,
+        }
 
-        # 4. 태그 조회
-        grouped_tag_sentiments = await self._fetch_grouped_tags(
-            branch_id, period_key
-        )
+    async def _fetch_tag_and_sentiment_data(
+        self,
+        branch_id: int,
+        period_key: str,
+    ) -> tuple[list[dict], dict]:
+        """태그 그룹핑과 감정 통계를 조회해 반환한다."""
+        grouped_tag_sentiments = await self._fetch_grouped_tags(branch_id, period_key)
 
-        # 5. 감정 통계 조회
         sentiment_stats = {"positive": 0, "negative": 0, "neutral": 0, "total": 0}
         if self.sentiment_repo:
             try:
@@ -144,7 +213,27 @@ class SummaryGenerationMixin:
                 except Exception:
                     pass
 
-        # 7. 프롬프트 생성
+        return grouped_tag_sentiments, sentiment_stats
+
+    async def _call_llm(
+        self,
+        branch_id: int,
+        mode: str,
+        branch_name: str,
+        period_label: str,
+        period_key: str,
+        grouped_tag_sentiments: list[dict],
+        sentiment_stats: dict,
+        review_count: int,
+        representative_reviews: dict,
+    ) -> dict:
+        """프롬프트를 생성하고 LLM을 호출해 요약 텍스트를 반환한다."""
+        from infrastructure.llm import get_provider
+        from infrastructure.llm.prompts import (
+            OperationalSummaryPromptBuilder,
+            SummaryPromptBuilder,
+        )
+
         if mode == "operational":
             system_prompt, user_prompt = OperationalSummaryPromptBuilder.create_prompt(
                 tag_sentiments=grouped_tag_sentiments,
@@ -166,7 +255,6 @@ class SummaryGenerationMixin:
                 )
             )
 
-        # 8. LLM 호출
         llm_params = {
             "marketing": {"max_tokens": 400, "temperature": 0.7},
             "operational": {"max_tokens": 500, "temperature": 0.5},
@@ -193,7 +281,15 @@ class SummaryGenerationMixin:
                 "error": f"AI 요약 생성 실패: {e}",
             }
 
-        # 9. 검증 및 마크다운 정리
+        return {"success": True, "generated_summary": generated_summary}
+
+    def _postprocess_summary(
+        self,
+        branch_id: int,
+        generated_summary: str,
+        mode: str,
+    ) -> str:
+        """마크다운 제거 및 유효성 검증 후 요약 텍스트를 반환한다."""
         from infrastructure.llm.validator import (
             strip_markdown_formatting,
             validate_summary,
@@ -206,32 +302,29 @@ class SummaryGenerationMixin:
             logger.warning(
                 f"검증 실패 (branch_id={branch_id}, mode={mode}): {errors}"
             )
+        return generated_summary
 
-        # 10. DB 저장
-        if save_to_db:
-            try:
-                all_period_fields = ["summary_all", "summary_1y", "summary_6m", "summary_3m", "summary_1m"]
-                save_data = {"branch_id": branch_id, period_field: generated_summary}
-                for f in all_period_fields:
-                    if f != period_field:
-                        save_data[f] = None
-                await self.summary_repo.upsert_by_branch_id(save_data)
-                logger.info(
-                    f"요약 저장 완료: branch_id={branch_id}, period={period_key}, mode={mode}"
-                )
-            except Exception as e:
-                logger.error("요약 저장 실패 (branch_id=%s): %s", branch_id, e)
-
-        return {
-            "success": True,
-            "summary": generated_summary,
-            "period": period_key,
-            "period_label": period_label,
-            "start_date": start_date.strftime("%Y-%m-%d") if start_date else None,
-            "end_date": end_date.strftime("%Y-%m-%d"),
-            "review_count": review_count,
-            "mode": mode,
-        }
+    async def _save_summary_to_db(
+        self,
+        branch_id: int,
+        period_key: str,
+        period_field: str,
+        generated_summary: str,
+        mode: str,
+    ) -> None:
+        """생성된 요약을 DB에 저장한다."""
+        try:
+            all_period_fields = ["summary_all", "summary_1y", "summary_6m", "summary_3m", "summary_1m"]
+            save_data = {"branch_id": branch_id, period_field: generated_summary}
+            for f in all_period_fields:
+                if f != period_field:
+                    save_data[f] = None
+            await self.summary_repo.upsert_by_branch_id(save_data)
+            logger.info(
+                f"요약 저장 완료: branch_id={branch_id}, period={period_key}, mode={mode}"
+            )
+        except Exception as e:
+            logger.error("요약 저장 실패 (branch_id=%s): %s", branch_id, e)
 
     async def _fetch_grouped_tags(
         self, branch_id: int, period_key: str
