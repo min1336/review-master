@@ -311,6 +311,8 @@ class NegativeReviewItem(BaseModel):
     """부정 리뷰 항목"""
     content: str = ""
     rating: float = 0.0
+    rating_car: float = 0.0
+    rating_convenience: float = 0.0
     review_date: str = ""
     vehicle_model: str = ""
 

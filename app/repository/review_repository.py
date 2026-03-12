@@ -294,6 +294,8 @@ class BranchReviewRepository(BaseRepository[Review]):
             select(
                 BranchReviewORM.content,
                 BranchReviewORM.rating_service,
+                BranchReviewORM.rating_car,
+                BranchReviewORM.rating_convenience,
                 BranchReviewORM.review_date,
                 BranchReviewORM.car_model,
             )
@@ -305,6 +307,8 @@ class BranchReviewRepository(BaseRepository[Review]):
             {
                 "content": row.content or "",
                 "rating": float(row.rating_service) if row.rating_service else 0.0,
+                "rating_car": float(row.rating_car) if row.rating_car else 0.0,
+                "rating_convenience": float(row.rating_convenience) if row.rating_convenience else 0.0,
                 "review_date": row.review_date.strftime("%Y-%m-%d") if row.review_date else "",
                 "vehicle_model": row.car_model or "",
             }

@@ -339,22 +339,28 @@ class PDFGenerator:
         self._section(pdf, font, "6. 부정 리뷰 목록")
 
         col_date = 30
-        col_rating = 15
+        col_rs = 10
+        col_rc = 10
+        col_rv = 10
         col_vehicle = 35
-        col_content = w - col_date - col_rating - col_vehicle
+        col_content = w - col_date - col_rs - col_rc - col_rv - col_vehicle
 
         pdf.set_font(font, "B", 7)
         pdf.set_fill_color(240, 240, 240)
         pdf.cell(col_date, row, " 날짜", border=1, fill=True)
-        pdf.cell(col_rating, row, " 평점", border=1, fill=True, align="C")
-        pdf.cell(col_vehicle, row, " 차량", border=1, fill=True)
+        pdf.cell(col_rs, row, "서비스", border=1, fill=True, align="C")
+        pdf.cell(col_rc, row, "차량", border=1, fill=True, align="C")
+        pdf.cell(col_rv, row, "편의", border=1, fill=True, align="C")
+        pdf.cell(col_vehicle, row, " 차량모델", border=1, fill=True)
         pdf.cell(col_content, row, " 리뷰 내용", border=1, fill=True)
         pdf.ln(row)
 
         pdf.set_font(font, "", 7)
         for r in report.negative_reviews:
             date_str = r.review_date or ""
-            rating_str = str(r.rating) if r.rating else ""
+            rs_str = str(r.rating) if r.rating else ""
+            rc_str = str(r.rating_car) if r.rating_car else ""
+            rv_str = str(r.rating_convenience) if r.rating_convenience else ""
             vehicle_str = r.vehicle_model or "-"
             content = (r.content or "").replace("<br>", " ").replace("<br/>", " ").replace("<br />", " ")
 
@@ -363,7 +369,9 @@ class PDFGenerator:
 
             pdf.cell(col_date, row, f" {date_str}", border="LBT")
             pdf.set_text_color(239, 68, 68)
-            pdf.cell(col_rating, row, rating_str, border="BT", align="C")
+            pdf.cell(col_rs, row, rs_str, border="BT", align="C")
+            pdf.cell(col_rc, row, rc_str, border="BT", align="C")
+            pdf.cell(col_rv, row, rv_str, border="BT", align="C")
             pdf.set_text_color(0, 0, 0)
             pdf.cell(col_vehicle, row, f" {vehicle_str}", border="BT")
 
