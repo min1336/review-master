@@ -38,7 +38,35 @@ class MonthlyCarModelStatsUpdater:
         """
         kw_to_subtag = self._build_kw_to_subtag() if store_subtags else {}
 
-        # 1. 메모리 집계
+        groups = self._aggregate_groups(processed, store_subtags, kw_to_subtag)
+        if not groups:
+            return 0
+
+        model_id_cache = await self._fetch_model_ids(session, groups)
+        if model_id_cache is None:
+            return 0
+
+        tag_id_cache = await self._fetch_tag_ids(session, groups)
+        if tag_id_cache is None:
+            return 0
+
+        if store_subtags:
+            missing = {k[2] for k in groups} - set(tag_id_cache.keys())
+            if missing:
+                await self._ensure_subtag_entries(session, missing, tag_id_cache)
+
+        saved = await self._upsert_groups(session, groups, model_id_cache, tag_id_cache)
+
+        logger.info("monthly_car_model_tag_stats 저장 완료: %s건", saved)
+        return saved
+
+    def _aggregate_groups(
+        self,
+        processed: list[ProcessedReviewDTO],
+        store_subtags: bool,
+        kw_to_subtag: dict[str, str],
+    ) -> dict[tuple[str, str, str], dict[str, int]]:
+        """리뷰 목록을 (car_model, period, tag_name) 단위로 집계하여 반환"""
         groups: dict[tuple[str, str, str], dict[str, int]] = {}
 
         for pr in processed:
@@ -53,7 +81,6 @@ class MonthlyCarModelStatsUpdater:
                 if tag_name == "기타":
                     continue
 
-                # 카테고리 수준 (기존 동작 유지)
                 key = (car_model, period, tag_name)
                 if key not in groups:
                     groups[key] = {"positive": 0, "negative": 0, "neutral": 0}
@@ -62,7 +89,6 @@ class MonthlyCarModelStatsUpdater:
                 g["negative"] += len(sentiments.get("negative", []))
                 g["neutral"] += len(sentiments.get("neutral", []))
 
-                # 서브태그 수준 (키워드 → 서브태그 역매핑)
                 if store_subtags:
                     for sent_type in ("positive", "negative", "neutral"):
                         for kw in sentiments.get(sent_type, []):
@@ -75,44 +101,58 @@ class MonthlyCarModelStatsUpdater:
                                     }
                                 groups[st_key][sent_type] += 1
 
-        if not groups:
-            return 0
+        return groups
 
-        # 2. car_models_master에서 car_model_id 일괄 조회
+    async def _fetch_model_ids(
+        self,
+        session: AsyncSession,
+        groups: dict[tuple[str, str, str], dict[str, int]],
+    ) -> dict[str, int] | None:
+        """groups에서 car_model 이름 목록을 추출해 DB에서 id를 일괄 조회.
+        실패 시 None 반환."""
         all_model_names = list({k[0] for k in groups})
-        model_id_cache: dict[str, int] = {}
+        cache: dict[str, int] = {}
         try:
             result = await session.execute(
                 select(CarModelsMasterORM.id, CarModelsMasterORM.model_name)
                 .where(CarModelsMasterORM.model_name.in_(all_model_names))
             )
             for row in result.all():
-                model_id_cache[row.model_name] = row.id
+                cache[row.model_name] = row.id
         except Exception as e:
             logger.warning("car_models_master 조회 실패: %s", e)
-            return 0
+            return None
+        return cache
 
-        # 3. tags에서 tag_id 일괄 조회
+    async def _fetch_tag_ids(
+        self,
+        session: AsyncSession,
+        groups: dict[tuple[str, str, str], dict[str, int]],
+    ) -> dict[str, int] | None:
+        """groups에서 tag 이름 목록을 추출해 DB에서 id를 일괄 조회.
+        실패 시 None 반환."""
         all_tag_names = list({k[2] for k in groups})
-        tag_id_cache: dict[str, int] = {}
+        cache: dict[str, int] = {}
         try:
             result = await session.execute(
                 select(TagORM.id, TagORM.name)
                 .where(TagORM.name.in_(all_tag_names))
             )
             for row in result.all():
-                tag_id_cache[row.name] = row.id
+                cache[row.name] = row.id
         except Exception as e:
             logger.warning("tags 조회 실패: %s", e)
-            return 0
+            return None
+        return cache
 
-        # 3b. tags 테이블에 없는 서브태그 자동 생성
-        if store_subtags:
-            missing = set(all_tag_names) - set(tag_id_cache.keys())
-            if missing:
-                await self._ensure_subtag_entries(session, missing, tag_id_cache)
-
-        # 4. car_model별 배치 upsert (처리 후 즉시 메모리 해제)
+    async def _upsert_groups(
+        self,
+        session: AsyncSession,
+        groups: dict[tuple[str, str, str], dict[str, int]],
+        model_id_cache: dict[str, int],
+        tag_id_cache: dict[str, int],
+    ) -> int:
+        """car_model별로 upsert 배치를 실행하고 저장 건수를 반환"""
         tbl = MonthlyCarModelTagStatsORM.__table__
         saved = 0
         model_names = list({k[0] for k in groups})
@@ -122,12 +162,11 @@ class MonthlyCarModelStatsUpdater:
             if not car_model_id:
                 continue
 
-            # 이 모델의 그룹만 추출 + 원본에서 제거 (메모리 해제)
             model_keys = [k for k in groups if k[0] == model_name]
             upsert_rows = []
             for key in model_keys:
                 counts = groups.pop(key)
-                tag_id = tag_id_cache.get(key[2])  # key = (model, period, tag)
+                tag_id = tag_id_cache.get(key[2])
                 if not tag_id:
                     continue
                 upsert_rows.append({
@@ -161,7 +200,6 @@ class MonthlyCarModelStatsUpdater:
                     f"(model={model_name}): {e}"
                 )
 
-        logger.info("monthly_car_model_tag_stats 저장 완료: %s건", saved)
         return saved
 
     @staticmethod
