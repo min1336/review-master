@@ -230,15 +230,15 @@ class ReportAIGenerator:
         report_mode = tag_sentiments is not None
         temperature = 0.5 if report_mode else 0.7
 
-        # 커스텀 설정 적용
-        if report_config and report_mode:
-            system_prompt, user_prompt, temperature, max_tokens = (
-                self._apply_custom_config_period(
-                    system_prompt, user_prompt, report_config, temperature
-                )
-            )
-
         try:
+            # 커스텀 설정 적용
+            if report_config and report_mode:
+                system_prompt, user_prompt, temperature, max_tokens = (
+                    self._apply_custom_config_period(
+                        system_prompt, user_prompt, report_config, temperature
+                    )
+                )
+
             llm_provider = get_provider()
             response = await llm_provider.async_generate(
                 prompt=user_prompt,
@@ -388,8 +388,8 @@ class ReportAIGenerator:
         max_tokens = report_config.output.summary_max_length * 2
         return system_prompt, user_prompt, temperature, max_tokens
 
+    @staticmethod
     def _validate_period_content(
-        self,
         content: str,
         tag_sentiments: list[dict] | None,
         sentiment_stats: dict | None,
