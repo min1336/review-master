@@ -77,7 +77,11 @@ class TagService:
 
     async def create_tag(self, data: dict) -> dict | None:
         """태그 생성"""
-        result = await self.tag_repo.create_dict(data)
+        from sqlalchemy.exc import IntegrityError
+        try:
+            result = await self.tag_repo.create_dict(data)
+        except IntegrityError as e:
+            raise ValueError(f"태그 생성 실패: 중복된 이름 또는 제약 조건 위반") from e
         _tag_cache.invalidate()
         return result.model_dump() if result else None
 
@@ -147,7 +151,11 @@ class TagService:
 
     async def create_category(self, data: dict) -> dict | None:
         """카테고리 생성"""
-        result = await self._require_category_repo().create_dict(data)
+        from sqlalchemy.exc import IntegrityError
+        try:
+            result = await self._require_category_repo().create_dict(data)
+        except IntegrityError as e:
+            raise ValueError(f"카테고리 생성 실패: 중복된 이름 또는 제약 조건 위반") from e
         _tag_cache.invalidate()
         return result.model_dump() if result else None
 
