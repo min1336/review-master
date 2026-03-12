@@ -271,11 +271,15 @@ class BranchReviewRepository(BaseRepository[Review]):
         review_date_from: datetime | None = None,
         review_date_to: datetime | None = None,
     ) -> list[dict]:
-        """부정 리뷰 조회 (리포트 하단 나열용) — 3점 이하 + sentiment=negative, 전건"""
+        """부정 리뷰 조회 (리포트 하단 나열용) — 3점 이하 OR sentiment=negative, 전건"""
         conditions = [
             BranchReviewORM.branch_id == branch_id,
-            BranchReviewORM.sentiment == "negative",
-            or_(BranchReviewORM.rating_service <= 3, BranchReviewORM.rating_service.is_(None)),
+            or_(
+                BranchReviewORM.sentiment == "negative",
+                BranchReviewORM.rating_service <= 3,
+                BranchReviewORM.rating_car <= 3,
+                BranchReviewORM.rating_convenience <= 3,
+            ),
             BranchReviewORM.content.isnot(None),
             BranchReviewORM.content != "",
             BranchReviewORM.deleted_at.is_(None),
