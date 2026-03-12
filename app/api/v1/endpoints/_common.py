@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 
 from fastapi import HTTPException
@@ -35,5 +36,4 @@ def resolve_period_or_dates(
 
 def sanitize_pdf_filename(raw: str) -> str:
     """PDF 저장/ZIP 엔트리용 파일명 정제 — Windows 예약 문자를 밑줄로 치환."""
-    import re
     return re.sub(r'[\\/:*?"<>|]', '_', raw)

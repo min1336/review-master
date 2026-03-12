@@ -18,6 +18,7 @@ from schemas.common import (
     resolve_period,
     validate_date_range_d,
 )
+from api.v1.endpoints._common import sanitize_pdf_filename
 
 
 # ── api_response ──────────────────────────────────────
@@ -126,3 +127,27 @@ class TestResolvePeriod:
         start_12m, _ = resolve_period("12m")
         start_1y, _ = resolve_period("1y")
         assert start_12m == start_1y
+
+
+# ── sanitize_pdf_filename ──────────────────────────────
+
+
+class TestSanitizePdfFilename:
+    def test_windows_reserved_chars_replaced(self):
+        for ch in r'\/:*?"<>|':
+            result = sanitize_pdf_filename(ch)
+            assert result == "_", f"char {ch!r} should become '_', got {result!r}"
+
+    def test_clean_name_unchanged(self):
+        name = "2026-03-report_final"
+        assert sanitize_pdf_filename(name) == name
+
+    def test_empty_string(self):
+        assert sanitize_pdf_filename("") == ""
+
+    def test_only_forbidden_chars(self):
+        assert sanitize_pdf_filename("///") == "___"
+
+    def test_multiple_consecutive_forbidden_chars(self):
+        result = sanitize_pdf_filename('report<2026>:final*')
+        assert result == "report_2026__final_"
