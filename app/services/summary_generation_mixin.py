@@ -43,8 +43,6 @@ class SummaryGenerationMixin:
         mode: str = "marketing",
     ) -> dict:
         """태그+감정+리뷰 데이터를 활용한 AI 요약 생성"""
-        from infrastructure.llm.prompts import SummaryPromptBuilder
-
         # 1. 지점 기본 정보 조회
         summary = await self.summary_repo.get_by_branch_id(branch_id)
         if not summary:
