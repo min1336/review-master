@@ -218,33 +218,11 @@ class AnalysisService:
 
             # 신규 리뷰 분기: new_reviews 테이블에서 content 포함 조회
             if is_new is True and self.new_review_repo:
-                result = await self.new_review_repo.search_with_filters(
-                    branch_ids=effective_branch_ids,
-                    date_from=date_from,
-                    date_to=date_to,
-                    sort_by=sort_by,
-                    limit=limit,
-                    offset=offset,
+                new_result = await self._search_new_reviews_with_sentiment(
+                    effective_branch_ids, date_from, date_to, sort_by, limit, offset
                 )
-
-                if result.total > 0:
-                    # sentiment 보강: branch_reviews에서 병합
-                    review_ids = [
-                        int(r["review_id"]) for r in result.reviews if r.get("review_id")
-                    ]
-                    sentiment_map = {}
-                    if review_ids:
-                        sentiment_map = await self.review_repo.get_sentiments_by_review_ids(
-                            review_ids
-                        )
-                    for row in result.reviews:
-                        rid = int(row["review_id"]) if row.get("review_id") else None
-                        if rid and rid in sentiment_map:
-                            row["sentiment"] = sentiment_map[rid]
-
-                    reviews = [AnalysisReviewDTO.from_db_row(row) for row in result.reviews]
-                    return AnalysisReviewListDTO(reviews=reviews, total=result.total)
-
+                if new_result is not None:
+                    return new_result
                 # new_reviews가 비어있으면 branch_reviews로 폴백
 
             # Athena 분기: is_new만 Supabase 전용 (sentiment는 평점 기반 계산 가능)
@@ -260,23 +238,9 @@ class AnalysisService:
                 )
 
             # 기존 Supabase 경로
-            result = await self.review_repo.search_with_filters(
-                branch_ids=effective_branch_ids,
-                sentiment=sentiment,
-                date_from=date_from,
-                date_to=date_to,
-                sort_by=sort_by,
-                limit=limit,
-                offset=offset,
+            return await self._search_via_supabase(
+                effective_branch_ids, sentiment, date_from, date_to, sort_by, limit, offset,
                 is_new=is_new,
-            )
-
-            # DTO 변환
-            reviews = [AnalysisReviewDTO.from_db_row(row) for row in result.reviews]
-
-            return AnalysisReviewListDTO(
-                reviews=reviews,
-                total=result.total,
             )
 
         except ConnectionError as e:
@@ -285,6 +249,72 @@ class AnalysisService:
         except Exception as e:
             logger.error("Failed to get filtered reviews: %s", e)
             raise ReviewSearchError(f"리뷰 검색 실패: {e}") from e
+
+    async def _search_new_reviews_with_sentiment(
+        self,
+        branch_ids: list[int] | None,
+        date_from: str | None,
+        date_to: str | None,
+        sort_by: str,
+        limit: int,
+        offset: int,
+    ) -> AnalysisReviewListDTO | None:
+        """new_reviews 테이블에서 조회 후 sentiment 보강.
+
+        결과가 있으면 AnalysisReviewListDTO 반환, 비어있으면 None 반환
+        (호출자가 branch_reviews로 폴백하도록).
+        """
+        result = await self.new_review_repo.search_with_filters(
+            branch_ids=branch_ids,
+            date_from=date_from,
+            date_to=date_to,
+            sort_by=sort_by,
+            limit=limit,
+            offset=offset,
+        )
+
+        if result.total == 0:
+            return None
+
+        # sentiment 보강: branch_reviews에서 병합
+        review_ids = [
+            int(r["review_id"]) for r in result.reviews if r.get("review_id")
+        ]
+        sentiment_map = {}
+        if review_ids:
+            sentiment_map = await self.review_repo.get_sentiments_by_review_ids(review_ids)
+        for row in result.reviews:
+            rid = int(row["review_id"]) if row.get("review_id") else None
+            if rid and rid in sentiment_map:
+                row["sentiment"] = sentiment_map[rid]
+
+        reviews = [AnalysisReviewDTO.from_db_row(row) for row in result.reviews]
+        return AnalysisReviewListDTO(reviews=reviews, total=result.total)
+
+    async def _search_via_supabase(
+        self,
+        branch_ids: list[int] | None,
+        sentiment: str | None,
+        date_from: str | None,
+        date_to: str | None,
+        sort_by: str,
+        limit: int,
+        offset: int,
+        is_new: bool | None = None,
+    ) -> AnalysisReviewListDTO:
+        """기존 Supabase(branch_reviews) 경로로 리뷰 검색 후 DTO 변환."""
+        result = await self.review_repo.search_with_filters(
+            branch_ids=branch_ids,
+            sentiment=sentiment,
+            date_from=date_from,
+            date_to=date_to,
+            sort_by=sort_by,
+            limit=limit,
+            offset=offset,
+            is_new=is_new,
+        )
+        reviews = [AnalysisReviewDTO.from_db_row(row) for row in result.reviews]
+        return AnalysisReviewListDTO(reviews=reviews, total=result.total)
 
     async def _search_via_athena(
         self,
