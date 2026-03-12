@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr = SecretStr("")
     openai_model: str = "gpt-4o-mini"
     openai_rpm: int = 3500
+    openai_org_id: str = ""
+    openai_project_id: str = ""
 
     # Database 설정 (SQLAlchemy + asyncpg)
     database_url: str = ""  # postgresql+asyncpg://user:pass@host:port/dbname

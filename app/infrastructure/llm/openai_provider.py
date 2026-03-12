@@ -43,8 +43,10 @@ class OpenAIProvider(LLMProvider):
         self._client = None
         self._available = None
         self._async_client = None
-        self._organization = organization or os.getenv("OPENAI_ORG_ID")
-        self._project = project or os.getenv("OPENAI_PROJECT_ID")
+        from core.config import get_settings
+        _s = get_settings()
+        self._organization = organization or _s.openai_org_id or None
+        self._project = project or _s.openai_project_id or None
         self.rate_limiter = RateLimiter(rpm=rpm)
 
     def _init_client(self) -> bool:
