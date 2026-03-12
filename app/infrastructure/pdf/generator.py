@@ -304,12 +304,14 @@ class PDFGenerator:
 
             col_date = 30
             col_rating = 15
-            col_content = w - col_date - col_rating
+            col_vehicle = 35
+            col_content = w - col_date - col_rating - col_vehicle
 
             pdf.set_font(font, "B", 7)
             pdf.set_fill_color(240, 240, 240)
             pdf.cell(col_date, row, " 날짜", border=1, fill=True)
             pdf.cell(col_rating, row, " 평점", border=1, fill=True, align="C")
+            pdf.cell(col_vehicle, row, " 차량", border=1, fill=True)
             pdf.cell(col_content, row, " 리뷰 내용", border=1, fill=True)
             pdf.ln(row)
 
@@ -317,6 +319,7 @@ class PDFGenerator:
             for r in report.negative_reviews:
                 date_str = r.review_date or ""
                 rating_str = str(r.rating) if r.rating else ""
+                vehicle_str = r.vehicle_model or "-"
                 content = (r.content or "").replace("<br>", " ").replace("<br/>", " ").replace("<br />", " ")
 
                 # 내용 길이에 따라 multi_cell 사용
@@ -327,6 +330,7 @@ class PDFGenerator:
                 pdf.set_text_color(239, 68, 68)
                 pdf.cell(col_rating, row, rating_str, border="BT", align="C")
                 pdf.set_text_color(0, 0, 0)
+                pdf.cell(col_vehicle, row, f" {vehicle_str}", border="BT")
 
                 # 내용이 길면 줄바꿈 처리
                 x_content = pdf.get_x()
@@ -341,6 +345,7 @@ class PDFGenerator:
                     pdf.set_text_color(239, 68, 68)
                     pdf.cell(col_rating, actual_h, rating_str, border="BT", align="C")
                     pdf.set_text_color(0, 0, 0)
+                    pdf.cell(col_vehicle, actual_h, f" {vehicle_str}", border="BT")
                     pdf.set_xy(x_content, y_before)
                     pdf.multi_cell(col_content, row, f" {content}", border="RBT")
 
