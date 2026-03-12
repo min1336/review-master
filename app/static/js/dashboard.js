@@ -83,24 +83,23 @@
                 return `${CONFIG.EXTERNAL_URLS.CARMORE_REVIEW_BASE}?${params.toString()}`;
             }
 
-            function getKeywordColor(str) {
-                if (!str) return '#e5e7eb';
+            function _stringToHue(str) {
+                if (!str) return 0;
                 let hash = 0;
                 for (let i = 0; i < str.length; i++) {
                     hash = str.charCodeAt(i) + ((hash << 5) - hash);
                 }
-                const h = Math.abs(hash) % 360;
-                return `hsl(${h}, 70%, 85%)`;
+                return Math.abs(hash) % 360;
+            }
+
+            function getKeywordColor(str) {
+                if (!str) return '#e5e7eb';
+                return `hsl(${_stringToHue(str)}, 70%, 85%)`;
             }
 
             function getKeywordTextColor(str) {
                 if (!str) return '#374151';
-                let hash = 0;
-                for (let i = 0; i < str.length; i++) {
-                    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-                }
-                const h = Math.abs(hash) % 360;
-                return `hsl(${h}, 80%, 30%)`;
+                return `hsl(${_stringToHue(str)}, 80%, 30%)`;
             }
 
             function getStarRating(rating) {
