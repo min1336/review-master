@@ -17,7 +17,6 @@ from .deps import require_internal_auth
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["n8n"])
 
-N8N_BASE = "https://n8n-cloud.carmore.kr"
 N8N_TIMEOUT = httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=5.0)
 
 # Module-level reusable client (avoids creating a new connection per request)
@@ -39,7 +38,8 @@ def _webhook_prefix() -> str:
 
 async def _call_n8n(path: str) -> dict[str, Any]:
     """n8n 웹훅을 호출하고 응답을 반환한다."""
-    url = f"{N8N_BASE}{_webhook_prefix()}{path}"
+    from core.config import get_settings
+    url = f"{get_settings().n8n_base_url}{_webhook_prefix()}{path}"
     client = _get_client()
     try:
         resp = await client.post(url)
@@ -59,9 +59,6 @@ async def _call_n8n(path: str) -> dict[str, Any]:
         raise HTTPException(status_code=502, detail="n8n 웹훅 연결 실패")
 
 
-_SLACK_BOT_BASE = "http://slack-bot:8080"
-
-
 @router.post("/webhook/jotform-cancellation", dependencies=[Depends(require_internal_auth)])
 async def jotform_cancellation_proxy(request: Request) -> dict[str, Any]:
     """Jotform webhook → slack-bot 프록시. n8n 외부 경로 제약 우회용."""
@@ -71,10 +68,11 @@ async def jotform_cancellation_proxy(request: Request) -> dict[str, Any]:
     content_type = request.headers.get("content-type", "")
     if content_type and "form" not in content_type and "json" not in content_type:
         raise HTTPException(status_code=400, detail="지원하지 않는 Content-Type")
+    from core.config import get_settings
     client = _get_client()
     try:
         resp = await client.post(
-            f"{_SLACK_BOT_BASE}/webhook/cancellation",
+            f"{get_settings().slack_bot_base_url}/webhook/cancellation",
             content=body,
             headers={"Content-Type": content_type},
         )

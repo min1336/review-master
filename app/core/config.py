@@ -94,6 +94,8 @@ class Settings(BaseSettings):
     # 로컬(기본): /webhook-test (동기 응답), Docker/실서버: N8N_TEST_MODE=false → /webhook
     n8n_test_mode: bool = True
     n8n_api_key: SecretStr = SecretStr("")
+    n8n_base_url: str = "https://n8n-cloud.carmore.kr"
+    slack_bot_base_url: str = "http://slack-bot:8080"
 
     # Carmore 관리자 URL (로컬: dev-admin, 실서버: admin)
     carmore_admin_url: str = "https://dev-admin.carmore.kr"
