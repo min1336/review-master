@@ -433,6 +433,8 @@ class ReportService:
 
     async def _compute_benchmark(self, branch_id: int) -> "BenchmarkData | None":
         """지역/전국 벤치마크 산출. 지역 데이터가 없으면 None 반환."""
+        if not self.summary_repo:
+            return None
         summary = await self.summary_repo.get_by_branch_id(branch_id)
         branch_rating = summary.avg_rating if summary and summary.avg_rating else 0.0
         region_name = summary.region if summary else ""
