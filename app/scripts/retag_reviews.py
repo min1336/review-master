@@ -40,7 +40,7 @@ async def _load_tags(session) -> dict[str, int]:
     return tag_name_to_id
 
 
-async def _init_classifier():
+def _init_classifier():
     from domain.analysis import HybridClassifier
     from domain.analysis._singletons import get_kiwi
 
@@ -119,7 +119,7 @@ async def _retag_in_batches(
     kiwi,
     tag_name_to_id: dict[str, int],
     total_reviews: int,
-) -> tuple[int, int]:
+) -> None:
     from sqlalchemy import delete, func, select
     from sqlalchemy.dialects.postgresql import insert as pg_insert
     from repository.orm_models import BranchReviewORM, ReviewTagMappingORM
@@ -191,7 +191,6 @@ async def _retag_in_batches(
         "=== DONE === deleted: %d, new mappings: %d, time: %.1fs",
         total_deleted, total_mappings, total_elapsed,
     )
-    return total_deleted, total_mappings
 
 
 async def _assign_fallback_tag(session, tag_name_to_id: dict[str, int]) -> None:
@@ -271,7 +270,7 @@ async def main():
     session = factory()
     try:
         tag_name_to_id = await _load_tags(session)
-        classifier, kiwi = await _init_classifier()
+        classifier, kiwi = _init_classifier()
         total_reviews = await _get_total_reviews(session)
         await _retag_in_batches(session, classifier, kiwi, tag_name_to_id, total_reviews)
         await _assign_fallback_tag(session, tag_name_to_id)
