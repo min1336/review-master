@@ -18,8 +18,6 @@ from domain.analysis.chunker import ClauseChunker
 from domain.analysis.hybrid_classifier import HybridClassifier
 from domain.analysis.patterns import (
     extract_stem,
-    get_tag_for_keyword,
-    is_negative_keyword,
 )
 from domain.analysis.sentiment_core import (
     check_double_negation,
@@ -82,7 +80,6 @@ class TestSpecialCharacters:
         detect_keyword_sentiment(text)
         count_sentiment_matches(text)
         check_double_negation(text)
-        is_negative_keyword(text)
 
 
 # ── 초장문 입력 (Stress Test) ─────────────────────────
@@ -126,11 +123,6 @@ class TestEmptyAndBoundaryInputs:
         else:
             result = extract_stem(text)
             assert isinstance(result, str)
-
-    @pytest.mark.parametrize("text", ["", "  ", "\t", "\n"])
-    def test_get_tag_for_keyword_empty(self, text):
-        result = get_tag_for_keyword(text)
-        assert result == "기타"
 
     def test_classify_review_none_keywords(self, classifier):
         result = classifier.classify_review("친절해요", keywords=None)

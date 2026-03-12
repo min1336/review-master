@@ -26,8 +26,6 @@ from domain.analysis.patterns import (
     TAG_TO_CATEGORY_COLOR,
     VEHICLE_CATEGORIES,
     extract_stem,
-    get_tag_for_keyword,
-    is_negative_keyword,
     normalize_category_name,
     resolve_tag_category,
 )
@@ -175,50 +173,6 @@ class TestExtractStem:
     def test_single_char_preserved(self):
         # 1글자에서 접미사 제거 시 빈 문자열이 되면 원본 반환
         assert extract_stem("한") == "한"
-
-
-# ── is_negative_keyword ───────────────────────────────
-
-
-class TestIsNegativeKeyword:
-    @pytest.mark.parametrize("keyword", [
-        "불친절", "불편", "비싸", "더럽", "최악", "실망", "별로",
-        "느리", "지저분", "냄새", "고장",
-    ])
-    def test_negative_keywords_detected(self, keyword):
-        assert is_negative_keyword(keyword) is True
-
-    @pytest.mark.parametrize("keyword", [
-        "친절", "깨끗", "좋은", "만족", "편리",
-    ])
-    def test_positive_keywords_not_negative(self, keyword):
-        assert is_negative_keyword(keyword) is False
-
-    def test_empty_string(self):
-        assert is_negative_keyword("") is False
-
-
-# ── get_tag_for_keyword ───────────────────────────────
-
-
-class TestGetTagForKeyword:
-    @pytest.mark.parametrize("keyword,expected_tag", [
-        ("친절", "친절"),
-        ("불친절", "친절"),
-        ("에어컨", "옵션"),
-        ("주유", "주유"),
-        ("보험", "보험/보장"),
-        ("스크래치", "차량외관"),
-        ("배차", "배차/시간"),
-    ])
-    def test_known_keywords(self, keyword, expected_tag):
-        assert get_tag_for_keyword(keyword) == expected_tag
-
-    def test_unknown_keyword_returns_etc(self):
-        assert get_tag_for_keyword("asdfghjkl") == "기타"
-
-    def test_empty_returns_etc(self):
-        assert get_tag_for_keyword("") == "기타"
 
 
 # ── 정규식 패턴 검증 ─────────────────────────────────

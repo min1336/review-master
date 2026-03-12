@@ -31,8 +31,6 @@ from .patterns import (
     TAG_DESCRIPTIONS,
     TAG_REGISTRY,
     extract_stem,
-    get_tag_for_keyword,
-    is_negative_keyword,
 )
 from .sentiment_core import (
     check_double_negation,
@@ -80,7 +78,5 @@ __all__ = [
     "count_sentiment_matches",
     # Utils
     "extract_stem",
-    "is_negative_keyword",
-    "get_tag_for_keyword",
 ]
 

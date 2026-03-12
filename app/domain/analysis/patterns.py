@@ -793,23 +793,3 @@ def extract_stem(keyword: str) -> str:
 
     return result if result else keyword
 
-
-def is_negative_keyword(keyword: str) -> bool:
-    """부정 키워드 여부 확인"""
-    return bool(NEGATIVE_REGEX.search(keyword)) if keyword else False
-
-
-def get_tag_for_keyword(keyword: str) -> str:
-    """키워드에 해당하는 태그 반환 (규칙 기반)"""
-    if not keyword:
-        return "기타"
-
-    keyword_lower = keyword.lower().strip()
-    stem = extract_stem(keyword_lower)
-
-    for tag, keywords in RULE_BASED_TAG_MAPPING.items():
-        for rule_kw in keywords:
-            if keyword_lower == rule_kw or rule_kw in keyword_lower or stem == rule_kw:
-                return tag
-
-    return "기타"
