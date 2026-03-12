@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
 
 from .base import LLMProvider, LLMResponse
@@ -38,13 +37,13 @@ class OpenAIProvider(LLMProvider):
             organization: OpenAI Organization ID
             project: OpenAI Project ID
         """
-        self._api_key = api_key or os.getenv("OPENAI_API_KEY", "")
+        from core.config import get_settings
+        _s = get_settings()
+        self._api_key = api_key or _s.openai_api_key.get_secret_value()
         self._model = model
         self._client = None
         self._available = None
         self._async_client = None
-        from core.config import get_settings
-        _s = get_settings()
         self._organization = organization or _s.openai_org_id or None
         self._project = project or _s.openai_project_id or None
         self.rate_limiter = RateLimiter(rpm=rpm)
