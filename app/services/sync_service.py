@@ -22,6 +22,69 @@ logger = logging.getLogger(__name__)
 SYNC_TYPE = "daily_pipeline"
 
 
+def _filter_misrouted_reviews(
+    reviews: list[dict],
+) -> tuple[list[dict], int]:
+    """branch_id별 다수 company_name과 다른 리뷰를 제거한다.
+
+    Athena가 잘못된 branch_id로 매핑한 리뷰(예: 해외 업체 리뷰가 국내 branch에
+    혼입)를 동기화 시점에 걸러낸다.
+
+    Returns:
+        (필터링된 리뷰 리스트, 제거된 건수)
+    """
+    from collections import Counter
+
+    # branch_id별 company_name 빈도 집계
+    branch_company_counts: dict[int, Counter] = {}
+    for r in reviews:
+        bid = r.get("branch_id") or r.get("지점번호")
+        cname = r.get("company_name") or r.get("예약_업체명") or ""
+        if bid is None or not cname:
+            continue
+        try:
+            bid = int(bid)
+        except (ValueError, TypeError):
+            continue
+        if bid not in branch_company_counts:
+            branch_company_counts[bid] = Counter()
+        branch_company_counts[bid][cname] += 1
+
+    # branch_id별 다수 company_name 결정
+    dominant: dict[int, str] = {}
+    for bid, counter in branch_company_counts.items():
+        dominant[bid] = counter.most_common(1)[0][0]
+
+    # 소수 company_name 비율이 충분히 낮을 때만 필터링 (오탐 방지)
+    filtered: list[dict] = []
+    dropped = 0
+    for r in reviews:
+        bid = r.get("branch_id") or r.get("지점번호")
+        cname = r.get("company_name") or r.get("예약_업체명") or ""
+        try:
+            bid = int(bid)
+        except (ValueError, TypeError):
+            filtered.append(r)
+            continue
+
+        dom = dominant.get(bid)
+        if dom and cname and cname != dom:
+            total = sum(branch_company_counts[bid].values())
+            dom_count = branch_company_counts[bid][dom]
+            # 다수 업체가 80% 이상일 때만 소수를 오배정으로 판단
+            if dom_count / total >= 0.8:
+                logger.debug(
+                    "오배정 필터: review_id=%s branch_id=%s expected=%s got=%s",
+                    r.get("review_id"), bid, dom, cname,
+                )
+                dropped += 1
+                continue
+
+        filtered.append(r)
+
+    return filtered, dropped
+
+
 def _generate_day_ranges(
     since: datetime, until: datetime | None
 ) -> list[tuple[datetime, datetime]]:
@@ -254,6 +317,11 @@ class SyncService:
             reviews.append(row)
         del athena_reviews, seen_ids
         gc.collect()
+
+        # 2-1. 오배정 리뷰 필터링: branch_id별 다수 업체와 다른 company_name 제거
+        reviews, dropped = _filter_misrouted_reviews(reviews)
+        if dropped:
+            logger.warning("[%s] 오배정 리뷰 %s건 필터링됨", day_label, dropped)
 
         logger.info("[%s] Athena 조회 완료: %s개", day_label, len(reviews))
 
