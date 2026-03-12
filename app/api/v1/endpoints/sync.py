@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,7 +11,6 @@ from schemas.sync import (
 
 from .deps import get_sync_job_service, get_sync_service, require_internal_auth
 
-logger = logging.getLogger(__name__)
 router = APIRouter(tags=["sync"], dependencies=[Depends(require_internal_auth)])
 
 
@@ -78,14 +76,7 @@ async def api_mark_reviews_as_read(
     sync_service=Depends(get_sync_service),
 ) -> dict[str, Any]:
     """리뷰 읽음 처리"""
-    try:
-        marked_count = await sync_service.mark_reviews_as_read(request.review_ids)
-    except Exception as e:
-        logger.error("리뷰 읽음 처리 실패: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=502,
-            detail="리뷰 읽음 처리 중 오류가 발생했습니다",
-        )
+    marked_count = await sync_service.mark_reviews_as_read(request.review_ids)
     return api_response({
         "marked_count": marked_count,
     })

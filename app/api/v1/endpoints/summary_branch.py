@@ -46,8 +46,6 @@ async def api_regenerate_summary(
         return api_response(result)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="요약 재생성 중 오류가 발생했습니다") from e
 
 
 @router.get("/{branch_id}/reviews", response_model=ApiResponseModel[BranchReviewsDTO])
@@ -78,19 +76,16 @@ async def api_branch_reviews(
     parsed_date_from = parse_date(review_date_from)
     parsed_date_to = parse_date(review_date_to, end_of_day=True)
 
-    try:
-        result = await service.get_branch_reviews(
-            branch_id=branch_id,
-            car_model=car_model,
-            sentiment=sentiment,
-            review_date_from=parsed_date_from,
-            review_date_to=parsed_date_to,
-            limit=limit,
-            offset=offset,
-        )
-        return api_response(result.model_dump(by_alias=True))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="리뷰 목록 조회 중 오류가 발생했습니다") from e
+    result = await service.get_branch_reviews(
+        branch_id=branch_id,
+        car_model=car_model,
+        sentiment=sentiment,
+        review_date_from=parsed_date_from,
+        review_date_to=parsed_date_to,
+        limit=limit,
+        offset=offset,
+    )
+    return api_response(result.model_dump(by_alias=True))
 
 
 @router.get("/{branch_id}/car-models", response_model=ApiResponseModel[BranchCarModelsDTO])

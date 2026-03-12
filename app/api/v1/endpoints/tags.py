@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Query
 from schemas.common import ApiListResponseModel, ApiResponseModel, api_list_response, api_response
 from schemas.tag import (
     CategoryCreate,
@@ -13,8 +12,6 @@ from schemas.tag import (
 from services.tag_service import TagService
 from .deps import get_tag_service
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter(tags=["tags"])
 
 @router.get("/categories", response_model=ApiListResponseModel[dict])
@@ -22,12 +19,8 @@ async def api_categories(
     is_active: bool = Query(True), service: TagService = Depends(get_tag_service)
 ) -> dict[str, Any]:
     """카테고리 목록"""
-    try:
-        categories = await service.get_categories(is_active=is_active)
-        return api_list_response(categories)
-    except Exception as e:
-        logger.exception("카테고리 목록 조회 오류")
-        raise HTTPException(status_code=500, detail="카테고리 목록 조회 중 오류가 발생했습니다") from e
+    categories = await service.get_categories(is_active=is_active)
+    return api_list_response(categories)
 
 
 @router.post("/categories", status_code=201, response_model=ApiResponseModel[dict])
@@ -35,11 +28,8 @@ async def api_create_category(
     data: CategoryCreate, service: TagService = Depends(get_tag_service)
 ) -> dict[str, Any]:
     """카테고리 생성"""
-    try:
-        result = await service.create_category(data.model_dump())
-        return api_response(result)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail="카테고리 생성 중 오류가 발생했습니다") from e
+    result = await service.create_category(data.model_dump())
+    return api_response(result)
 
 @router.get("/list", response_model=ApiListResponseModel[dict])
 async def api_tags(
@@ -52,19 +42,15 @@ async def api_tags(
     service: TagService = Depends(get_tag_service),
 ) -> dict[str, Any]:
     """태그 목록"""
-    try:
-        tags, total = await service.get_tags(
-            category_id=category_id,
-            sentiment=sentiment,
-            group_name=group_name,
-            is_active=is_active,
-            limit=limit,
-            offset=offset,
-        )
-        return api_list_response(tags, total=total, limit=limit, offset=offset)
-    except Exception as e:
-        logger.exception("태그 목록 조회 오류")
-        raise HTTPException(status_code=500, detail="태그 목록 조회 중 오류가 발생했습니다") from e
+    tags, total = await service.get_tags(
+        category_id=category_id,
+        sentiment=sentiment,
+        group_name=group_name,
+        is_active=is_active,
+        limit=limit,
+        offset=offset,
+    )
+    return api_list_response(tags, total=total, limit=limit, offset=offset)
 
 @router.post("/batch", response_model=ApiResponseModel[dict])
 async def api_tags_batch(
@@ -84,11 +70,8 @@ async def api_create_tag(
     data: TagCreate, service: TagService = Depends(get_tag_service)
 ) -> dict[str, Any]:
     """태그 생성"""
-    try:
-        result = await service.create_tag(data.model_dump())
-        return api_response(result)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail="태그 생성 중 오류가 발생했습니다") from e
+    result = await service.create_tag(data.model_dump())
+    return api_response(result)
 
 
 @router.put("/{tag_id}", response_model=ApiResponseModel[dict])
@@ -96,13 +79,9 @@ async def api_update_tag(
     tag_id: int, data: TagUpdate, service: TagService = Depends(get_tag_service)
 ) -> dict[str, Any]:
     """태그 수정"""
-    try:
-        update_data = data.model_dump(exclude_unset=True)
-        result = await service.update_tag(tag_id, update_data)
-        return api_response(result)
-    except Exception as e:
-        logger.exception("태그 수정 오류")
-        raise HTTPException(status_code=500, detail="태그 수정 중 오류가 발생했습니다") from e
+    update_data = data.model_dump(exclude_unset=True)
+    result = await service.update_tag(tag_id, update_data)
+    return api_response(result)
 
 
 @router.delete("/{tag_id}", response_model=ApiResponseModel[dict])
@@ -110,9 +89,5 @@ async def api_delete_tag(
     tag_id: int, service: TagService = Depends(get_tag_service)
 ) -> dict[str, Any]:
     """태그 삭제"""
-    try:
-        await service.delete_tag(tag_id)
-        return api_response()
-    except Exception as e:
-        logger.exception("태그 삭제 오류")
-        raise HTTPException(status_code=500, detail="태그 삭제 중 오류가 발생했습니다") from e
+    await service.delete_tag(tag_id)
+    return api_response()

@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from schemas.common import ApiResponseModel, api_response
 from services.summary_service import SummaryService
 
 from .deps import get_summary_service, require_public_api_key
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["public-summary"])
 
@@ -47,9 +44,3 @@ async def api_get_public_summary(
         return api_response(data)
     except HTTPException:
         raise
-    except Exception as e:
-        logger.exception("Public summary fetch failed")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="요약 조회 중 오류가 발생했습니다",
-        ) from e

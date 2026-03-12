@@ -7,7 +7,6 @@ Router: /api/reports (report_generate)
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 from uuid import UUID
 
@@ -19,8 +18,6 @@ from services.report_job_service import ReportJobService
 
 from core.config import get_settings
 from .deps import get_report_job_service
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["report"])
 
@@ -39,21 +36,17 @@ async def api_generate_report_async(
     """
     validate_date_range_d(data.start_date, data.end_date)
 
-    try:
-        report_config = data.to_resolved_config()
-        job_id = await job_service.submit_job(
-            branch_id=branch_id,
-            start_date=date_to_utc(data.start_date),
-            end_date=date_to_utc(data.end_date, end_of_day=True),
-            report_config=report_config,
-        )
-        return api_response({
-            "job_id": job_id,
-            "poll_url": f"{get_settings().api_prefix}/reports/{branch_id}/job/{job_id}",
-        })
-    except Exception as e:
-        logger.exception("비동기 리포트 생성 요청 실패")
-        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
+    report_config = data.to_resolved_config()
+    job_id = await job_service.submit_job(
+        branch_id=branch_id,
+        start_date=date_to_utc(data.start_date),
+        end_date=date_to_utc(data.end_date, end_of_day=True),
+        report_config=report_config,
+    )
+    return api_response({
+        "job_id": job_id,
+        "poll_url": f"{get_settings().api_prefix}/reports/{branch_id}/job/{job_id}",
+    })
 
 
 @router.get("/{branch_id}/job/{job_id}", response_model=ApiResponseModel[dict])

@@ -6,18 +6,15 @@ X-API-Key 인증으로 AI 리포트를 외부에 제공합니다.
 
 from __future__ import annotations
 
-import logging
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from core.timezone import date_to_utc
 from schemas.common import ApiResponseModel, api_response, validate_date_range_d
 from services.report_service import ReportService
 
 from .deps import get_report_service, require_public_api_key
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["public-report"])
 
@@ -78,9 +75,3 @@ async def api_get_public_report(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except HTTPException:
         raise
-    except Exception as e:
-        logger.exception("Public report fetch failed")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="서버 오류가 발생했습니다.",
-        ) from e

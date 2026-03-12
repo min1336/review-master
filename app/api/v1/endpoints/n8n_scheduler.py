@@ -394,32 +394,26 @@ async def list_available_branches(
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """선택 가능한 전체 지점 목록 (branch_summaries 테이블)"""
-    try:
-        stmt = (
-            select(
-                BranchSummaryORM.branch_id,
-                BranchSummaryORM.branch_name,
-                BranchSummaryORM.region,
-                BranchSummaryORM.review_count,
-            )
-            .order_by(BranchSummaryORM.branch_name)
+    stmt = (
+        select(
+            BranchSummaryORM.branch_id,
+            BranchSummaryORM.branch_name,
+            BranchSummaryORM.region,
+            BranchSummaryORM.review_count,
         )
-        result = await session.execute(stmt)
-        rows = [
-            {
-                "branch_id": r.branch_id,
-                "branch_name": r.branch_name,
-                "region": r.region,
-                "review_count": r.review_count,
-            }
-            for r in result.all()
-        ]
-        return api_response(rows)
-    except Exception as e:
-        logger.error("branches fetch failed: %s", e)
-        raise HTTPException(
-            status_code=502, detail="지점 목록 조회 실패"
-        ) from e
+        .order_by(BranchSummaryORM.branch_name)
+    )
+    result = await session.execute(stmt)
+    rows = [
+        {
+            "branch_id": r.branch_id,
+            "branch_name": r.branch_name,
+            "region": r.region,
+            "review_count": r.review_count,
+        }
+        for r in result.all()
+    ]
+    return api_response(rows)
 
 
 # ── 스케줄 그룹 관리 엔드포인트 ───────────────────────
@@ -490,21 +484,15 @@ async def list_groups(
     """워크플로의 스케줄 그룹 목록 + 각 그룹의 대상 지점 조회"""
     _validate_workflow_id(workflow_id)
 
-    try:
-        stmt = (
-            select(ScheduleGroupORM)
-            .options(selectinload(ScheduleGroupORM.targets))
-            .where(ScheduleGroupORM.workflow_id == workflow_id)
-            .order_by(ScheduleGroupORM.created_at)
-        )
-        result = await session.execute(stmt)
-        groups = [_group_to_dict(g) for g in result.scalars().all()]
-        return api_response(groups)
-    except Exception as e:
-        logger.error("groups fetch failed: %s", e)
-        raise HTTPException(
-            status_code=502, detail="스케줄 그룹 조회 실패"
-        ) from e
+    stmt = (
+        select(ScheduleGroupORM)
+        .options(selectinload(ScheduleGroupORM.targets))
+        .where(ScheduleGroupORM.workflow_id == workflow_id)
+        .order_by(ScheduleGroupORM.created_at)
+    )
+    result = await session.execute(stmt)
+    groups = [_group_to_dict(g) for g in result.scalars().all()]
+    return api_response(groups)
 
 
 @router.post("/groups/{workflow_id}", response_model=ApiResponseModel[dict])
@@ -515,36 +503,30 @@ async def create_group(
     """새 스케줄 그룹 생성"""
     _validate_workflow_id(workflow_id)
 
-    try:
-        group = ScheduleGroupORM(
-            workflow_id=workflow_id,
-            group_name=body.group_name,
-            cron_expression=body.cron_expression,
-        )
-        session.add(group)
-        await session.flush()
+    group = ScheduleGroupORM(
+        workflow_id=workflow_id,
+        group_name=body.group_name,
+        cron_expression=body.cron_expression,
+    )
+    session.add(group)
+    await session.flush()
 
-        count = await _replace_group_targets(
-            session, group.id, workflow_id, body.branch_ids,
-        )
+    count = await _replace_group_targets(
+        session, group.id, workflow_id, body.branch_ids,
+    )
 
-        await session.commit()
-        return api_response({
-            "message": f"'{body.group_name}' 그룹이 생성되었습니다 ({count}개 지점)",
-            "group": {
-                "id": group.id,
-                "workflow_id": group.workflow_id,
-                "group_name": group.group_name,
-                "cron_expression": group.cron_expression,
-                "created_at": group.created_at,
-                "updated_at": group.updated_at,
-            },
-        })
-    except Exception as e:
-        logger.error("group create failed: %s", e)
-        raise HTTPException(
-            status_code=502, detail="스케줄 그룹 생성 실패"
-        ) from e
+    await session.commit()
+    return api_response({
+        "message": f"'{body.group_name}' 그룹이 생성되었습니다 ({count}개 지점)",
+        "group": {
+            "id": group.id,
+            "workflow_id": group.workflow_id,
+            "group_name": group.group_name,
+            "cron_expression": group.cron_expression,
+            "created_at": group.created_at,
+            "updated_at": group.updated_at,
+        },
+    })
 
 
 @router.put("/groups/{group_id}", response_model=ApiResponseModel[dict])
@@ -553,38 +535,30 @@ async def update_group(
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """스케줄 그룹 수정 (이름, 크론, 대상 지점)"""
-    try:
-        stmt = select(ScheduleGroupORM).where(ScheduleGroupORM.id == group_id)
-        result = await session.execute(stmt)
-        group = result.scalar_one_or_none()
-        if not group:
-            raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
+    stmt = select(ScheduleGroupORM).where(ScheduleGroupORM.id == group_id)
+    result = await session.execute(stmt)
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
 
-        if body.group_name is not None:
-            group.group_name = body.group_name
-        if body.cron_expression is not None:
-            group.cron_expression = body.cron_expression
+    if body.group_name is not None:
+        group.group_name = body.group_name
+    if body.cron_expression is not None:
+        group.cron_expression = body.cron_expression
 
-        target_count = None
-        if body.branch_ids is not None:
-            target_count = await _replace_group_targets(
-                session, group_id, group.workflow_id, body.branch_ids,
-            )
+    target_count = None
+    if body.branch_ids is not None:
+        target_count = await _replace_group_targets(
+            session, group_id, group.workflow_id, body.branch_ids,
+        )
 
-        await session.commit()
+    await session.commit()
 
-        msg = "그룹이 수정되었습니다"
-        if target_count is not None:
-            msg += f" ({target_count}개 지점)"
+    msg = "그룹이 수정되었습니다"
+    if target_count is not None:
+        msg += f" ({target_count}개 지점)"
 
-        return api_response({"message": msg})
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("group update failed: %s", e)
-        raise HTTPException(
-            status_code=502, detail="스케줄 그룹 수정 실패"
-        ) from e
+    return api_response({"message": msg})
 
 
 @router.delete("/groups/{group_id}", response_model=ApiResponseModel[dict])
@@ -593,20 +567,12 @@ async def delete_group(
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """스케줄 그룹 삭제 (CASCADE로 대상 지점도 삭제)"""
-    try:
-        stmt = select(ScheduleGroupORM).where(ScheduleGroupORM.id == group_id)
-        result = await session.execute(stmt)
-        group = result.scalar_one_or_none()
-        if not group:
-            raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
+    stmt = select(ScheduleGroupORM).where(ScheduleGroupORM.id == group_id)
+    result = await session.execute(stmt)
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
 
-        await session.delete(group)
-        await session.commit()
-        return api_response({"message": "그룹이 삭제되었습니다"})
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("group delete failed: %s", e)
-        raise HTTPException(
-            status_code=502, detail="스케줄 그룹 삭제 실패"
-        ) from e
+    await session.delete(group)
+    await session.commit()
+    return api_response({"message": "그룹이 삭제되었습니다"})

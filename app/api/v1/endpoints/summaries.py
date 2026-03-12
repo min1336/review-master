@@ -147,8 +147,6 @@ async def api_apply_pending_summary(
         return api_response(result.model_dump(by_alias=True))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="요약 적용 중 오류가 발생했습니다") from e
 
 
 @router.post("/{branch_id}/discard-pending", response_model=ApiResponseModel[PendingSummaryResultDTO])

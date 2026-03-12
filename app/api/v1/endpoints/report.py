@@ -271,16 +271,12 @@ async def api_get_review_count(
     """
     validate_date_range_d(start_date, end_date)
 
-    try:
-        result = await service.get_review_count_summary(
-            branch_id,
-            date_to_utc(start_date),
-            date_to_utc(end_date, end_of_day=True),
-        )
-        return api_response(result)
-    except Exception as e:
-        logger.exception("리뷰 수 확인 오류")
-        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
+    result = await service.get_review_count_summary(
+        branch_id,
+        date_to_utc(start_date),
+        date_to_utc(end_date, end_of_day=True),
+    )
+    return api_response(result)
 
 
 @router.get("/{branch_id}/list", response_model=ApiResponseModel[list])
@@ -290,12 +286,8 @@ async def api_get_report_list(
     service: ReportService = Depends(get_report_service),
 ) -> dict[str, Any]:
     """지점의 리포트 목록 조회"""
-    try:
-        reports = await service.get_report_list(branch_id, limit)
-        return api_response(reports)
-    except Exception as e:
-        logger.exception("리포트 목록 조회 오류")
-        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
+    reports = await service.get_report_list(branch_id, limit)
+    return api_response(reports)
 
 
 @router.delete("/{branch_id}", response_model=ApiResponseModel[dict])
@@ -308,20 +300,14 @@ async def api_delete_report(
     """리포트 삭제"""
     validate_date_range_d(start_date, end_date)
 
-    try:
-        deleted = await service.delete_report(
-            branch_id,
-            date_to_utc(start_date),
-            date_to_utc(end_date),
-        )
-        if not deleted:
-            raise HTTPException(status_code=404, detail="삭제할 리포트를 찾을 수 없습니다.")
-        return api_response({"deleted": True})
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("리포트 삭제 오류")
-        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
+    deleted = await service.delete_report(
+        branch_id,
+        date_to_utc(start_date),
+        date_to_utc(end_date),
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail="삭제할 리포트를 찾을 수 없습니다.")
+    return api_response({"deleted": True})
 
 
 @router.get("/{branch_id}/pdf")
@@ -371,9 +357,6 @@ async def api_download_report_pdf(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        logger.exception("PDF 생성 오류")
-        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
 
 
 @router.get("/{branch_id}", response_model=ApiResponseModel[dict])
@@ -409,6 +392,3 @@ async def api_get_report(
         return api_response(report_data)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        logger.exception("리포트 조회 오류")
-        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.") from e
