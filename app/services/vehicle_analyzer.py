@@ -172,6 +172,10 @@ class VehicleAnalyzer:
 
         return top_liked, top_disliked
 
+    # ----------------------------------------------------------------
+    # 랭킹 빌더 헬퍼
+    # ----------------------------------------------------------------
+
     def _build_items_from_analysis(self, vehicle_analysis: list) -> list[dict]:
         """vehicle_analysis만으로 랭킹 아이템 빌드 (raw가 카테고리 키이거나 없을 때)"""
         items: list[dict] = []
@@ -270,6 +274,7 @@ class VehicleAnalyzer:
 
     def _pick_top_disliked(self, items: list[dict]) -> list:
         """불만 Top 5 VehicleRankItem 리스트 반환"""
+        # 순환 참조 방지를 위해 함수 내부에서 import
         from services.report_service import VehicleRankItem
 
         sorted_disliked = sorted(
