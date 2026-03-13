@@ -1,51 +1,56 @@
 /**
- * shared-theme.css — 카모어 디자인 시스템 기반 공통 테마
+ * shared-theme.css — Carmore Modern Design System
+ *
+ * carmore.kr 브랜드 블루 + shadcn/ui 스타일 뉴트럴 톤.
+ * Clean borders, zinc grays, minimal shadows, restrained blue accents.
  *
  * 포함 내용:
- *   - :root CSS 변수 (카모어 브랜드 컬러, 간격, radius, shadow)
+ *   - :root CSS 변수 (컬러, 간격, radius, shadow)
  *   - box-sizing 리셋 + body 기본 스타일
  *   - 공통 컴포넌트 (Header, Card, Button, Badge, Table)
  *   - Toast 애니메이션 (slideIn / slideOut)
  */
 
 /* ============================================================
- * CSS Variables — 카모어(carmore.kr) 디자인 토큰 기반
+ * CSS Variables — Carmore Modern Design Tokens
  * ============================================================ */
 
 :root {
-    /* Carmore Brand Colors */
+    /* Brand — Carmore Blue */
     --primary: #0d6ffc;
     --primary-hover: #0b5ed7;
-    --primary-light: #e8f2ff;
+    --primary-light: #eff6ff;
     --primary-dark: #0954c7;
 
     /* Status Colors */
-    --success: #10b981;
-    --success-light: #d1fae5;
-    --warning: #f59e0b;
-    --warning-light: #fef3c7;
-    --error: #ef4444;
-    --error-light: #fee2e2;
+    --success: #16a34a;
+    --success-light: #f0fdf4;
+    --warning: #ea580c;
+    --warning-light: #fff7ed;
+    --error: #dc2626;
+    --error-light: #fef2f2;
 
-    /* Grey Scale — 카모어 톤 */
-    --grey-1: #1a1a1a;
-    --grey-2: #333333;
-    --grey-3: #555555;
-    --grey-5: #999999;
-    --grey-7: #e0e0e0;
-    --grey-8: #f0f0f0;
-    --grey-9: #f7f8fa;
+    /* Zinc Grey Scale */
+    --grey-1: #09090b;
+    --grey-2: #18181b;
+    --grey-3: #3f3f46;
+    --grey-4: #52525b;
+    --grey-5: #71717a;
+    --grey-6: #a1a1aa;
+    --grey-7: #e4e4e7;
+    --grey-8: #f4f4f5;
+    --grey-9: #fafafa;
 
     /* Layout */
-    --radius: 12px;
-    --radius-sm: 8px;
-    --radius-lg: 16px;
+    --radius: 8px;
+    --radius-sm: 6px;
+    --radius-lg: 12px;
     --max-width: 1200px;
 
-    /* Shadows — 카모어 스타일 (가벼운 그림자) */
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
-    --shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+    /* Shadows — minimal, shadcn-style */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
 
     /* Spacing */
     --spacing-xs: 4px;
@@ -69,30 +74,31 @@ body {
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui,
         Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo',
         'Noto Sans KR', 'Malgun Gothic', sans-serif;
-    background: var(--grey-9);
+    background: #fafafa;
     color: var(--grey-1);
-    line-height: 1.5;
+    line-height: 1.6;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
 }
 
 /* ============================================================
- * Header — 카모어 블루
+ * Header
  * ============================================================ */
 
 .header {
-    background: var(--primary);
+    background: #ffffff;
     padding: 20px 24px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    box-shadow: 0 2px 12px rgba(13, 111, 252, 0.15);
+    border-bottom: 1px solid var(--grey-7);
+    box-shadow: var(--shadow-sm);
 }
 
 .header h1 {
     font-size: 20px;
     font-weight: 700;
-    color: white;
+    color: var(--grey-1);
     letter-spacing: -0.3px;
 }
 
@@ -112,7 +118,7 @@ body {
 }
 
 /* ============================================================
- * Card — 카모어 스타일 (깔끔한 보더 + 가벼운 그림자)
+ * Card
  * ============================================================ */
 
 .card {
@@ -131,7 +137,7 @@ body {
 }
 
 /* ============================================================
- * Button — 카모어 스타일
+ * Button
  * ============================================================ */
 
 .btn {
@@ -161,7 +167,7 @@ body {
     color: var(--grey-2);
     border: 1px solid var(--grey-7);
 }
-.btn-secondary:hover { background: var(--grey-9); border-color: var(--grey-5); }
+.btn-secondary:hover { background: var(--grey-9); border-color: var(--grey-6); }
 
 .btn-ghost {
     background: rgba(255, 255, 255, 0.15);
@@ -174,20 +180,20 @@ body {
     background: var(--error);
     color: white;
 }
-.btn-danger:hover { background: #dc2626; }
+.btn-danger:hover { background: #b91c1c; }
 
 .btn-header-nav {
-    background: white;
-    color: var(--primary);
-    font-weight: 600;
-    border: none;
+    background: var(--grey-8);
+    color: var(--grey-2);
+    font-weight: 500;
+    border: 1px solid var(--grey-7);
     padding: 8px 20px;
     border-radius: var(--radius-sm);
     font-size: 13px;
     cursor: pointer;
     transition: all 0.15s ease;
 }
-.btn-header-nav:hover { background: var(--primary-light); }
+.btn-header-nav:hover { background: var(--grey-7); }
 
 .btn-group {
     display: flex;
@@ -228,10 +234,10 @@ table {
 th {
     font-size: 12px;
     font-weight: 600;
-    color: var(--grey-3);
+    color: var(--grey-4);
     text-align: left;
     padding: 10px 12px;
-    border-bottom: 2px solid var(--grey-7);
+    border-bottom: 1px solid var(--grey-7);
     background: var(--grey-9);
     white-space: nowrap;
 }
@@ -259,13 +265,13 @@ select, input[type="text"], input[type="number"], input[type="search"] {
     font-family: inherit;
     color: var(--grey-2);
     background: white;
-    transition: border-color 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 select:focus, input:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(13, 111, 252, 0.1);
+    box-shadow: 0 0 0 3px rgba(13, 111, 252, 0.08);
 }
 
 /* ============================================================
@@ -278,7 +284,7 @@ select:focus, input:focus {
     border: 3px solid var(--grey-7);
     border-top-color: var(--primary);
     border-radius: 50%;
-    animation: spin 0.6s linear infinite;
+    animation: spin 0.8s ease-in-out infinite;
 }
 
 @keyframes spin {

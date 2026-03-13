@@ -2947,7 +2947,7 @@
                         frag.appendChild(el('div', { style: { color: 'var(--grey-5)', fontSize: '13px' }, textContent: '데이터 부족' }));
                         return frag;
                     }
-                    var color = mode === 'negative' ? '#ef4444' : '#10b981';
+                    var color = mode === 'negative' ? '#dc2626' : '#16a34a';
                     var sentiment = mode === 'negative' ? 'negative' : 'positive';
                     tags.forEach(function (t, i) {
                         var sentence = TAG_SENTENCE_MAP[t.tag_name]?.[sentiment] || t.tag_name;
@@ -2966,7 +2966,7 @@
                         frag.appendChild(el('div', { style: { color: 'var(--grey-5)', fontSize: '13px' }, textContent: '데이터 부족' }));
                         return frag;
                     }
-                    var tagColor = mode === 'disliked' ? '#ef4444' : '#10b981';
+                    var tagColor = mode === 'disliked' ? '#dc2626' : '#16a34a';
                     vehicles.forEach(function (v, i) {
                         var children = [(i + 1) + '. ' + v.model];
                         var vTags = (v.tags || []).slice(0, 3);
@@ -3004,12 +3004,12 @@
                 // 섹션 2: 업체 평가
                 if (data.affiliate_evaluation) {
                     var affPosBox = el('div', { style: { flex: '1', background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '8px', padding: '12px' } }, [
-                        el('div', { style: { fontWeight: '600', color: '#10b981', marginBottom: '8px', fontSize: '13px' }, textContent: '잘한점' })
+                        el('div', { style: { fontWeight: '600', color: '#16a34a', marginBottom: '8px', fontSize: '13px' }, textContent: '잘한점' })
                     ]);
                     affPosBox.appendChild(buildTagListNode(aff.top_positive, 'positive'));
 
                     var affNegBox = el('div', { style: { flex: '1', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', padding: '12px' } }, [
-                        el('div', { style: { fontWeight: '600', color: '#ef4444', marginBottom: '8px', fontSize: '13px' }, textContent: '개선점' })
+                        el('div', { style: { fontWeight: '600', color: '#dc2626', marginBottom: '8px', fontSize: '13px' }, textContent: '개선점' })
                     ]);
                     affNegBox.appendChild(buildTagListNode(aff.top_negative, 'negative'));
 
@@ -3023,12 +3023,12 @@
                 // 섹션 3: 차량 평가
                 if (data.vehicle_evaluation) {
                     var vehLikedBox = el('div', { style: { flex: '1', background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '8px', padding: '12px' } }, [
-                        el('div', { style: { fontWeight: '600', color: '#10b981', marginBottom: '8px', fontSize: '13px' }, textContent: '칭찬 차량' })
+                        el('div', { style: { fontWeight: '600', color: '#16a34a', marginBottom: '8px', fontSize: '13px' }, textContent: '칭찬 차량' })
                     ]);
                     vehLikedBox.appendChild(buildVehicleListNode(veh.top_liked, 'liked'));
 
                     var vehDislikedBox = el('div', { style: { flex: '1', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', padding: '12px' } }, [
-                        el('div', { style: { fontWeight: '600', color: '#ef4444', marginBottom: '8px', fontSize: '13px' }, textContent: '불만 차량' })
+                        el('div', { style: { fontWeight: '600', color: '#dc2626', marginBottom: '8px', fontSize: '13px' }, textContent: '불만 차량' })
                     ]);
                     vehDislikedBox.appendChild(buildVehicleListNode(veh.top_disliked, 'disliked'));
 
@@ -3083,7 +3083,7 @@
                         ])
                     ]);
                     var nrTbody = el('tbody');
-                    var rTd = { padding: '4px 2px', fontSize: '10px', color: '#ef4444', textAlign: 'center', borderBottom: '1px solid var(--grey-7)', whiteSpace: 'nowrap' };
+                    var rTd = { padding: '4px 2px', fontSize: '10px', color: '#dc2626', textAlign: 'center', borderBottom: '1px solid var(--grey-7)', whiteSpace: 'nowrap' };
                     data.negative_reviews.forEach(function (r) {
                         var d = r.review_date || '';
                         nrTbody.appendChild(el('tr', {}, [
@@ -3127,8 +3127,8 @@
                         vTbody.appendChild(el('tr', {}, [
                             el('td', { textContent: v.model || '' }),
                             el('td', { style: { textAlign: 'center' }, textContent: v.count + '건' }),
-                            el('td', { style: { color: '#10b981' }, textContent: v.top_praise || '-' }),
-                            el('td', { style: { color: '#ef4444' }, textContent: v.top_issue || '-' })
+                            el('td', { style: { color: '#16a34a' }, textContent: v.top_praise || '-' }),
+                            el('td', { style: { color: '#dc2626' }, textContent: v.top_issue || '-' })
                         ]));
                     });
                 } else {

@@ -76,10 +76,10 @@ function showToast(message, type, duration) {
     if (existingToast) existingToast.remove();
 
     const bgColors = {
-        success: '#10b981',
-        error: '#ef4444',
-        warning: '#f59e0b',
-        info: '#3b82f6'
+        success: '#16a34a',
+        error: '#dc2626',
+        warning: '#ea580c',
+        info: '#0d6ffc'
     };
 
     const toast = document.createElement('div');
