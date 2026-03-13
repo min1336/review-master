@@ -3071,26 +3071,33 @@
 
                 // 섹션 6: 부정 리뷰 목록
                 if (data.negative_reviews && data.negative_reviews.length > 0) {
+                    var thNarrow = { textAlign: 'center', padding: '4px 2px', fontSize: '10px', color: 'var(--grey-4)', borderBottom: '2px solid var(--grey-7)', whiteSpace: 'nowrap' };
                     var nrThead = el('thead', {}, [
                         el('tr', {}, [
-                            el('th', { style: { textAlign: 'left', padding: '8px 10px', fontSize: '12px', color: 'var(--grey-4)', borderBottom: '2px solid var(--grey-7)' }, textContent: '날짜' }),
-                            el('th', { style: { textAlign: 'center', padding: '8px 10px', fontSize: '12px', color: 'var(--grey-4)', borderBottom: '2px solid var(--grey-7)' }, textContent: '평점' }),
-                            el('th', { style: { textAlign: 'left', padding: '8px 10px', fontSize: '12px', color: 'var(--grey-4)', borderBottom: '2px solid var(--grey-7)' }, textContent: '차량' }),
-                            el('th', { style: { textAlign: 'left', padding: '8px 10px', fontSize: '12px', color: 'var(--grey-4)', borderBottom: '2px solid var(--grey-7)' }, textContent: '리뷰 내용' })
+                            el('th', { style: Object.assign({}, thNarrow, { width: '80px', textAlign: 'left', padding: '4px 4px' }), textContent: '날짜' }),
+                            el('th', { style: Object.assign({}, thNarrow, { width: '34px' }), textContent: '서비스' }),
+                            el('th', { style: Object.assign({}, thNarrow, { width: '28px' }), textContent: '차량' }),
+                            el('th', { style: Object.assign({}, thNarrow, { width: '28px' }), textContent: '편의' }),
+                            el('th', { style: Object.assign({}, thNarrow, { width: '90px', textAlign: 'left', padding: '4px 4px', overflow: 'hidden', textOverflow: 'ellipsis' }), textContent: '차량모델' }),
+                            el('th', { style: Object.assign({}, thNarrow, { textAlign: 'left', padding: '4px 4px' }), textContent: '리뷰 내용' })
                         ])
                     ]);
                     var nrTbody = el('tbody');
+                    var rTd = { padding: '4px 2px', fontSize: '10px', color: '#ef4444', textAlign: 'center', borderBottom: '1px solid var(--grey-7)', whiteSpace: 'nowrap' };
                     data.negative_reviews.forEach(function (r) {
+                        var d = r.review_date || '';
                         nrTbody.appendChild(el('tr', {}, [
-                            el('td', { style: { padding: '8px 10px', fontSize: '12px', color: 'var(--grey-4)', borderBottom: '1px solid var(--grey-7)', whiteSpace: 'nowrap' }, textContent: r.review_date || '' }),
-                            el('td', { style: { padding: '8px 10px', fontSize: '12px', color: '#ef4444', textAlign: 'center', borderBottom: '1px solid var(--grey-7)' }, textContent: String(r.rating || '') }),
-                            el('td', { style: { padding: '8px 10px', fontSize: '12px', color: 'var(--grey-4)', borderBottom: '1px solid var(--grey-7)', whiteSpace: 'nowrap' }, textContent: r.vehicle_model || '-' }),
-                            el('td', { style: { padding: '8px 10px', fontSize: '12px', color: 'var(--grey-3)', borderBottom: '1px solid var(--grey-7)', lineHeight: '1.5', whiteSpace: 'pre-line' }, textContent: (r.content || '').replace(/<br\s*\/?>/gi, '\n') })
+                            el('td', { style: { padding: '4px 4px', fontSize: '10px', color: 'var(--grey-4)', borderBottom: '1px solid var(--grey-7)', whiteSpace: 'nowrap' }, textContent: d }),
+                            el('td', { style: rTd, textContent: String(r.rating || '') }),
+                            el('td', { style: rTd, textContent: String(r.rating_car || '') }),
+                            el('td', { style: rTd, textContent: String(r.rating_convenience || '') }),
+                            el('td', { style: { padding: '4px 4px', fontSize: '10px', color: 'var(--grey-4)', borderBottom: '1px solid var(--grey-7)', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, textContent: r.vehicle_model || '-' }),
+                            el('td', { style: { padding: '4px 6px', fontSize: '12px', color: 'var(--grey-3)', borderBottom: '1px solid var(--grey-7)', lineHeight: '1.5', whiteSpace: 'pre-line' }, textContent: (r.content || '').replace(/<br\s*\/?>/gi, '\n') })
                         ]));
                     });
                     body.appendChild(el('div', { className: 'report-section' }, [
                         el('div', { className: 'report-section-title', textContent: '부정 리뷰 목록' }),
-                        el('table', { className: 'report-table', style: { width: '100%', borderCollapse: 'collapse' } }, [nrThead, nrTbody])
+                        el('table', { className: 'report-table', style: { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' } }, [nrThead, nrTbody])
                     ]));
                 }
 
