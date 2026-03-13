@@ -48,15 +48,14 @@ async def index(request: Request):
     )
 
 
-if settings.debug:
-    @router.get("/review-detail-test", response_class=HTMLResponse)
-    async def review_detail_test(request: Request):
-        """리뷰 요약 테스트 페이지 (debug 모드에서만 노출)"""
-        return templates.TemplateResponse(
-            request=request,
-            name="review_detail_test.html",
-            context=_page_context(),
-        )
+@router.get("/review-detail-test", response_class=HTMLResponse)
+async def review_detail_test(request: Request):
+    """리뷰 요약 테스트 페이지"""
+    return templates.TemplateResponse(
+        request=request,
+        name="review_detail_test.html",
+        context=_page_context(),
+    )
 
 
 @router.get("/analysis", response_class=HTMLResponse)
