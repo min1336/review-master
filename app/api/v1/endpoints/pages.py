@@ -10,13 +10,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from core.config import get_settings
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from .deps import require_page_auth
-
-router = APIRouter(tags=["pages"], dependencies=[Depends(require_page_auth)])
+router = APIRouter(tags=["pages"])
 settings = get_settings()
 
 # 템플릿 디렉토리 설정

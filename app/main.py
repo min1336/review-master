@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
 # 프로젝트 경로 설정
@@ -185,34 +185,16 @@ async def global_exception_handler(request: Request, exc: Exception) -> TZAwareJ
     )
 
 
-# PageAuthRequired — 미인증 페이지 접근 시 로그인으로 리다이렉트
-from api.v1.endpoints.auth import PageAuthRequired  # noqa: E402
-
-
-@app.exception_handler(PageAuthRequired)
-async def page_auth_redirect(request: Request, exc: PageAuthRequired) -> RedirectResponse:
-    base_path = settings.api_prefix.replace("/api", "")
-    next_path = f"{base_path}{exc.next_url}" if exc.next_url != "/" else ""
-    login_url = f"{base_path}/login"
-    if next_path:
-        login_url += f"?next={next_path}"
-    return RedirectResponse(url=login_url, status_code=303)
-
-
 # ============================================================
 # Routers
 # ============================================================
 from api.v1.api import api_router
-from api.v1.endpoints.auth import router as auth_router
 from api.v1.endpoints.pages import router as pages_router
 from api.v1.endpoints.public import summary_router as public_summary_router
 from api.v1.endpoints.public import report_router as public_report_router
 
 # API 라우터 (/api/*)
 app.include_router(api_router, prefix="/api")
-
-# 인증 라우터 (/login, /logout)
-app.include_router(auth_router)
 
 # Public API 라우터 - 외부 연동용 (구체적 경로를 먼저 등록)
 app.include_router(public_report_router, prefix="/public/report")  # AI 리포트 외부 제공

@@ -16,14 +16,13 @@ from .deps import (
     get_sync_job_service,
     get_sync_service,
     get_upload_job_service,
-    require_internal_auth,
 )
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["sync"], dependencies=[Depends(require_internal_auth)])
-realtime_router = APIRouter(tags=["realtime"], dependencies=[Depends(require_internal_auth)])
-upload_router = APIRouter(tags=["upload"], dependencies=[Depends(require_internal_auth)])
+router = APIRouter(tags=["sync"])
+realtime_router = APIRouter(tags=["realtime"])
+upload_router = APIRouter(tags=["upload"])
 
 
 @router.post("/reviews", status_code=202, response_model=ApiResponseModel[dict])

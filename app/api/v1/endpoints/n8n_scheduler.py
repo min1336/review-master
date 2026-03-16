@@ -23,10 +23,10 @@ from sqlalchemy.orm import selectinload
 from repository.orm_models import BranchSummaryORM, ScheduleGroupORM, SchedulerTargetORM
 from schemas.common import ApiResponseModel, api_response
 
-from .deps import get_db_session, require_internal_auth
+from .deps import get_db_session
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["n8n-scheduler"], dependencies=[Depends(require_internal_auth)])
+router = APIRouter(tags=["n8n-scheduler"])
 
 N8N_BASE = "https://n8n-cloud.carmore.kr"
 N8N_API_TIMEOUT = httpx.Timeout(connect=10.0, read=30.0, write=30.0, pool=5.0)

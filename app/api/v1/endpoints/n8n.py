@@ -9,10 +9,8 @@ import logging
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from schemas.common import ApiResponseModel, api_response
-
-from .deps import require_internal_auth
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["n8n"])
@@ -59,7 +57,7 @@ async def _call_n8n(path: str) -> dict[str, Any]:
         raise HTTPException(status_code=502, detail="n8n 웹훅 연결 실패")
 
 
-@router.post("/webhook/jotform-cancellation", dependencies=[Depends(require_internal_auth)])
+@router.post("/webhook/jotform-cancellation", )
 async def jotform_cancellation_proxy(request: Request) -> dict[str, Any]:
     """Jotform webhook → slack-bot 프록시. n8n 외부 경로 제약 우회용."""
     body = await request.body()
@@ -82,14 +80,14 @@ async def jotform_cancellation_proxy(request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=502, detail="slack-bot 웹훅 연결 실패")
 
 
-@router.post("/review-sync", response_model=ApiResponseModel[dict], dependencies=[Depends(require_internal_auth)])
+@router.post("/review-sync", response_model=ApiResponseModel[dict], )
 async def n8n_review_sync() -> dict[str, Any]:
     """신규 리뷰 동기화 (n8n 웹훅)"""
     result = await _call_n8n("/review-sync")
     return api_response(result)
 
 
-@router.post("/generate-summary", response_model=ApiResponseModel[dict], dependencies=[Depends(require_internal_auth)])
+@router.post("/generate-summary", response_model=ApiResponseModel[dict], )
 async def n8n_generate_summary() -> dict[str, Any]:
     """월별 요약/리포트 생성 (n8n 웹훅)"""
     result = await _call_n8n("/generate-summary")

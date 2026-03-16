@@ -1,64 +1,15 @@
 from __future__ import annotations
 
-import hmac
 import logging
-import time
-from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from fastapi import Depends, Header, HTTPException, Request, status
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.container import ServiceContainer
 from repository.database import get_session
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================
-# Rate Limiter — Public API 보호
-# ============================================================
-
-
-class _RateLimiter:
-    """In-memory sliding window rate limiter (단일 프로세스용)"""
-
-    _MAX_KEYS = 10_000  # 메모리 보호: 최대 추적 IP 수
-
-    def __init__(self, max_requests: int, window_seconds: int):
-        self.max_requests = max_requests
-        self.window_seconds = window_seconds
-        self._requests: dict[str, list[float]] = defaultdict(list)
-        self._check_count = 0
-
-    def check(self, key: str) -> bool:
-        now = time.monotonic()
-        window_start = now - self.window_seconds
-        timestamps = self._requests[key]
-        active = [t for t in timestamps if t > window_start]
-        if not active:
-            self._requests[key] = [now]
-            self._maybe_purge(now, window_start)
-            return True
-        if len(active) >= self.max_requests:
-            self._requests[key] = active
-            return False
-        active.append(now)
-        self._requests[key] = active
-        return True
-
-    def _maybe_purge(self, now: float, window_start: float) -> None:
-        """100회 호출마다 만료된 IP 키 정리"""
-        self._check_count += 1
-        if self._check_count < 100:
-            return
-        self._check_count = 0
-        expired = [k for k, v in self._requests.items() if not v or v[-1] <= window_start]
-        for k in expired:
-            del self._requests[k]
-
-
-_public_api_limiter = _RateLimiter(max_requests=10, window_seconds=60)
 
 if TYPE_CHECKING:
     from domain.pipeline import RealtimePipeline
@@ -374,45 +325,3 @@ async def get_pipeline_job_service():
 async def get_realtime_pipeline() -> "RealtimePipeline":
     return await ServiceContainer.get_realtime_pipeline()
 
-
-
-# ============================================================
-# Security
-# ============================================================
-
-
-async def require_internal_auth(
-    request: Request,
-    x_internal_key: str | None = Header(default=None, alias="X-Internal-Key"),
-) -> None:
-    """내부 API 인증 — 비활성화됨"""
-    return
-
-
-async def require_page_auth(request: Request) -> None:
-    """페이지 접근 인증 — 비활성화됨"""
-    return
-
-
-async def require_public_api_key(
-    request: Request,
-    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
-) -> None:
-    from core.config import get_settings
-
-    settings = get_settings()
-    expected = settings.public_api_key.get_secret_value()
-    if not expected or not x_api_key or not hmac.compare_digest(x_api_key, expected):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-        )
-
-    # Rate limit: 인증 통과 후 IP당 분당 10회 제한
-    client_ip = request.client.host if request.client else "unknown"
-    if not _public_api_limiter.check(client_ip):
-        logger.warning("Rate limit exceeded for IP: %s", client_ip)
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many requests. Please try again later.",
-        )

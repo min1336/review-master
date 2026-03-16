@@ -13,11 +13,11 @@ from pydantic import BaseModel
 
 from schemas.jobs import FullPipelineRequest, PipelineJobStatusResponse
 
-from .deps import get_pipeline_job_service, get_sync_job_service, get_upload_job_service, require_internal_auth
+from .deps import get_pipeline_job_service, get_sync_job_service, get_upload_job_service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["pipeline-console"], dependencies=[Depends(require_internal_auth)])
+router = APIRouter(tags=["pipeline-console"])
 
 # --- 설정값 허용 목록 ---
 # 절대 노출 금지: openai_api_key, database_password, database_url,
