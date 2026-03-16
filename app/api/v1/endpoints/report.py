@@ -13,16 +13,19 @@ import time
 import uuid
 from datetime import date
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import Response
+from core.config import get_settings
 from core.timezone import date_to_utc
 from schemas.common import ApiResponseModel, api_response, validate_date_range_d
-from schemas.report import BatchPdfRequest
+from schemas.report import BatchPdfRequest, ReportRequest
+from services.report_job_service import ReportJobService
 from services.report_service import ReportService
 
 from ._common import resolve_period_or_dates, sanitize_pdf_filename
-from .deps import get_report_service
+from .deps import get_report_job_service, get_report_service
 
 logger = logging.getLogger(__name__)
 
@@ -392,3 +395,64 @@ async def api_get_report(
         return api_response(report_data)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+# ================================================================
+# 비동기 리포트 생성 (report_generate)
+# ================================================================
+
+
+@router.post("/{branch_id}/generate/async", status_code=202, response_model=ApiResponseModel[dict])
+async def api_generate_report_async(
+    branch_id: int,
+    data: ReportRequest,
+    job_service: ReportJobService = Depends(get_report_job_service),
+) -> dict[str, Any]:
+    """
+    비동기 AI 리포트 생성 요청
+
+    502 타임아웃 방지를 위한 백그라운드 작업 방식.
+    즉시 job_id를 반환하고, 클라이언트는 /job/{job_id}로 상태를 폴링합니다.
+    """
+    validate_date_range_d(data.start_date, data.end_date)
+
+    report_config = data.to_resolved_config()
+    job_id = await job_service.submit_job(
+        branch_id=branch_id,
+        start_date=date_to_utc(data.start_date),
+        end_date=date_to_utc(data.end_date, end_of_day=True),
+        report_config=report_config,
+    )
+    return api_response({
+        "job_id": job_id,
+        "poll_url": f"{get_settings().api_prefix}/reports/{branch_id}/job/{job_id}",
+    })
+
+
+@router.get("/{branch_id}/job/{job_id}", response_model=ApiResponseModel[dict])
+async def api_get_job_status(
+    branch_id: int,
+    job_id: UUID = Path(..., description="작업 UUID"),
+    job_service: ReportJobService = Depends(get_report_job_service),
+) -> dict[str, Any]:
+    """비동기 작업 상태 조회 (폴링용)"""
+    job_status = await job_service.get_job_status(str(job_id), branch_id=branch_id)
+
+    if not job_status:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
+
+    return api_response(job_status)
+
+
+@router.delete("/{branch_id}/job/{job_id}", response_model=ApiResponseModel[dict])
+async def api_cancel_job(
+    branch_id: int,
+    job_id: UUID = Path(..., description="작업 UUID"),
+    job_service: ReportJobService = Depends(get_report_job_service),
+) -> dict[str, Any]:
+    """진행 중인 작업 취소"""
+    cancelled = await job_service.cancel_job(str(job_id), branch_id=branch_id)
+    return api_response({
+        "cancelled": cancelled,
+        "message": "작업이 취소되었습니다." if cancelled else "취소할 수 없는 작업입니다.",
+    })

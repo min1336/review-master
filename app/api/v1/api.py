@@ -8,15 +8,10 @@ from .endpoints import (
     n8n_scheduler,
     pipeline_console,
     presets,
-    realtime,
     report,
-    report_generate,
-    sentiment,
     summaries,
-    summary_branch,
     sync,
     tags,
-    upload,
 )
 from .endpoints.deps import require_internal_auth
 
@@ -25,26 +20,24 @@ _auth = [Depends(require_internal_auth)]
 
 # --- Summaries ---
 api_router.include_router(summaries.router, prefix="/summaries", dependencies=_auth)
-api_router.include_router(summary_branch.router, prefix="/summaries", dependencies=_auth)
 
 # --- Tags & Sentiment ---
 api_router.include_router(tags.router, prefix="/tags", dependencies=_auth)
-api_router.include_router(sentiment.router, prefix="/sentiment", dependencies=_auth)
+api_router.include_router(tags.sentiment_router, prefix="/sentiment", dependencies=_auth)
 
 # --- Analysis ---
 api_router.include_router(analysis.router, prefix="/analysis", dependencies=_auth)
 
 # --- Reports ---
 api_router.include_router(report.router, prefix="/reports", dependencies=_auth)
-api_router.include_router(report_generate.router, prefix="/reports", dependencies=_auth)
 
 # --- Presets ---
 api_router.include_router(presets.router, prefix="/presets", dependencies=_auth)
 
 # --- Sync & Processing (이미 라우터 레벨 인증 있음 — 이중 안전) ---
 api_router.include_router(sync.router, prefix="/sync")
-api_router.include_router(realtime.router, prefix="/realtime")
-api_router.include_router(upload.router, prefix="/upload")
+api_router.include_router(sync.realtime_router, prefix="/realtime")
+api_router.include_router(sync.upload_router, prefix="/upload")
 
 # --- Pipeline Console (이미 라우터 레벨 인증 있음) ---
 api_router.include_router(pipeline_console.router, prefix="/pipeline")

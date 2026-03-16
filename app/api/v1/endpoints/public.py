@@ -1,7 +1,8 @@
-"""Public Report API 엔드포인트
+"""Public API 엔드포인트
 
-X-API-Key 인증으로 AI 리포트를 외부에 제공합니다.
-차량별 평가 분석은 기본 긍정 Top 5, URL 파라미터로 조절 가능합니다.
+X-API-Key 인증으로 요약/리포트를 외부에 제공합니다.
+- summary_router: /review/*, /public/* — 요약 조회
+- report_router: /public/report/* — AI 리포트 조회
 """
 
 from __future__ import annotations
@@ -13,15 +14,57 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from core.timezone import date_to_utc
 from schemas.common import ApiResponseModel, api_response, validate_date_range_d
 from services.report_service import ReportService
+from services.summary_service import SummaryService
 
-from .deps import get_report_service, require_public_api_key
+from .deps import get_report_service, get_summary_service, require_public_api_key
 
-router = APIRouter(tags=["public-report"])
+# ============================================================
+# Public Summary
+# ============================================================
+
+summary_router = APIRouter(tags=["public-summary"])
+
+
+@summary_router.get("/{branch_id}", response_model=ApiResponseModel[dict])
+async def api_get_public_summary(
+    branch_id: int,
+    _: None = Depends(require_public_api_key),
+    service: SummaryService = Depends(get_summary_service),
+) -> dict[str, Any]:
+    """
+    최신 요약 1개 조회 (Public)
+
+    - X-API-Key 헤더 필요
+    """
+    summary = await service.get_summary_by_branch_id(branch_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Summary not found")
+
+    data = {
+        "branch_id": summary.branch_id,
+        "branch_name": summary.branch_name,
+        "region": summary.region,
+        "review_count": summary.review_count,
+        "avg_rating": summary.avg_rating,
+        "updated_at": summary.updated_at,
+    }
+
+    latest = SummaryService.pick_latest_summary(summary)
+    data["summary"] = latest or "요약이 아직 생성되지 않았습니다."
+
+    return api_response(data)
+
+
+# ============================================================
+# Public Report
+# ============================================================
+
+report_router = APIRouter(tags=["public-report"])
 
 DEFAULT_VEHICLE_TOP_N = 5
 
 
-@router.get("/{branch_id}", response_model=ApiResponseModel[dict])
+@report_router.get("/{branch_id}", response_model=ApiResponseModel[dict])
 async def api_get_public_report(
     branch_id: int,
     start_date: date = Query(..., description="시작일 (YYYY-MM-DD)"),

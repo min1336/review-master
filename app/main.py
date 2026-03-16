@@ -205,8 +205,8 @@ async def page_auth_redirect(request: Request, exc: PageAuthRequired) -> Redirec
 from api.v1.api import api_router
 from api.v1.endpoints.auth import router as auth_router
 from api.v1.endpoints.pages import router as pages_router
-from api.v1.endpoints.public_summary import router as public_summary_router
-from api.v1.endpoints.public_report import router as public_report_router
+from api.v1.endpoints.public import summary_router as public_summary_router
+from api.v1.endpoints.public import report_router as public_report_router
 
 # API 라우터 (/api/*)
 app.include_router(api_router, prefix="/api")
