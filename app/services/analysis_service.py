@@ -22,6 +22,7 @@ from schemas.dto import (
 
 if TYPE_CHECKING:
     from infrastructure.athena_client import AthenaClient
+    from repository.affiliate_repository import AffiliateRepository
     from repository.review_repository import NewReviewRepository
     from repository.review_repository import BranchReviewRepository
     from repository.summary_repository import SummaryRepository
@@ -65,6 +66,22 @@ class DatabaseConnectionError(AnalysisServiceError):
     """DB 연결 실패"""
 
     pass
+
+
+class CarmoreService:
+    """Carmore API 연동 비즈니스 로직"""
+
+    def __init__(self, affiliate_repo: AffiliateRepository):
+        self.affiliate_repo = affiliate_repo
+
+    async def get_affiliates(
+        self, location_type: str | None = None, is_active: bool = True
+    ) -> list[dict]:
+        """업체 목록 조회"""
+        affiliates = await self.affiliate_repo.get_all_with_filters(
+            location_type=location_type, is_active=is_active
+        )
+        return [a.model_dump() for a in affiliates]
 
 
 class AnalysisService:

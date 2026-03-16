@@ -11,10 +11,9 @@ Usage:
 
 from __future__ import annotations
 
-from .carmore_service import CarmoreService
-from .sentiment_service import SentimentService
+from .analysis_service import CarmoreService
 from .summary_service import SummaryService
-from .tag_service import TagService
+from .tag_service import SentimentService, TagService
 
 __all__ = [
     "SummaryService",

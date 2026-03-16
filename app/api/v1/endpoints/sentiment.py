@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 from schemas.common import ApiListResponseModel, ApiResponseModel, api_list_response, api_response
 from schemas.dto import SentimentStatsDTO
-from services.sentiment_service import SentimentService
+from services.tag_service import SentimentService
 
 from .deps import get_sentiment_service
 

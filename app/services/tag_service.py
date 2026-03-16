@@ -8,12 +8,30 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from core.utils import TTLCache
+from schemas.dto import SentimentStatsDTO
 
 if TYPE_CHECKING:
     from repository.branch_tag_repository import BranchTagRepository
+    from repository.review_repository import SentimentRepository
     from repository.tag_repository import CategoryRepository, MappingRepository, TagRepository
 
 _tag_cache = TTLCache(300)
+
+
+class SentimentService:
+    """감정통계 비즈니스 로직"""
+
+    def __init__(self, sentiment_repo: SentimentRepository):
+        self.sentiment_repo = sentiment_repo
+
+    async def get_stats(self, branch_id: int | None = None) -> SentimentStatsDTO:
+        """감정통계 조회"""
+        return await self.sentiment_repo.get_stats(branch_id)
+
+    async def get_all_stats(self, page: int = 1, limit: int = 50) -> tuple[list[dict], int]:
+        """전체 지점 감정통계 (페이지네이션)"""
+        return await self.sentiment_repo.get_all_stats(page=page, limit=limit)
+
 
 def _get_classifier():
     from domain.analysis._singletons import get_hybrid_classifier

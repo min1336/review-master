@@ -1,19 +1,38 @@
 """요약 비즈니스 로직
 
-조회/생성/승인 로직을 Mixin으로 분리하여 관심사를 분리한다.
-- SummaryQueryMixin: 조회/수정 (10개 메서드)
-- SummaryGenerationMixin: AI 요약 생성 (8개 메서드)
-- SummaryApprovalMixin: 승인/거절 (6개 메서드)
+조회/생성/승인 로직을 단일 클래스로 통합.
+- 조회/수정 메서드 (10개)
+- AI 요약 생성 메서드 (8개)
+- 승인/거절 메서드 (6개)
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections import defaultdict
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from services.summary_approval_mixin import SummaryApprovalMixin
-from services.summary_generation_mixin import SummaryGenerationMixin
-from services.summary_query_mixin import SummaryQueryMixin
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from core.timezone import utc_now
+from repository.orm_models import (
+    BranchReviewORM,
+    MonthlyTagStatsORM,
+    TagORM,
+)
+from schemas.dto import (
+    BranchCarModelsDTO,
+    BranchReviewsDTO,
+    CarModelDTO,
+    CarModelTagDTO,
+    PendingSummaryResultDTO,
+    RegionStatsDTO,
+    SummaryStatsDTO,
+)
 
 if TYPE_CHECKING:
     from infrastructure.athena_client import AthenaClient
@@ -25,8 +44,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class SummaryService(SummaryQueryMixin, SummaryGenerationMixin, SummaryApprovalMixin):
-    """요약 비즈니스 로직 (Mixin 조합)"""
+class SummaryService:
+    """요약 비즈니스 로직"""
+
+    # 기간별 설정 (우선순위 순서)
+    PERIOD_CONFIGS = [
+        {"key": "1m", "field": "summary_1m", "months": 1, "label": "최근 1개월"},
+        {"key": "3m", "field": "summary_3m", "months": 3, "label": "최근 3개월"},
+        {"key": "6m", "field": "summary_6m", "months": 6, "label": "최근 6개월"},
+        {"key": "1y", "field": "summary_1y", "months": 12, "label": "최근 1년"},
+    ]
+    MIN_REVIEWS_FOR_SUMMARY = 30
 
     def __init__(
         self,
@@ -41,3 +69,958 @@ class SummaryService(SummaryQueryMixin, SummaryGenerationMixin, SummaryApprovalM
         self.review_repo = review_repo
         self.sentiment_repo = sentiment_repo
         self.athena_client = athena_client
+
+    # ============================================================
+    # 조회 / 수정
+    # ============================================================
+
+    async def get_summary_by_branch_id(self, branch_id: int) -> dict | None:
+        """지점 ID로 요약 조회 (Public API용)"""
+        return await self.summary_repo.get_by_branch_id(branch_id)
+
+    @staticmethod
+    def pick_latest_summary(summary) -> str | None:
+        """요약 문자열 선택 (가장 최신/짧은 기간 우선)"""
+        candidates = [
+            summary.summary_1m,
+            summary.summary_3m,
+            summary.summary_6m,
+            summary.summary_1y,
+            summary.summary_all,
+        ]
+        for value in candidates:
+            if value and str(value).strip():
+                return value
+        return None
+
+    async def get_summaries(
+        self,
+        region: str | None = None,
+        region_group: str | None = None,
+        keyword: str | None = None,
+        min_rating: float | None = None,
+        max_rating: float | None = None,
+        min_reviews: int = 0,
+        limit: int = 50,
+        offset: int = 0,
+        sort_by: str = "branch_id",
+        order: str = "asc",
+        review_date_from: datetime | None = None,
+        review_date_to: datetime | None = None,
+    ) -> list[dict]:
+        """요약 목록 조회 (날짜 범위 필터링 지원)"""
+        branch_ids_filter = None
+        if review_date_from or review_date_to:
+            branch_ids_filter = await self.summary_repo.get_branch_ids_by_date_range(
+                review_date_from=review_date_from, review_date_to=review_date_to
+            )
+
+            if not branch_ids_filter:
+                logging.info(
+                    f"날짜 필터 결과 없음: {review_date_from} ~ {review_date_to}"
+                )
+                return []
+
+        if keyword or min_rating or max_rating:
+            summaries = await self.summary_repo.search(
+                keyword=keyword,
+                region=region,
+                region_group=region_group,
+                min_rating=min_rating,
+                max_rating=max_rating,
+                min_reviews=min_reviews,
+                limit=limit,
+            )
+            if branch_ids_filter is not None:
+                summaries = [s for s in summaries if s.branch_id in branch_ids_filter]
+        else:
+            summaries = await self.summary_repo.get_all_with_filters(
+                region=region,
+                region_group=region_group,
+                min_reviews=min_reviews,
+                limit=limit,
+                offset=offset,
+                sort_by=sort_by,
+                order=order,
+                branch_ids=branch_ids_filter,
+            )
+
+        return [s.model_dump() if hasattr(s, "model_dump") else s for s in summaries]
+
+    async def get_summary(self, branch_id: int) -> dict | None:
+        """단일 요약 조회"""
+        summary = await self.summary_repo.get_by_branch_id(branch_id)
+        return summary.model_dump() if summary else None
+
+    async def update_summary(self, branch_id: int, data: dict) -> dict | None:
+        """요약 수정"""
+        data["branch_id"] = branch_id
+        result = await self.summary_repo.upsert_by_branch_id(data)
+        return result.model_dump() if result else None
+
+    async def get_stats(self) -> SummaryStatsDTO:
+        """통계 조회"""
+        return await self.summary_repo.get_stats()
+
+    async def get_region_stats(self) -> list[RegionStatsDTO]:
+        """지역별 통계"""
+        data = await self.summary_repo.get_region_data()
+
+        if not data:
+            return []
+
+        region_stats = {}
+        for row in data:
+            region = row.get("region") or "미분류"
+            city = region.split()[0] if region and region.strip() else "미분류"
+
+            if city not in region_stats:
+                region_stats[city] = {
+                    "region": city,
+                    "count": 0,
+                    "total_reviews": 0,
+                    "rating_sum": 0,
+                    "rating_count": 0,
+                }
+
+            region_stats[city]["count"] += 1
+            region_stats[city]["total_reviews"] += row.get("review_count") or 0
+
+            if row.get("avg_rating"):
+                region_stats[city]["rating_sum"] += float(row["avg_rating"])
+                region_stats[city]["rating_count"] += 1
+
+        stats_list = []
+        for city, stats in region_stats.items():
+            avg_rating = 0
+            if stats["rating_count"] > 0:
+                avg_rating = round(stats["rating_sum"] / stats["rating_count"], 2)
+
+            stats_list.append(
+                RegionStatsDTO(
+                    region=city,
+                    count=stats["count"],
+                    avg_rating=avg_rating,
+                    total_reviews=stats["total_reviews"],
+                )
+            )
+
+        stats_list.sort(key=lambda x: x.count, reverse=True)
+        return stats_list
+
+    async def get_branch_reviews(
+        self,
+        branch_id: int,
+        car_model: str | None = None,
+        sentiment: str | None = None,
+        review_date_from: datetime | None = None,
+        review_date_to: datetime | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> BranchReviewsDTO:
+        """지점별 원본 리뷰 목록 조회 (Athena primary, Supabase fallback)"""
+        use_athena = (
+            self.athena_client is not None
+            and car_model is None
+            and sentiment is None
+        )
+
+        if use_athena:
+            try:
+                result = await self._get_branch_reviews_via_athena(
+                    branch_id, review_date_from, review_date_to, limit, offset
+                )
+                result.car_models = await self.review_repo.get_distinct_car_models(branch_id)
+                return result
+            except Exception as e:
+                logger.warning("Athena 리뷰 조회 실패, Supabase 폴백: %s", e)
+
+        return await self.review_repo.get_by_branch(
+            branch_id=branch_id,
+            car_model=car_model,
+            sentiment=sentiment,
+            review_date_from=review_date_from,
+            review_date_to=review_date_to,
+            limit=limit,
+            offset=offset,
+        )
+
+    async def _get_branch_reviews_via_athena(
+        self,
+        branch_id: int,
+        review_date_from: datetime | None,
+        review_date_to: datetime | None,
+        limit: int,
+        offset: int,
+    ) -> BranchReviewsDTO:
+        """Athena에서 리뷰 조회 + Supabase sentiment 병합"""
+        date_from = review_date_from.strftime("%Y-%m-%d") if review_date_from else None
+        date_to = review_date_to.strftime("%Y-%m-%d") if review_date_to else None
+
+        rows, total = await asyncio.to_thread(
+            self.athena_client.fetch_reviews_by_branch,
+            branch_id=branch_id,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+            offset=offset,
+        )
+
+        review_ids = [int(r["review_id"]) for r in rows if r.get("review_id")]
+        if review_ids:
+            sentiment_map = await self.review_repo.get_sentiments_by_review_ids(review_ids)
+            for row in rows:
+                rid = int(row["review_id"]) if row.get("review_id") else None
+                if rid and rid in sentiment_map:
+                    row["sentiment"] = sentiment_map[rid]
+
+        return BranchReviewsDTO(reviews=rows, total=total)
+
+    async def get_car_model_tags(
+        self,
+        branch_id: int,
+        car_model: str | None = None,
+    ) -> BranchCarModelsDTO:
+        """지점별 차량 모델 태그 분석"""
+        from repository.car_model_repository import CarModelRepository
+        from repository.database import get_session_factory
+
+        async with get_session_factory()() as session:
+            repo = CarModelRepository(session)
+
+            try:
+                rows = await repo.get_car_model_tags(branch_id, car_model)
+            except Exception as e:
+                logger.warning("차량 태그 조회 실패 (branch_id=%s): %s", branch_id, e)
+                return BranchCarModelsDTO(branch_id=branch_id, car_models=[])
+
+            if not rows:
+                return BranchCarModelsDTO(branch_id=branch_id, car_models=[])
+
+            car_data: dict[str, dict] = {}
+            for row in rows:
+                car = row["car_model"]
+                tag_name = row.get("tag_name", "기타")
+
+                if car not in car_data:
+                    car_data[car] = {"name": car, "tags": {}, "review_count": 0}
+
+                car_data[car]["tags"][tag_name] = {
+                    "name": tag_name,
+                    "positive": row.get("positive_count", 0),
+                    "negative": row.get("negative_count", 0),
+                    "neutral": row.get("neutral_count", 0),
+                    "total": row.get("total_count", 0),
+                }
+
+            for car in car_data:
+                try:
+                    count_result = await session.execute(
+                        select(func.count())
+                        .select_from(BranchReviewORM)
+                        .where(BranchReviewORM.branch_id == branch_id)
+                        .where(BranchReviewORM.car_model == car)
+                    )
+                    car_data[car]["review_count"] = count_result.scalar_one() or 0
+                except Exception:
+                    car_data[car]["review_count"] = 0
+
+        car_models_dto: list[CarModelDTO] = []
+        for car, data in sorted(car_data.items()):
+            tags_dto = sorted(
+                [
+                    CarModelTagDTO(
+                        name=tag_data["name"],
+                        positive=tag_data["positive"],
+                        negative=tag_data["negative"],
+                        neutral=tag_data["neutral"],
+                        total=tag_data["total"],
+                    )
+                    for tag_data in data["tags"].values()
+                ],
+                key=lambda x: x.total,
+                reverse=True,
+            )
+
+            car_models_dto.append(
+                CarModelDTO(
+                    name=data["name"],
+                    review_count=data.get("review_count", 0),
+                    tags=tags_dto,
+                )
+            )
+
+        return BranchCarModelsDTO(branch_id=branch_id, car_models=car_models_dto)
+
+    # ============================================================
+    # AI 요약 생성
+    # ============================================================
+
+    async def generate_summary_with_data(
+        self,
+        branch_id: int,
+        save_to_db: bool = True,
+        mode: str = "marketing",
+    ) -> dict:
+        """태그+감정+리뷰 데이터를 활용한 AI 요약 생성"""
+        # 1. 지점 기본 정보 조회
+        summary = await self.summary_repo.get_by_branch_id(branch_id)
+        if not summary:
+            return {
+                "success": False,
+                "summary": "",
+                "error": f"지점 {branch_id}을(를) 찾을 수 없습니다",
+            }
+
+        summary_data = summary.model_dump()
+        branch_name = summary_data.get("branch_name", f"지점 {branch_id}")
+
+        # 2. 기간 선택 + 대표 리뷰 수집
+        period_result = await self._select_period_and_fetch_reviews(
+            branch_id, branch_name, mode
+        )
+        if not period_result["success"]:
+            return period_result
+
+        selected_period = period_result["selected_period"]
+        review_count = period_result["review_count"]
+        start_date = period_result["start_date"]
+        end_date = period_result["end_date"]
+        representative_reviews = period_result["representative_reviews"]
+
+        period_key = selected_period["key"]
+        period_field = selected_period["field"]
+        period_label = selected_period["label"]
+
+        # 3. 태그 + 감정 통계 조회
+        grouped_tag_sentiments, sentiment_stats = await self._fetch_tag_and_sentiment_data(
+            branch_id, period_key
+        )
+
+        # 4. 프롬프트 생성 및 LLM 호출
+        llm_result = await self._call_llm(
+            branch_id=branch_id,
+            mode=mode,
+            branch_name=branch_name,
+            period_label=period_label,
+            period_key=period_key,
+            grouped_tag_sentiments=grouped_tag_sentiments,
+            sentiment_stats=sentiment_stats,
+            review_count=review_count,
+            representative_reviews=representative_reviews,
+        )
+        if not llm_result["success"]:
+            return llm_result
+
+        generated_summary = llm_result["generated_summary"]
+
+        # 5. 검증, 마크다운 정리, DB 저장
+        generated_summary = self._postprocess_summary(
+            branch_id, generated_summary, mode
+        )
+        if save_to_db:
+            await self._save_summary_to_db(
+                branch_id, period_key, period_field, generated_summary, mode
+            )
+
+        return {
+            "success": True,
+            "summary": generated_summary,
+            "period": period_key,
+            "period_label": period_label,
+            "start_date": start_date.strftime("%Y-%m-%d") if start_date else None,
+            "end_date": end_date.strftime("%Y-%m-%d"),
+            "review_count": review_count,
+            "mode": mode,
+        }
+
+    async def _select_period_and_fetch_reviews(
+        self,
+        branch_id: int,
+        branch_name: str,
+        mode: str,
+    ) -> dict:
+        """기간별 리뷰 수를 확인해 적절한 기간을 선택하고, 대표 리뷰를 수집한다."""
+        from infrastructure.llm.prompts import SummaryPromptBuilder
+        from repository.database import get_session_factory
+
+        async with get_session_factory()() as session:
+            end_date = utc_now()
+            selected_period = None
+            review_count = 0
+            start_date = None
+
+            for period_config in self.PERIOD_CONFIGS:
+                months = period_config["months"]
+                start_date = end_date - timedelta(days=months * 30)
+
+                count_result = await session.execute(
+                    select(func.count())
+                    .select_from(BranchReviewORM)
+                    .where(BranchReviewORM.branch_id == branch_id)
+                    .where(BranchReviewORM.review_date >= start_date)
+                )
+                review_count = count_result.scalar_one() or 0
+
+                if review_count >= self.MIN_REVIEWS_FOR_SUMMARY:
+                    selected_period = period_config
+                    break
+
+            # 어떤 기간도 30개 이상이 아닌 경우 → 전체 기간으로 폴백
+            if not selected_period:
+                total_result = await session.execute(
+                    select(func.count())
+                    .select_from(BranchReviewORM)
+                    .where(BranchReviewORM.branch_id == branch_id)
+                )
+                total_count = total_result.scalar_one() or 0
+
+                if total_count < self.MIN_REVIEWS_FOR_SUMMARY:
+                    insufficient_msg = SummaryPromptBuilder.get_insufficient_reviews_message(
+                        branch_name, total_count
+                    )
+                    return {
+                        "success": False,
+                        "summary": insufficient_msg,
+                        "period": None,
+                        "period_label": None,
+                        "review_count": total_count,
+                        "mode": mode,
+                        "error": "리뷰가 부족합니다",
+                    }
+
+                selected_period = {"key": "all", "field": "summary_all", "months": None, "label": "전체 기간"}
+                review_count = total_count
+                start_date = None
+
+            representative_reviews = await self._fetch_representative_reviews(
+                session, branch_id, start_date, mode
+            )
+
+        return {
+            "success": True,
+            "selected_period": selected_period,
+            "review_count": review_count,
+            "start_date": start_date,
+            "end_date": end_date,
+            "representative_reviews": representative_reviews,
+        }
+
+    async def _fetch_tag_and_sentiment_data(
+        self,
+        branch_id: int,
+        period_key: str,
+    ) -> tuple[list[dict], dict]:
+        """태그 그룹핑과 감정 통계를 조회해 반환한다."""
+        grouped_tag_sentiments = await self._fetch_grouped_tags(branch_id, period_key)
+
+        sentiment_stats = {"positive": 0, "negative": 0, "neutral": 0, "total": 0}
+        if self.sentiment_repo:
+            try:
+                stats = await self.sentiment_repo.get_stats(branch_id)
+                sentiment_stats = {
+                    "positive": stats.positive,
+                    "negative": stats.negative,
+                    "neutral": stats.neutral,
+                    "total": stats.total,
+                }
+            except Exception as e:
+                logger.warning("감정 통계 조회 실패 (branch_id=%s): %s", branch_id, e)
+                try:
+                    await self.sentiment_repo.rollback()
+                except Exception:
+                    pass
+
+        return grouped_tag_sentiments, sentiment_stats
+
+    async def _call_llm(
+        self,
+        branch_id: int,
+        mode: str,
+        branch_name: str,
+        period_label: str,
+        period_key: str,
+        grouped_tag_sentiments: list[dict],
+        sentiment_stats: dict,
+        review_count: int,
+        representative_reviews: dict,
+    ) -> dict:
+        """프롬프트를 생성하고 LLM을 호출해 요약 텍스트를 반환한다."""
+        from infrastructure.llm import get_provider
+        from infrastructure.llm.prompts import (
+            OperationalSummaryPromptBuilder,
+            SummaryPromptBuilder,
+        )
+
+        if mode == "operational":
+            system_prompt, user_prompt = OperationalSummaryPromptBuilder.create_prompt(
+                tag_sentiments=grouped_tag_sentiments,
+                review_count=review_count,
+                representative_reviews=representative_reviews,
+                branch_name=branch_name,
+                period_label=period_label,
+                sentiment_stats=sentiment_stats,
+            )
+        else:
+            system_prompt, user_prompt = (
+                SummaryPromptBuilder.create_enhanced_summary_prompt(
+                    tag_sentiments=grouped_tag_sentiments,
+                    review_count=review_count,
+                    representative_reviews=representative_reviews,
+                    branch_name=branch_name,
+                    period_label=period_label,
+                    sentiment_stats=sentiment_stats,
+                )
+            )
+
+        llm_params = {
+            "marketing": {"max_tokens": 400, "temperature": 0.7},
+            "operational": {"max_tokens": 500, "temperature": 0.5},
+        }
+        params = llm_params.get(mode, llm_params["marketing"])
+
+        try:
+            llm_provider = get_provider()
+            response = await llm_provider.async_generate(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                **params,
+            )
+            generated_summary = (
+                response.content if hasattr(response, "content") else str(response)
+            )
+        except Exception as e:
+            logger.error("LLM 호출 실패 (branch_id=%s): %s", branch_id, e)
+            return {
+                "success": False,
+                "summary": "",
+                "period": period_key,
+                "mode": mode,
+                "error": f"AI 요약 생성 실패: {e}",
+            }
+
+        return {"success": True, "generated_summary": generated_summary}
+
+    def _postprocess_summary(
+        self,
+        branch_id: int,
+        generated_summary: str,
+        mode: str,
+    ) -> str:
+        """마크다운 제거 및 유효성 검증 후 요약 텍스트를 반환한다."""
+        from infrastructure.llm.validator import (
+            strip_markdown_formatting,
+            validate_summary,
+        )
+
+        generated_summary = strip_markdown_formatting(generated_summary)
+        validation_mode = "operational" if mode == "operational" else "summary"
+        is_valid, errors = validate_summary(generated_summary, mode=validation_mode)
+        if not is_valid:
+            logger.warning(
+                f"검증 실패 (branch_id={branch_id}, mode={mode}): {errors}"
+            )
+        return generated_summary
+
+    async def _save_summary_to_db(
+        self,
+        branch_id: int,
+        period_key: str,
+        period_field: str,
+        generated_summary: str,
+        mode: str,
+    ) -> None:
+        """생성된 요약을 DB에 저장한다."""
+        try:
+            all_period_fields = ["summary_all", "summary_1y", "summary_6m", "summary_3m", "summary_1m"]
+            save_data = {"branch_id": branch_id, period_field: generated_summary}
+            for f in all_period_fields:
+                if f != period_field:
+                    save_data[f] = None
+            await self.summary_repo.upsert_by_branch_id(save_data)
+            logger.info(
+                f"요약 저장 완료: branch_id={branch_id}, period={period_key}, mode={mode}"
+            )
+        except Exception as e:
+            logger.error("요약 저장 실패 (branch_id=%s): %s", branch_id, e)
+
+    async def _fetch_grouped_tags(
+        self, branch_id: int, period_key: str
+    ) -> list[dict]:
+        """monthly_tag_stats에서 기간별 태그를 조회하고 카테고리별로 그룹핑"""
+        try:
+            if period_key != "all":
+                grouped = await self._fetch_tags_from_monthly(branch_id, period_key)
+                if len(grouped) >= 1:
+                    return grouped
+
+            branch_tags = await self.branch_tag_repo.get_by_branch(
+                branch_id, period_type="all", limit=15
+            )
+            return self._group_tags_by_category(branch_tags)
+        except Exception as e:
+            logger.warning("태그 조회 실패 (branch_id=%s): %s", branch_id, e)
+            try:
+                await self.branch_tag_repo.rollback()
+            except Exception:
+                pass
+            return []
+
+    async def _fetch_tags_from_monthly(
+        self, branch_id: int, period_key: str
+    ) -> list[dict]:
+        """monthly_tag_stats에서 기간 집계 → 카테고리 그룹핑"""
+        from repository.database import get_session_factory
+
+        months_map = {"1m": 1, "3m": 3, "6m": 6, "1y": 12}
+        months = months_map.get(period_key, 6)
+        now = utc_now()
+        start_period = (now - timedelta(days=months * 30)).strftime("%Y-%m")
+
+        async with get_session_factory()() as session:
+            stmt = (
+                select(
+                    MonthlyTagStatsORM.tag_id,
+                    MonthlyTagStatsORM.positive_count,
+                    MonthlyTagStatsORM.negative_count,
+                    MonthlyTagStatsORM.neutral_count,
+                )
+                .where(MonthlyTagStatsORM.branch_id == branch_id)
+                .where(MonthlyTagStatsORM.period >= start_period)
+            )
+            result = await session.execute(stmt)
+            rows = result.all()
+
+            if not rows:
+                return []
+
+            tag_agg: dict[int, dict[str, int]] = {}
+            for row in rows:
+                tid = row.tag_id
+                if tid not in tag_agg:
+                    tag_agg[tid] = {"positive": 0, "negative": 0, "neutral": 0}
+                tag_agg[tid]["positive"] += row.positive_count or 0
+                tag_agg[tid]["negative"] += row.negative_count or 0
+                tag_agg[tid]["neutral"] += row.neutral_count or 0
+
+            if len(tag_agg) < 3:
+                return []
+
+            tag_ids = list(tag_agg.keys())
+            tags_stmt = (
+                select(TagORM)
+                .options(selectinload(TagORM.category))
+                .where(TagORM.id.in_(tag_ids))
+            )
+            tags_result = await session.execute(tags_stmt)
+            tag_rows = tags_result.scalars().all()
+
+            tag_info: dict[int, tuple[str, str]] = {}
+            for t in tag_rows:
+                from domain.analysis.patterns import resolve_tag_category
+                cat_name = resolve_tag_category(t.name, t.category.name) if t.category else "기타"
+                tag_info[t.id] = (t.name, cat_name)
+
+        category_groups: dict[str, list[dict]] = defaultdict(list)
+
+        sorted_tags = sorted(
+            tag_agg.items(),
+            key=lambda x: sum(x[1].values()),
+            reverse=True,
+        )[:15]
+
+        for tid, counts in sorted_tags:
+            name, cat_name = tag_info.get(tid, ("", "기타"))
+            if not name:
+                continue
+            total = counts["positive"] + counts["negative"] + counts["neutral"]
+            pos_ratio = round(counts["positive"] / total * 100) if total > 0 else 0
+            neg_ratio = round(counts["negative"] / total * 100) if total > 0 else 0
+            category_groups[cat_name].append({
+                "name": name,
+                "positive_ratio": pos_ratio,
+                "negative_ratio": neg_ratio,
+                "total": total,
+            })
+
+        return [
+            {"category": cat, "tags": tags}
+            for cat, tags in category_groups.items()
+        ]
+
+    @staticmethod
+    def _group_tags_by_category(branch_tags: list) -> list[dict]:
+        """BranchTag 리스트를 카테고리별로 그룹핑"""
+        category_groups: dict[str, list[dict]] = defaultdict(list)
+
+        for bt in branch_tags:
+            tag_info = bt.tags
+            if not tag_info:
+                continue
+
+            from domain.analysis.patterns import resolve_tag_category
+            category_name = "기타"
+            if tag_info.categories and tag_info.categories.name:
+                category_name = resolve_tag_category(tag_info.name, tag_info.categories.name)
+
+            total = bt.count or 0
+            positive = bt.positive_count or 0
+            negative = bt.negative_count or 0
+
+            pos_ratio = round(positive / total * 100) if total > 0 else 0
+            neg_ratio = round(negative / total * 100) if total > 0 else 0
+
+            category_groups[category_name].append({
+                "name": tag_info.name,
+                "positive_ratio": pos_ratio,
+                "negative_ratio": neg_ratio,
+                "total": total,
+            })
+
+        return [
+            {"category": cat, "tags": tags}
+            for cat, tags in category_groups.items()
+        ]
+
+    async def _fetch_representative_reviews(
+        self,
+        session: AsyncSession,
+        branch_id: int,
+        start_date,
+        mode: str,
+    ) -> dict[str, list[str]]:
+        """감정별로 분리된 대표 리뷰 샘플링 (등간격)"""
+        if mode == "operational":
+            pos_limit, neg_limit = 4, 4
+        else:
+            pos_limit, neg_limit = 5, 2
+
+        result = {"positive": [], "negative": []}
+
+        if self.athena_client is not None:
+            try:
+                return await self._fetch_representative_reviews_via_athena(
+                    branch_id, start_date, pos_limit, neg_limit
+                )
+            except Exception as e:
+                logger.warning("Athena 리뷰 샘플링 실패, Supabase 폴백: %s", e)
+
+        try:
+            pos_stmt = (
+                select(BranchReviewORM.content)
+                .where(BranchReviewORM.branch_id == branch_id)
+                .where(BranchReviewORM.sentiment == "positive")
+            )
+            if start_date is not None:
+                pos_stmt = pos_stmt.where(
+                    BranchReviewORM.review_date >= start_date
+                )
+            pos_stmt = (
+                pos_stmt
+                .order_by(BranchReviewORM.review_date.desc())
+                .limit(30)
+            )
+            pos_result = await session.execute(pos_stmt)
+            pos_reviews = [
+                row.content[:250] for row in pos_result.all() if row.content
+            ]
+            result["positive"] = self._sample_evenly(pos_reviews, pos_limit)
+
+            neg_stmt = (
+                select(BranchReviewORM.content)
+                .where(BranchReviewORM.branch_id == branch_id)
+                .where(BranchReviewORM.sentiment == "negative")
+            )
+            if start_date is not None:
+                neg_stmt = neg_stmt.where(
+                    BranchReviewORM.review_date >= start_date
+                )
+            neg_stmt = (
+                neg_stmt
+                .order_by(BranchReviewORM.review_date.desc())
+                .limit(30)
+            )
+            neg_result = await session.execute(neg_stmt)
+            neg_reviews = [
+                row.content[:250] for row in neg_result.all() if row.content
+            ]
+            result["negative"] = self._sample_evenly(neg_reviews, neg_limit)
+
+        except Exception as e:
+            logger.warning("리뷰 샘플링 실패 (branch_id=%s): %s", branch_id, e)
+
+        return result
+
+    async def _fetch_representative_reviews_via_athena(
+        self,
+        branch_id: int,
+        start_date,
+        pos_limit: int,
+        neg_limit: int,
+    ) -> dict[str, list[str]]:
+        """Athena 리뷰 + Supabase sentiment → 감정별 분리 샘플링"""
+        date_from = start_date.strftime("%Y-%m-%d") if start_date else None
+
+        rows, _ = await asyncio.to_thread(
+            self.athena_client.fetch_reviews_by_branch,
+            branch_id=branch_id,
+            date_from=date_from,
+            limit=50,
+        )
+
+        if not rows:
+            return {"positive": [], "negative": []}
+
+        review_ids = [int(r["review_id"]) for r in rows if r.get("review_id")]
+        sentiment_map = {}
+        if review_ids:
+            sentiment_map = await self.review_repo.get_sentiments_by_review_ids(review_ids)
+
+        pos_reviews = []
+        neg_reviews = []
+        for row in rows:
+            content = row.get("content", "")
+            if not content or not content.strip():
+                continue
+            rid = int(row["review_id"]) if row.get("review_id") else None
+            sent = sentiment_map.get(rid, "neutral") if rid else "neutral"
+            if sent == "positive":
+                pos_reviews.append(content[:250])
+            elif sent == "negative":
+                neg_reviews.append(content[:250])
+
+        return {
+            "positive": self._sample_evenly(pos_reviews, pos_limit),
+            "negative": self._sample_evenly(neg_reviews, neg_limit),
+        }
+
+    @staticmethod
+    def _sample_evenly(items: list, n: int) -> list:
+        """리스트에서 등간격으로 n개 샘플링"""
+        if not items or n <= 0:
+            return []
+        if len(items) <= n:
+            return items
+        step = len(items) / n
+        return [items[int(i * step)] for i in range(n)]
+
+    async def generate_pending_summary(
+        self,
+        branch_id: int,
+        period: str = "1m",
+    ) -> dict:
+        """AI 요약을 생성하여 pending_summaries에 저장 (승인 대기 상태)"""
+        result = await self.generate_summary_with_data(branch_id, save_to_db=False)
+
+        if not result.get("success"):
+            return result
+
+        generated_summary = result.get("summary", "")
+        generated_period = result.get("period", period)
+
+        try:
+            summary = await self.summary_repo.get_by_branch_id(branch_id)
+            if not summary:
+                return {
+                    "success": False,
+                    "summary": "",
+                    "period": generated_period,
+                    "error": f"지점 {branch_id}을(를) 찾을 수 없습니다",
+                }
+
+            current_pending = summary.pending_summaries or {}
+            current_pending[generated_period] = generated_summary
+            await self.summary_repo.set_pending_summary(branch_id, current_pending)
+
+            logger.info(
+                f"Pending 요약 생성 완료: branch_id={branch_id}, period={generated_period}"
+            )
+
+            return {
+                "success": True,
+                "summary": generated_summary,
+                "period": generated_period,
+                "period_label": result.get("period_label"),
+                "review_count": result.get("review_count"),
+            }
+        except Exception as e:
+            logger.error("Pending 요약 저장 실패 (branch_id=%s): %s", branch_id, e)
+            return {
+                "success": False,
+                "summary": generated_summary,
+                "period": generated_period,
+                "error": f"Pending 저장 실패: {e}",
+            }
+
+    # ============================================================
+    # 승인 / 거절
+    # ============================================================
+
+    async def get_pending_summaries(self, limit: int = 50) -> list[dict]:
+        """승인 대기 중인 요약 목록 조회"""
+        return await self.summary_repo.get_pending_summaries(limit)
+
+    async def get_history(self, branch_id: int, limit: int = 10) -> list[dict]:
+        """요약 변경 히스토리 조회"""
+        return await self.summary_repo.get_history(branch_id, limit)
+
+    async def approve_pending_summary(self, branch_id: int) -> dict | None:
+        """대기 중인 요약 승인"""
+        return await self.summary_repo.approve_pending_summary(branch_id)
+
+    async def reject_pending_summary(self, branch_id: int) -> dict | None:
+        """대기 중인 요약 거부"""
+        return await self.summary_repo.reject_pending_summary(branch_id)
+
+    async def apply_pending_summary(
+        self, branch_id: int, period: str
+    ) -> PendingSummaryResultDTO:
+        """대기 중인 요약을 적용 (pending → main)"""
+        summary = await self.summary_repo.get_by_branch_id(branch_id)
+        if not summary:
+            raise ValueError(f"지점 {branch_id}을(를) 찾을 수 없습니다")
+
+        summary_data = summary.model_dump()
+        pending = summary_data.get("pending_summaries") or {}
+
+        if period not in pending:
+            raise ValueError(f"대기 중인 {period} 요약이 없습니다")
+
+        field_map = {
+            "all": "summary_all",
+            "1y": "summary_1y",
+            "6m": "summary_6m",
+            "3m": "summary_3m",
+            "1m": "summary_1m",
+        }
+
+        new_summary = pending.pop(period)
+
+        await self.summary_repo.upsert_by_branch_id(
+            {
+                "branch_id": branch_id,
+                field_map[period]: new_summary,
+                "pending_summaries": pending,
+            }
+        )
+
+        return PendingSummaryResultDTO(period=period, applied=new_summary)
+
+    async def discard_pending_summary(
+        self, branch_id: int, period: str
+    ) -> PendingSummaryResultDTO:
+        """대기 중인 요약 취소 (삭제)"""
+        summary = await self.summary_repo.get_by_branch_id(branch_id)
+        if not summary:
+            raise ValueError(f"지점 {branch_id}을(를) 찾을 수 없습니다")
+
+        summary_data = summary.model_dump()
+        pending = summary_data.get("pending_summaries") or {}
+
+        if period in pending:
+            del pending[period]
+            await self.summary_repo.upsert_by_branch_id(
+                {"branch_id": branch_id, "pending_summaries": pending}
+            )
+
+        return PendingSummaryResultDTO(period=period, discarded=period)

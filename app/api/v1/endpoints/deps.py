@@ -70,11 +70,11 @@ if TYPE_CHECKING:
     from repository.summary_repository import SummaryRepository
     from repository.tag_repository import CategoryRepository, MappingRepository, TagRepository
     from services.analysis_service import AnalysisService
-    from services.carmore_service import CarmoreService
+    from services.analysis_service import CarmoreService
     from services.preset_service import PresetService
     from services.report_job_service import ReportJobService
     from services.report_service import ReportService
-    from services.sentiment_service import SentimentService
+    from services.tag_service import SentimentService
     from services.summary_service import SummaryService
     from services.sync_job_service import SyncJobService
     from services.sync_service import SyncService
@@ -234,7 +234,7 @@ async def get_tag_service(
 async def get_sentiment_service(
     sentiment_repo: SentimentRepository = Depends(get_sentiment_repo),
 ) -> SentimentService:
-    from services.sentiment_service import SentimentService
+    from services.tag_service import SentimentService
 
     return SentimentService(sentiment_repo)
 
@@ -247,7 +247,7 @@ async def get_sentiment_service(
 async def get_carmore_service(
     affiliate_repo: AffiliateRepository = Depends(get_affiliate_repo),
 ) -> CarmoreService:
-    from services.carmore_service import CarmoreService
+    from services.analysis_service import CarmoreService
 
     return CarmoreService(affiliate_repo)
 
