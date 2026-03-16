@@ -62,11 +62,13 @@ class TestStaleJobDetection:
         # 300초 이상 전에 생성된 processing 작업 (task는 아직 살아있음)
         stale_task = asyncio.ensure_future(asyncio.sleep(9999))
 
+        stale_time = datetime.now(timezone.utc) - timedelta(seconds=_JOB_STALE_TIMEOUT_SECONDS + 60)
         old_state = SyncJobState(
             job_id="stale_job_001",
             status="processing",
             task=stale_task,
-            created_at=datetime.now(timezone.utc) - timedelta(seconds=_JOB_STALE_TIMEOUT_SECONDS + 60),
+            created_at=stale_time,
+            last_activity_at=stale_time,
         )
         svc._jobs["stale_job_001"] = old_state
 

@@ -114,18 +114,17 @@ def test_compute_top_tags(sample_branch_tags):
             TagStatsCalculator.compute_top_tags(tag_details)
         )
 
-    # top_positive는 긍정 수 내림차순: 친절한 직원(80) > 깨끗한 차량(60) > 빠른 출고(40) > ...
+    # top_positive는 카테고리별 긍정 수 내림차순: 서비스(120) > 청결(62) > 가격(5)
     assert len(top_positive) >= 1
-    assert top_positive[0].tag_name == "친절한 직원"
-    assert top_positive[0].count == 80
+    assert top_positive[0].tag_name == "서비스"
+    assert top_positive[0].count == 120
 
-    # 두 번째는 깨끗한 차량(60)
-    assert top_positive[1].tag_name == "깨끗한 차량"
-    assert top_positive[1].count == 60
+    # 두 번째는 청결(62)
+    assert top_positive[1].tag_name == "청결"
+    assert top_positive[1].count == 62
 
-    # top_negative는 부정 수 내림차순: 비싼 가격(50) > 냄새(30) > 깨끗한 차량(20) > ...
+    # top_negative는 카테고리별 부정 수 내림차순: 청결(50) = 가격(50) > 서비스(8)
     assert len(top_negative) >= 1
-    assert top_negative[0].tag_name == "비싼 가격"
     assert top_negative[0].count == 50
 
     # TagRankItem 필드 확인
@@ -181,7 +180,7 @@ async def test_compute_integration(mock_branch_tag_repo):
     assert len(result["tag_sentiments"]) == 5
     assert set(result["tag_by_category"].keys()) == {"서비스", "청결", "가격"}
     assert result["sentiment_stats"]["positive"] == 187
-    assert result["top_positive_tags"][0].tag_name == "친절한 직원"
+    assert result["top_positive_tags"][0].tag_name == "서비스"
 
 
 @pytest.mark.asyncio

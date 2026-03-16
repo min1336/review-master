@@ -37,6 +37,7 @@ def _make_mock_session(counts: list[int]):
     session.execute = AsyncMock(side_effect=results)
     session.close = AsyncMock()
 
+    session.__aenter__.return_value = session
     factory = MagicMock(return_value=session)
     return factory
 
@@ -352,9 +353,8 @@ class TestReviewCountSummaryRecommendation:
     async def test_recommended_none_when_all_counts_below_threshold(self):
         """모든 기간 + 전체 리뷰 <= 30 → recommended_period=None, sufficient=False"""
         review_repo = AsyncMock()
-        # count_by_branch: 선택기간=10, 1m=5, 3m=10, 6m=15, 12m=20, all=25
-        review_repo.count_by_branch = AsyncMock(
-            side_effect=[10, 5, 10, 15, 20, 25]
+        review_repo.count_by_branch_multi_periods = AsyncMock(
+            return_value={"selected": 10, "1m": 5, "3m": 10, "6m": 15, "12m": 20, "all": 25}
         )
 
         service = self._make_service(review_repo=review_repo)
@@ -372,9 +372,8 @@ class TestReviewCountSummaryRecommendation:
     async def test_recommended_all_when_only_all_exceeds_threshold(self):
         """표준 기간 모두 < 30, all > 30 → recommended_period='all', sufficient=True"""
         review_repo = AsyncMock()
-        # count_by_branch: 선택기간=10, 1m=5, 3m=10, 6m=15, 12m=20, all=50
-        review_repo.count_by_branch = AsyncMock(
-            side_effect=[10, 5, 10, 15, 20, 50]
+        review_repo.count_by_branch_multi_periods = AsyncMock(
+            return_value={"selected": 10, "1m": 5, "3m": 10, "6m": 15, "12m": 20, "all": 50}
         )
 
         service = self._make_service(review_repo=review_repo)
@@ -392,9 +391,8 @@ class TestReviewCountSummaryRecommendation:
     async def test_recommended_all_blocked_when_exactly_30(self):
         """all=30 (경계값) → recommended_period=None (> 조건이므로 차단)"""
         review_repo = AsyncMock()
-        # count_by_branch: 선택기간=10, 1m=5, 3m=10, 6m=15, 12m=20, all=30
-        review_repo.count_by_branch = AsyncMock(
-            side_effect=[10, 5, 10, 15, 20, 30]
+        review_repo.count_by_branch_multi_periods = AsyncMock(
+            return_value={"selected": 10, "1m": 5, "3m": 10, "6m": 15, "12m": 20, "all": 30}
         )
 
         service = self._make_service(review_repo=review_repo)
@@ -412,8 +410,8 @@ class TestReviewCountSummaryRecommendation:
     async def test_sufficient_field_exists_in_response(self):
         """응답에 sufficient 필드가 항상 포함되는지 확인"""
         review_repo = AsyncMock()
-        review_repo.count_by_branch = AsyncMock(
-            side_effect=[100, 50, 80, 100, 120, 200]
+        review_repo.count_by_branch_multi_periods = AsyncMock(
+            return_value={"selected": 100, "1m": 50, "3m": 80, "6m": 100, "12m": 120, "all": 200}
         )
 
         service = self._make_service(review_repo=review_repo)

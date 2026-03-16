@@ -36,7 +36,7 @@ for _name, _mod in [
 _dto_path = Path(__file__).resolve().parent.parent / "app" / "schemas" / "dto.py"
 _spec = importlib.util.spec_from_file_location("schemas.dto", _dto_path)
 _dto_mod = importlib.util.module_from_spec(_spec)
-sys.modules.setdefault("schemas.dto", _dto_mod)
+sys.modules["schemas.dto"] = _dto_mod
 _spec.loader.exec_module(_dto_mod)
 
 AnalysisReviewDTO = _dto_mod.AnalysisReviewDTO
