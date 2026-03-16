@@ -11,7 +11,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from schemas.pipeline_console import FullPipelineRequest, PipelineJobStatusResponse
+from schemas.jobs import FullPipelineRequest, PipelineJobStatusResponse
 
 from .deps import get_pipeline_job_service, get_sync_job_service, get_upload_job_service, require_internal_auth
 

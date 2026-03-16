@@ -51,7 +51,7 @@ def install_traces():
         from datetime import timedelta, datetime
         from repository.database import get_session_factory
         from repository.sync_metadata_repository import SyncMetadataRepository
-        from schemas.sync import SyncResultResponse
+        from schemas.jobs import SyncResultResponse
         import gc
 
         start_time = utc_now()

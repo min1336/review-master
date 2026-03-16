@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from schemas.common import ApiResponseModel, api_response
-from schemas.realtime import ReviewInput
+from schemas.jobs import ReviewInput
 
 from .deps import get_realtime_pipeline, require_internal_auth
 

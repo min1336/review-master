@@ -12,7 +12,7 @@ import logging
 import time
 from dataclasses import dataclass
 
-from schemas.pipeline_console import PipelineJobStatusResponse
+from schemas.jobs import PipelineJobStatusResponse
 from services.base_job_service import BaseJobService, BaseJobState
 
 logger = logging.getLogger(__name__)

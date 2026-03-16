@@ -28,7 +28,7 @@ from .dto import (
     SummaryWithTagsDTO,
     TagSentimentCountDTO,
 )
-from .summary import RegenerateRequest, SummaryUpdate
+from .query import RegenerateRequest, SummaryUpdate
 from .tag import (
     BulkMappingRequest,
     CategoryCreate,

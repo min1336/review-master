@@ -16,7 +16,7 @@ import re
 import time
 from dataclasses import dataclass
 
-from schemas.upload import UploadJobStatusResponse, UploadResultResponse, UploadRowError
+from schemas.jobs import UploadJobStatusResponse, UploadResultResponse, UploadRowError
 from services.base_job_service import BaseJobService, BaseJobState
 
 logger = logging.getLogger(__name__)

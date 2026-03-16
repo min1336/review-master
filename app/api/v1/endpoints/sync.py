@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from schemas.common import ApiResponseModel, api_response
-from schemas.sync import (
+from schemas.jobs import (
     MarkReadRequest,
     SyncRequest,
 )

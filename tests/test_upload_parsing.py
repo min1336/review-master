@@ -235,7 +235,7 @@ class TestStripNull:
 
 class TestUploadSchemas:
     def test_job_status_serialization(self):
-        from schemas.upload import UploadJobStatusResponse
+        from schemas.jobs import UploadJobStatusResponse
 
         resp = UploadJobStatusResponse(
             job_id="abc123",
@@ -250,7 +250,7 @@ class TestUploadSchemas:
         assert data["progress"] == 100
 
     def test_result_response_serialization(self):
-        from schemas.upload import UploadResultResponse, UploadRowError
+        from schemas.jobs import UploadResultResponse, UploadRowError
 
         resp = UploadResultResponse(
             success=True,

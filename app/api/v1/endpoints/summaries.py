@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from schemas.common import ApiListResponseModel, ApiResponseModel, api_list_response, api_response, parse_date
 from schemas.dto import PendingSummaryResultDTO, RegionStatsDTO, SummaryStatsDTO
 from models.summary import Summary
-from schemas.summary import RegenerateRequest, SummaryUpdate
+from schemas.query import RegenerateRequest, SummaryUpdate
 from services.summary_service import SummaryService
 
 from .deps import get_summary_service

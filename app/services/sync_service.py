@@ -15,7 +15,7 @@ from infrastructure.athena import AthenaClient
 from repository.database import get_session_factory
 from repository.review_repository import BranchReviewRepository
 from repository.sync_metadata_repository import SyncMetadataRepository
-from schemas.sync import SyncResultResponse
+from schemas.jobs import SyncResultResponse
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
-from schemas.analysis import ReviewFilterParams
+from schemas.query import ReviewFilterParams
 from schemas.common import ApiResponseModel, api_response
 from schemas.dto import AnalysisReviewListDTO, FilterOptionsDTO
 from services.analysis_service import AnalysisService

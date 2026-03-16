@@ -12,7 +12,7 @@ import logging
 from dataclasses import dataclass, field
 
 from core.timezone import utc_now
-from schemas.sync import SyncJobStatusResponse, SyncResultResponse
+from schemas.jobs import SyncJobStatusResponse, SyncResultResponse
 from services.base_job_service import BaseJobService, BaseJobState
 
 logger = logging.getLogger(__name__)
