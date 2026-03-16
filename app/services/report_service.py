@@ -34,6 +34,8 @@ if TYPE_CHECKING:
     from services.vehicle_analyzer import VehicleAnalyzer
 
 # 데이터 모델 — schemas/report.py 에서 정의, 하위호환용 re-export
+from infrastructure.pdf.cache import InMemoryPdfCache
+
 from schemas.report import (  # noqa: F401
     TagRankItem,
     VehicleRankItem,
@@ -76,6 +78,7 @@ class ReportService:
         self.report_repo = report_repo
         self.sentiment_repo = sentiment_repo
         self._pdf_generator = pdf_generator
+        self._pdf_cache = InMemoryPdfCache()
         if vehicle_analyzer is None:
             from services.vehicle_analyzer import VehicleAnalyzer as _VA
             vehicle_analyzer = _VA()
@@ -90,11 +93,18 @@ class ReportService:
 
     async def generate_pdf(self, report: ReportData) -> bytes:
         """PDF 바이트 생성 (H-1: Service 레이어에서 Infrastructure 호출, H-2: 이벤트 루프 블로킹 방지)"""
+        cache_key = f"{report.branch_id}:{report.period_start}:{report.period_end}:{report.generated_at}"
+        cached = self._pdf_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         if self._pdf_generator is None:
             from infrastructure.pdf.generator import PDFGenerator
             self._pdf_generator = PDFGenerator()
 
-        return await asyncio.to_thread(self._pdf_generator.generate_simple, report)
+        pdf_bytes = await asyncio.to_thread(self._pdf_generator.generate_simple, report)
+        self._pdf_cache.put(cache_key, pdf_bytes)
+        return pdf_bytes
 
     # ================================================================
     # Repository 래핑 메서드 (레이어드 아키텍처 준수)
@@ -131,16 +141,16 @@ class ReportService:
         """
         now = utc_now()
         today = datetime(now.year, now.month, now.day, tzinfo=now.tzinfo)
-        period_defs = [("1m", 1), ("3m", 3), ("6m", 6), ("12m", 12)]
-
-        # AsyncSession은 동시 쿼리를 지원하지 않으므로 순차 실행
-        for label, months in period_defs:
-            count = await self.review_repo.count_by_branch(
-                branch_id,
-                review_date_from=today - relativedelta(months=months),
-                review_date_to=now,
-            )
-            if count >= REVIEW_CHANGE_THRESHOLD:
+        period_ranges = [
+            ("1m", today - relativedelta(months=1), now),
+            ("3m", today - relativedelta(months=3), now),
+            ("6m", today - relativedelta(months=6), now),
+            ("12m", today - relativedelta(months=12), now),
+            ("all", None, None),
+        ]
+        counts = await self.review_repo.count_by_branch_multi_periods(branch_id, period_ranges)
+        for label in ("1m", "3m", "6m", "12m"):
+            if counts[label] >= REVIEW_CHANGE_THRESHOLD:
                 return label
         return "all"
 
@@ -159,26 +169,21 @@ class ReportService:
 
         today = utc_now()
         today_date = datetime(today.year, today.month, today.day)
-        period_defs = [
-            ("1m", 1), ("3m", 3), ("6m", 6), ("12m", 12),
+        period_ranges = [
+            ("selected", start_date, end_date),
+            ("1m", today_date - relativedelta(months=1), today),
+            ("3m", today_date - relativedelta(months=3), today),
+            ("6m", today_date - relativedelta(months=6), today),
+            ("12m", today_date - relativedelta(months=12), today),
+            ("all", None, None),
         ]
-
-        # AsyncSession은 동시 쿼리를 지원하지 않으므로 순차 실행
-        selected_count = await self.review_repo.count_by_branch(
-            branch_id, review_date_from=start_date, review_date_to=end_date,
-        )
-        period_counts: dict[str, int] = {}
-        for label, months in period_defs:
-            period_counts[label] = await self.review_repo.count_by_branch(
-                branch_id,
-                review_date_from=today_date - relativedelta(months=months),
-                review_date_to=today,
-            )
-        period_counts["all"] = await self.review_repo.count_by_branch(branch_id)
+        counts = await self.review_repo.count_by_branch_multi_periods(branch_id, period_ranges)
+        selected_count = counts["selected"]
+        period_counts = {k: v for k, v in counts.items() if k != "selected"}
 
         # 추천 기간: threshold 이상인 최단 기간
         recommended_period = None
-        for label, _months in period_defs:
+        for label in ("1m", "3m", "6m", "12m"):
             if period_counts[label] >= REVIEW_CHANGE_THRESHOLD:
                 recommended_period = label
                 break

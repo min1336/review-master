@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from core.cache import TTLCache
 from core.constants import (
     CACHE_MIN_NEW_REVIEWS,
     CACHE_SENTIMENT_DRIFT,
@@ -38,6 +39,7 @@ class ReportCacheService:
         self.report_repo = report_repo
         self.review_repo = review_repo
         self.branch_tag_repo = branch_tag_repo
+        self._invalidation_cache = TTLCache(ttl_seconds=300)
 
     async def get_saved_report(
         self,
@@ -76,16 +78,24 @@ class ReportCacheService:
         end_date: datetime,
         saved_report: ReportData,
     ) -> bool:
-        """캐시 무효화 여부 결정"""
+        """캐시 무효화 여부 결정 (TTL 캐시로 반복 DB 쿼리 방지)"""
+        cache_key = f"inv:{branch_id}:{start_date}:{end_date}"
+        cached = self._invalidation_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         new_reviews = await self._count_new_reviews(
             branch_id, start_date, end_date, saved_report
         )
         if new_reviews < CACHE_MIN_NEW_REVIEWS:
+            self._invalidation_cache.set(cache_key, False)
             return False
 
-        return await self._has_significant_sentiment_drift(
+        result = await self._has_significant_sentiment_drift(
             branch_id, new_reviews, saved_report
         )
+        self._invalidation_cache.set(cache_key, result)
+        return result
 
     @staticmethod
     def extract_saved_tag_stats(saved_report: ReportData) -> tuple[int, float] | None:

@@ -179,7 +179,7 @@ class OpenAIProvider(LLMProvider):
                 prompt, system_prompt, max_tokens, temperature
             )
         try:
-            await asyncio.to_thread(self.rate_limiter.wait_if_needed)
+            await self.rate_limiter.async_wait_if_needed()
             messages = []
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})

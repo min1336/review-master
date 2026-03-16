@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
-from sqlalchemy import delete, func, or_, select, text, update
+from sqlalchemy import and_, delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from models.review import Review
@@ -168,26 +168,18 @@ class BranchReviewRepository(BaseRepository[Review]):
             next_day = review_date_to + timedelta(days=1)
             conditions.append(BranchReviewORM.review_date < next_day)
 
-        # 데이터 쿼리
+        # 데이터 + 카운트 통합 쿼리 (윈도우 함수)
         data_stmt = (
-            select(BranchReviewORM)
+            select(BranchReviewORM, func.count().over().label("_total"))
             .where(*conditions)
             .order_by(BranchReviewORM.review_date.desc())
             .offset(offset)
             .limit(limit)
         )
         data_result = await self._session.execute(data_stmt)
-        rows = data_result.scalars().all()
-        reviews = [self._to_dict(row) for row in rows]
-
-        # 카운트 쿼리
-        count_stmt = (
-            select(func.count())
-            .select_from(BranchReviewORM)
-            .where(*conditions)
-        )
-        count_result = await self._session.execute(count_stmt)
-        total = count_result.scalar_one()
+        rows = data_result.all()
+        reviews = [self._to_dict(row[0]) for row in rows]
+        total = rows[0][1] if rows else 0
 
         # 차량 모델 목록 조회 (distinct)
         car_models: list[str] = []
@@ -238,6 +230,36 @@ class BranchReviewRepository(BaseRepository[Review]):
 
         result = await self._session.execute(stmt)
         return result.scalar_one()
+
+    async def count_by_branch_multi_periods(
+        self,
+        branch_id: int,
+        period_ranges: list[tuple[str, datetime | None, datetime | None]],
+    ) -> dict[str, int]:
+        """여러 기간의 리뷰 수를 단일 쿼리로 카운트
+
+        PostgreSQL의 COUNT(*) FILTER (WHERE ...) 구문을 사용합니다.
+
+        Args:
+            branch_id: 지점 ID
+            period_ranges: [(label, date_from, date_to), ...] 리스트
+                date_from/date_to가 None이면 해당 조건 생략 (전체 기간)
+        """
+        columns = []
+        for label, date_from, date_to in period_ranges:
+            conditions = [BranchReviewORM.branch_id == branch_id]
+            if date_from is not None:
+                conditions.append(BranchReviewORM.review_date >= date_from)
+            if date_to is not None:
+                next_day = date_to + timedelta(days=1)
+                conditions.append(BranchReviewORM.review_date < next_day)
+            col = func.count().filter(and_(*conditions)).label(label)
+            columns.append(col)
+
+        stmt = select(*columns)
+        result = await self._session.execute(stmt)
+        row = result.one()
+        return {label: row[i] for i, (label, _, _) in enumerate(period_ranges)}
 
     async def count_tagged_reviews(
         self,
