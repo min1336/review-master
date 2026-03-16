@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from fastapi import HTTPException, status
 
 if TYPE_CHECKING:
-    from repository.preset_repository import PresetRepository
+    from repository.report_repository import PresetRepository
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ class PresetService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"프리셋을 찾을 수 없습니다 (id={preset_id})",
             )
-        result = await self.preset_repo.update(preset_id, data)
+        result = await self.preset_repo.update_preset(preset_id, data)
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -67,4 +67,4 @@ class PresetService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"프리셋을 찾을 수 없습니다 (id={preset_id})",
             )
-        return await self.preset_repo.delete(preset_id)
+        return await self.preset_repo.delete_preset(preset_id)

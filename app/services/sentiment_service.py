@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from schemas.dto import SentimentStatsDTO
 
 if TYPE_CHECKING:
-    from repository.sentiment_repository import SentimentRepository
+    from repository.review_repository import SentimentRepository
 
 
 class SentimentService:

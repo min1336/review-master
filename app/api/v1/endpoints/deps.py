@@ -64,12 +64,9 @@ if TYPE_CHECKING:
     from domain.pipeline import RealtimePipeline
     from repository.affiliate_repository import AffiliateRepository
     from repository.branch_tag_repository import BranchTagRepository
-    from repository.new_review_repository import NewReviewRepository
-    from repository.preset_repository import PresetRepository
     from repository.report_job_repository import ReportJobRepository
-    from repository.report_repository import ReportRepository
-    from repository.review_repository import BranchReviewRepository
-    from repository.sentiment_repository import SentimentRepository
+    from repository.report_repository import PresetRepository, ReportRepository
+    from repository.review_repository import BranchReviewRepository, NewReviewRepository, SentimentRepository
     from repository.summary_repository import SummaryRepository
     from repository.tag_repository import CategoryRepository, MappingRepository, TagRepository
     from services.analysis_service import AnalysisService
@@ -141,7 +138,7 @@ async def get_tag_repo(
 async def get_sentiment_repo(
     session: AsyncSession = Depends(get_db_session),
 ) -> SentimentRepository:
-    from repository.sentiment_repository import SentimentRepository
+    from repository.review_repository import SentimentRepository
 
     return SentimentRepository(session)
 
@@ -186,7 +183,7 @@ async def get_report_repo(
 async def get_preset_repo(
     session: AsyncSession = Depends(get_db_session),
 ) -> PresetRepository:
-    from repository.preset_repository import PresetRepository
+    from repository.report_repository import PresetRepository
 
     return PresetRepository(session)
 
@@ -258,7 +255,7 @@ async def get_carmore_service(
 async def get_new_review_repo(
     session: AsyncSession = Depends(get_db_session),
 ) -> NewReviewRepository:
-    from repository.new_review_repository import NewReviewRepository
+    from repository.review_repository import NewReviewRepository
 
     return NewReviewRepository(session)
 

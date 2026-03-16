@@ -115,7 +115,7 @@ async def main() -> None:
 
     from repository.branch_tag_repository import BranchTagRepository
     from repository.review_repository import BranchReviewRepository
-    from repository.sentiment_repository import SentimentRepository
+    from repository.review_repository import SentimentRepository
     from repository.summary_repository import SummaryRepository
     from services.summary_service import SummaryService
 
