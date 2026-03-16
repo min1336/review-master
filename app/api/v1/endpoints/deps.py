@@ -1,3 +1,9 @@
+"""의존성 주입 팩토리
+
+FastAPI Depends() 체인으로 Repository → Service를 조립.
+함수 내부 import는 순환참조 방지용 — 모듈 로드 시점이 아닌 호출 시점에 import.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -20,16 +26,14 @@ if TYPE_CHECKING:
     from repository.review_repository import BranchReviewRepository, NewReviewRepository, SentimentRepository
     from repository.summary_repository import SummaryRepository
     from repository.tag_repository import CategoryRepository, MappingRepository, TagRepository
-    from services.analysis_service import AnalysisService
-    from services.analysis_service import CarmoreService
+    from services.analysis_service import AnalysisService, CarmoreService
     from services.preset_service import PresetService
     from services.report_job_service import ReportJobService
     from services.report_service import ReportService
-    from services.tag_service import SentimentService
+    from services.tag_service import SentimentService, TagService
     from services.summary_service import SummaryService
     from services.sync_job_service import SyncJobService
     from services.sync_service import SyncService
-    from services.tag_service import TagService
     from services.upload_job_service import UploadJobService
 
 
@@ -45,106 +49,32 @@ async def get_db_session(
 
 
 # ============================================================
-# Repositories — Summaries & Reviews
+# Repository 팩토리 헬퍼
 # ============================================================
 
 
-async def get_summary_repo(
-    session: AsyncSession = Depends(get_db_session),
-) -> SummaryRepository:
-    from repository.summary_repository import SummaryRepository
-
-    return SummaryRepository(session)
-
-
-async def get_branch_tag_repo(
-    session: AsyncSession = Depends(get_db_session),
-) -> BranchTagRepository:
-    from repository.branch_tag_repository import BranchTagRepository
-
-    return BranchTagRepository(session)
+def _repo(module: str, cls_name: str):
+    """Repository DI 팩토리 생성. 모든 repo는 session 하나만 받는 동일 패턴."""
+    async def _factory(session: AsyncSession = Depends(get_db_session)):
+        mod = __import__(module, fromlist=[cls_name])
+        return getattr(mod, cls_name)(session)
+    _factory.__name__ = f"get_{cls_name}"
+    _factory.__qualname__ = f"_repo.<locals>.get_{cls_name}"
+    return _factory
 
 
-async def get_review_repo(
-    session: AsyncSession = Depends(get_db_session),
-) -> BranchReviewRepository:
-    from repository.review_repository import BranchReviewRepository
-
-    return BranchReviewRepository(session)
-
-
-# ============================================================
-# Repositories — Tags & Sentiment
-# ============================================================
-
-
-async def get_tag_repo(
-    session: AsyncSession = Depends(get_db_session),
-) -> TagRepository:
-    from repository.tag_repository import TagRepository
-
-    return TagRepository(session)
-
-
-async def get_sentiment_repo(
-    session: AsyncSession = Depends(get_db_session),
-) -> SentimentRepository:
-    from repository.review_repository import SentimentRepository
-
-    return SentimentRepository(session)
-
-
-# ============================================================
-# Repositories — Affiliates & Reports
-# ============================================================
-
-
-async def get_affiliate_repo(
-    session: AsyncSession = Depends(get_db_session),
-) -> AffiliateRepository:
-    from repository.affiliate_repository import AffiliateRepository
-
-    return AffiliateRepository(session)
-
-
-async def get_category_repo(
-    session: AsyncSession = Depends(get_db_session),
-) -> CategoryRepository:
-    from repository.tag_repository import CategoryRepository
-
-    return CategoryRepository(session)
-
-
-async def get_mapping_repo(
-    session: AsyncSession = Depends(get_db_session),
-) -> MappingRepository:
-    from repository.tag_repository import MappingRepository
-
-    return MappingRepository(session)
-
-
-async def get_report_repo(
-    session: AsyncSession = Depends(get_db_session),
-) -> ReportRepository:
-    from repository.report_repository import ReportRepository
-
-    return ReportRepository(session)
-
-
-async def get_preset_repo(
-    session: AsyncSession = Depends(get_db_session),
-) -> PresetRepository:
-    from repository.report_repository import PresetRepository
-
-    return PresetRepository(session)
-
-
-async def get_report_job_repo(
-    session: AsyncSession = Depends(get_db_session),
-) -> ReportJobRepository:
-    from repository.report_job_repository import ReportJobRepository
-
-    return ReportJobRepository(session)
+get_summary_repo = _repo("repository.summary_repository", "SummaryRepository")
+get_branch_tag_repo = _repo("repository.branch_tag_repository", "BranchTagRepository")
+get_review_repo = _repo("repository.review_repository", "BranchReviewRepository")
+get_tag_repo = _repo("repository.tag_repository", "TagRepository")
+get_sentiment_repo = _repo("repository.review_repository", "SentimentRepository")
+get_affiliate_repo = _repo("repository.affiliate_repository", "AffiliateRepository")
+get_category_repo = _repo("repository.tag_repository", "CategoryRepository")
+get_mapping_repo = _repo("repository.tag_repository", "MappingRepository")
+get_report_repo = _repo("repository.report_repository", "ReportRepository")
+get_preset_repo = _repo("repository.report_repository", "PresetRepository")
+get_report_job_repo = _repo("repository.report_job_repository", "ReportJobRepository")
+get_new_review_repo = _repo("repository.review_repository", "NewReviewRepository")
 
 
 # ============================================================
@@ -201,14 +131,6 @@ async def get_carmore_service(
     from services.analysis_service import CarmoreService
 
     return CarmoreService(affiliate_repo)
-
-
-async def get_new_review_repo(
-    session: AsyncSession = Depends(get_db_session),
-) -> NewReviewRepository:
-    from repository.review_repository import NewReviewRepository
-
-    return NewReviewRepository(session)
 
 
 async def get_analysis_service(
@@ -324,4 +246,3 @@ async def get_pipeline_job_service():
 
 async def get_realtime_pipeline() -> "RealtimePipeline":
     return await ServiceContainer.get_realtime_pipeline()
-
