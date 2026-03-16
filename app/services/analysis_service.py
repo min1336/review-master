@@ -21,7 +21,7 @@ from schemas.dto import (
 )
 
 if TYPE_CHECKING:
-    from infrastructure.athena import AthenaClient
+    from infrastructure.athena_client import AthenaClient
     from repository.new_review_repository import NewReviewRepository
     from repository.review_repository import BranchReviewRepository
     from repository.summary_repository import SummaryRepository

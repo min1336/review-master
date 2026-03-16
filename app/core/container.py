@@ -37,7 +37,7 @@ class ServiceContainer:
                 if not cls._athena_initialized:
                     try:
                         from core.config import get_settings
-                        from infrastructure.athena import AthenaClient
+                        from infrastructure.athena_client import AthenaClient
 
                         settings = get_settings()
                         if settings.aws_access_key_id and settings.athena_output_bucket:

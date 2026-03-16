@@ -16,7 +16,7 @@ from services.summary_generation_mixin import SummaryGenerationMixin
 from services.summary_query_mixin import SummaryQueryMixin
 
 if TYPE_CHECKING:
-    from infrastructure.athena.client import AthenaClient
+    from infrastructure.athena_client import AthenaClient
     from repository.branch_tag_repository import BranchTagRepository
     from repository.review_repository import BranchReviewRepository
     from repository.sentiment_repository import SentimentRepository

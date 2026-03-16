@@ -88,7 +88,7 @@ def fetch_reviews_from_athena(branch_ids: list[int]) -> list[dict]:
     Athena 결과 키(review_id, content, car_type 등)가 ReviewDTO.from_athena_row()와
     호환되므로 별도 매핑 없이 파이프라인에 직접 전달 가능합니다.
     """
-    from infrastructure.athena.client import AthenaClient
+    from infrastructure.athena_client import AthenaClient
 
     athena = AthenaClient()
     all_reviews: list[dict] = []
