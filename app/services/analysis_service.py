@@ -12,7 +12,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from core.cache import TTLCache
+from core.utils import TTLCache
 from schemas.dto import (
     AnalysisReviewDTO,
     AnalysisReviewListDTO,

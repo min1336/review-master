@@ -10,7 +10,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from core.cache import TTLCache
+from core.utils import TTLCache
 from core.constants import (
     CACHE_MIN_NEW_REVIEWS,
     CACHE_SENTIMENT_DRIFT,

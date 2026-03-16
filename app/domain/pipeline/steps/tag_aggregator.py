@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from core.decay import compute_decay
+from core.utils import compute_decay
 from core.timezone import utc_now
 from repository.orm_models import BranchTagORM, CategoryORM, KeywordMappingORM, TagORM
 from schemas.dto import ProcessedReviewDTO

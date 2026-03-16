@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import text
 
-from core.decay import DECAY_LAMBDA
+from core.utils import DECAY_LAMBDA
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession

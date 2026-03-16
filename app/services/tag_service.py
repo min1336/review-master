@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from core.cache import TTLCache
+from core.utils import TTLCache
 
 if TYPE_CHECKING:
     from repository.branch_tag_repository import BranchTagRepository
