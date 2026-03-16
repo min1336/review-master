@@ -96,9 +96,8 @@ class SummaryQueryMixin:
                 offset=offset,
                 sort_by=sort_by,
                 order=order,
+                branch_ids=branch_ids_filter,
             )
-            if branch_ids_filter is not None:
-                summaries = [s for s in summaries if s.branch_id in branch_ids_filter]
 
         return [s.model_dump() if hasattr(s, "model_dump") else s for s in summaries]
 

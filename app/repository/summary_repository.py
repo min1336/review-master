@@ -51,10 +51,13 @@ class SummaryRepository(BaseRepository[Summary]):
         offset: int = 0,
         sort_by: str = "branch_id",
         order: str = "asc",
+        branch_ids: list[int] | None = None,
     ) -> list[Summary]:
         """필터링된 목록 조회"""
         stmt = select(BranchSummaryORM)
 
+        if branch_ids is not None:
+            stmt = stmt.where(BranchSummaryORM.branch_id.in_(branch_ids))
         if min_reviews > 0:
             stmt = stmt.where(BranchSummaryORM.review_count >= min_reviews)
         if region_group:

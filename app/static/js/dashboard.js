@@ -1276,10 +1276,19 @@
 
                     setSummaries(allData);
                     renderTable(allData, showDetail);
+                    updatePaginationButtons();
                 } catch (e) {
                     console.error('Summaries load error:', e);
                     showTableMessage('로드 실패', true);
+                    updatePaginationButtons();
                 }
+            }
+
+            function updatePaginationButtons() {
+                const prevBtn = document.getElementById('prev-btn');
+                const nextBtn = document.getElementById('next-btn');
+                if (prevBtn) prevBtn.disabled = state.pagination.currentPage === 0;
+                if (nextBtn) nextBtn.disabled = state.summaries.length < state.pagination.pageSize;
             }
 
             function handleSort(field) {
