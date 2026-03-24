@@ -374,8 +374,7 @@ class TestReportAIGenerator:
                 mock_builder,
             ),
             patch(
-                "services.report_ai_generator.RichSummaryPromptBuilder"
-                if False else "infrastructure.llm.prompts.RichSummaryPromptBuilder",
+                "infrastructure.llm.prompts.RichSummaryPromptBuilder",
                 mock_builder,
             ),
         ):

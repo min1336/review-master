@@ -144,7 +144,7 @@ class TestDetermineSentiment:
 
     def test_neutral_when_no_signal(self, absa):
         sent, conf = absa._determine_sentiment("차량을 이용했습니다")
-        assert sent in ("neutral", "positive")  # context inference may vary
+        assert sent == "neutral"
 
 
 # ── RuleBasedABSA.classify_review ─────────────────────

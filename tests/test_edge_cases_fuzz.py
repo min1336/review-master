@@ -77,9 +77,12 @@ class TestSpecialCharacters:
 
     @pytest.mark.parametrize("text", SPECIAL_INPUTS)
     def test_sentiment_functions_no_crash(self, text):
-        detect_keyword_sentiment(text)
-        count_sentiment_matches(text)
-        check_double_negation(text)
+        result = detect_keyword_sentiment(text)
+        assert result in ("positive", "negative", "neutral")
+        count = count_sentiment_matches(text)
+        assert isinstance(count, tuple) and len(count) == 2
+        dn = check_double_negation(text)
+        assert isinstance(dn, bool)
 
 
 # ── 초장문 입력 (Stress Test) ─────────────────────────

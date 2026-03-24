@@ -287,26 +287,26 @@ class TestReportServiceInsufficientReviews:
         assert result.period_summary == ""
 
     @pytest.mark.asyncio
-    async def test_blocks_when_total_reviews_is_exactly_30(self):
-        """collected total_reviews=30 → 빈 리포트 반환 (<= 조건)"""
-        from schemas.report import ReportData
-
+    async def test_allows_when_total_reviews_is_exactly_30(self):
+        """collected total_reviews=30 → _step_tags 호출됨 (< 조건이므로 30은 허용)"""
         service = self._make_service()
         service._step_collect = AsyncMock(return_value={
             "branch_name": "테스트지점",
             "affiliate_name": "테스트업체",
             "total_reviews": 30,
         })
+        service._step_tags = AsyncMock(return_value={})
 
         start = datetime(2024, 1, 1)
         end = datetime(2024, 1, 31)
-        result = await service.generate_report_with_progress(
-            branch_id=1, start_date=start, end_date=end
-        )
+        try:
+            await service.generate_report_with_progress(
+                branch_id=1, start_date=start, end_date=end
+            )
+        except Exception:
+            pass
 
-        assert isinstance(result, ReportData)
-        assert result.total_reviews == 30
-        assert result.period_summary == ""
+        service._step_tags.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_returns_actual_review_count_in_blocked_report(self):

@@ -87,18 +87,31 @@ class TestTagRegistryMapping:
 
     def test_tag_type_derivation_logic(self):
         """tag_type 파생 로직: affiliate→company, vehicle→vehicle, 그 외→None"""
+        from domain.analysis.patterns import TAG_REGISTRY
+
         _, tag_to_group = self._build_mappings()
 
+        # 알려진 그룹 값 집합 검증
+        known_groups = {meta.group for meta in TAG_REGISTRY.values()}
+        assert "affiliate" in known_groups or "vehicle" in known_groups, (
+            "TAG_REGISTRY에 affiliate 또는 vehicle 그룹이 없음"
+        )
+
         for tag_name, group in tag_to_group.items():
-            expected = (
-                "company" if group == "affiliate"
-                else ("vehicle" if group == "vehicle" else None)
-            )
-            actual = (
-                "company" if group == "affiliate"
-                else ("vehicle" if group == "vehicle" else None)
-            )
-            assert actual == expected, f"'{tag_name}' (group={group}) tag_type 불일치"
+            if group == "affiliate":
+                derived = "company"
+            elif group == "vehicle":
+                derived = "vehicle"
+            else:
+                derived = None
+
+            # affiliate 그룹은 반드시 company, vehicle 그룹은 반드시 vehicle
+            if group == "affiliate":
+                assert derived == "company", f"'{tag_name}' affiliate→company 실패"
+            elif group == "vehicle":
+                assert derived == "vehicle", f"'{tag_name}' vehicle→vehicle 실패"
+            else:
+                assert derived is None, f"'{tag_name}' 기타 그룹→None 실패"
 
     def test_total_tag_count(self):
         """전체 매핑된 태그 수 = 고유 키 수 (카테고리명과 서브태그명 중복 제거)"""

@@ -63,7 +63,6 @@ class TestProgressCallbackCommit:
              patch.object(service, '_create_report_service', return_value=mock_report_service), \
              patch('repository.database.get_session_factory', return_value=mock_factory_fn):
 
-            from datetime import datetime
             await service._run_job(
                 job_id="test-job-1",
                 branch_id=1,
@@ -106,7 +105,6 @@ class TestProgressCallbackCommit:
              patch.object(service, '_create_report_service', return_value=mock_report_service), \
              patch('repository.database.get_session_factory', return_value=mock_factory_fn):
 
-            from datetime import datetime
             await service._run_job(
                 job_id="test-job-2",
                 branch_id=1,
@@ -165,7 +163,6 @@ class TestProgressCallbackCommit:
              patch.object(service, '_create_report_service', return_value=mock_report_service), \
              patch('repository.database.get_session_factory', return_value=mock_factory_fn):
 
-            from datetime import datetime
             await service._run_job(
                 job_id="test-job-3",
                 branch_id=1,

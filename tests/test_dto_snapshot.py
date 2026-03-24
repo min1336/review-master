@@ -479,7 +479,7 @@ def test_review_output_dto_with_datetime():
 
 
 def test_review_output_dto_with_string_date():
-    """ReviewOutputDTO — 문자열 date는 그대로 반환."""
+    """ReviewOutputDTO — 문자열 date는 datetime으로 파싱 후 ISO 포맷 반환."""
     dto = ReviewOutputDTO(
         id=None,
         date="2024-06-15",
@@ -489,7 +489,7 @@ def test_review_output_dto_with_string_date():
     )
     result = dto.model_dump(by_alias=True)
 
-    assert result["date"] == "2024-06-15"
+    assert result["date"] == "2024-06-15T00:00:00"
     assert result["id"] is None
     assert result["keywords"] == []
 

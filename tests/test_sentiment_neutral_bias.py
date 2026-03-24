@@ -19,6 +19,45 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
 
 # ============================================================
+# 공통 헬퍼 (모듈 레벨)
+# ============================================================
+
+
+def _make_preprocessor_with_text_sentiment(
+    text_sentiment: str, confidence: float = 0.8
+):
+    """preprocessor + 실제 UnifiedSentimentAnalyzer (sub-components만 모킹)"""
+    from domain.pipeline.steps.preprocessor import ReviewPreprocessor
+    from domain.analysis.sentiment_utils import UnifiedSentimentAnalyzer
+
+    pp = ReviewPreprocessor.__new__(ReviewPreprocessor)
+    pp._kiwi = None
+    pp._hybrid_classifier = None
+
+    analyzer = UnifiedSentimentAnalyzer(lazy_load=True)
+
+    mock_absa = MagicMock()
+    mock_absa.determine_text_sentiment.return_value = (text_sentiment, confidence)
+    analyzer._absa = mock_absa
+
+    mock_hybrid = MagicMock()
+    if text_sentiment == "positive":
+        aspects = {"positive_aspects": ["좋음"], "negative_aspects": []}
+    elif text_sentiment == "negative":
+        aspects = {"positive_aspects": [], "negative_aspects": ["나쁨"]}
+    else:
+        aspects = {"positive_aspects": [], "negative_aspects": []}
+    mock_hybrid.get_review_summary.return_value = {
+        "overall_sentiment": text_sentiment,
+        **aspects,
+    }
+    analyzer._hybrid = mock_hybrid
+
+    pp._sentiment_analyzer = analyzer
+    return pp
+
+
+# ============================================================
 # Test 1: preprocessor 중립 오버라이드 임계값 (3.0→4.0)
 # ============================================================
 
@@ -30,42 +69,9 @@ class TestPreprocessorNeutralOverride:
     _absa와 _hybrid만 모킹하여 텍스트 감정을 제어하고, 별점 통합 로직은 실제 실행.
     """
 
-    def _make_preprocessor_with_text_sentiment(
-        self, text_sentiment: str, confidence: float = 0.8
-    ):
-        """preprocessor + 실제 UnifiedSentimentAnalyzer (sub-components만 모킹)"""
-        from domain.pipeline.steps.preprocessor import ReviewPreprocessor
-        from domain.analysis.sentiment_utils import UnifiedSentimentAnalyzer
-
-        pp = ReviewPreprocessor.__new__(ReviewPreprocessor)
-        pp._kiwi = None
-        pp._hybrid_classifier = None
-
-        analyzer = UnifiedSentimentAnalyzer(lazy_load=True)
-
-        mock_absa = MagicMock()
-        mock_absa.determine_text_sentiment.return_value = (text_sentiment, confidence)
-        analyzer._absa = mock_absa
-
-        mock_hybrid = MagicMock()
-        if text_sentiment == "positive":
-            aspects = {"positive_aspects": ["좋음"], "negative_aspects": []}
-        elif text_sentiment == "negative":
-            aspects = {"positive_aspects": [], "negative_aspects": ["나쁨"]}
-        else:
-            aspects = {"positive_aspects": [], "negative_aspects": []}
-        mock_hybrid.get_review_summary.return_value = {
-            "overall_sentiment": text_sentiment,
-            **aspects,
-        }
-        analyzer._hybrid = mock_hybrid
-
-        pp._sentiment_analyzer = analyzer
-        return pp
-
     def test_negative_text_with_rating_3_stays_negative(self):
         """별점 3.0 + 부정 텍스트 → 부정 유지"""
-        pp = self._make_preprocessor_with_text_sentiment("negative", 0.8)
+        pp = _make_preprocessor_with_text_sentiment("negative", 0.8)
 
         sentiment, _ = pp._analyze_sentiment_with_ratings(
             text="서비스가 너무 불친절했어요",
@@ -81,7 +87,7 @@ class TestPreprocessorNeutralOverride:
 
     def test_negative_text_with_rating_3_5_stays_negative(self):
         """별점 3.5 + 부정 텍스트 → 부정 유지"""
-        pp = self._make_preprocessor_with_text_sentiment("negative", 0.8)
+        pp = _make_preprocessor_with_text_sentiment("negative", 0.8)
 
         sentiment, _ = pp._analyze_sentiment_with_ratings(
             text="차가 너무 더러웠습니다",
@@ -95,7 +101,7 @@ class TestPreprocessorNeutralOverride:
 
     def test_negative_text_with_all_high_ratings_becomes_neutral(self):
         """별점 모두 4.0+ + 부정 텍스트 → neutral (정당한 오버라이드)"""
-        pp = self._make_preprocessor_with_text_sentiment("negative", 0.7)
+        pp = _make_preprocessor_with_text_sentiment("negative", 0.7)
 
         sentiment, _ = pp._analyze_sentiment_with_ratings(
             text="좀 아쉬운 부분이 있었어요",
@@ -109,7 +115,7 @@ class TestPreprocessorNeutralOverride:
 
     def test_positive_text_passes_through(self):
         """긍정 텍스트 + 보통 별점 → positive 그대로 유지"""
-        pp = self._make_preprocessor_with_text_sentiment("positive", 0.9)
+        pp = _make_preprocessor_with_text_sentiment("positive", 0.9)
 
         sentiment, _ = pp._analyze_sentiment_with_ratings(
             text="정말 친절하고 좋았습니다",
@@ -123,7 +129,7 @@ class TestPreprocessorNeutralOverride:
 
     def test_any_low_rating_with_high_avg_becomes_neutral(self):
         """별점 하나 3.0 미만이지만 평균 >= 3.5 → neutral (텍스트 무시하지 않음)"""
-        pp = self._make_preprocessor_with_text_sentiment("positive", 0.9)
+        pp = _make_preprocessor_with_text_sentiment("positive", 0.9)
 
         sentiment, _ = pp._analyze_sentiment_with_ratings(
             text="좋았습니다",
@@ -149,41 +155,11 @@ class TestUnifiedPathBehaviorChange:
     - Rule 4: text=positive + avg<3.5 → neutral (preprocessor에 없던 규칙)
     """
 
-    def _make_preprocessor_with_text_sentiment(
-        self, text_sentiment: str, confidence: float = 0.8
-    ):
-        from domain.pipeline.steps.preprocessor import ReviewPreprocessor
-        from domain.analysis.sentiment_utils import UnifiedSentimentAnalyzer
 
-        pp = ReviewPreprocessor.__new__(ReviewPreprocessor)
-        pp._kiwi = None
-        pp._hybrid_classifier = None
-
-        analyzer = UnifiedSentimentAnalyzer(lazy_load=True)
-
-        mock_absa = MagicMock()
-        mock_absa.determine_text_sentiment.return_value = (text_sentiment, confidence)
-        analyzer._absa = mock_absa
-
-        mock_hybrid = MagicMock()
-        if text_sentiment == "positive":
-            aspects = {"positive_aspects": ["좋음"], "negative_aspects": []}
-        elif text_sentiment == "negative":
-            aspects = {"positive_aspects": [], "negative_aspects": ["나쁨"]}
-        else:
-            aspects = {"positive_aspects": [], "negative_aspects": []}
-        mock_hybrid.get_review_summary.return_value = {
-            "overall_sentiment": text_sentiment,
-            **aspects,
-        }
-        analyzer._hybrid = mock_hybrid
-
-        pp._sentiment_analyzer = analyzer
-        return pp
 
     def test_positive_text_low_avg_becomes_neutral(self):
         """행동 변경: text=positive + avg<3.5 → neutral (Rule 4)"""
-        pp = self._make_preprocessor_with_text_sentiment("positive", 0.8)
+        pp = _make_preprocessor_with_text_sentiment("positive", 0.8)
 
         sentiment, _ = pp._analyze_sentiment_with_ratings(
             text="정말 친절했어요",
@@ -199,7 +175,7 @@ class TestUnifiedPathBehaviorChange:
 
     def test_negative_text_high_avg_not_all_becomes_neutral(self):
         """행동 변경: text=negative + avg≥4.0 (not all≥4.0) → neutral (Rule 3, avg 기준)"""
-        pp = self._make_preprocessor_with_text_sentiment("negative", 0.8)
+        pp = _make_preprocessor_with_text_sentiment("negative", 0.8)
 
         sentiment, _ = pp._analyze_sentiment_with_ratings(
             text="좀 아쉬운 점이 있었어요",
@@ -216,7 +192,7 @@ class TestUnifiedPathBehaviorChange:
 
     def test_positive_text_at_boundary_stays_positive(self):
         """경계: text=positive + avg=3.5 → positive 유지 (Rule 4 미적용)"""
-        pp = self._make_preprocessor_with_text_sentiment("positive", 0.85)
+        pp = _make_preprocessor_with_text_sentiment("positive", 0.85)
 
         sentiment, _ = pp._analyze_sentiment_with_ratings(
             text="정말 좋았습니다",

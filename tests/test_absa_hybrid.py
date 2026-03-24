@@ -372,7 +372,7 @@ class TestClassifyReview:
         for tag, sentiments in result.items():
             all_keywords.extend(sentiments.get("positive", []))
         # 친절이 어떤 태그에든 positive로 분류되었거나 ABSA가 잡아야 함
-        assert len(result) >= 0  # 최소 빈 dict도 허용 (절 분석 결과에 따라)
+        assert isinstance(result, dict)
 
     def test_classify_review_sentiment_values_valid(self, classifier_with_mock_model):
         """각 태그의 sentiments는 positive/negative/neutral 키 포함"""
@@ -431,4 +431,4 @@ class TestClassifyReview:
         assert isinstance(result, dict)
         # 비어있지 않아야 함 (여러 aspect가 있으므로)
         # 단, ABSA의 절 분리 결과에 따라 달라질 수 있으므로 최소 검증
-        assert len(result) >= 0
+        assert isinstance(result, dict)
