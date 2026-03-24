@@ -14,7 +14,7 @@ Usage:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 # ── 상수 ──────────────────────────────────────────────────
 UTC = timezone.utc
@@ -47,19 +47,17 @@ def parse_date_str(date_str: str, end_of_day: bool = False) -> datetime:
     Raises:
         ValueError: 형식이 잘못된 경우
     """
-    dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC)
+    dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=KST)
     if end_of_day:
         dt = dt.replace(hour=23, minute=59, second=59)
-    return dt
+    return dt.astimezone(UTC)
 
 
-def date_to_utc(d: "date", end_of_day: bool = False) -> datetime:
+def date_to_utc(d: date, end_of_day: bool = False) -> datetime:
     """date → UTC-aware datetime 변환. end_of_day=True면 23:59:59."""
-    from datetime import date as _date  # noqa: F811
-
-    dt = datetime(d.year, d.month, d.day, tzinfo=UTC)
+    dt = datetime(d.year, d.month, d.day, tzinfo=KST)
     if end_of_day:
         dt = dt.replace(hour=23, minute=59, second=59)
-    return dt
+    return dt.astimezone(UTC)
 
 
