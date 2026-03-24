@@ -14,7 +14,7 @@ class Summary(BaseModel):
     branch_name: str | None = None
     region: str | None = None
     status: str | None = None
-    review_count: int | None = 0
+    review_count: int = 0
     avg_rating: float | None = None
     keywords: list[str] | None = None
     keyword_1: str | None = None

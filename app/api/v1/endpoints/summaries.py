@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from schemas.common import ApiListResponseModel, ApiResponseModel, api_list_response, api_response, parse_date
 from schemas.dto import BranchCarModelsDTO, BranchReviewsDTO, PendingSummaryResultDTO, RegionStatsDTO, SummaryStatsDTO
 from models.summary import Summary
@@ -136,7 +136,7 @@ async def api_update_summary(
 @router.post("/{branch_id}/apply-pending", response_model=ApiResponseModel[PendingSummaryResultDTO])
 async def api_apply_pending_summary(
     branch_id: int,
-    data: RegenerateRequest = None,
+    data: RegenerateRequest | None = Body(None),
     service: SummaryService = Depends(get_summary_service),
 ) -> dict[str, Any]:
     """대기 중인 요약 적용 (pending -> main)"""
@@ -152,7 +152,7 @@ async def api_apply_pending_summary(
 @router.post("/{branch_id}/discard-pending", response_model=ApiResponseModel[PendingSummaryResultDTO])
 async def api_discard_pending_summary(
     branch_id: int,
-    data: RegenerateRequest = None,
+    data: RegenerateRequest | None = Body(None),
     service: SummaryService = Depends(get_summary_service),
 ) -> dict[str, Any]:
     """대기 중인 요약 취소 (삭제)"""

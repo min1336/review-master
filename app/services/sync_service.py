@@ -224,7 +224,7 @@ class SyncService:
                     except Exception as e:
                         day_label = chunk_since.strftime("%m-%d")
                         logger.error(
-                            f"청크 {day_idx + 1}/{total_days} ({day_label}) 실패: {e}",
+                            "청크 %s/%s (%s) 실패: %s", day_idx + 1, total_days, day_label, e,
                             exc_info=True,
                         )
                         chunk_errors.append(f"{day_label}: {e}")
@@ -249,8 +249,8 @@ class SyncService:
 
                 failed_count = total_synced - total_processed
                 logger.info(
-                    f"동기화 완료: {total_synced}개 저장, {total_processed}개 분석, "
-                    f"{failed_count}개 실패 ({duration:.1f}초)"
+                    "동기화 완료: %s개 저장, %s개 분석, %s개 실패 (%.1f초)",
+                    total_synced, total_processed, failed_count, duration,
                 )
 
                 if chunk_errors:
@@ -311,6 +311,8 @@ class SyncService:
         reviews: list[dict] = []
         for row in athena_reviews:
             review_id = row.get("review_id")
+            if not review_id:
+                continue
             if review_id in seen_ids:
                 continue
             seen_ids.add(review_id)
@@ -347,8 +349,8 @@ class SyncService:
         await self._review_repo.commit()
 
         logger.info(
-            f"[{day_label}] {saved_count}개 upsert "
-            f"(신규 {new_count}개, 기존 {existing_count}개)"
+            "[%s] %s개 upsert (신규 %s개, 기존 %s개)",
+            day_label, saved_count, new_count, existing_count,
         )
 
         # 4. UnifiedPipeline 실행 (감정/태그 통계 저장)

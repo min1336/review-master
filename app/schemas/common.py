@@ -119,10 +119,3 @@ class ApiListResponseModel(BaseModel, Generic[T]):
     count: int
     total: int | None = None
     has_next: bool | None = None
-
-
-class ApiErrorResponseModel(BaseModel):
-    """에러 응답 — response_model 전용"""
-
-    success: bool = False
-    detail: str

@@ -411,7 +411,7 @@ class AthenaClient:
 
         if date_to:
             safe_to = _validate_date(date_to, "date_to")
-            where_parts.append(f"AND nrl.register_date < TIMESTAMP '{safe_to} 23:59:59'")
+            where_parts.append(f"AND nrl.register_date <= TIMESTAMP '{safe_to} 23:59:59'")
 
         # ORDER BY (화이트리스트)
         if sort_by == "rating_low":
@@ -589,6 +589,8 @@ class AthenaClient:
                 logger.info("쿼리 상태: %s (%s초 경과)", state, elapsed)
 
         if state != "SUCCEEDED":
+            if status is None:
+                raise RuntimeError(f"Athena 쿼리 상태 조회 불가 (타임아웃 {timeout}초)")
             error_msg = status["QueryExecution"]["Status"].get(
                 "StateChangeReason", "Unknown error"
             )

@@ -12,13 +12,14 @@ import asyncio
 import logging
 from datetime import datetime
 
-from dateutil.relativedelta import relativedelta
+from typing import TYPE_CHECKING, Awaitable, Callable
 
-logger = logging.getLogger(__name__)
+from dateutil.relativedelta import relativedelta
 
 from core.constants import REVIEW_CHANGE_THRESHOLD
 from core.timezone import to_kst, utc_now
-from typing import TYPE_CHECKING, Awaitable, Callable
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from repository.branch_tag_repository import BranchTagRepository
@@ -408,8 +409,8 @@ class ReportService:
                 prev_review_count = await self.review_repo.count_by_branch(
                     branch_id, review_date_from=prev_start, review_date_to=prev_end,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("이전 기간 리뷰 수 조회 실패: %s", e)
 
         if prev_review_count == 0 or not tags.get("tag_by_category"):
             return None
@@ -722,7 +723,7 @@ class ReportService:
         await update_progress(20)
 
         # 리뷰가 부족한 경우 (30건 이하) 빈 리포트 반환
-        if collected["total_reviews"] <= REVIEW_CHANGE_THRESHOLD:
+        if collected["total_reviews"] < REVIEW_CHANGE_THRESHOLD:
             await update_progress(100)
             return ReportData(
                 branch_id=branch_id,

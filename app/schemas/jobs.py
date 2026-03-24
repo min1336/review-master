@@ -70,7 +70,7 @@ class UploadResultResponse(BaseModel):
     processed_count: int = 0
     failed_count: int = 0
     duration_seconds: float = 0
-    errors: list[UploadRowError] = []
+    errors: list[UploadRowError] = Field(default_factory=list)
 
 
 class UploadJobStatusResponse(BaseModel):

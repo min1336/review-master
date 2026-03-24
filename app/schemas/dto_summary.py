@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 from core.timezone import utc_now
 
@@ -150,10 +150,20 @@ class ReviewOutputDTO(BaseModel):
     """리뷰 출력 DTO"""
 
     id: str | None
-    date: datetime | str | None
+    date: datetime | None = None
     content: str
     keywords: list[str]
     tag_sentiments: str
+
+    @field_validator("date", mode="before")
+    @classmethod
+    def parse_date(cls, v):
+        if isinstance(v, str):
+            try:
+                return datetime.fromisoformat(v.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+        return v
 
     @model_serializer
     def _serialize(self) -> dict[str, Any]:

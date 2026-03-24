@@ -64,7 +64,7 @@ class BranchTag(BaseModel):
     positive_count: int = 0
     negative_count: int = 0
     neutral_count: int = 0
-    weighted_score: float | None = 0
+    weighted_score: float = 0.0
     rank: int | None = None
     # 조인 데이터
     tags: Tag | None = None

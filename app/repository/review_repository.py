@@ -155,7 +155,7 @@ class BranchReviewRepository(BaseRepository[Review]):
         """원본 리뷰 조회 (필터링 지원)"""
         conditions = []
 
-        if branch_id:
+        if branch_id is not None:
             conditions.append(BranchReviewORM.branch_id == branch_id)
         if car_model:
             conditions.append(BranchReviewORM.car_model == car_model)
@@ -433,7 +433,7 @@ class BranchReviewRepository(BaseRepository[Review]):
         """신규 리뷰 조회 (is_new=true)"""
         conditions = [BranchReviewORM.is_new == True]  # noqa: E712
 
-        if branch_id:
+        if branch_id is not None:
             conditions.append(BranchReviewORM.branch_id == branch_id)
 
         # 데이터 쿼리
@@ -471,7 +471,7 @@ class BranchReviewRepository(BaseRepository[Review]):
             .where(BranchReviewORM.is_new == True)  # noqa: E712
         )
 
-        if branch_id:
+        if branch_id is not None:
             stmt = stmt.where(BranchReviewORM.branch_id == branch_id)
 
         result = await self._session.execute(stmt)
@@ -596,7 +596,7 @@ class BranchReviewRepository(BaseRepository[Review]):
                 deleted_count += result.rowcount
             except Exception as e:
                 logger.error(
-                    f"Failed to delete reviews batch (data integrity risk): {e}"
+                    "Failed to delete reviews batch (data integrity risk): %s", e
                 )
                 raise
 

@@ -86,11 +86,6 @@ class ResolvedReportConfig(BaseModel):
 
 
 # ============================================================
-# API 요청 DTO
-# ============================================================
-
-
-# ============================================================
 # 프리셋 DTO
 # ============================================================
 
@@ -222,20 +217,20 @@ class VehicleRankItem(BaseModel):
     model: str
     count: int = 0               # 총 리뷰 건수
     ratio: int = 0               # 호평 or 불만 비율
-    tags: list[str] = []         # ["냄새(85%)", "청결(72%)"] 최대 3개
+    tags: list[str] = Field(default_factory=list)         # ["냄새(85%)", "청결(72%)"] 최대 3개
 
 
 class AffiliateEvaluation(BaseModel):
     """업체 평가 섹션"""
-    top_positive: list[TagRankItem] = []   # Top 5 긍정 태그
-    top_negative: list[TagRankItem] = []   # Top 5 부정 태그
+    top_positive: list[TagRankItem] = Field(default_factory=list)   # Top 5 긍정 태그
+    top_negative: list[TagRankItem] = Field(default_factory=list)   # Top 5 부정 태그
     ai_text: str = ""                       # AI 평가 텍스트 (150-250자)
 
 
 class VehicleEvaluation(BaseModel):
     """차량 평가 섹션"""
-    top_liked: list[VehicleRankItem] = []   # 호평 Top 5 차량
-    top_disliked: list[VehicleRankItem] = [] # 불만 Top 5 차량
+    top_liked: list[VehicleRankItem] = Field(default_factory=list)   # 호평 Top 5 차량
+    top_disliked: list[VehicleRankItem] = Field(default_factory=list) # 불만 Top 5 차량
     ai_text: str = ""                        # AI 평가 텍스트 (150-250자)
 
 
@@ -279,7 +274,7 @@ class TrendComparison(BaseModel):
     current_total_reviews: int = 0
     overall_positive_change: int = 0        # 전체 긍정률 변화 (pp)
     overall_negative_change: int = 0        # 전체 부정률 변화 (pp)
-    category_trends: list[TrendItem] = []
+    category_trends: list[TrendItem] = Field(default_factory=list)
 
 
 class BenchmarkData(BaseModel):
@@ -332,14 +327,14 @@ class ReportData(BaseModel):
     period_start: str
     period_end: str
     total_reviews: int = 0
-    top_tags: list[str] = []
+    top_tags: list[str] = Field(default_factory=list)
     period_summary: str = ""
-    strengths: list[str] = []       # 현상유지 (잘하고 있는 카테고리)
-    improvements: list[str] = []    # 보완필요 (개선이 필요한 카테고리)
-    strengths_detail: list[StrengthItem] = []       # 구조화된 현상유지
-    improvements_detail: list[StrengthItem] = []    # 구조화된 보완필요
-    top_tags_detail: list[TopTagItem] = []           # 구조화된 Top 태그
-    vehicle_analysis: list[VehicleAnalysis] = []
+    strengths: list[str] = Field(default_factory=list)       # 현상유지 (잘하고 있는 카테고리)
+    improvements: list[str] = Field(default_factory=list)    # 보완필요 (개선이 필요한 카테고리)
+    strengths_detail: list[StrengthItem] = Field(default_factory=list)       # 구조화된 현상유지
+    improvements_detail: list[StrengthItem] = Field(default_factory=list)    # 구조화된 보완필요
+    top_tags_detail: list[TopTagItem] = Field(default_factory=list)           # 구조화된 Top 태그
+    vehicle_analysis: list[VehicleAnalysis] = Field(default_factory=list)
     affiliate_evaluation: AffiliateEvaluation | None = None
     vehicle_evaluation: VehicleEvaluation | None = None
     generated_at: str = ""
@@ -347,8 +342,8 @@ class ReportData(BaseModel):
     # 신규 인사이트 섹션 (선택적, 하위호환)
     trend_comparison: TrendComparison | None = None
     benchmark: BenchmarkData | None = None
-    priority_actions: list[PriorityAction] = []
-    negative_reviews: list[NegativeReviewItem] = []
+    priority_actions: list[PriorityAction] = Field(default_factory=list)
+    negative_reviews: list[NegativeReviewItem] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from typing import Any
 
 from core.constants import NEGATIVE_RATING_THRESHOLD
 from core.stopwords import LexiconConfig
@@ -94,8 +95,8 @@ class ReviewPreprocessor:
                     if is_target_pos and is_valid:
                         keywords.append(word)
                 return keywords
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Kiwi 토큰화 실패, 정규식 폴백: %s", e)
 
         words = re.findall(r"[가-힣]{2,}", text)
         return [w for w in words if w not in LexiconConfig.STOP_WORDS]
@@ -152,8 +153,8 @@ class ReviewPreprocessor:
             return "negative", 0.8
 
     @staticmethod
-    def _safe_float(val) -> float | None:
+    def _safe_float(val: Any) -> float | None:
         try:
-            return float(val) if val else None
+            return float(val) if val is not None else None
         except (ValueError, TypeError):
             return None

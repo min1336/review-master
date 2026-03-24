@@ -527,7 +527,7 @@ class PromptPresetORM(Base):
     analysis_perspective: Mapped[str] = mapped_column(String(30), default="operational")
     tone: Mapped[str] = mapped_column(String(30), default="analytical")
     detail_level: Mapped[str] = mapped_column(String(20), default="standard")
-    focus_areas: Mapped[list | None] = mapped_column(JSONB, default=[])
+    focus_areas: Mapped[list | None] = mapped_column(JSONB, default=list)
     custom_instruction: Mapped[str | None] = mapped_column(Text, default="")
     temperature: Mapped[float] = mapped_column(Float, default=0.5)
     summary_max_length: Mapped[int] = mapped_column(Integer, default=600)

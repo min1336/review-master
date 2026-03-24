@@ -79,7 +79,7 @@ class ReportCacheService:
         saved_report: ReportData,
     ) -> bool:
         """캐시 무효화 여부 결정 (TTL 캐시로 반복 DB 쿼리 방지)"""
-        cache_key = f"inv:{branch_id}:{start_date}:{end_date}"
+        cache_key = f"inv:{branch_id}:{start_date.isoformat()}:{end_date.isoformat()}"
         cached = self._invalidation_cache.get(cache_key)
         if cached is not None:
             return cached

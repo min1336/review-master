@@ -105,7 +105,8 @@ class TagService:
 
     async def update_tag(self, tag_id: int, data: dict) -> dict | None:
         """태그 수정"""
-        data["updated_at"] = "now()"
+        from sqlalchemy import func
+        data["updated_at"] = func.now()
         result = await self.tag_repo.update(tag_id, data)
         _tag_cache.invalidate()
         return result.model_dump() if result else None

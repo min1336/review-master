@@ -189,7 +189,7 @@ class ReportRepository:
                 .select_from(BranchReportORM)
                 .where(BranchReportORM.is_viewed == False)  # noqa: E712
             )
-            if branch_id:
+            if branch_id is not None:
                 stmt = stmt.where(BranchReportORM.branch_id == branch_id)
 
             result = await self._session.execute(stmt)
@@ -249,8 +249,8 @@ class ReportRepository:
             return True
         except Exception as e:
             logger.error(
-                f"리포트 삭제 실패 (branch: {branch_id}, "
-                f"period: {period_start} ~ {period_end}): {e}"
+                "리포트 삭제 실패 (branch: %s, period: %s ~ %s): %s",
+                branch_id, period_start, period_end, e
             )
             return False
 
