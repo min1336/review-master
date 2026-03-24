@@ -150,7 +150,7 @@ class AffiliateRepository(BaseRepository[Affiliate]):
         return sync_result
 
 
-class CarModelRepository(BaseRepository[CarModel]):
+class CarModelCatalogRepository(BaseRepository[CarModel]):
     """car_models 테이블 Repository"""
 
     model = CarModel

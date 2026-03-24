@@ -72,8 +72,8 @@ def _extract_keywords(kiwi, content: str) -> list[str]:
                 if token.tag in ("NNG", "NNP", "VA", "VV", "XR"):
                     if len(token.form) >= 2:
                         keywords.append(token.form)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Kiwi 토큰화 실패: %s", e)
     return keywords
 
 
@@ -108,7 +108,7 @@ def _build_upsert_rows(
                     "tag_id": tag_id,
                     "sentiment": sentiment_label,
                     "matched_keyword": ", ".join(kws[:10]),
-                    "source": "retag_v2",
+                    "source": "pipeline",
                 })
     return upsert_rows
 
@@ -213,7 +213,7 @@ async def _assign_fallback_tag(session, tag_name_to_id: dict[str, int]) -> None:
                 ELSE 'neutral'
             END,
             '기본 분류',
-            'retag_v2_fallback'
+            'pipeline'
         FROM branch_reviews br
         WHERE br.deleted_at IS NULL
           AND br.content IS NOT NULL

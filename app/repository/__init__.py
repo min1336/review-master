@@ -10,12 +10,14 @@ Usage:
 
 from __future__ import annotations
 
-from .affiliate_repository import AffiliateRepository, CarModelRepository
+from .affiliate_repository import AffiliateRepository, CarModelCatalogRepository
 from .base import BaseRepository
 from .branch_tag_repository import BranchTagRepository
-from .report_repository import PresetRepository
+from .report_job_repository import ReportJobRepository
+from .report_repository import PresetRepository, ReportRepository
 from .review_repository import BranchReviewRepository, NewReviewRepository, SentimentRepository
 from .summary_repository import SummaryRepository
+from .sync_metadata_repository import SyncMetadataRepository
 from .tag_repository import CategoryRepository, MappingRepository, TagRepository
 
 __all__ = [
@@ -38,5 +40,10 @@ __all__ = [
     "PresetRepository",
     # Affiliates
     "AffiliateRepository",
-    "CarModelRepository",
+    "CarModelCatalogRepository",
+    # Reports
+    "ReportRepository",
+    "ReportJobRepository",
+    # Sync
+    "SyncMetadataRepository",
 ]

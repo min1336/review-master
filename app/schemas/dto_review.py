@@ -13,7 +13,7 @@ class ReviewDTO(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    id: int
+    id: int | None = None
     branch_id: int
     content: str
     branch_name: str = ""
@@ -51,7 +51,7 @@ class ReviewDTO(BaseModel):
         }
 
     @classmethod
-    def from_athena_row(cls, row: dict[str, Any]) -> "ReviewDTO":
+    def from_athena_row(cls, row: dict[str, Any]) -> "ReviewDTO | None":
         """Athena 쿼리 결과에서 ReviewDTO 생성 (모든 값이 문자열)"""
         created_at = None
         review_date = row.get("review_date")
@@ -61,7 +61,7 @@ class ReviewDTO(BaseModel):
             except ValueError:
                 created_at = None
 
-        def safe_int(val, default=0):
+        def safe_int(val, default=None):
             try:
                 return int(val) if val else default
             except (ValueError, TypeError):
@@ -73,14 +73,18 @@ class ReviewDTO(BaseModel):
             except (ValueError, TypeError):
                 return default
 
+        review_id = safe_int(row.get("review_id"))
+        if review_id is None:
+            return None
+
         return cls(
-            id=safe_int(row.get("review_id")),
-            branch_id=safe_int(row.get("branch_id")),
+            id=review_id,
+            branch_id=safe_int(row.get("branch_id")) or 0,
             content=(row.get("content") or "").strip(),
             branch_name=row.get("branch_name") or "",
             rating=safe_float(row.get("rating_service")),
             created_at=created_at,
-            like_count=safe_int(row.get("helpful_count")),
+            like_count=safe_int(row.get("helpful_count")) or 0,
             is_blind=False,
             car_model=row.get("car_type") or "",
             company_name=row.get("company_name") or "",
@@ -97,14 +101,18 @@ class ReviewDTO(BaseModel):
             except ValueError:
                 created_at = None
 
+        _id = row.get("id")
+        if _id is None:
+            _id = row.get("review_id")
+
         return cls(
-            id=row.get("id") or row.get("review_id") or 0,
+            id=_id,
             branch_id=row.get("branch_id") or 0,
             content=row.get("content") or "",
             branch_name=row.get("branch_name") or "",
-            rating=row.get("rating_service") or row.get("rating") or None,
+            rating=(rs if (rs := row.get("rating_service")) is not None else row.get("rating")),
             created_at=created_at,
-            like_count=row.get("helpful_count") or row.get("like_count") or 0,
+            like_count=(hc if (hc := row.get("helpful_count")) is not None else (row.get("like_count") or 0)),
             is_blind=row.get("is_blind", False),
             car_model=row.get("car_model") or "",
             company_name=row.get("company_name") or "",

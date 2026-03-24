@@ -23,12 +23,13 @@ from sqlalchemy.orm import selectinload
 from repository.orm_models import BranchSummaryORM, ScheduleGroupORM, SchedulerTargetORM
 from schemas.common import ApiResponseModel, api_response
 
+from core.config import get_settings
+
 from .deps import get_db_session
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["n8n-scheduler"])
 
-N8N_BASE = "https://n8n-cloud.carmore.kr"
 N8N_API_TIMEOUT = httpx.Timeout(connect=10.0, read=30.0, write=30.0, pool=5.0)
 SEOUL_TZ = ZoneInfo("Asia/Seoul")
 
@@ -196,7 +197,7 @@ async def list_scheduler_workflows() -> dict[str, Any]:
     ) -> dict[str, Any]:
         try:
             resp = await client.get(
-                f"{N8N_BASE}/api/v1/workflows/{wf_id}",
+                f"{get_settings().n8n_base_url}/api/v1/workflows/{wf_id}",
                 headers=_api_headers(),
             )
             resp.raise_for_status()
@@ -260,7 +261,7 @@ async def update_schedule(body: ScheduleRequest) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=N8N_API_TIMEOUT) as client:
             # 1) GET 현재 워크플로
             resp = await client.get(
-                f"{N8N_BASE}/api/v1/workflows/{body.workflow_id}",
+                f"{get_settings().n8n_base_url}/api/v1/workflows/{body.workflow_id}",
                 headers=_api_headers(),
             )
             resp.raise_for_status()
@@ -290,7 +291,7 @@ async def update_schedule(body: ScheduleRequest) -> dict[str, Any]:
             # 3) PUT 업데이트 (n8n API는 PATCH 미지원)
             wf["nodes"] = nodes
             put_resp = await client.put(
-                f"{N8N_BASE}/api/v1/workflows/{body.workflow_id}",
+                f"{get_settings().n8n_base_url}/api/v1/workflows/{body.workflow_id}",
                 headers=_api_headers(),
                 json=_strip_readonly(wf),
             )
@@ -319,7 +320,7 @@ async def toggle_workflow(body: ToggleRequest) -> dict[str, Any]:
     try:
         async with httpx.AsyncClient(timeout=N8N_API_TIMEOUT) as client:
             resp = await client.post(
-                f"{N8N_BASE}/api/v1/workflows/{body.workflow_id}/{action}",
+                f"{get_settings().n8n_base_url}/api/v1/workflows/{body.workflow_id}/{action}",
                 headers=_api_headers(),
             )
             resp.raise_for_status()
@@ -343,7 +344,7 @@ async def trigger_workflow(body: TriggerRequest) -> dict[str, Any]:
     _validate_workflow_id(body.workflow_id)
     meta = MANAGED_WORKFLOWS[body.workflow_id]
 
-    url = f"{N8N_BASE}{_webhook_prefix()}{meta['webhook']}"
+    url = f"{get_settings().n8n_base_url}{_webhook_prefix()}{meta['webhook']}"
     try:
         async with httpx.AsyncClient(timeout=N8N_API_TIMEOUT) as client:
             resp = await client.post(url)
@@ -503,6 +504,12 @@ async def create_group(
     """새 스케줄 그룹 생성"""
     _validate_workflow_id(workflow_id)
 
+    if body.cron_expression:
+        try:
+            croniter(body.cron_expression)
+        except (ValueError, KeyError):
+            raise HTTPException(400, f"잘못된 cron 표현식: {body.cron_expression}")
+
     group = ScheduleGroupORM(
         workflow_id=workflow_id,
         group_name=body.group_name,
@@ -544,6 +551,10 @@ async def update_group(
     if body.group_name is not None:
         group.group_name = body.group_name
     if body.cron_expression is not None:
+        try:
+            croniter(body.cron_expression)
+        except (ValueError, KeyError):
+            raise HTTPException(400, f"잘못된 cron 표현식: {body.cron_expression}")
         group.cron_expression = body.cron_expression
 
     target_count = None

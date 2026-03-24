@@ -104,9 +104,10 @@ async def _recover_stale_report_jobs():
 async def _close_http_clients():
     """모듈 레벨 httpx 클라이언트 정리"""
     try:
-        from api.v1.endpoints.n8n import _http_client
-        if _http_client is not None:
-            await _http_client.aclose()
+        import api.v1.endpoints.n8n as n8n_module
+        if n8n_module._http_client is not None:
+            await n8n_module._http_client.aclose()
+            n8n_module._http_client = None
             logger.info("[Shutdown] httpx client closed")
     except Exception as e:
         logger.warning("[Shutdown] httpx client 종료 실패: %s", e)

@@ -7,15 +7,15 @@ branch_tags 데이터로부터 카테고리 통계, 현상유지/보완필요, T
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from core.constants import IMPROVEMENT_NEGATIVE_RATIO, STRENGTH_POSITIVE_RATIO
+from core.timezone import utc_now
 from domain.analysis.patterns import (
     AFFILIATE_CATEGORIES,
     CATEGORY_NEGATIVE_LABELS,
     CATEGORY_POSITIVE_LABELS,
-    normalize_category_name,
     resolve_tag_category,
 )
 from schemas.report import TagRankItem
@@ -46,8 +46,8 @@ class TagStatsCalculator:
         결과가 MIN_PERIOD_TAG_COUNT 미만이면 branch_tags(all) fallback.
         """
         # Primary: RPC로 기간별 통계 조회 (날짜 없으면 넓은 범위 사용)
-        rpc_start = start_date or datetime(2020, 1, 1)
-        rpc_end = end_date or datetime.now()
+        rpc_start = start_date or datetime(2020, 1, 1, tzinfo=timezone.utc)
+        rpc_end = end_date or utc_now()
         try:
             period_tags = await self.branch_tag_repo.get_tag_stats_by_period(
                 branch_id, rpc_start, rpc_end

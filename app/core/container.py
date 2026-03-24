@@ -10,6 +10,7 @@ deps.py와 백그라운드 서비스에서 공통으로 사용하는 인프라 �
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 
@@ -26,6 +27,7 @@ class ServiceContainer:
     _athena_initialized: bool = False
     _athena_lock: threading.Lock = threading.Lock()
     _realtime_pipeline: object | None = None
+    _realtime_lock: asyncio.Lock = asyncio.Lock()
     _llm_provider: object | None = None
     _llm_lock: threading.Lock = threading.Lock()
 
@@ -51,9 +53,11 @@ class ServiceContainer:
     async def get_realtime_pipeline(cls):
         """RealtimePipeline 싱글턴 반환"""
         if cls._realtime_pipeline is None:
-            from domain.pipeline import RealtimePipeline
+            async with cls._realtime_lock:
+                if cls._realtime_pipeline is None:
+                    from domain.pipeline import RealtimePipeline
 
-            cls._realtime_pipeline = RealtimePipeline()
+                    cls._realtime_pipeline = RealtimePipeline()
         return cls._realtime_pipeline
 
     @classmethod

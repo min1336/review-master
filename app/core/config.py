@@ -11,6 +11,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from urllib.parse import quote_plus
+
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -51,7 +53,7 @@ class Settings(BaseSettings):
         if self.database_url:
             return self.database_url
         if self.database_host and self.database_user:
-            password = self.database_password.get_secret_value()
+            password = quote_plus(self.database_password.get_secret_value())
             return (
                 f"postgresql+asyncpg://{self.database_user}:{password}"
                 f"@{self.database_host}:{self.database_port}/{self.database_name}"

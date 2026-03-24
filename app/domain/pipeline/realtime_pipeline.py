@@ -32,6 +32,7 @@ from repository.orm_models import (
     MonthlySentimentStatsORM,
     TagORM,
 )
+from core.timezone import utc_now
 from .pipeline import BasePipeline
 
 if TYPE_CHECKING:
@@ -109,7 +110,8 @@ class RealtimePipeline(BasePipeline):
             await self._save_results(branch_id, sentiment, tags, review_id)
 
             logger.info(
-                f"리뷰 처리 완료: branch={branch_id}, sentiment={sentiment}, tags={len(tags)}개"
+                "리뷰 처리 완료: branch=%s, sentiment=%s, tags=%s개",
+                branch_id, sentiment, len(tags),
             )
 
             return RealtimeResultDTO(
@@ -227,9 +229,7 @@ class RealtimePipeline(BasePipeline):
         2. monthly_sentiment_stats: 전체 감정 +1
         3. branch_tags: 태그별 감정 +1
         """
-        session = await self._get_session()
-
-        try:
+        async with self._session_factory() as session:
             # 1. 개별 리뷰 sentiment 업데이트
             if review_id:
                 await session.execute(
@@ -253,19 +253,12 @@ class RealtimePipeline(BasePipeline):
                     )
 
             await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
 
     async def _increment_sentiment_stats(
         self, session: AsyncSession, branch_id: int, sentiment: str
     ) -> None:
         """monthly_sentiment_stats SQL-level 증분 업데이트 (SELECT 불필요)"""
-        from datetime import datetime
-
-        period = datetime.now().strftime("%Y-%m")
+        period = utc_now().strftime("%Y-%m")
         tbl = MonthlySentimentStatsORM.__table__
 
         pos_delta = 1 if sentiment == "positive" else 0

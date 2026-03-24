@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
+from typing import Any
 
 from sqlalchemy import delete, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -105,8 +106,11 @@ class SummaryRepository(BaseRepository[Summary]):
         row = result.mappings().one_or_none()
         return self.model(**row) if row else None
 
-    async def update_field(self, branch_id: int, field: str, value) -> Summary | None:
+    async def update_field(self, branch_id: int, field: str, value: Any) -> Summary | None:
         """특정 필드만 업데이트"""
+        UPDATABLE_FIELDS = {"summary_all", "summary_1y", "summary_6m", "summary_3m", "summary_1m", "status", "keywords"}
+        if field not in UPDATABLE_FIELDS:
+            raise ValueError(f"허용되지 않는 필드: {field}")
         stmt = (
             update(BranchSummaryORM)
             .where(BranchSummaryORM.branch_id == branch_id)

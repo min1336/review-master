@@ -12,10 +12,11 @@ import argparse
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
 from sqlalchemy import text
 
-sys.path.insert(0, ".")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from repository.database import get_session_factory  # noqa: E402
 
