@@ -725,7 +725,7 @@
         .new-review-actions .btn-sm {
             padding: 4px 10px;
             font-size: 11px;
-            border: 1px solid var(--border);
+            border: 1px solid var(--grey-7);
             border-radius: 6px;
             background: white;
             cursor: pointer;
@@ -736,7 +736,7 @@
         }
 
         .new-review-actions .btn-sm:hover:not(:disabled) {
-            background: var(--bg-secondary);
+            background: var(--grey-8);
         }
 
         .new-review-actions .btn-sm:disabled {
@@ -1838,7 +1838,7 @@
         // 운영툴에서 예약 보기 + 해당 리뷰 읽음 처리
         async function openReservation(reviewId, reviewDate, dbId, isNewSection = false) {
             if (reviewId && reviewId !== '-') {
-                let url = `{{ carmore_admin_url }}/partners/Reviewmanage?sp=reservation_idx&sv=${reviewId}`;
+                let url = `{{ carmore_admin_url }}/partners/Reviewmanage?sp=reservation_idx&sv=${encodeURIComponent(reviewId)}`;
                 window.open(url, '_blank');
 
                 // 해당 리뷰 읽음 처리 (DB ID가 있는 경우)

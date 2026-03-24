@@ -915,7 +915,7 @@
 
                 registerGlobalHandlers();
 
-                console.log('Dashboard initialized (v2.0)');
+
             }
 
             async function handleToggleFavorite(branchId) {
@@ -1954,7 +1954,7 @@
 
                 try {
                     const response = await fetchRetry(
-                        `${API_PREFIX}/reports/${reportState.branchId}?start_date=${startDate}&end_date=${endDate}`,
+                        `${API_PREFIX}/reports/${reportState.branchId}?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
                         { method: 'DELETE' }
                     );
                     const result = await response.json();
@@ -2516,7 +2516,7 @@
                 const infoBar = document.getElementById('review-count-info');
                 try {
                     const resp = await fetchRetry(
-                        `${API_PREFIX}/reports/${reportState.branchId}/review-count?start_date=${reportState.startDate}&end_date=${reportState.endDate}`
+                        `${API_PREFIX}/reports/${reportState.branchId}/review-count?start_date=${encodeURIComponent(reportState.startDate)}&end_date=${encodeURIComponent(reportState.endDate)}`
                     );
                     if (!resp.ok) {
                         if (infoBar) infoBar.style.display = 'none';
@@ -2667,7 +2667,6 @@
                     setReportProgress(0);
                     reportActiveJobId = null;
                     if (error.name === 'AbortError') {
-                        console.log('Report generation aborted');
                         return;
                     }
                     console.error('Report generation error:', error);
@@ -2801,7 +2800,6 @@
                 while (pollCount < maxPolls) {
                     // 폴링 취소 확인
                     if (reportPollingController && reportPollingController.signal.aborted) {
-                        console.log('Report polling cancelled');
                         return;
                     }
 
@@ -2847,7 +2845,7 @@
             async function fetchReportData() {
                 // 생성된 리포트 데이터 가져오기
                 const response = await fetchRetry(
-                    `${API_PREFIX}/reports/${reportState.branchId}?start_date=${reportState.startDate}&end_date=${reportState.endDate}`,
+                    `${API_PREFIX}/reports/${reportState.branchId}?start_date=${encodeURIComponent(reportState.startDate)}&end_date=${encodeURIComponent(reportState.endDate)}`,
                     { signal: reportPollingController ? reportPollingController.signal : undefined }
                 );
 
@@ -2909,7 +2907,6 @@
                     setReportProgress(0);
                     reportActiveJobId = null;
                     if (error.name === 'AbortError') {
-                        console.log('Report regeneration aborted');
                         return;
                     }
                     console.error('Report regeneration error:', error);
@@ -3180,7 +3177,7 @@
                     return;
                 }
 
-                const url = `${API_PREFIX}/reports/${reportState.branchId}/pdf?start_date=${reportState.startDate}&end_date=${reportState.endDate}`;
+                const url = `${API_PREFIX}/reports/${reportState.branchId}/pdf?start_date=${encodeURIComponent(reportState.startDate)}&end_date=${encodeURIComponent(reportState.endDate)}`;
                 window.open(url, '_blank');
             }
 
@@ -3661,7 +3658,6 @@
                         sentiment,
                     });
 
-                    // debug: console.log('리뷰 API 응답:', result);
 
                     setReviewsTotal(result.total || 0);
 

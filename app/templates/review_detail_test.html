@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>리뷰 요약 테스트 - Carmore</title>
     <link rel="stylesheet" as="style" crossorigin
         href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
@@ -580,7 +580,7 @@
     </div>
 
     <script>
-        var API_PREFIX = '{{ api_prefix }}';
+        var API_PREFIX = {{ api_prefix | tojson }};
 
         // Carmore blue star SVG (exact path from carmore.kr)
         var STAR_SVG_BASE64 = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjUiIGhlaWdodD0iMjUiIHZpZXdCb3g9IjAgMCAyNSAyNSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxwYXRoIGQ9Ik03Ljk1OCAyMC45MzRjLS42OS4zOC0xLjQ5OC0uMjM0LTEuMzY2LTEuMDM4bC44NjgtNS4yOS0zLjY3NS0zLjc0NWMtLjU1OC0uNTctLjI1LTEuNTYyLjUyMi0xLjY4bDUuMDc4LS43NzEgMi4yNy00LjgxMmEuOTI0LjkyNCAwIDAgMSAxLjY5IDBsMi4yNyA0LjgxMiA1LjA3OC43NzJjLjc3Mi4xMTcgMS4wOCAxLjExLjUyMiAxLjY3OWwtMy42NzUgMy43NDYuODY4IDUuMjg5Yy4xMzIuODA0LS42NzYgMS40MTctMS4zNjYgMS4wMzhMMTIuNSAxOC40MzZsLTQuNTQyIDIuNDk4eiIgZmlsbD0iIzBENkZGQyIvPgo8L3N2Zz4K';
