@@ -41,7 +41,7 @@ jobs:
         uses: haythem/public-ip@v1.2
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -106,7 +106,7 @@ jobs:
           chmod 600 /tmp/bastion_key
           
           # SSH 연결 테스트 (verbose 모드)
-          ssh -vvv -i /tmp/bastion_key \
+          ssh -v -i /tmp/bastion_key \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
             -o ConnectTimeout=10 \
@@ -126,7 +126,7 @@ jobs:
           chmod 600 /tmp/bastion_key /tmp/prod_key
           
           # ProxyJump를 사용한 연결 테스트
-          ssh -vvv -i /tmp/prod_key \
+          ssh -v -i /tmp/prod_key \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
             -o ProxyCommand="ssh -i /tmp/bastion_key -W %h:%p -o StrictHostKeyChecking=no ${{ secrets.AWS_TM2_BASTION_USERNAME }}@${{ secrets.AWS_TM2_BASTION_HOST }}" \

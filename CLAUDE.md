@@ -1,4 +1,20 @@
-# CLAUDE.md - Rental Car Review API Standards
+# Review Summary AI
+
+Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
+
+---
+
+## Conventions — 핵심 규칙
+
+### Working Style
+
+- 변경 요청을 받으면 즉시 코딩을 시작할 것. 광범위한 확인 질문을 하지 말고 합리적인 가정을 하여 진행할 것
+- 정말 모호한 경우에만 최대 1개의 핵심 질문만 할 것
+- 명시적으로 요청된 변경만 수행할 것. 추가 개선, 리팩터링, 스타일 변경을 임의로 하지 말 것
+- UI 조정 시 언급된 특정 속성만 변경할 것
+
+### Coding Standards
+
 - Use FastAPI typed routes with Pydantic models
 - Error handling: try-except with proper status codes
 - Database: Use transaction context managers
@@ -6,102 +22,7 @@
 - Type hints required for all functions
 - Avoid nested conditionals in business logic
 
-## Working Style
-
-- 변경 요청을 받으면 즉시 코딩을 시작할 것. 광범위한 확인 질문을 하지 말고 합리적인 가정을 하여 진행할 것
-- 정말 모호한 경우에만 최대 1개의 핵심 질문만 할 것
-
-## Code Changes
-
-- 명시적으로 요청된 변경만 수행할 것. 추가 개선, 리팩터링, 스타일 변경을 임의로 하지 말 것
-- UI 조정 시 언급된 특정 속성만 변경할 것
-
-# Review Summary AI
-
-Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
-
-## Tech Stack
-
-- **Backend**: Python 3.12, FastAPI
-- **NLP**: Kiwi (한국어 형태소 분석), FastEmbed (ONNX 기반)
-- **LLM**: OpenAI GPT-4o-mini
-- **Database**: PostgreSQL (SQLAlchemy Async + asyncpg)
-- **Data**: pandas, openpyxl
-
-> **SQL 마이그레이션 규칙**: SQL 마이그레이션 생성 시 유효한 SQL만 출력할 것. 마크다운 주석, 'Step N' 어노테이션, 비-SQL 텍스트를 포함하지 말 것
-
-## Key Constants
-
-```python
-OPENAI_RPM = 3500                # API Rate Limit
-EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-SIMILARITY_THRESHOLD = 0.35      # 태그 분류 최소 유사도
-CONTEXT_WINDOW_SIZE = 50         # 감정 분석 문맥 윈도우 (글자)
-```
-
-## Project Structure
-
-- `app/main.py` — FastAPI 진입점
-- `app/api/v1/` — API 라우터 및 엔드포인트 (라우트 목록: `app/api/v1/api.py`)
-- `app/domain/analysis/` — 감정 분석, ABSA, 태그 임베딩
-- `app/domain/pipeline/` — 배치/증분 처리 파이프라인
-- `app/infrastructure/llm/` — LLM 프로바이더 (OpenAI)
-- `app/services/` — 비즈니스 로직 레이어
-- `app/repository/` — DB 접근 레이어 (SQLAlchemy AsyncSession 기반)
-- `app/repository/database.py` — 엔진/세션 팩토리, `get_session()`, `with_retry`
-- `app/repository/orm_models.py` — SQLAlchemy ORM 모델 정의
-- `app/models/` — Pydantic DB 모델
-- `app/schemas/` — API 요청/응답 DTO
-- `app/scripts/` — 운영 스크립트 (retag_reviews, run_auto_mapping 등)
-- `app/templates/` — HTML 대시보드 (dashboard_v2, analysis)
-- `app/static/js/shared-utils.js` — 공통 JS (escapeHtml, escapeAttr, showToast, apiRequest 등)
-- `app/static/css/shared-theme.css` — 공통 CSS 변수, 리셋, toast 애니메이션
-
-## Architecture
-
-```
-Request → API (endpoints) → Service → Domain/Repository → Response
-                              ↓
-                         Infrastructure (LLM)
-```
-
-## Code Principles
-
-1. **단일 책임**: 하나의 파일/함수는 하나의 역할
-2. **의존성 주입**: `deps.py`에서 서비스 생성
-3. **Repository 패턴**: Repository로 DB 접근 추상화
-4. **DTO 패턴**: 데이터 전송 객체로 타입 안전성 보장
-5. **순환 참조 방지**: 함수 내부 import 사용
-6. **에러 처리**: HTTPException으로 적절한 에러 응답
-7. **로깅**: logging 모듈로 에러 상황 기록
-
-## Environment Variables
-
-`.env` 필수: `OPENAI_API_KEY`, `LLM_PROVIDER`, `DATABASE_URL`, `API_PREFIX`
-- `DATABASE_URL`: `postgresql+asyncpg://user:pass@host:port/dbname`
-- 로컬: `API_PREFIX=/api` / 서버: `API_PREFIX=/review/api`
-
-## 태그 시스템
-
-- 8개 카테고리, 52개 세분화 태그 + "일반" fallback (상세: `app/domain/analysis/patterns.py`)
-- "일반" 태그(id=13853, category_id=8): 분류 미매핑 리뷰에 자동 부여, 평점 합산으로 감정 판정
-- 감정 판단: 규칙 패턴 매칭 + 문맥 분석, 이중부정 처리, 반전 구문(CONCESSION) 인식, 문맥 윈도우 50자
-- 동일 카테고리 충돌 해소: pos+neg 공존 시 다수결, 반전 구문 시 neg 제거
-- API Envelope: `{"success": true, "data": ..., "count": N}`
-
-## Testing
-
-- 버그 수정 시 대상 + 인접 카테고리 모두 기존 테스트 실행하여 회귀 확인
-- 수정 → 전체 테스트 → 통과 확인 순서 필수
-
-## Architecture Decisions
-
-- 데이터 정합성: DB 레벨 솔루션(트리거, 제약조건, 계산 컬럼) 우선
-- `branch_tags` 테이블: `created_at` 컬럼 없음 (count, positive/negative/neutral_count, updated_at만 존재)
-- branch_tags 재집계: `DELETE WHERE period_type='all'` + `INSERT ... ON CONFLICT DO UPDATE`
-- 명시적 요청 없이 API 측 데이터 수정 금지
-
-## Git Rules
+### Git Rules
 
 - push/PR은 사용자 허가 필수
 - main/master 직접 푸시 금지 → feature 브랜치 + PR
@@ -109,34 +30,22 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 - 커밋 메시지: `FEAT:(AI-N) 내용` 또는 `FIX:(AI-N) 내용`
 - Git Worktree: `.worktrees/` 디렉토리 사용
 
-## FastAPI 주의사항
+### Testing
 
-- 라우트 순서: 고정 경로(`/list`, `/batch`) → path parameter(`/{id}`)
+- 버그 수정 시 대상 + 인접 카테고리 모두 기존 테스트 실행하여 회귀 확인
+- 수정 → 전체 테스트 → 통과 확인 순서 필수
 
-## 프론트엔드 주의사항
+---
 
-- innerHTML 대신 DOM API 사용 (보안 훅이 XSS 경고 발생)
-- `escapeHtml` 사용 필수 (정의: `app/static/js/shared-utils.js`)
-- HTML 속성(onclick, data-*, value)에는 `escapeAttr()` 사용 (같은 파일)
-- 동적 텍스트 업데이트는 `innerHTML` 대신 `.textContent` 사용
-- 모든 템플릿은 `shared-theme.css` + `shared-utils.js`를 `{{ base_path }}`로 참조
-- CSS 변수: `shared-theme.css`에 superset 정의, 각 페이지는 로컬 오버라이드만 유지
-- let 변수: 사용 함수보다 위에 선언
-- `regenerate_report()`는 내부적으로 `generate_report()` 호출 (동일 로직)
+## Documentation Map — 문서 라우팅
 
-## 비동기 작업 패턴
-
-긴 작업(60초+)은 백그라운드 + 폴링: `POST .../async → job_id` + `GET .../job/{id}` (2초 간격)
-- `AbortController`로 모달 닫기 시 폴링 취소, 최대 60회 폴링, `updateReportProgress()` 패턴
-
-## 개발 명령어
-
-- `python -m py_compile <file.py>` — 문법 검사
-- `alembic upgrade head` — DB 마이그레이션 적용
-- `alembic revision --autogenerate -m "설명"` — 마이그레이션 생성
-- `python app/scripts/run_auto_mapping.py` — 키워드 자동 매핑
-- `PGPASSWORD=devpass psql -h localhost -p 3306 -U n8n_user -d review_summary_db` — 로컬 DB 접속
-- `cd app && ../.venv/bin/python scripts/retag_reviews.py` — 리뷰 재태깅 (app/ 에서 실행 필수)
-
-> 상세 API 엔드포인트, DB 테이블, 대시보드 UI 패턴 → `.claude/docs/reference.md` 참조
-> DB 스키마 상세 (27개 테이블 컬럼, 관계도, 데이터 흐름) → `.claude/docs/database-schema.md` 참조
+| 주제 | 문서 위치 |
+| ---- | --------- |
+| 아키텍처, 기술 스택, 디렉토리 구조, 환경변수, 코드 원칙 | `app/CLAUDE.md` |
+| API 규칙, 라우트 순서, 비동기 패턴, 엔드포인트 | `app/api/CLAUDE.md` |
+| 태그 시스템, 감정 분석, 도메인 상수 | `app/domain/CLAUDE.md` |
+| DB 규칙, 트랜잭션, 마이그레이션, branch_tags | `app/repository/CLAUDE.md` |
+| 프론트엔드 규칙, XSS 방어, CSS/JS, 대시보드 | `app/templates/CLAUDE.md` |
+| 개발 명령어, 운영 스크립트 | `app/scripts/CLAUDE.md` |
+| API 엔드포인트 전체 목록, DB 테이블 요약, UI 패턴 | `.claude/docs/reference.md` |
+| DB 스키마 상세 (27개 테이블 컬럼, 관계도, 데이터 흐름) | `.claude/docs/database-schema.md` |

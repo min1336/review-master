@@ -1622,11 +1622,6 @@ pdf = [
     { name = "weasyprint" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "ruff" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.14.0" },
@@ -1656,9 +1651,6 @@ requires-dist = [
     { name = "weasyprint", marker = "extra == 'pdf'", specifier = ">=68.0" },
 ]
 provides-extras = ["pdf", "dev"]
-
-[package.metadata.requires-dev]
-dev = [{ name = "ruff", specifier = ">=0.14.13" }]
 
 [[package]]
 name = "ruff"

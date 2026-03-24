@@ -1,7 +1,7 @@
 .PHONY: run dev up down logs clean
 
 IMAGE   := review-api:local
-COMPOSE := API_IMAGE=$(IMAGE) docker compose --env-file .env.local -f docker-compose.local.yml
+COMPOSE := API_IMAGE=$(IMAGE) docker compose --env-file .env -f docker-compose.prod.yml
 
 # 로컬 개발 서버 (hot-reload)
 dev:
