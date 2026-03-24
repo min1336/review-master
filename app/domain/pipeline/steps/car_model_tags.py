@@ -66,6 +66,7 @@ class CarModelTagAggregator:
             logger.info("car_models_master upsert 완료: %s개 모델", len(model_names))
         except Exception as e:
             logger.warning("car_models_master upsert 실패: %s", e)
+            raise
 
     async def _upsert_branch_car_models(
         self, session: AsyncSession, processed: list[ProcessedReviewDTO]

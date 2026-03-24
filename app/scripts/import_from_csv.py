@@ -1,11 +1,11 @@
 """CSV 리뷰 데이터 → 파이프라인 처리 → DB 저장
 
-data/reviewList.csv를 읽어 UnifiedPipeline을 통해 집계 테이블을 갱신합니다.
+data/review_list.csv를 읽어 UnifiedPipeline을 통해 집계 테이블을 갱신합니다.
 Athena 없이 CSV만으로 전체 파이프라인(감정/태그/키워드 분석)을 구동합니다.
 
 업데이트 테이블:
 - branch_reviews       : upsert (원본 저장) + sentiment 업데이트
-- branch_sentiment_stats: 지점별 감정 통계 증분 갱신
+- monthly_sentiment_stats: 월별 감정 통계 증분 갱신
 - branch_tags          : 지점별 태그 집계 갱신
 - keyword_mappings     : 키워드→태그 매핑 추가
 - car_model_tags       : 차종별 태그 집계 갱신
@@ -125,7 +125,7 @@ async def main() -> None:
     )
     logger.info("")
     logger.info("DB 검증 쿼리:")
-    logger.info("  SELECT branch_id, total_count, positive_ratio FROM branch_sentiment_stats ORDER BY branch_id;")
+    logger.info("  SELECT branch_id, COUNT(*) FROM monthly_sentiment_stats GROUP BY branch_id ORDER BY branch_id;")
     logger.info("  SELECT COUNT(*) FROM branch_reviews WHERE sentiment IS NOT NULL;")
 
 

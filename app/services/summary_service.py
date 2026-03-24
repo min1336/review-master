@@ -8,12 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.timezone import utc_now
 from repository.orm_models import BranchReviewORM
@@ -106,8 +104,8 @@ class SummaryService:
             )
 
             if not branch_ids_filter:
-                logging.info(
-                    f"날짜 필터 결과 없음: {review_date_from} ~ {review_date_to}"
+                logger.info(
+                    "날짜 필터 결과 없음: %s ~ %s", review_date_from, review_date_to
                 )
                 return []
 

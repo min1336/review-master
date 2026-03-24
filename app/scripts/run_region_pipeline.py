@@ -150,7 +150,7 @@ async def main() -> None:
 
     # 2. Athena에서 리뷰 조회 (content 포함)
     logger.info("Athena에서 리뷰 조회 중...")
-    reviews = fetch_reviews_from_athena(branch_ids)
+    reviews = await asyncio.to_thread(fetch_reviews_from_athena, branch_ids)
 
     if not reviews:
         logger.info("처리할 리뷰가 없습니다.")

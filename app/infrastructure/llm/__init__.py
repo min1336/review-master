@@ -7,8 +7,6 @@ Rate Limiting, 프롬프트 관리, 출력 검증
 
 from __future__ import annotations
 
-from core.config import BranchType
-
 from .base import LLMProvider, LLMResponse
 from .openai_provider import OpenAIProvider
 from .prompts import OperationalSummaryPromptBuilder, SummaryPromptBuilder
@@ -21,19 +19,13 @@ __all__ = [
     "OpenAIProvider",
     "SummaryPromptBuilder",
     "OperationalSummaryPromptBuilder",
-    "BranchType",
     "RateLimiter",
     "validate_summary",
 ]
 
 
-def get_provider(provider_type: str = None) -> LLMProvider:
-    """
-    LLM 프로바이더 반환
-
-    Args:
-        provider_type: 'openai' (기본값)
-    """
+def get_provider() -> LLMProvider:
+    """LLM 프로바이더 반환"""
     from core.container import ServiceContainer
 
     return ServiceContainer.get_llm_provider()

@@ -153,7 +153,7 @@ class KeywordManager:
             )
             await session.execute(stmt)
             logger.info(
-                f"지점 {branch_id} 키워드 {len(upsert_rows)}개 업데이트"
+                "지점 %s 키워드 %s개 업데이트", branch_id, len(upsert_rows)
             )
             return 1
 

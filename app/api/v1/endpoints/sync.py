@@ -195,7 +195,7 @@ async def api_upload_reviews(
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="빈 파일입니다")
 
-    # 3. 파싱 (파싱 후 content 해제로 메모리 절약)
+    # 4. 파싱 (파싱 후 content 해제로 메모리 절약)
     try:
         if ext == ".csv":
             raw_dicts = parse_csv_content(content)
@@ -209,12 +209,12 @@ async def api_upload_reviews(
             detail=f"파일 파싱에 실패했습니다: {e!s}",
         ) from e
 
-    # 4. 필수 컬럼 검증
+    # 5. 필수 컬럼 검증
     col_error = validate_columns(raw_dicts)
     if col_error:
         raise HTTPException(status_code=422, detail=col_error)
 
-    # 5. 한글→영문 매핑 + 행별 검증
+    # 6. 한글→영문 매핑 + 행별 검증
     raw_rows, mapped_rows, row_errors = parse_rows(raw_dicts)
 
     if not raw_rows:
@@ -224,7 +224,7 @@ async def api_upload_reviews(
             detail=f"유효한 데이터가 없습니다. 오류: {error_summary}",
         )
 
-    # 6. 비동기 작업 제출
+    # 7. 비동기 작업 제출
     result = await service.submit_job(
         raw_rows=raw_rows,
         mapped_rows=mapped_rows,

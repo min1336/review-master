@@ -98,8 +98,8 @@ class BasePipeline(ABC):
                     if is_target_pos and is_valid:
                         keywords.append(word)
                 return keywords
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Kiwi 토큰화 실패, 정규식 폴백: %s", e)
 
         # 정규식 폴백
         words = re.findall(r"[가-힣]{2,}", text)

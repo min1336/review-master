@@ -286,7 +286,7 @@ class MonthlyStatsUpdater:
                 saved += len(upsert_rows)
             except Exception as e:
                 logger.warning(
-                    f"monthly_tag_stats 배치 upsert 실패 (branch={branch_id}): {e}"
+                    "monthly_tag_stats 배치 upsert 실패 (branch=%s): %s", branch_id, e
                 )
 
         logger.info("monthly_tag_stats 저장 완료: %s건", saved)

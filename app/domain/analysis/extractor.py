@@ -5,12 +5,9 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
 
 from core.stopwords import LexiconConfig
-
-if TYPE_CHECKING:
-    from .chunker import ClauseChunker
+from domain.analysis._singletons import kiwi_tokenize
 
 
 class KeywordExtractor:
@@ -23,9 +20,9 @@ class KeywordExtractor:
 
     def __init__(
         self,
-        stopwords: set[str] = None,
+        stopwords: set[str] | None = None,
         min_length: int = 2,
-        pos_tags: list[str] = None,
+        pos_tags: list[str] | None = None,
     ):
         """
         Args:
@@ -81,7 +78,7 @@ class KeywordExtractor:
         """Kiwi를 사용한 키워드 추출"""
         try:
             keywords = []
-            for token in self.kiwi.tokenize(text):
+            for token in kiwi_tokenize(text):
                 tag = token.tag
                 word = token.form
 

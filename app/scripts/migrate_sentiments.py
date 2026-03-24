@@ -15,15 +15,18 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # 프로젝트 루트 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
     from dotenv import load_dotenv
-    load_dotenv(Path(__file__).parent.parent / ".env")
+    load_dotenv(Path(__file__).parent.parent.parent / ".env")
 except ImportError:
     pass  # dotenv 없으면 환경변수 직접 설정 필요
 
@@ -96,7 +99,8 @@ async def migrate_sentiments(
                     .values(sentiment=sentiment)
                 )
                 updated += 1
-            except Exception:
+            except Exception as e:
+                logger.warning("Review %s 처리 실패: %s", review.id, e)
                 errors += 1
                 continue
 

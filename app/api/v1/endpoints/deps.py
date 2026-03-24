@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from services.sync_job_service import SyncJobService
     from services.sync_service import SyncService
     from services.upload_job_service import UploadJobService
+    from services.pipeline_job_service import PipelineJobService
 
 
 # ============================================================
@@ -238,7 +239,7 @@ async def get_upload_job_service() -> "UploadJobService":
     return UploadJobService.get_instance()
 
 
-async def get_pipeline_job_service():
+async def get_pipeline_job_service() -> "PipelineJobService":
     from services.pipeline_job_service import PipelineJobService
 
     return PipelineJobService.get_instance()

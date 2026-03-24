@@ -297,6 +297,6 @@ class TagAggregator:
                 await session.execute(stmt)
             except Exception as e:
                 logger.warning(
-                    f"branch_tags 업데이트 실패 (branch_id={branch_id}): {e}"
+                    "branch_tags 업데이트 실패 (branch_id=%s): %s", branch_id, e
                 )
                 continue

@@ -54,12 +54,13 @@ class ReviewSentimentUpdater:
                 updated += len(review_ids)
             except Exception as e:
                 logger.warning(
-                    f"sentiment 업데이트 실패 (sentiment={sentiment}, count={len(review_ids)}): {e}"
+                    "sentiment 업데이트 실패 (sentiment=%s, count=%s): %s",
+                    sentiment, len(review_ids), e,
                 )
                 failed += len(review_ids)
                 continue
 
         logger.info(
-            f"sentiment 업데이트: 성공 {updated}, 실패 {failed}/{updated + failed}"
+            "sentiment 업데이트: 성공 %s, 실패 %s/%s", updated, failed, updated + failed
         )
         return updated

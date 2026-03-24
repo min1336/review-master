@@ -23,11 +23,11 @@ class OpenAIProvider(LLMProvider):
 
     def __init__(
         self,
-        api_key: str = None,
+        api_key: str | None = None,
         model: str = "gpt-4o-mini",
         rpm: int = 3500,
-        organization: str = None,
-        project: str = None,
+        organization: str | None = None,
+        project: str | None = None,
     ):
         """
         Args:
@@ -75,7 +75,7 @@ class OpenAIProvider(LLMProvider):
     def generate(
         self,
         prompt: str,
-        system_prompt: str = None,
+        system_prompt: str | None = None,
         max_tokens: int = 300,
         temperature: float = 0.7,
         *,
@@ -166,7 +166,7 @@ class OpenAIProvider(LLMProvider):
     async def async_generate(
         self,
         prompt: str,
-        system_prompt: str = None,
+        system_prompt: str | None = None,
         max_tokens: int = 300,
         temperature: float = 0.7,
         *,

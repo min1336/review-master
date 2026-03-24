@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ def get_kiwi():
     return _kiwi
 
 
-def kiwi_tokenize(text: str) -> list:
+def kiwi_tokenize(text: str) -> list[Any]:
     """스레드 안전한 Kiwi tokenize 래퍼.
 
     Kiwi 내부 C++ 상태는 멀티스레드 동시 접근이 안전하지 않으므로

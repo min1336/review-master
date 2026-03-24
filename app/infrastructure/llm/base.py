@@ -27,7 +27,7 @@ class LLMProvider(ABC):
     def generate(
         self,
         prompt: str,
-        system_prompt: str = None,
+        system_prompt: str | None = None,
         max_tokens: int = 300,
         temperature: float = 0.7,
     ) -> LLMResponse:
@@ -54,7 +54,7 @@ class LLMProvider(ABC):
     async def async_generate(
         self,
         prompt: str,
-        system_prompt: str = None,
+        system_prompt: str | None = None,
         max_tokens: int = 300,
         temperature: float = 0.7,
     ) -> LLMResponse:

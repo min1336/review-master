@@ -44,7 +44,7 @@ class TagEmbeddingManager:
             {태그명: 임베딩벡터} 딕셔너리
         """
         if self.model is None:
-            msg = "모델이 설정되지 않았습니다. set_model()을 먼저 호출하세요."
+            msg = "모델이 설정되지 않았습니다. 생성자에 model 인자를 전달하세요."
             raise RuntimeError(msg)
 
         logger.info("태그 임베딩 계산 중...")
@@ -104,7 +104,7 @@ class TagEmbeddingManager:
             return None
 
         try:
-            data = np.load(self.cache_path)
+            data = np.load(self.cache_path, allow_pickle=False)
             embeddings = {key: data[key] for key in data.files}
             logger.info("태그 임베딩 로드 완료: %s개 그룹", len(embeddings))
             return embeddings

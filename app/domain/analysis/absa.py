@@ -476,7 +476,7 @@ class RuleBasedABSA:
     # =========================================================================
 
     def classify_review(
-        self, review: str, keywords: list[str] = None
+        self, review: str, keywords: list[str] | None = None
     ) -> dict[str, dict[str, list[str]]]:
         """
         HybridClassifier 호환 API

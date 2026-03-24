@@ -138,7 +138,7 @@ async def main() -> None:
             if existing:
                 data = existing.model_dump() if hasattr(existing, 'model_dump') else existing
                 if any(data.get(f) for f in ["summary_1m", "summary_3m", "summary_6m", "summary_1y", "summary_all"]):
-                    success_count += 1
+                    skip_count += 1
                     logger.info(
                         "  [%d/%d] 지점 %d — 이미 요약 있음 (skip)",
                         idx + 1, len(target_branches), branch_info["branch_id"],

@@ -13,7 +13,6 @@ import re
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from domain.analysis.patterns import AFFILIATE_CATEGORIES, VEHICLE_CATEGORIES
 
 if TYPE_CHECKING:
     from repository.review_repository import BranchReviewRepository
@@ -284,7 +283,7 @@ class ReportAIGenerator:
                     saved_summary = summary_data.get(field)
                     if saved_summary:
                         logger.info(
-                            f"DB 저장 요약 사용: branch_id={branch_id}, field={field}"
+                            "DB 저장 요약 사용: branch_id=%s, field=%s", branch_id, field
                         )
                         return saved_summary
         except Exception as e:
@@ -410,7 +409,7 @@ class ReportAIGenerator:
         )
         if not is_content_valid:
             logger.warning(
-                f"리포트 내용 검증 경고 (branch_id={branch_id}): {content_warnings}"
+                "리포트 내용 검증 경고 (branch_id=%s): %s", branch_id, content_warnings
             )
 
     @staticmethod

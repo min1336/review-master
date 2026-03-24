@@ -172,7 +172,7 @@ class SummaryGenerator:
             await self.summary_repo.set_pending_summary(branch_id, current_pending)
 
             logger.info(
-                f"Pending 요약 생성 완료: branch_id={branch_id}, period={generated_period}"
+                "Pending 요약 생성 완료: branch_id=%s, period=%s", branch_id, generated_period
             )
 
             return {
@@ -292,8 +292,8 @@ class SummaryGenerator:
                 logger.warning("감정 통계 조회 실패 (branch_id=%s): %s", branch_id, e)
                 try:
                     await self.sentiment_repo.rollback()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("rollback 실패: %s", e)
 
         return grouped_tag_sentiments, sentiment_stats
 
@@ -315,8 +315,8 @@ class SummaryGenerator:
             logger.warning("태그 조회 실패 (branch_id=%s): %s", branch_id, e)
             try:
                 await self.branch_tag_repo.rollback()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("rollback 실패: %s", e)
             return []
 
     async def _fetch_tags_from_monthly(
@@ -528,7 +528,7 @@ class SummaryGenerator:
         is_valid, errors = validate_summary(generated_summary, mode=validation_mode)
         if not is_valid:
             logger.warning(
-                f"검증 실패 (branch_id={branch_id}, mode={mode}): {errors}"
+                "검증 실패 (branch_id=%s, mode=%s): %s", branch_id, mode, errors
             )
         return generated_summary
 
@@ -549,7 +549,7 @@ class SummaryGenerator:
                     save_data[f] = None
             await self.summary_repo.upsert_by_branch_id(save_data)
             logger.info(
-                f"요약 저장 완료: branch_id={branch_id}, period={period_key}, mode={mode}"
+                "요약 저장 완료: branch_id=%s, period=%s, mode=%s", branch_id, period_key, mode
             )
         except Exception as e:
             logger.error("요약 저장 실패 (branch_id=%s): %s", branch_id, e)

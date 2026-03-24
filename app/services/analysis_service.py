@@ -426,6 +426,7 @@ class AnalysisService:
 
         from openpyxl import Workbook
         from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        from openpyxl.utils import get_column_letter
 
         # 최대 10000개까지 내보내기
         result = await self.get_filtered_reviews(
@@ -500,7 +501,7 @@ class AnalysisService:
         # 열 너비 조정
         column_widths = [8, 12, 15, 20, 12, 8, 12, 12, 12, 60]
         for col, width in enumerate(column_widths, 1):
-            ws.column_dimensions[chr(64 + col)].width = width
+            ws.column_dimensions[get_column_letter(col)].width = width
 
         output = io.BytesIO()
         wb.save(output)

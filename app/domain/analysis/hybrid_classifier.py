@@ -394,7 +394,7 @@ class HybridClassifier:
         return results
 
     def classify_review(
-        self, review: str, keywords: list[str] = None
+        self, review: str, keywords: list[str] | None = None
     ) -> dict[str, dict[str, list[str]]]:
         """
         리뷰와 키워드를 결합 분석
@@ -464,7 +464,7 @@ class HybridClassifier:
 
         return resolved
 
-    def get_review_summary(self, review: str, keywords: list[str] = None) -> dict:
+    def get_review_summary(self, review: str, keywords: list[str] | None = None) -> dict:
         """
         리뷰 분석 요약 반환
 

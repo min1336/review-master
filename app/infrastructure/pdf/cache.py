@@ -8,6 +8,7 @@ NullCache(캐싱 없음)와 InMemoryPdfCache(인메모리 TTL 캐시)를 제공�
 
 from __future__ import annotations
 
+import threading
 import time
 from abc import ABC, abstractmethod
 
@@ -54,25 +55,29 @@ class InMemoryPdfCache(PDFCacheStrategy):
         self._max_size = max_size
         # key -> (timestamp, data)
         self._store: dict[str, tuple[float, bytes]] = {}
+        self._lock = threading.Lock()
 
     def get(self, key: str) -> bytes | None:
-        entry = self._store.get(key)
-        if entry is None:
-            return None
-        timestamp, data = entry
-        if time.monotonic() - timestamp > self._ttl:
-            del self._store[key]
-            return None
-        return data
+        with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            timestamp, data = entry
+            if time.monotonic() - timestamp > self._ttl:
+                del self._store[key]
+                return None
+            return data
 
     def put(self, key: str, data: bytes) -> None:
-        if key in self._store:
-            del self._store[key]
-        elif len(self._store) >= self._max_size:
-            # LRU: 가장 오래된 항목 제거 (삽입 순서 기준)
-            oldest_key = next(iter(self._store))
-            del self._store[oldest_key]
-        self._store[key] = (time.monotonic(), data)
+        with self._lock:
+            if key in self._store:
+                del self._store[key]
+            elif len(self._store) >= self._max_size:
+                # LRU: 가장 오래된 항목 제거 (삽입 순서 기준)
+                oldest_key = next(iter(self._store))
+                del self._store[oldest_key]
+            self._store[key] = (time.monotonic(), data)
 
     def invalidate(self, key: str) -> None:
-        self._store.pop(key, None)
+        with self._lock:
+            self._store.pop(key, None)

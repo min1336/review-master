@@ -2,6 +2,21 @@ from __future__ import annotations
 
 import re
 
+_EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001f600-\U0001f64f"  # emoticons (smileys)
+    "\U0001f300-\U0001f5ff"  # symbols & pictographs
+    "\U0001f680-\U0001f6ff"  # transport & map
+    "\U0001f1e0-\U0001f1ff"  # flags
+    "\U0001f900-\U0001f9ff"  # supplemental symbols
+    "\U0001fa00-\U0001fa6f"  # chess symbols
+    "\U0001fa70-\U0001faff"  # symbols extended-A
+    "\U00002600-\U000026ff"  # misc symbols (sun, moon, etc.)
+    "\U00002700-\U000027bf"  # dingbats (arrows, etc.)
+    "]+",
+    flags=re.UNICODE,
+)
+
 # 금지어 목록
 FORBIDDEN_WORDS = [
     "최고",
@@ -131,22 +146,7 @@ def _has_markdown_or_emoji(text: str) -> bool:
             return True
 
     # 이모지 체크 (정확한 유니코드 이모지 범위만)
-    emoji_pattern = re.compile(
-        "["
-        "\U0001f600-\U0001f64f"  # emoticons (smileys)
-        "\U0001f300-\U0001f5ff"  # symbols & pictographs
-        "\U0001f680-\U0001f6ff"  # transport & map
-        "\U0001f1e0-\U0001f1ff"  # flags
-        "\U0001f900-\U0001f9ff"  # supplemental symbols
-        "\U0001fa00-\U0001fa6f"  # chess symbols
-        "\U0001fa70-\U0001faff"  # symbols extended-A
-        "\U00002600-\U000026ff"  # misc symbols (sun, moon, etc.)
-        "\U00002700-\U000027bf"  # dingbats (arrows, etc.)
-        "]+",
-        flags=re.UNICODE,
-    )
-
-    return bool(emoji_pattern.search(text))
+    return bool(_EMOJI_PATTERN.search(text))
 
 
 def strip_markdown_formatting(text: str) -> str:

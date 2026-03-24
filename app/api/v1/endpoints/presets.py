@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, Query
 
 from schemas.report import (
     PromptPresetCreate,
-    PromptPresetResponse,
     PromptPresetUpdate,
 )
 from services.preset_service import PresetService
@@ -23,7 +22,7 @@ router = APIRouter(tags=["presets"])
 async def list_presets(
     branch_type: str | None = Query(None, pattern="^(airport|tourist|city)$"),
     service: PresetService = Depends(get_preset_service),
-):
+) -> dict:
     """프리셋 목록 조회"""
     presets = await service.list_presets(branch_type)
     return {"success": True, "data": presets, "count": len(presets)}
@@ -36,7 +35,7 @@ async def list_presets(
 async def get_preset(
     preset_id: int,
     service: PresetService = Depends(get_preset_service),
-):
+) -> dict:
     """프리셋 상세 조회"""
     preset = await service.get_preset(preset_id)
     return {"success": True, "data": preset}
@@ -50,7 +49,7 @@ async def get_preset(
 async def create_preset(
     body: PromptPresetCreate,
     service: PresetService = Depends(get_preset_service),
-):
+) -> dict:
     """프리셋 생성"""
     data = body.model_dump(exclude_none=True)
     preset = await service.create_preset(data)
@@ -65,7 +64,7 @@ async def update_preset(
     preset_id: int,
     body: PromptPresetUpdate,
     service: PresetService = Depends(get_preset_service),
-):
+) -> dict:
     """프리셋 수정"""
     data = body.model_dump(exclude_unset=True)
     preset = await service.update_preset(preset_id, data)
@@ -79,7 +78,7 @@ async def update_preset(
 async def delete_preset(
     preset_id: int,
     service: PresetService = Depends(get_preset_service),
-):
+) -> dict:
     """프리셋 삭제"""
     await service.delete_preset(preset_id)
     return {"success": True, "data": None}

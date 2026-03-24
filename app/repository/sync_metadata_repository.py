@@ -129,8 +129,8 @@ class SyncMetadataRepository:
 
             if result.rowcount > 0:
                 logger.warning(
-                    f"Stale lock released for {sync_type} "
-                    f"(timeout: {LOCK_TIMEOUT_MINUTES}min)"
+                    "Stale lock released for %s (timeout: %smin)",
+                    sync_type, LOCK_TIMEOUT_MINUTES
                 )
         except Exception as e:
             logger.debug("Failed to release stale lock: %s", e)
