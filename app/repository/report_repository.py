@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import delete, func, select, update
@@ -234,22 +234,22 @@ class ReportRepository:
     async def delete_by_branch_and_period(
         self,
         branch_id: int,
-        period_start: datetime,
-        period_end: datetime,
+        period_start: date | datetime,
+        period_end: date | datetime,
     ) -> bool:
         """특정 지점의 기간별 리포트 삭제"""
         try:
+            start = period_start.date() if isinstance(period_start, datetime) else period_start
+            end = period_end.date() if isinstance(period_end, datetime) else period_end
             stmt = (
                 delete(BranchReportORM)
                 .where(BranchReportORM.branch_id == branch_id)
-                .where(BranchReportORM.period_start == period_start.date())
-                .where(BranchReportORM.period_end == period_end.date())
+                .where(BranchReportORM.period_start == start)
+                .where(BranchReportORM.period_end == end)
             )
             await self._session.execute(stmt)
-            await self._session.commit()
             return True
         except Exception as e:
-            await self._session.rollback()
             logger.error(
                 "리포트 삭제 실패 (branch: %s, period: %s ~ %s): %s",
                 branch_id, period_start, period_end, e

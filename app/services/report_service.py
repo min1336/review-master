@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import date, datetime
 
 from typing import TYPE_CHECKING, Awaitable, Callable
 
@@ -855,8 +855,8 @@ class ReportService:
     async def delete_report(
         self,
         branch_id: int,
-        start_date: datetime,
-        end_date: datetime,
+        start_date: date | datetime,
+        end_date: date | datetime,
     ) -> bool:
         """
         리포트 삭제

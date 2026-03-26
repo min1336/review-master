@@ -305,8 +305,8 @@ async def api_delete_report(
 
     deleted = await service.delete_report(
         branch_id,
-        date_to_utc(start_date),
-        date_to_utc(end_date, end_of_day=True),
+        start_date,
+        end_date,
     )
     if not deleted:
         raise HTTPException(status_code=404, detail="삭제할 리포트를 찾을 수 없습니다.")
