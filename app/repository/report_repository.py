@@ -246,8 +246,10 @@ class ReportRepository:
                 .where(BranchReportORM.period_end == period_end.date())
             )
             await self._session.execute(stmt)
+            await self._session.commit()
             return True
         except Exception as e:
+            await self._session.rollback()
             logger.error(
                 "리포트 삭제 실패 (branch: %s, period: %s ~ %s): %s",
                 branch_id, period_start, period_end, e
