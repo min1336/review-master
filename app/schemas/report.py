@@ -281,12 +281,9 @@ class BenchmarkData(BaseModel):
     """벤치마크 비교 섹션"""
     branch_rating: float = 0.0
     regional_avg_rating: float = 0.0
-    national_avg_rating: float = 0.0
     regional_rank_pct: int = 0              # 지역 내 상위 N%
-    national_rank_pct: int = 0              # 전국 상위 N%
     region_name: str = ""
     total_branches_in_region: int = 0
-    total_branches_national: int = 0
 
 
 class PriorityAction(BaseModel):

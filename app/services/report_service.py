@@ -449,19 +449,12 @@ class ReportService:
         if not region_data:
             return None
 
-        all_ratings = [r["avg_rating"] for r in region_data if r.get("avg_rating")]
         regional_ratings = [
             r["avg_rating"] for r in region_data
             if r.get("avg_rating") and r.get("region") == region_name
         ]
 
-        national_avg = round(sum(all_ratings) / len(all_ratings), 2) if all_ratings else 0.0
         regional_avg = round(sum(regional_ratings) / len(regional_ratings), 2) if regional_ratings else 0.0
-
-        national_rank_pct = 0
-        if all_ratings and branch_rating > 0:
-            higher_count = sum(1 for r in all_ratings if r > branch_rating)
-            national_rank_pct = round(higher_count / len(all_ratings) * 100)
 
         regional_rank_pct = 0
         if regional_ratings and branch_rating > 0:
@@ -471,12 +464,9 @@ class ReportService:
         return BenchmarkData(
             branch_rating=branch_rating,
             regional_avg_rating=regional_avg,
-            national_avg_rating=national_avg,
             regional_rank_pct=regional_rank_pct,
-            national_rank_pct=national_rank_pct,
             region_name=region_name or "",
             total_branches_in_region=len(regional_ratings),
-            total_branches_national=len(all_ratings),
         )
 
     def _compute_priority_actions(self, tags: dict) -> "list[PriorityAction]":

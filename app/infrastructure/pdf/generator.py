@@ -293,30 +293,24 @@ class PDFGenerator:
         bm = report.benchmark
         self._section(pdf, font, "5. 벤치마크")
 
-        col_third = (w - 8) / 3
+        col_half = (w - 4) / 2
         pdf.set_font(font, "B", 8)
-        pdf.cell(col_third, row, "이 지점", align="C")
+        pdf.cell(col_half, row, "이 지점", align="C")
         pdf.set_x(pdf.get_x() + 4)
-        pdf.cell(col_third, row, f"{bm.region_name or '지역'} 평균", align="C")
-        pdf.set_x(pdf.get_x() + 4)
-        pdf.cell(col_third, row, "전국 평균", align="C")
+        pdf.cell(col_half, row, f"{bm.region_name or '지역'} 평균", align="C")
         pdf.ln(row)
 
         pdf.set_font(font, "B", 12)
-        pdf.cell(col_third, 7, f"{bm.branch_rating:.1f}", align="C")
+        pdf.cell(col_half, 7, f"{bm.branch_rating:.1f}", align="C")
         pdf.set_x(pdf.get_x() + 4)
-        pdf.cell(col_third, 7, f"{bm.regional_avg_rating:.1f}", align="C")
-        pdf.set_x(pdf.get_x() + 4)
-        pdf.cell(col_third, 7, f"{bm.national_avg_rating:.1f}", align="C")
+        pdf.cell(col_half, 7, f"{bm.regional_avg_rating:.1f}", align="C")
         pdf.ln(7)
 
         pdf.set_font(font, "", 7)
         pdf.set_text_color(100, 100, 100)
-        pdf.cell(col_third, row, "", align="C")
+        pdf.cell(col_half, row, "", align="C")
         pdf.set_x(pdf.get_x() + 4)
-        pdf.cell(col_third, row, f"상위 {bm.regional_rank_pct}% ({bm.total_branches_in_region}개 지점)", align="C")
-        pdf.set_x(pdf.get_x() + 4)
-        pdf.cell(col_third, row, f"상위 {bm.national_rank_pct}% ({bm.total_branches_national}개 지점)", align="C")
+        pdf.cell(col_half, row, f"상위 {bm.regional_rank_pct}% ({bm.total_branches_in_region}개 지점)", align="C")
         pdf.ln(row)
         pdf.set_text_color(0, 0, 0)
 

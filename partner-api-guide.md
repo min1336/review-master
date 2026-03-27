@@ -250,12 +250,9 @@ GET /reports/{branch_id}?start_date={YYYY-MM-DD}&end_date={YYYY-MM-DD}
     "benchmark": {
       "branch_rating": 4.2,
       "regional_avg_rating": 3.8,
-      "national_avg_rating": 4.0,
       "regional_rank_pct": 25,
-      "national_rank_pct": 30,
       "region_name": "서울",
-      "total_branches_in_region": 40,
-      "total_branches_national": 200
+      "total_branches_in_region": 40
     },
 
     "negative_reviews": [
