@@ -192,15 +192,11 @@ async def global_exception_handler(request: Request, exc: Exception) -> TZAwareJ
 from api.v1.api import api_router
 from api.v1.endpoints.pages import router as pages_router
 from api.v1.endpoints.public import summary_router as public_summary_router
-from api.v1.endpoints.public import report_router as public_report_router
-from api.v2.endpoints.public_report import router as public_report_v2_router
 
 # API 라우터 (/api/*)
 app.include_router(api_router, prefix="/api")
 
-# Public API 라우터 - 외부 연동용 (구체적 경로를 먼저 등록)
-app.include_router(public_report_v2_router, prefix="/public/v2/report")  # v2: HTML 렌더링 완료
-app.include_router(public_report_router, prefix="/public/report")  # v1: 기존 JSON
+# Public API 라우터 - 외부 연동용
 app.include_router(public_summary_router, prefix="/review")   # 기존 n8n 호환
 app.include_router(public_summary_router, prefix="/public")   # 신규 깔끔한 경로
 
