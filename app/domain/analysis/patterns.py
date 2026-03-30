@@ -662,18 +662,18 @@ RULE_BASED_TAG_MAPPING: dict[str, list[str]] = {
     for tag_name, meta in cat.tags.items()
 }
 
-# 7개 카테고리 → 소속 태그의 키워드 전체 (ABSA 절 단위 aspect 탐지용)
+# 9개 카테고리 → 소속 태그의 키워드 전체 (ABSA 절 단위 aspect 탐지용)
 ASPECT_KEYWORDS: dict[str, list[str]] = {
     cat_name: [kw for tag in cat.tags.values() for kw in tag.keywords]
     for cat_name, cat in TAG_REGISTRY.items()
 }
 
-# 7개 카테고리 → 임베딩 계산용 설명문
+# 9개 카테고리 → 임베딩 계산용 설명문
 TAG_DESCRIPTIONS: dict[str, str] = {
     cat_name: cat.description for cat_name, cat in TAG_REGISTRY.items()
 }
 
-# 7개 카테고리 → UI 색상
+# 9개 카테고리 → UI 색상
 TAG_COLORS: dict[str, str] = {
     cat_name: cat.color for cat_name, cat in TAG_REGISTRY.items()
 }
@@ -732,7 +732,7 @@ def resolve_tag_category(tag_name: str, db_category: str = "") -> str:
         return TAG_TO_CATEGORY[tag_name]
     return normalize_category_name(db_category)
 
-# 7개 카테고리 → 긍정/부정 표시 문장
+# 9개 카테고리 → 긍정/부정 표시 문장
 CATEGORY_POSITIVE_LABELS: dict[str, str] = {
     cat_name: cat.positive_label for cat_name, cat in TAG_REGISTRY.items()
 }
