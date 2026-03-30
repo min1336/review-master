@@ -32,9 +32,17 @@ GET  .../job/{id} → status + progress (2초 간격 폴링)
 
 | Prefix | 역할 |
 | ------ | ---- |
-| `/api/v2/summaries` | 요약 CRUD |
+| `/api/summaries` | 요약 CRUD |
 | `/api/tags` | 태그 관리 |
 | `/api/sentiment` | 감정 통계 |
 | `/api/analysis` | 필터링 분석 |
-| `/api/v2/report` | 리포트 생성/조회 |
-| `/`, `/analysis`, `/tag-tester` | 페이지 라우트 |
+| `/api/reports` | 리포트 생성/조회 |
+| `/api/presets` | 프롬프트 프리셋 CRUD |
+| `/api/sync` | 리뷰 동기화 |
+| `/api/upload` | Excel/CSV 업로드 |
+| `/api/realtime` | 실시간 리뷰 처리 |
+| `/api/pipeline` | 파이프라인 콘솔 |
+| `/api/n8n` | n8n 웹훅 연동 |
+| `/api/n8n/scheduler` | n8n 스케줄러 관리 |
+| `/public`, `/review` | Public 요약 API |
+| `/`, `/analysis` | 페이지 라우트 |

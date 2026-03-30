@@ -38,7 +38,7 @@ Request → API (endpoints) → Service → Domain/Repository → Response
 ## Code Principles
 
 1. **단일 책임**: 하나의 파일/함수는 하나의 역할
-2. **의존성 주입**: `core/deps.py`에서 서비스 생성
+2. **의존성 주입**: `api/v1/endpoints/deps.py`에서 서비스 생성
 3. **Repository 패턴**: Repository로 DB 접근 추상화
 4. **DTO 패턴**: 데이터 전송 객체로 타입 안전성 보장
 5. **순환 참조 방지**: 함수 내부 import 사용

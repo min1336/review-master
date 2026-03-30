@@ -4,6 +4,11 @@ Carmore 렌트카 리뷰를 자동 분석하고 요약하는 운영팀용 대시
 
 22만 건 이상의 고객 리뷰를 NLP로 분석하여 태그 분류, 감정 판단, AI 요약 리포트를 생성한다.
 
+### 관련 문서
+
+- [`review-summary-design.md`](review-summary-design.md) — 기술 설계 문서 (Diataxis 프레임워크 기반)
+- [`partner-api-guide.md`](partner-api-guide.md) — 파트너 API 연동 가이드
+
 ---
 
 ## 목차
@@ -34,10 +39,12 @@ cd Review_Summary_AI
 uv sync
 
 # 3. 환경변수 설정
-cp .env.template .env
-# .env 파일을 열어 값 채우기 (아래 '환경변수' 섹션 참조)
+# .env 파일을 생성하고 아래 '환경변수' 섹션 참조
 
-# 4. 개발 서버 실행
+# 4. DB 마이그레이션
+alembic upgrade head
+
+# 5. 개발 서버 실행
 make dev
 # → http://localhost:8000
 ```
@@ -173,7 +180,7 @@ pytest -v
 
 ### 태그 시스템
 
-- **7개 카테고리**: 직원이 친절함, 사고 처리를 잘해줌, 주유비 부담 없음, 가격이 저렴함, 차량이 청결함, 차량외관이 좋음, 배달 서비스가 우수함
+- **9개 카테고리**: 직원친절, 외관, 가격, 청결, 사고 처리, 주유비, 배달/배차, 반납/픽업, 위치/접근성
 - **52개 세분화 태그**: 각 카테고리 하위에 매핑
 - **1개 일반 fallback**: 분류 불가 시 "일반" 태그 할당
 
@@ -183,7 +190,7 @@ pytest -v
 
 하이브리드 방식으로 리뷰 내 키워드별 감정(긍정/부정/중립)을 판단한다.
 
-- **규칙 기반**: 100+ 부정 키워드 패턴 (`불친절`, `비싸`, `냄새` 등)
+- **규칙 기반**: 약 120개 부정 키워드 패턴 (`불친절`, `비싸`, `냄새` 등)
 - **문맥 분석**: 키워드 앞뒤 50자 윈도우
 - **이중부정 처리**: `불편함이 없다` → 긍정
 - **반전 구문 처리**: `~지만`, `~는데` → 뒷절 감정 우선
@@ -243,7 +250,7 @@ app/
 ├── main.py                          # FastAPI 진입점, lifespan
 ├── api/v1/
 │   ├── api.py                       # 라우터 등록
-│   └── endpoints/                   # 18개 라우트 파일
+│   └── endpoints/                   # 엔드포인트 모듈
 │       ├── summaries.py             #   요약 CRUD, 승인
 │       ├── report.py                #   리포트 조회, PDF
 │       ├── report_generate.py       #   리포트 비동기 생성
@@ -257,7 +264,7 @@ app/
 │       ├── pages.py                 #   HTML 페이지 라우트
 │       ├── public_report.py         #   Public API (리포트)
 │       └── ...
-├── services/                        # 비즈니스 로직 (14개 서비스)
+├── services/                        # 비즈니스 로직 레이어
 ├── domain/
 │   ├── analysis/                    # NLP 분석 모듈
 │   │   ├── patterns.py              #   감정 패턴 (120+ 규칙)
@@ -273,9 +280,8 @@ app/
 ├── infrastructure/
 │   ├── llm/                         # OpenAI 연동
 │   ├── pdf/                         # PDF 생성
-│   ├── athena/                      # AWS Athena 쿼리
-│   └── storage/                     # 파일 스토리지
-├── repository/                      # DB 접근 (11개 리포지토리)
+│   └── athena/                      # AWS Athena 쿼리 (athena_client.py)
+├── repository/                      # DB 접근 레이어
 ├── models/                          # Pydantic DB 모델
 ├── schemas/                         # API 요청/응답 DTO
 ├── core/
@@ -286,7 +292,7 @@ app/
 ├── templates/                       # HTML 대시보드 (Jinja2)
 ├── static/                          # CSS, JS
 └── scripts/                         # 운영 스크립트
-tests/                               # 26개 테스트 파일
+tests/                               # 테스트 스위트
 ddl/                                 # DB 마이그레이션 SQL
 ```
 
@@ -300,19 +306,18 @@ ddl/                                 # DB 마이그레이션 SQL
 
 | 그룹 | 메서드 | 경로 | 설명 |
 |------|--------|------|------|
-| **요약** | GET | `/api/v2/summaries` | 요약 목록 (필터/정렬) |
-| | GET | `/api/v2/summaries/{id}` | 요약 상세 |
-| | POST | `/api/v2/summaries/{id}/regenerate` | AI 재생성 |
-| **리포트** | POST | `/api/v2/report/{id}/generate/async` | 비동기 리포트 생성 |
-| | GET | `/api/v2/report/{id}/job/{job_id}` | 작업 상태 폴링 |
-| | GET | `/api/v2/report/{id}/pdf` | PDF 다운로드 |
+| **요약** | GET | `/api/summaries` | 요약 목록 (필터/정렬) |
+| | GET | `/api/summaries/{branch_id}` | 요약 상세 |
+| | POST | `/api/summaries/{branch_id}/regenerate` | AI 재생성 |
+| **리포트** | POST | `/api/reports/{branch_id}/generate/async` | 비동기 리포트 생성 |
+| | GET | `/api/reports/{branch_id}/job/{job_id}` | 작업 상태 폴링 |
+| | GET | `/api/reports/{branch_id}/pdf` | PDF 다운로드 |
 | **태그** | GET | `/api/tags/list` | 태그 목록 |
-| | POST | `/api/tags/analyze-tags` | 텍스트 태그 분석 |
 | **감정** | GET | `/api/sentiment/stats` | 지점별 감정 통계 |
 | **분석** | GET | `/api/analysis/reviews` | 필터링 리뷰 조회 |
 | | GET | `/api/analysis/reviews/export` | Excel 내보내기 |
 | **동기화** | POST | `/api/sync/reviews` | 리뷰 동기화 실행 |
-| **Public** | GET | `/public/report/{branch_id}` | 외부 리포트 (X-API-Key) |
+| **Public** | GET | `/public/{branch_id}` | 외부 지점 요약 (X-API-Key) |
 
 ### 인증 방식
 
@@ -320,7 +325,7 @@ ddl/                                 # DB 마이그레이션 SQL
 |------|------|
 | 대시보드 페이지 | 세션 기반 (`POST /login`) |
 | 내부 API | `INTERNAL_API_KEY` 헤더 |
-| Public API | `X-API-Key` 헤더 |
+| Public API | `X-API-Key: PUBLIC_API_KEY` 헤더 |
 
 ---
 
@@ -331,9 +336,8 @@ ddl/                                 # DB 마이그레이션 SQL
 | `/login` | 로그인 |
 | `/` | 메인 대시보드 - 지점 요약 목록, 통계, 리포트 |
 | `/analysis` | 리뷰 분석 - 필터링, 검색, Excel 내보내기 |
-| `/pipeline` | 파이프라인 콘솔 - 배치/지역별 처리 모니터링 |
-| `/scheduler` | 스케줄러 관리 - 워크플로우, 그룹 관리 |
-| `/tag-tester` | 태그 테스트 - 텍스트 입력 → 태그/감정 결과 확인 |
+| `/pipeline-console` | 파이프라인 콘솔 - 배치/지역별 처리 모니터링 |
+| `/scheduler` | 스케줄러 관리 |
 
 ---
 

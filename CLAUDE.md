@@ -48,4 +48,6 @@ Carmore 렌트카 리뷰 요약 시스템 - 운영팀 모니터링 대시보드
 | 프론트엔드 규칙, XSS 방어, CSS/JS, 대시보드 | `app/templates/CLAUDE.md` |
 | 개발 명령어, 운영 스크립트 | `app/scripts/CLAUDE.md` |
 | API 엔드포인트 전체 목록, DB 테이블 요약, UI 패턴 | `.claude/docs/reference.md` |
-| DB 스키마 상세 (27개 테이블 컬럼, 관계도, 데이터 흐름) | `.claude/docs/database-schema.md` |
+| DB 스키마 상세 (테이블 컬럼, 관계도, 데이터 흐름) | `.claude/docs/database-schema.md` |
+| 파트너 프론트엔드 API 연동 | `partner-api-guide.md` |
+| 기술 설계 (Diataxis 4파트) | `review-summary-design.md` |

@@ -18,7 +18,13 @@
 
 ## 인증
 
-현재 별도 인증 없음. 추후 API Key 인증이 추가될 수 있습니다.
+모든 API 요청에 `X-API-Key` 헤더가 필요합니다.
+
+```
+X-API-Key: {발급받은 PUBLIC_API_KEY}
+```
+
+API Key는 Carmore 운영팀에서 발급합니다.
 
 ---
 
@@ -78,7 +84,6 @@ GET /reports/{branch_id}/review-count?start_date={YYYY-MM-DD}&end_date={YYYY-MM-
 **응답 예시**
 
 ```json
-// 예시 데이터 — 실제 값은 지점/기간에 따라 다릅니다
 {
   "success": true,
   "data": {
@@ -148,7 +153,6 @@ Content-Type: application/json
 **응답 예시 (202)**
 
 ```json
-// 예시 데이터
 {
   "success": true,
   "data": {
@@ -167,7 +171,6 @@ GET /reports/{branch_id}/job/{job_id}
 **응답 예시**
 
 ```json
-// 예시 데이터
 {
   "success": true,
   "data": {
