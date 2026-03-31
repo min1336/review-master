@@ -130,8 +130,8 @@ class PDFGenerator:
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.add_page()
 
-        m = 15
-        w = 180
+        m = 10
+        w = 190
         pdf.set_left_margin(m)
         pdf.set_right_margin(m)
 

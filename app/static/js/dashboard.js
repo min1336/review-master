@@ -3098,7 +3098,7 @@
                             el('td', { style: rTd, textContent: String(r.rating_car || '') }),
                             el('td', { style: rTd, textContent: String(r.rating_convenience || '') }),
                             el('td', { style: { padding: '4px 4px', fontSize: '10px', color: 'var(--grey-4)', borderBottom: '1px solid var(--grey-7)', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, textContent: r.vehicle_model || '-' }),
-                            el('td', { style: { padding: '4px 6px', fontSize: '12px', color: 'var(--grey-3)', borderBottom: '1px solid var(--grey-7)', lineHeight: '1.5', whiteSpace: 'pre-line' }, textContent: (r.content || '').replace(/<br\s*\/?>/gi, '\n') })
+                            el('td', { style: { padding: '4px 6px', fontSize: '10px', color: 'var(--grey-3)', borderBottom: '1px solid var(--grey-7)', lineHeight: '1.4', whiteSpace: 'pre-line' }, textContent: (r.content || '').replace(/<br\s*\/?>/gi, '\n') })
                         ]));
                     });
                     body.appendChild(el('div', { className: 'report-section' }, [
