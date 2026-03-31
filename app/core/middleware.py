@@ -26,7 +26,7 @@ logger = logging.getLogger("app.request")
 _SKIP_PREFIXES = ("/static/", "/favicon.ico")
 
 # Content-Security-Policy — XSS 방어 (외부 리소스 로딩 제한)
-# unsafe-inline: 대시보드 템플릿의 인라인 스크립트/스타일 허용
+# unsafe-inline: 대시보드 템플릿의 인라인 스크립트/스타일에 필요
 # cdn.jsdelivr.net: Pretendard 폰트, flatpickr 등 CDN 리소스
 _CSP = (
     "default-src 'self'; "
@@ -34,8 +34,10 @@ _CSP = (
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
     "font-src 'self' https://cdn.jsdelivr.net; "
     "img-src 'self' data:; "
-    "connect-src 'self' https://cdn.jsdelivr.net; "
-    "frame-ancestors 'none'"
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'"
 )
 
 

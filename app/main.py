@@ -130,8 +130,8 @@ app = FastAPI(
 _cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()] if settings.cors_origins else []
 if not _cors_origins:
     if settings.debug:
-        _cors_origins = ["*"]
-        logger.warning("[CORS] debug 모드 — 모든 origin 허용")
+        _cors_origins = ["http://localhost:8000", "http://localhost:3000", "http://127.0.0.1:8000"]
+        logger.warning("[CORS] debug 모드 — localhost origin만 허용")
     else:
         _cors_origins = []
         logger.info("[CORS] cors_origins 미설정 — same-origin만 허용")
@@ -139,7 +139,7 @@ if _cors_origins:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_cors_origins,
-        allow_credentials=_cors_origins != ["*"],
+        allow_credentials="*" not in _cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )

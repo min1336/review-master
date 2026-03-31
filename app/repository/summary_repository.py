@@ -200,9 +200,7 @@ class SummaryRepository(BaseRepository[Summary]):
         if review_date_from:
             stmt = stmt.where(BranchReviewORM.review_date >= review_date_from)
         if review_date_to:
-            # 종료일 전체를 포함하기 위해 다음날 00:00:00 미만으로 비교
-            next_day = review_date_to + timedelta(days=1)
-            stmt = stmt.where(BranchReviewORM.review_date < next_day)
+            stmt = stmt.where(BranchReviewORM.review_date < review_date_to)
 
         stmt = stmt.where(BranchReviewORM.branch_id.is_not(None))
         result = await self._session.execute(stmt)
@@ -244,35 +242,31 @@ class SummaryRepository(BaseRepository[Summary]):
         generated_by: str = "scheduler",
     ) -> dict | None:
         """요약 히스토리 저장"""
-        try:
-            data = {
-                "branch_id": branch_id,
-                "summary_all": summary_all,
-                "summary_1y": summary_1y,
-                "summary_6m": summary_6m,
-                "summary_3m": summary_3m,
-                "summary_1m": summary_1m,
-                "keywords": keywords or [],
-                "review_count": review_count,
-                "avg_rating": avg_rating,
-                "generated_by": generated_by,
-            }
+        data = {
+            "branch_id": branch_id,
+            "summary_all": summary_all,
+            "summary_1y": summary_1y,
+            "summary_6m": summary_6m,
+            "summary_3m": summary_3m,
+            "summary_1m": summary_1m,
+            "keywords": keywords or [],
+            "review_count": review_count,
+            "avg_rating": avg_rating,
+            "generated_by": generated_by,
+        }
 
-            stmt = (
-                pg_insert(BranchSummaryHistoryORM.__table__)
-                .values(**data)
-                .returning(BranchSummaryHistoryORM.__table__)
-            )
-            result = await self._session.execute(stmt)
-            row = result.mappings().one_or_none()
+        stmt = (
+            pg_insert(BranchSummaryHistoryORM.__table__)
+            .values(**data)
+            .returning(BranchSummaryHistoryORM.__table__)
+        )
+        result = await self._session.execute(stmt)
+        row = result.mappings().one_or_none()
 
-            if row:
-                logger.info("요약 히스토리 저장: branch_id=%s, by=%s", branch_id, generated_by)
-                return dict(row)
-            return None
-        except Exception as e:
-            logger.error("요약 히스토리 저장 실패: %s", e)
-            return None
+        if row:
+            logger.info("요약 히스토리 저장: branch_id=%s, by=%s", branch_id, generated_by)
+            return dict(row)
+        return None
 
     async def get_history(
         self,
@@ -320,26 +314,22 @@ class SummaryRepository(BaseRepository[Summary]):
         pending_data: dict,
     ) -> Summary | None:
         """pending 요약 설정 (승인 대기 상태로)"""
-        try:
-            stmt = (
-                update(BranchSummaryORM)
-                .where(BranchSummaryORM.branch_id == branch_id)
-                .values(
-                    pending_summaries=pending_data,
-                    updated_at=utc_now(),
-                )
-                .returning(BranchSummaryORM.__table__)
+        stmt = (
+            update(BranchSummaryORM)
+            .where(BranchSummaryORM.branch_id == branch_id)
+            .values(
+                pending_summaries=pending_data,
+                updated_at=utc_now(),
             )
-            result = await self._session.execute(stmt)
-            row = result.mappings().one_or_none()
+            .returning(BranchSummaryORM.__table__)
+        )
+        result = await self._session.execute(stmt)
+        row = result.mappings().one_or_none()
 
-            if row:
-                logger.info("Pending 요약 설정: branch_id=%s", branch_id)
-                return self.model(**row)
-            return None
-        except Exception as e:
-            logger.error("Pending 요약 설정 실패: %s", e)
-            return None
+        if row:
+            logger.info("Pending 요약 설정: branch_id=%s", branch_id)
+            return self.model(**row)
+        return None
 
     async def approve_pending_summary(self, branch_id: int) -> Summary | None:
         """pending 요약 승인 (실제 필드로 이동)"""

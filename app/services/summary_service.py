@@ -301,17 +301,22 @@ class SummaryService:
                     "total": row.get("total_count", 0),
                 }
 
-            for car in car_data:
-                try:
-                    count_result = await session.execute(
-                        select(func.count())
-                        .select_from(BranchReviewORM)
-                        .where(BranchReviewORM.branch_id == branch_id)
-                        .where(BranchReviewORM.car_model == car)
+            # 차량별 리뷰 수를 단일 쿼리로 조회 (N+1 방지)
+            car_names = list(car_data.keys())
+            if car_names:
+                count_stmt = (
+                    select(
+                        BranchReviewORM.car_model,
+                        func.count().label("cnt"),
                     )
-                    car_data[car]["review_count"] = count_result.scalar_one() or 0
-                except Exception:
-                    car_data[car]["review_count"] = 0
+                    .where(BranchReviewORM.branch_id == branch_id)
+                    .where(BranchReviewORM.car_model.in_(car_names))
+                    .group_by(BranchReviewORM.car_model)
+                )
+                count_result = await session.execute(count_stmt)
+                for row in count_result.all():
+                    if row.car_model in car_data:
+                        car_data[row.car_model]["review_count"] = row.cnt
 
         car_models_dto: list[CarModelDTO] = []
         for car, data in sorted(car_data.items()):

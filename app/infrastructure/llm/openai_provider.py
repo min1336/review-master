@@ -126,7 +126,7 @@ class OpenAIProvider(LLMProvider):
             # Rate limit 에러 시 재시도
             if "429" in error_msg or "rate" in error_msg.lower():
                 if _retry_count < max_retries:
-                    wait_time = 60 * (2 ** _retry_count)
+                    wait_time = min(10 * (2 ** _retry_count), 60)
                     logger.warning("Rate limit 초과, %s초 대기 후 재시도 (%s/%s)...", wait_time, _retry_count + 1, max_retries)
                     time.sleep(wait_time)
                     return self.generate(
@@ -205,7 +205,7 @@ class OpenAIProvider(LLMProvider):
             error_msg = str(e)
             if "429" in error_msg or "rate" in error_msg.lower():
                 if _retry_count < max_retries:
-                    wait_time = 60 * (2 ** _retry_count)
+                    wait_time = min(10 * (2 ** _retry_count), 60)
                     logger.warning("Rate limit 초과 (async), %s초 대기 후 재시도 (%s/%s)...", wait_time, _retry_count + 1, max_retries)
                     await asyncio.sleep(wait_time)
                     return await self.async_generate(

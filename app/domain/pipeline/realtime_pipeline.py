@@ -229,7 +229,8 @@ class RealtimePipeline(BasePipeline):
         2. monthly_sentiment_stats: 전체 감정 +1
         3. branch_tags: 태그별 감정 +1
         """
-        async with self._session_factory() as session:
+        session_ctx = await self._get_session()
+        async with session_ctx as session:
             # 1. 개별 리뷰 sentiment 업데이트
             if review_id:
                 await session.execute(

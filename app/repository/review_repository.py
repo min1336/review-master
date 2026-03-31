@@ -78,8 +78,13 @@ class BranchReviewRepository(BaseRepository[Review]):
         return result.scalar() or 0
 
     async def upsert_batch(self, reviews: list[dict], batch_size: int = 100) -> int:
-        """원본 리뷰 일괄 저장 (SQLAlchemy ON CONFLICT upsert)"""
+        """원본 리뷰 일괄 저장 (SQLAlchemy ON CONFLICT upsert)
+
+        배치 단위로 실행하되, 실패한 배치는 건너뛴다.
+        호출자는 반환된 success_count와 입력 건수를 비교하여 부분 실패를 감지할 수 있다.
+        """
         success_count = 0
+        errors: list[str] = []
         total = len(reviews)
 
         for i in range(0, total, batch_size):
@@ -138,8 +143,16 @@ class BranchReviewRepository(BaseRepository[Review]):
                 await self._session.execute(stmt)
                 success_count += len(batch)
             except Exception as e:
-                logger.warning("Failed to upsert branch reviews batch: %s", e)
+                logger.warning(
+                    "Batch upsert 실패 (offset=%d, size=%d): %s", i, len(batch), e,
+                )
+                errors.append(f"batch[{i}:{i+len(batch)}]: {e}")
 
+        if errors:
+            logger.error(
+                "upsert_batch 부분 실패: %d/%d건 성공, %d개 배치 실패",
+                success_count, total, len(errors),
+            )
         return success_count
 
     async def get_by_branch(
@@ -164,9 +177,7 @@ class BranchReviewRepository(BaseRepository[Review]):
         if review_date_from:
             conditions.append(BranchReviewORM.review_date >= review_date_from)
         if review_date_to:
-            # 종료일 전체를 포함하기 위해 다음날 00:00:00 미만으로 비교
-            next_day = review_date_to + timedelta(days=1)
-            conditions.append(BranchReviewORM.review_date < next_day)
+            conditions.append(BranchReviewORM.review_date < review_date_to)
 
         # 데이터 + 카운트 통합 쿼리 (윈도우 함수)
         data_stmt = (
@@ -225,8 +236,7 @@ class BranchReviewRepository(BaseRepository[Review]):
         if review_date_from:
             stmt = stmt.where(BranchReviewORM.review_date >= review_date_from)
         if review_date_to:
-            next_day = review_date_to + timedelta(days=1)
-            stmt = stmt.where(BranchReviewORM.review_date < next_day)
+            stmt = stmt.where(BranchReviewORM.review_date < review_date_to)
 
         result = await self._session.execute(stmt)
         return result.scalar_one()
@@ -251,8 +261,7 @@ class BranchReviewRepository(BaseRepository[Review]):
             if date_from is not None:
                 conditions.append(BranchReviewORM.review_date >= date_from)
             if date_to is not None:
-                next_day = date_to + timedelta(days=1)
-                conditions.append(BranchReviewORM.review_date < next_day)
+                conditions.append(BranchReviewORM.review_date < date_to)
             col = func.count().filter(and_(*conditions)).label(label)
             columns.append(col)
 
@@ -279,8 +288,7 @@ class BranchReviewRepository(BaseRepository[Review]):
         if review_date_from:
             subq = subq.where(BranchReviewORM.review_date >= review_date_from)
         if review_date_to:
-            next_day = review_date_to + timedelta(days=1)
-            subq = subq.where(BranchReviewORM.review_date < next_day)
+            subq = subq.where(BranchReviewORM.review_date < review_date_to)
 
         subq = subq.distinct().subquery()
         stmt = select(func.count()).select_from(subq)
@@ -309,8 +317,7 @@ class BranchReviewRepository(BaseRepository[Review]):
         if review_date_from:
             conditions.append(BranchReviewORM.review_date >= review_date_from)
         if review_date_to:
-            next_day = review_date_to + timedelta(days=1)
-            conditions.append(BranchReviewORM.review_date < next_day)
+            conditions.append(BranchReviewORM.review_date < review_date_to)
 
         stmt = (
             select(

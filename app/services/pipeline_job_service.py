@@ -70,19 +70,17 @@ class PipelineJobService(BaseJobService[PipelineJobState, PipelineJobStatusRespo
         return self._to_response(state)
 
     def _check_other_pipelines(self) -> None:
-        """다른 파이프라인 서비스에 활성 작업이 있으면 HTTPException 발생"""
-        from fastapi import HTTPException
-
+        """다른 파이프라인 서비스에 활성 작업이 있으면 ValueError 발생"""
         from services.sync_job_service import SyncJobService
         from services.upload_job_service import UploadJobService
 
         sync_svc = SyncJobService.get_instance()
         if sync_svc.has_active_job():
-            raise HTTPException(409, "동기화 작업이 실행 중입니다")
+            raise ValueError("동기화 작업이 실행 중입니다")
 
         upload_svc = UploadJobService.get_instance()
         if upload_svc.has_active_job():
-            raise HTTPException(409, "업로드 작업이 실행 중입니다")
+            raise ValueError("업로드 작업이 실행 중입니다")
 
     async def _run_job(
         self,

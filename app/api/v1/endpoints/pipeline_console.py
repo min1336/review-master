@@ -210,11 +210,14 @@ async def run_full_pipeline(
     if body is None:
         body = FullPipelineRequest()
 
-    return await svc.submit_job(
-        date_from=body.date_from,
-        date_to=body.date_to,
-        chunk_size=body.chunk_size,
-    )
+    try:
+        return await svc.submit_job(
+            date_from=body.date_from,
+            date_to=body.date_to,
+            chunk_size=body.chunk_size,
+        )
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
 
 
 @router.get("/jobs/{job_id}")

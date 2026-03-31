@@ -39,7 +39,7 @@ def parse_date_str(date_str: str, end_of_day: bool = False) -> datetime:
 
     Args:
         date_str: "2024-01-15" 형식
-        end_of_day: True이면 23:59:59로 설정
+        end_of_day: True이면 다음날 00:00:00 (exclusive upper bound용)
 
     Returns:
         UTC-aware datetime
@@ -49,15 +49,15 @@ def parse_date_str(date_str: str, end_of_day: bool = False) -> datetime:
     """
     dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=KST)
     if end_of_day:
-        dt = dt.replace(hour=23, minute=59, second=59)
+        dt = dt + timedelta(days=1)
     return dt.astimezone(UTC)
 
 
 def date_to_utc(d: date, end_of_day: bool = False) -> datetime:
-    """date → UTC-aware datetime 변환. end_of_day=True면 23:59:59."""
+    """date → UTC-aware datetime 변환. end_of_day=True면 다음날 00:00:00 (exclusive upper bound용)."""
     dt = datetime(d.year, d.month, d.day, tzinfo=KST)
     if end_of_day:
-        dt = dt.replace(hour=23, minute=59, second=59)
+        dt = dt + timedelta(days=1)
     return dt.astimezone(UTC)
 
 

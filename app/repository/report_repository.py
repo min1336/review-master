@@ -169,17 +169,13 @@ class ReportRepository:
 
     async def mark_as_viewed(self, report_id: int) -> bool:
         """리포트 조회 표시"""
-        try:
-            stmt = (
-                update(BranchReportORM)
-                .where(BranchReportORM.id == report_id)
-                .values(is_viewed=True, viewed_at=utc_now())
-            )
-            await self._session.execute(stmt)
-            return True
-        except Exception as e:
-            logger.error("리포트 조회 표시 실패: %s", e)
-            return False
+        stmt = (
+            update(BranchReportORM)
+            .where(BranchReportORM.id == report_id)
+            .values(is_viewed=True, viewed_at=utc_now())
+        )
+        await self._session.execute(stmt)
+        return True
 
     async def get_unviewed_count(self, branch_id: int | None = None) -> int:
         """미조회 리포트 개수 조회"""
@@ -238,23 +234,16 @@ class ReportRepository:
         period_end: date | datetime,
     ) -> bool:
         """특정 지점의 기간별 리포트 삭제"""
-        try:
-            start = period_start.date() if isinstance(period_start, datetime) else period_start
-            end = period_end.date() if isinstance(period_end, datetime) else period_end
-            stmt = (
-                delete(BranchReportORM)
-                .where(BranchReportORM.branch_id == branch_id)
-                .where(BranchReportORM.period_start == start)
-                .where(BranchReportORM.period_end == end)
-            )
-            await self._session.execute(stmt)
-            return True
-        except Exception as e:
-            logger.error(
-                "리포트 삭제 실패 (branch: %s, period: %s ~ %s): %s",
-                branch_id, period_start, period_end, e
-            )
-            return False
+        start = period_start.date() if isinstance(period_start, datetime) else period_start
+        end = period_end.date() if isinstance(period_end, datetime) else period_end
+        stmt = (
+            delete(BranchReportORM)
+            .where(BranchReportORM.branch_id == branch_id)
+            .where(BranchReportORM.period_start == start)
+            .where(BranchReportORM.period_end == end)
+        )
+        await self._session.execute(stmt)
+        return True
 
 
 # ── PresetRepository ─────────────────────────────────────────
@@ -327,13 +316,9 @@ class PresetRepository:
 
     async def delete_preset(self, preset_id: int) -> bool:
         """프리셋 삭제"""
-        try:
-            stmt = delete(PromptPresetORM).where(PromptPresetORM.id == preset_id)
-            result = await self._session.execute(stmt)
-            return result.rowcount > 0
-        except Exception as e:
-            logger.error("프리셋 삭제 실패: %s", e)
-            return False
+        stmt = delete(PromptPresetORM).where(PromptPresetORM.id == preset_id)
+        result = await self._session.execute(stmt)
+        return result.rowcount > 0
 
     @staticmethod
     def _preset_to_dict(row: PromptPresetORM) -> dict:
