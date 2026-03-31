@@ -25,6 +25,7 @@ services:
       - N8N_API_KEY
       - N8N_TEST_MODE
       - CARMORE_ADMIN_URL
+      - CORS_ORIGINS
       - LIGHTWEIGHT_MODE=true
     cpus: "1.0"
     mem_limit: "1024m"
