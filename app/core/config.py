@@ -78,8 +78,8 @@ class Settings(BaseSettings):
     # 로컬: /api, 프로덕션(Nginx): /review/api
     api_prefix: str = "/api"
 
-    # CORS 허용 도메인 (빈 리스트 → ["*"] 전체 허용)
-    cors_origins: list[str] = []
+    # CORS 허용 도메인 (쉼표 구분 문자열, 예: "https://a.com,https://b.com")
+    cors_origins: str = ""
 
     # AWS Athena 설정
     aws_access_key_id: str = ""

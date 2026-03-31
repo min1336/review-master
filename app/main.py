@@ -126,8 +126,8 @@ app = FastAPI(
 
 # CORS 미들웨어
 # cors_origins 설정 시 해당 도메인만 허용 + credentials 활성화
-# 미설정(빈 리스트) 시: 프로덕션은 same-origin만, 개발은 전체 허용
-_cors_origins = settings.cors_origins
+# 미설정(빈 문자열) 시: 프로덕션은 same-origin만, 개발은 전체 허용
+_cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()] if settings.cors_origins else []
 if not _cors_origins:
     if settings.debug:
         _cors_origins = ["*"]
