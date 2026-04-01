@@ -18,13 +18,7 @@
 
 ## 인증
 
-모든 API 요청에 `X-API-Key` 헤더가 필요합니다.
-
-```
-X-API-Key: {발급받은 PUBLIC_API_KEY}
-```
-
-API Key는 Carmore 운영팀에서 발급합니다.
+> **참고**: 현재 Public API는 별도 인증 없이 접근 가능합니다. 향후 `X-API-Key` 헤더 인증이 추가될 수 있습니다.
 
 ---
 

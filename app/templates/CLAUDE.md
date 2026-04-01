@@ -23,7 +23,11 @@
 | -------- | ---- |
 | `escapeHtml()` | HTML 특수문자 이스케이프 |
 | `escapeAttr()` | HTML 속성값 이스케이프 |
+| `formatDate()` | 날짜 포맷팅 (ko-KR) |
+| `formatDateForAPI()` | API용 날짜 포맷 (YYYY-MM-DD) |
+| `debounce()` | 함수 호출 지연 제어 |
 | `showToast()` | 토스트 알림 표시 |
+| `fetchRetry()` | 503/502 재시도 래퍼 |
 | `apiRequest()` | API 호출 래퍼 |
 
 ## 비동기 작업 UI 패턴
@@ -38,7 +42,9 @@
 | -------- | ---- |
 | `dashboard_v2.html` | 메인 대시보드 (`/`) |
 | `analysis.html` | 리뷰 분석 페이지 (`/analysis`) |
-| `tag_tester.html` | 태그 테스트 페이지 (`/tag-tester`) |
+| `pipeline_console.html` | 파이프라인 콘솔 (`/pipeline-console`) |
+| `scheduler.html` | 스케줄러 관리 (`/scheduler`) |
+| `review_detail_test.html` | 리뷰 상세 테스트 (`/review-detail-test`) |
 
 ## UI 패턴 Reference
 
