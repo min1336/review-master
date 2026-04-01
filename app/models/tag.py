@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class Category(BaseModel):
@@ -66,6 +66,11 @@ class BranchTag(BaseModel):
     neutral_count: int = 0
     weighted_score: float = 0.0
     rank: int | None = None
+
+    @field_validator("weighted_score", mode="before")
+    @classmethod
+    def _null_to_zero(cls, v: float | None) -> float:
+        return v if v is not None else 0.0
     # 조인 데이터
     tags: Tag | None = None
 
