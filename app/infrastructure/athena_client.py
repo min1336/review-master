@@ -316,6 +316,21 @@ def _validate_date(value: str, name: str) -> str:
     return value
 
 
+def _build_date_where_parts(
+    date_from: str | None,
+    date_to: str | None,
+) -> list[str]:
+    """날짜 범위 WHERE 절 빌드 (register_date 기준)"""
+    parts: list[str] = []
+    if date_from:
+        safe_from = _validate_date(date_from, "date_from")
+        parts.append(f"AND nrl.register_date >= TIMESTAMP '{safe_from} 00:00:00'")
+    if date_to:
+        safe_to = _validate_date(date_to, "date_to")
+        parts.append(f"AND nrl.register_date <= TIMESTAMP '{safe_to} 23:59:59'")
+    return parts
+
+
 class AthenaClient:
     """AWS Athena 클라이언트"""
 
@@ -405,13 +420,7 @@ class AthenaClient:
             ids_str = ", ".join(str(bid) for bid in safe_ids)
             where_parts.append(f"AND nrl.branch_serial IN ({ids_str})")
 
-        if date_from:
-            safe_from = _validate_date(date_from, "date_from")
-            where_parts.append(f"AND nrl.register_date >= TIMESTAMP '{safe_from} 00:00:00'")
-
-        if date_to:
-            safe_to = _validate_date(date_to, "date_to")
-            where_parts.append(f"AND nrl.register_date <= TIMESTAMP '{safe_to} 23:59:59'")
+        where_parts.extend(_build_date_where_parts(date_from, date_to))
 
         # ORDER BY (화이트리스트)
         if sort_by == "rating_low":
@@ -496,6 +505,36 @@ class AthenaClient:
             r["content"] for r in reviews
             if r.get("content") and r["content"].strip()
         ]
+
+    def fetch_review_counts_by_branch(
+        self,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> dict[int, int]:
+        """날짜 범위의 지점별 리뷰 수 집계 (대시보드용)
+
+        Returns:
+            {branch_id: review_count} 매핑
+        """
+        date_parts = _build_date_where_parts(date_from, date_to)
+
+        query = (
+            "SELECT CAST(nrl.branch_serial AS INTEGER) AS branch_id,"
+            " COUNT(*) AS review_count"
+            " FROM carmore.new_review_list nrl"
+            " WHERE TRY_CAST(nrl.status AS INTEGER) = 1"
+            f" {' '.join(date_parts)}"
+            " AND nrl.branch_serial IS NOT NULL"
+            " GROUP BY nrl.branch_serial"
+        )
+
+        logger.info("Athena 지점별 리뷰수 집계: %s ~ %s", date_from, date_to)
+        rows = self._execute_query(query)
+        return {
+            int(r["branch_id"]): int(r["review_count"])
+            for r in rows
+            if r.get("branch_id")
+        }
 
     def fetch_reviews_since(
         self,

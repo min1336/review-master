@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import delete, or_, select, text, update
+from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.timezone import utc_now
@@ -121,11 +121,35 @@ class SummaryRepository(BaseRepository[Summary]):
         row = result.mappings().one_or_none()
         return self.model(**row) if row else None
 
-    async def get_stats(self) -> SummaryStatsDTO:
-        """통계 조회 (RPC로 DB 서버에서 집계)"""
-        result = await self._session.execute(
-            text("SELECT * FROM get_summary_stats()")
-        )
+    async def get_stats(
+        self,
+        review_date_from: datetime | None = None,
+        review_date_to: datetime | None = None,
+    ) -> SummaryStatsDTO:
+        """통계 조회 (날짜 필터 없으면 RPC, 있으면 branch_reviews에서 직접 집계)"""
+        if not review_date_from and not review_date_to:
+            result = await self._session.execute(
+                text("SELECT * FROM get_summary_stats()")
+            )
+            row = result.mappings().one_or_none()
+            if not row:
+                return SummaryStatsDTO(total=0, total_reviews=0)
+            return SummaryStatsDTO(
+                total=row.get("total_branches", 0),
+                total_reviews=row.get("total_reviews", 0),
+            )
+
+        stmt = select(
+            func.count(func.distinct(BranchReviewORM.branch_id)).label("total_branches"),
+            func.count(BranchReviewORM.id).label("total_reviews"),
+        ).where(BranchReviewORM.deleted_at.is_(None))
+
+        if review_date_from:
+            stmt = stmt.where(BranchReviewORM.review_date >= review_date_from)
+        if review_date_to:
+            stmt = stmt.where(BranchReviewORM.review_date < review_date_to)
+
+        result = await self._session.execute(stmt)
         row = result.mappings().one_or_none()
         if not row:
             return SummaryStatsDTO(total=0, total_reviews=0)
@@ -205,6 +229,28 @@ class SummaryRepository(BaseRepository[Summary]):
         stmt = stmt.where(BranchReviewORM.branch_id.is_not(None))
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def get_review_counts_by_date_range(
+        self,
+        review_date_from: datetime | None = None,
+        review_date_to: datetime | None = None,
+    ) -> dict[int, int]:
+        """해당 기간의 지점별 리뷰 수 반환"""
+        stmt = select(
+            BranchReviewORM.branch_id,
+            func.count(BranchReviewORM.id).label("review_count"),
+        ).where(
+            BranchReviewORM.branch_id.is_not(None),
+            BranchReviewORM.deleted_at.is_(None),
+        ).group_by(BranchReviewORM.branch_id)
+
+        if review_date_from:
+            stmt = stmt.where(BranchReviewORM.review_date >= review_date_from)
+        if review_date_to:
+            stmt = stmt.where(BranchReviewORM.review_date < review_date_to)
+
+        result = await self._session.execute(stmt)
+        return {row.branch_id: row.review_count for row in result.all()}
 
     async def get_region_data(self) -> list[dict]:
         """지역별 데이터 조회 (region, avg_rating, review_count)"""

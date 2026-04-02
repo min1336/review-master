@@ -351,7 +351,14 @@
             // apiRequest → shared-utils.js
 
             async function fetchStats() {
-                const result = await apiRequest(`${API_PREFIX}/summaries/stats`);
+                const params = new URLSearchParams();
+                if (state.dateFilter.from) params.set('review_date_from', state.dateFilter.from);
+                if (state.dateFilter.to) params.set('review_date_to', state.dateFilter.to);
+                const qs = params.toString();
+                const url = qs
+                    ? `${API_PREFIX}/summaries/stats?${qs}`
+                    : `${API_PREFIX}/summaries/stats`;
+                const result = await apiRequest(url);
                 return result.data;
             }
 
@@ -1085,6 +1092,7 @@
                             );
                             getElement('btn-clear-date').style.display = 'inline-block';
                             resetPage();
+                            loadStats();
                             loadSummaries();
                         }
                     },
@@ -1094,6 +1102,7 @@
                             setDateFilter(dateStr, dateStr);
                             getElement('btn-clear-date').style.display = 'inline-block';
                             resetPage();
+                            loadStats();
                             loadSummaries();
                         }
                     }
@@ -1318,6 +1327,7 @@
                 stateClearDateFilter();
                 getElement('btn-clear-date').style.display = 'none';
                 resetPage();
+                loadStats();
                 loadSummaries();
             }
 
@@ -1329,6 +1339,15 @@
 
                 try {
                     const data = await fetchSummaryDetail(branchId);
+
+                    // 날짜 필터 활성 시, 대시보드 테이블의 필터된 리뷰수로 교체
+                    if (state.dateFilter.from || state.dateFilter.to) {
+                        const filtered = state.summaries.find(s => s.branch_id === branchId);
+                        if (filtered) {
+                            data.review_count = filtered.review_count;
+                        }
+                    }
+
                     setModalTitle(data.branch_name || `지점 ${branchId}`);
 
                     const modalHtml = buildDetailModalHtml(data);
@@ -1393,7 +1412,7 @@
                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px;">
                     <div style="background: var(--grey-9); padding: 16px; border-radius: var(--radius);">
                         <div style="font-size: 13px; color: var(--grey-5);">총 리뷰 수</div>
-                        <div style="font-size: 20px; font-weight: 700; color: var(--grey-1); margin-top: 4px;">${data.review_count?.toLocaleString() || 0}건</div>
+                        <div id="modal-review-count" style="font-size: 20px; font-weight: 700; color: var(--grey-1); margin-top: 4px;">${data.review_count?.toLocaleString() || 0}건</div>
                     </div>
                     <div style="background: var(--grey-9); padding: 16px; border-radius: var(--radius);">
                         <div style="font-size: 13px; color: var(--grey-5);">평균 평점</div>
@@ -3635,6 +3654,11 @@
                 const sentiment = getElement('filter-sentiment')?.value || '';
                 const useAthena = !carModel && !sentiment;
 
+                const prevBtn = getElement('reviews-prev-btn');
+                const nextBtn = getElement('reviews-next-btn');
+                if (prevBtn) prevBtn.disabled = true;
+                if (nextBtn) nextBtn.disabled = true;
+
                 const listEl = getElement('reviews-list');
                 if (listEl) {
                     const msg = useAthena ? '원본 리뷰 검색 중... (2~4초 소요)' : '로딩 중...';
@@ -3667,6 +3691,8 @@
                     }
 
                     updateReviewsCount(result.total || 0);
+                    const modalCountEl = getElement('modal-review-count');
+                    if (modalCountEl) modalCountEl.textContent = `${(result.total || 0).toLocaleString()}건`;
                     renderReviewsList(result.reviews || [], offset);
 
                     const totalPages = Math.ceil((result.total || 0) / state.reviews.pageSize);
@@ -3686,6 +3712,11 @@
             }
 
             function loadMoreReviews(branchId, direction) {
+                const prevBtn = getElement('reviews-prev-btn');
+                const nextBtn = getElement('reviews-next-btn');
+                if (prevBtn?.disabled && direction === 'prev') return;
+                if (nextBtn?.disabled && direction === 'next') return;
+
                 if (direction === 'prev' && state.reviews.currentPage > 0) {
                     setReviewsPage(state.reviews.currentPage - 1);
                 } else if (direction === 'next') {

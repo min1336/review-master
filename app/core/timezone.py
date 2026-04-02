@@ -53,6 +53,13 @@ def parse_date_str(date_str: str, end_of_day: bool = False) -> datetime:
     return dt.astimezone(UTC)
 
 
+def to_kst_date_str(dt: datetime | None) -> str | None:
+    """UTC-aware datetime → KST 날짜 문자열 (YYYY-MM-DD). Athena 쿼리용."""
+    if dt is None:
+        return None
+    return to_kst(dt).strftime("%Y-%m-%d")
+
+
 def date_to_utc(d: date, end_of_day: bool = False) -> datetime:
     """date → UTC-aware datetime 변환. end_of_day=True면 다음날 00:00:00 (exclusive upper bound용)."""
     dt = datetime(d.year, d.month, d.day, tzinfo=KST)

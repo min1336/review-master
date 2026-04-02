@@ -76,10 +76,17 @@ async def api_summaries(
 
 @router.get("/stats", response_model=ApiResponseModel[SummaryStatsDTO])
 async def api_stats(
+    review_date_from: str | None = Query(None, description="시작일 (YYYY-MM-DD)"),
+    review_date_to: str | None = Query(None, description="종료일 (YYYY-MM-DD)"),
     service: SummaryService = Depends(get_summary_service),
 ) -> dict[str, Any]:
-    """요약 통계"""
-    result = await service.get_stats()
+    """요약 통계 (날짜 필터링 지원)"""
+    parsed_date_from = parse_date(review_date_from)
+    parsed_date_to = parse_date(review_date_to, end_of_day=True)
+    result = await service.get_stats(
+        review_date_from=parsed_date_from,
+        review_date_to=parsed_date_to,
+    )
     return api_response(result.model_dump(by_alias=True))
 
 

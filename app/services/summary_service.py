@@ -11,6 +11,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from core.timezone import to_kst_date_str
 from sqlalchemy import func, select
 
 from core.timezone import utc_now
@@ -98,10 +99,13 @@ class SummaryService:
     ) -> list[dict]:
         """요약 목록 조회 (날짜 범위 필터링 지원)"""
         branch_ids_filter = None
+        review_counts_map: dict[int, int] | None = None
+
         if review_date_from or review_date_to:
-            branch_ids_filter = await self.summary_repo.get_branch_ids_by_date_range(
-                review_date_from=review_date_from, review_date_to=review_date_to
+            review_counts_map = await self._get_review_counts_by_date(
+                review_date_from, review_date_to
             )
+            branch_ids_filter = list(review_counts_map.keys())
 
             if not branch_ids_filter:
                 logger.info(
@@ -133,7 +137,39 @@ class SummaryService:
                 branch_ids=branch_ids_filter,
             )
 
-        return [s.model_dump() if hasattr(s, "model_dump") else s for s in summaries]
+        result = [s.model_dump() if hasattr(s, "model_dump") else s for s in summaries]
+
+        if review_counts_map is not None:
+            for item in result:
+                branch_id = item.get("branch_id")
+                if branch_id in review_counts_map:
+                    item["review_count"] = review_counts_map[branch_id]
+
+        return result
+
+    async def _get_review_counts_by_date(
+        self,
+        review_date_from: datetime | None,
+        review_date_to: datetime | None,
+    ) -> dict[int, int]:
+        """날짜 범위의 지점별 리뷰 수 (Athena 우선, DB 폴백)"""
+        date_from_str = to_kst_date_str(review_date_from)
+        date_to_str = to_kst_date_str(review_date_to)
+
+        if self.athena_client:
+            try:
+                return await asyncio.to_thread(
+                    self.athena_client.fetch_review_counts_by_branch,
+                    date_from=date_from_str,
+                    date_to=date_to_str,
+                )
+            except Exception as e:
+                logger.warning("Athena 리뷰수 집계 실패, DB 폴백: %s", e)
+
+        return await self.summary_repo.get_review_counts_by_date_range(
+            review_date_from=review_date_from,
+            review_date_to=review_date_to,
+        )
 
     async def get_summary(self, branch_id: int) -> dict | None:
         """단일 요약 조회"""
@@ -146,9 +182,21 @@ class SummaryService:
         result = await self.summary_repo.upsert_by_branch_id(data)
         return result.model_dump() if result else None
 
-    async def get_stats(self) -> SummaryStatsDTO:
-        """통계 조회"""
-        return await self.summary_repo.get_stats()
+    async def get_stats(
+        self,
+        review_date_from: datetime | None = None,
+        review_date_to: datetime | None = None,
+    ) -> SummaryStatsDTO:
+        """통계 조회 (날짜 필터 시 Athena 우선)"""
+        if not review_date_from and not review_date_to:
+            return await self.summary_repo.get_stats()
+
+        counts_map = await self._get_review_counts_by_date(
+            review_date_from, review_date_to
+        )
+        total_branches = len(counts_map)
+        total_reviews = sum(counts_map.values())
+        return SummaryStatsDTO(total=total_branches, total_reviews=total_reviews)
 
     async def get_region_stats(self) -> list[RegionStatsDTO]:
         """지역별 통계"""
@@ -242,8 +290,8 @@ class SummaryService:
         offset: int,
     ) -> BranchReviewsDTO:
         """Athena에서 리뷰 조회 + Supabase sentiment 병합"""
-        date_from = review_date_from.strftime("%Y-%m-%d") if review_date_from else None
-        date_to = review_date_to.strftime("%Y-%m-%d") if review_date_to else None
+        date_from = to_kst_date_str(review_date_from)
+        date_to = to_kst_date_str(review_date_to)
 
         rows, total = await asyncio.to_thread(
             self.athena_client.fetch_reviews_by_branch,
