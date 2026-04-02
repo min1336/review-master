@@ -69,6 +69,7 @@ class AnalysisReviewDTO(BaseModel):
 
     id: int | None
     review_id: int | None
+    reservation_id: str | None = None
     branch_id: int | None
     branch_name: str
     company_name: str
@@ -111,6 +112,7 @@ class AnalysisReviewDTO(BaseModel):
         return cls(
             id=row.get("id"),
             review_id=row.get("review_id"),
+            reservation_id=row.get("reservation_id"),
             branch_id=row.get("branch_id"),
             branch_name=row.get("branch_name") or "",
             company_name=row.get("company_name") or "",

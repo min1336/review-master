@@ -706,7 +706,7 @@
             }
 
             function renderReviewItemNode(reviewData, index, pageOffset) {
-                var linkNode = createReviewLinkNode(reviewData.review_id);
+                var linkNode = createReviewLinkNode(reviewData.reservation_id || reviewData.review_id);
                 if (!linkNode) {
                     linkNode = el('span', {}, ['#' + (pageOffset + index + 1)]);
                 }

@@ -102,6 +102,7 @@ class BranchReviewRepository(BaseRepository[Review]):
                         "review_id": self._safe_int(
                             r.get("review_id") or r.get("리뷰번호")
                         ),
+                        "reservation_id": str(r.get("reservation_id")) if r.get("reservation_id") else None,
                         "branch_id": self._safe_int(
                             r.get("branch_id") or r.get("지점번호")
                         ),
@@ -127,6 +128,7 @@ class BranchReviewRepository(BaseRepository[Review]):
                 stmt = stmt.on_conflict_do_update(
                     index_elements=["review_id"],
                     set_={
+                        "reservation_id": stmt.excluded.reservation_id,
                         "branch_name": stmt.excluded.branch_name,
                         "company_name": stmt.excluded.company_name,
                         "content": stmt.excluded.content,

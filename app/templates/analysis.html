@@ -1578,13 +1578,13 @@
 
             const idSpan = document.createElement('span');
             idSpan.className = 'info-id';
-            idSpan.textContent = `#${review.review_id || '-'}`;
+            idSpan.textContent = `#${review.reservation_id || review.review_id || '-'}`;
             idSpan.title = '운영툴에서 보기';
             idSpan.onclick = () => {
-                const reviewId = review.review_id || '-';
+                const reservationId = review.reservation_id || review.review_id || '-';
                 const reviewDate = review.review_date ? review.review_date.split('T')[0] : '';
                 const dbId = review.review_id || null;
-                openReservation(reviewId, reviewDate, dbId, isNewSection);
+                openReservation(reservationId, reviewDate, dbId, isNewSection);
             };
             reviewInfo.appendChild(idSpan);
 

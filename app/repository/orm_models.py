@@ -131,6 +131,7 @@ class BranchReviewORM(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     review_id: Mapped[int | None] = mapped_column(Integer)
+    reservation_id: Mapped[str | None] = mapped_column(String(50))
     branch_id: Mapped[int] = mapped_column(Integer, index=True)
     branch_name: Mapped[str | None] = mapped_column(String(100))
     company_name: Mapped[str | None] = mapped_column(String(100))
