@@ -143,6 +143,8 @@ class BranchReviewORM(Base):
     car_model: Mapped[str | None] = mapped_column(String(100))
     rent_type: Mapped[str | None] = mapped_column(String(20))
     review_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rental_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    return_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_new: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

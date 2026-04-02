@@ -51,7 +51,9 @@ SELECT
     END                     AS affiliate_type,
     r."차종"                AS car_type,
     r."차량모델"            AS car_model,
-    r.rentType              AS rent_type
+    r.rentType              AS rent_type,
+    r.rental_date           AS rental_date,
+    r.return_date           AS return_date
 FROM carmore.new_review_list nrl
 LEFT JOIN (
     -- 예약 정보 서브쿼리: 파트너스
@@ -74,7 +76,9 @@ LEFT JOIN (
             WHEN 1 THEN 'SHORT'
             WHEN 2 THEN 'MONTH'
             ELSE 'SUBSCRIPTION'
-        END AS rentType
+        END AS rentType,
+        trl.f_rentstartdate AS rental_date,
+        trl.f_rentenddate AS return_date
     FROM carmore.tbl_reservation_list trl
     INNER JOIN carmore.new_rentCompany nrc
         ON trl.company_serial = nrc.serial
@@ -101,7 +105,9 @@ LEFT JOIN (
             WHEN date_diff('day', wari.wari_rental_start, wari.wari_rental_end) < 15 THEN 'SHORT'
             WHEN date_diff('day', wari.wari_rental_start, wari.wari_rental_end) < 30 THEN 'MONTH'
             ELSE 'SUBSCRIPTION'
-        END AS rentType
+        END AS rentType,
+        wari.wari_rental_start AS rental_date,
+        wari.wari_rental_end AS return_date
     FROM carmore.workspace_api_reservation_inventory wari
     INNER JOIN carmore.workspace_api_affiliate
         ON wari_waa_idx = waa_idx
@@ -128,7 +134,9 @@ LEFT JOIN (
             WHEN date_diff('day', cgar.cgar_rent_start_datetime, cgar.cgar_rent_end_datetime) < 15 THEN 'SHORT'
             WHEN date_diff('day', cgar.cgar_rent_start_datetime, cgar.cgar_rent_end_datetime) < 30 THEN 'MONTH'
             ELSE 'SUBSCRIPTION'
-        END AS rentType
+        END AS rentType,
+        cgar.cgar_rent_start_datetime AS rental_date,
+        cgar.cgar_rent_end_datetime AS return_date
     FROM carmore.carmore_global_api_reservation cgar
     INNER JOIN carmore.carmore_global_api_affiliates
         ON cgar_cgaa_index = cgaa_index
@@ -188,6 +196,8 @@ SELECT
     nrl.status              AS status,
     r."차종"                AS car_type,
     r."차량모델"            AS car_model,
+    r.rental_date           AS rental_date,
+    r.return_date           AS return_date,
     COUNT(*) OVER()         AS total_count
 FROM carmore.new_review_list nrl
 LEFT JOIN (
@@ -202,7 +212,9 @@ LEFT JOIN (
         trl.trl_car_model AS "차량모델",
         CASE TRY_CAST(trl.reserv_rent_type AS INTEGER)
             WHEN 1 THEN 'SHORT' WHEN 2 THEN 'MONTH' ELSE 'SUBSCRIPTION'
-        END AS rentType
+        END AS rentType,
+        trl.f_rentstartdate AS rental_date,
+        trl.f_rentenddate AS return_date
     FROM carmore.tbl_reservation_list trl
     INNER JOIN carmore.new_rentCompany nrc ON trl.company_serial = nrc.serial
 
@@ -221,7 +233,9 @@ LEFT JOIN (
             WHEN date_diff('day', wari.wari_rental_start, wari.wari_rental_end) < 15 THEN 'SHORT'
             WHEN date_diff('day', wari.wari_rental_start, wari.wari_rental_end) < 30 THEN 'MONTH'
             ELSE 'SUBSCRIPTION'
-        END AS rentType
+        END AS rentType,
+        wari.wari_rental_start AS rental_date,
+        wari.wari_rental_end AS return_date
     FROM carmore.workspace_api_reservation_inventory wari
     INNER JOIN carmore.workspace_api_affiliate ON wari_waa_idx = waa_idx
 
@@ -240,7 +254,9 @@ LEFT JOIN (
             WHEN date_diff('day', cgar.cgar_rent_start_datetime, cgar.cgar_rent_end_datetime) < 15 THEN 'SHORT'
             WHEN date_diff('day', cgar.cgar_rent_start_datetime, cgar.cgar_rent_end_datetime) < 30 THEN 'MONTH'
             ELSE 'SUBSCRIPTION'
-        END AS rentType
+        END AS rentType,
+        cgar.cgar_rent_start_datetime AS rental_date,
+        cgar.cgar_rent_end_datetime AS return_date
     FROM carmore.carmore_global_api_reservation cgar
     INNER JOIN carmore.carmore_global_api_affiliates ON cgar_cgaa_index = cgaa_index
     INNER JOIN carmore.carinfo_master cim ON cgar_cimaster_index = carinfo_idx

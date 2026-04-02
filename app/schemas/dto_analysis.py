@@ -76,6 +76,8 @@ class AnalysisReviewDTO(BaseModel):
     content: str
     sentiment: str | None
     review_date: str | None
+    rental_date: str | None = None
+    return_date: str | None = None
     rating_service: float | None
     rating_car: float | None
     rating_convenience: float | None
@@ -88,6 +90,14 @@ class AnalysisReviewDTO(BaseModel):
         review_date = row.get("review_date")
         if isinstance(review_date, datetime):
             review_date = review_date.isoformat()
+
+        rental_date = row.get("rental_date")
+        if isinstance(rental_date, datetime):
+            rental_date = rental_date.isoformat()
+
+        return_date = row.get("return_date")
+        if isinstance(return_date, datetime):
+            return_date = return_date.isoformat()
 
         def _safe_float(val: Any) -> float | None:
             if val is None:
@@ -119,6 +129,8 @@ class AnalysisReviewDTO(BaseModel):
             content=row.get("content") or "",
             sentiment=final_sentiment,
             review_date=review_date,
+            rental_date=rental_date,
+            return_date=return_date,
             rating_service=rating_service,
             rating_car=rating_car,
             rating_convenience=rating_convenience,

@@ -125,6 +125,7 @@ class SummaryRepository(BaseRepository[Summary]):
         self,
         review_date_from: datetime | None = None,
         review_date_to: datetime | None = None,
+        date_type: str = "review_date",
     ) -> SummaryStatsDTO:
         """통계 조회 (날짜 필터 없으면 RPC, 있으면 branch_reviews에서 직접 집계)"""
         if not review_date_from and not review_date_to:
@@ -139,15 +140,16 @@ class SummaryRepository(BaseRepository[Summary]):
                 total_reviews=row.get("total_reviews", 0),
             )
 
+        date_col = self._get_date_column(date_type)
         stmt = select(
             func.count(func.distinct(BranchReviewORM.branch_id)).label("total_branches"),
             func.count(BranchReviewORM.id).label("total_reviews"),
         ).where(BranchReviewORM.deleted_at.is_(None))
 
         if review_date_from:
-            stmt = stmt.where(BranchReviewORM.review_date >= review_date_from)
+            stmt = stmt.where(date_col >= review_date_from)
         if review_date_to:
-            stmt = stmt.where(BranchReviewORM.review_date < review_date_to)
+            stmt = stmt.where(date_col < review_date_to)
 
         result = await self._session.execute(stmt)
         row = result.mappings().one_or_none()
@@ -213,18 +215,29 @@ class SummaryRepository(BaseRepository[Summary]):
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none() is not None
 
+    def _get_date_column(self, date_type: str = "review_date"):
+        """date_type에 따른 ORM 컬럼 반환"""
+        col_map = {
+            "review_date": BranchReviewORM.review_date,
+            "rental_date": BranchReviewORM.rental_date,
+            "return_date": BranchReviewORM.return_date,
+        }
+        return col_map.get(date_type, BranchReviewORM.review_date)
+
     async def get_branch_ids_by_date_range(
         self,
         review_date_from: datetime | None = None,
         review_date_to: datetime | None = None,
+        date_type: str = "review_date",
     ) -> list[int]:
         """해당 기간에 리뷰가 있는 지점 ID 목록 반환"""
+        date_col = self._get_date_column(date_type)
         stmt = select(BranchReviewORM.branch_id).distinct()
 
         if review_date_from:
-            stmt = stmt.where(BranchReviewORM.review_date >= review_date_from)
+            stmt = stmt.where(date_col >= review_date_from)
         if review_date_to:
-            stmt = stmt.where(BranchReviewORM.review_date < review_date_to)
+            stmt = stmt.where(date_col < review_date_to)
 
         stmt = stmt.where(BranchReviewORM.branch_id.is_not(None))
         result = await self._session.execute(stmt)
@@ -234,8 +247,10 @@ class SummaryRepository(BaseRepository[Summary]):
         self,
         review_date_from: datetime | None = None,
         review_date_to: datetime | None = None,
+        date_type: str = "review_date",
     ) -> dict[int, int]:
         """해당 기간의 지점별 리뷰 수 반환"""
+        date_col = self._get_date_column(date_type)
         stmt = select(
             BranchReviewORM.branch_id,
             func.count(BranchReviewORM.id).label("review_count"),
@@ -245,9 +260,9 @@ class SummaryRepository(BaseRepository[Summary]):
         ).group_by(BranchReviewORM.branch_id)
 
         if review_date_from:
-            stmt = stmt.where(BranchReviewORM.review_date >= review_date_from)
+            stmt = stmt.where(date_col >= review_date_from)
         if review_date_to:
-            stmt = stmt.where(BranchReviewORM.review_date < review_date_to)
+            stmt = stmt.where(date_col < review_date_to)
 
         result = await self._session.execute(stmt)
         return {row.branch_id: row.review_count for row in result.all()}

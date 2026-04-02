@@ -114,7 +114,7 @@
             display: flex;
             align-items: flex-start;
             gap: 12px;
-            margin-bottom: 10px;
+            margin-bottom: 4px;
         }
 
         .filter-cascade .filter-step {
@@ -324,8 +324,6 @@
         .filter-row {
             display: flex;
             gap: 12px;
-            padding-top: 10px;
-            border-top: 1px solid var(--grey-8);
             align-items: flex-end;
         }
 
@@ -338,7 +336,7 @@
         .filter-actions {
             display: flex;
             gap: 8px;
-            justify-content: flex-end;
+            margin-left: auto;
         }
 
         /* Buttons — 분석 페이지용 compact 크기 오버라이드 */
@@ -521,15 +519,17 @@
 
         .review-ratings {
             display: flex;
-            gap: var(--spacing-sm);
+            align-items: center;
+            gap: 4px;
         }
 
         .rating-item {
-            font-size: 12px;
-            padding: 2px 8px;
-            background: var(--grey-8);
-            border-radius: 4px;
-            color: var(--grey-3);
+            font-size: 11px;
+            padding: 1px 7px;
+            background: #fff8e1;
+            border-radius: 10px;
+            color: #f59e0b;
+            line-height: 1.2;
         }
 
         .review-sentiment {
@@ -884,7 +884,12 @@
             </div>
 
             <!-- Additional Filters -->
-            <div class="filter-row" style="justify-content: flex-end;">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label class="filter-label">기간</label>
+                    <input type="text" class="filter-input" id="dateRangeFilter" placeholder="기간 선택">
+                </div>
+
                 <div class="filter-group">
                     <label class="filter-label">감정</label>
                     <div class="filter-select-wrapper">
@@ -902,14 +907,11 @@
                     <div class="filter-select-wrapper">
                         <select class="filter-select" id="sortSelect">
                             <option value="latest">최신순</option>
+                            <option value="rental_date">대여일순</option>
+                            <option value="return_date">반납일순</option>
                             <option value="rating_low">낮은 평점순</option>
                         </select>
                     </div>
-                </div>
-
-                <div class="filter-group">
-                    <label class="filter-label">기간</label>
-                    <input type="text" class="filter-input" id="dateRangeFilter" placeholder="기간 선택">
                 </div>
 
                 <div class="filter-actions">
@@ -1569,24 +1571,45 @@
             branchSpan.textContent = review.branch_name || '-';
             reviewInfo.appendChild(branchSpan);
 
-            const dateSpan = document.createElement('span');
-            dateSpan.className = 'info-date';
-            dateSpan.textContent = review.review_date
-                ? new Date(review.review_date).toLocaleDateString('ko-KR')
-                : '-';
-            reviewInfo.appendChild(dateSpan);
+            // 정렬 기준에 따라 날짜 표시
+            const fmtDate = (d) => d ? new Date(d).toLocaleDateString('ko-KR') : null;
+            const sortVal = document.getElementById('sortSelect')?.value || 'latest';
+            const dateType = (sortVal === 'rental_date' || sortVal === 'return_date') ? sortVal : 'review_date';
+            const dateMap = {
+                'review_date': review.review_date,
+                'rental_date': review.rental_date,
+                'return_date': review.return_date,
+            };
+            const dateStr = fmtDate(dateMap[dateType]);
+            if (dateStr) {
+                const dateSpan = document.createElement('span');
+                dateSpan.className = 'info-date';
+                dateSpan.textContent = dateStr;
+                reviewInfo.appendChild(dateSpan);
+            }
 
-            const idSpan = document.createElement('span');
-            idSpan.className = 'info-id';
-            idSpan.textContent = `#${review.reservation_id || review.review_id || '-'}`;
-            idSpan.title = '운영툴에서 보기';
-            idSpan.onclick = () => {
+            const badgeStyle = 'display:inline-block; padding:2px 7px; border-radius:10px; font-size:11px; line-height:1.4;';
+
+            // 예약번호 badge
+            const idBadge = document.createElement('span');
+            idBadge.style.cssText = badgeStyle + 'background:#e8f0fe; color:#1a73e8; cursor:pointer;';
+            idBadge.textContent = `#${review.reservation_id || review.review_id || '-'}`;
+            idBadge.title = '운영툴에서 보기';
+            idBadge.onclick = () => {
                 const reservationId = review.reservation_id || review.review_id || '-';
                 const reviewDate = review.review_date ? review.review_date.split('T')[0] : '';
                 const dbId = review.review_id || null;
                 openReservation(reservationId, reviewDate, dbId, isNewSection);
             };
-            reviewInfo.appendChild(idSpan);
+            reviewInfo.appendChild(idBadge);
+
+            // 차량모델 badge
+            if (review.car_model) {
+                const carBadge = document.createElement('span');
+                carBadge.style.cssText = badgeStyle + 'background:#f0f0f0; color:#555;';
+                carBadge.textContent = review.car_model;
+                reviewInfo.appendChild(carBadge);
+            }
 
             if (review.is_new === true) {
                 const newTag = document.createElement('span');
@@ -1605,22 +1628,24 @@
             const ratingCar = review.rating_car != null ? review.rating_car.toFixed(1) : '-';
             const ratingConv = review.rating_convenience != null ? review.rating_convenience.toFixed(1) : '-';
 
+            const ratingBadgeStyle = 'display:inline-block; padding:1px 7px; border-radius:10px; font-size:11px; line-height:1.2; background:#fff8e1; color:#f59e0b;';
+
             const serviceRating = document.createElement('span');
-            serviceRating.className = 'rating-item';
-            serviceRating.title = '친절/편의성';
-            serviceRating.textContent = `서비스 ${ratingService}`;
+            serviceRating.style.cssText = ratingBadgeStyle;
+            serviceRating.title = '서비스';
+            serviceRating.textContent = ratingService;
             reviewRatings.appendChild(serviceRating);
 
             const carRating = document.createElement('span');
-            carRating.className = 'rating-item';
-            carRating.title = '차량평점';
-            carRating.textContent = `차량 ${ratingCar}`;
+            carRating.style.cssText = ratingBadgeStyle;
+            carRating.title = '차량';
+            carRating.textContent = ratingCar;
             reviewRatings.appendChild(carRating);
 
             const convRating = document.createElement('span');
-            convRating.className = 'rating-item';
-            convRating.title = '인수/반납편의성';
-            convRating.textContent = `편의성 ${ratingConv}`;
+            convRating.style.cssText = ratingBadgeStyle;
+            convRating.title = '편의성';
+            convRating.textContent = ratingConv;
             reviewRatings.appendChild(convRating);
 
             // Sentiment badge
@@ -1688,6 +1713,10 @@
                 }
                 if (dateTo) {
                     params.append('date_to', dateTo);
+                }
+                const sortValExport = document.getElementById('sortSelect')?.value || 'latest';
+                if (sortValExport === 'rental_date' || sortValExport === 'return_date') {
+                    params.append('date_type', sortValExport);
                 }
 
                 const response = await fetchRetry(`${API_PREFIX}/analysis/reviews/export?${params}`);
@@ -1773,6 +1802,10 @@
                 }
                 if (dateTo) {
                     params.append('date_to', dateTo);
+                }
+                const sortValSearch = document.getElementById('sortSelect')?.value || 'latest';
+                if (sortValSearch === 'rental_date' || sortValSearch === 'return_date') {
+                    params.append('date_type', sortValSearch);
                 }
 
                 // sentiment/is_new 없으면 Athena 경로 → 로딩 메시지 변경

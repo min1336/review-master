@@ -48,6 +48,7 @@ async def api_get_reviews(
         sentiment=filters.sentiment,
         date_from=filters.date_from,
         date_to=filters.date_to,
+        date_type=filters.date_type,
         sort_by=filters.sort_by,
         limit=limit,
         offset=offset,

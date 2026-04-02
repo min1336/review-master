@@ -32,10 +32,15 @@ class ReviewFilterParams:
         pattern=r"^\d{4}-\d{2}-\d{2}$",
         description="종료일 (YYYY-MM-DD)",
     )
+    date_type: str = FQuery(
+        "review_date",
+        pattern="^(review_date|rental_date|return_date)$",
+        description="날짜 기준 (review_date: 리뷰작성일, rental_date: 대여일, return_date: 반납일)",
+    )
     sort_by: str = FQuery(
         "latest",
-        pattern="^(latest|rating_low)$",
-        description="정렬 기준 (latest, rating_low)",
+        pattern="^(latest|rental_date|return_date|rating_low)$",
+        description="정렬 기준 (latest, rental_date, return_date, rating_low)",
     )
 
 

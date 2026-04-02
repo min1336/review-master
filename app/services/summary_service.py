@@ -96,6 +96,7 @@ class SummaryService:
         order: str = "asc",
         review_date_from: datetime | None = None,
         review_date_to: datetime | None = None,
+        date_type: str = "review_date",
     ) -> list[dict]:
         """요약 목록 조회 (날짜 범위 필터링 지원)"""
         branch_ids_filter = None
@@ -103,7 +104,7 @@ class SummaryService:
 
         if review_date_from or review_date_to:
             review_counts_map = await self._get_review_counts_by_date(
-                review_date_from, review_date_to
+                review_date_from, review_date_to, date_type
             )
             branch_ids_filter = list(review_counts_map.keys())
 
@@ -151,12 +152,13 @@ class SummaryService:
         self,
         review_date_from: datetime | None,
         review_date_to: datetime | None,
+        date_type: str = "review_date",
     ) -> dict[int, int]:
         """날짜 범위의 지점별 리뷰 수 (Athena 우선, DB 폴백)"""
-        date_from_str = to_kst_date_str(review_date_from)
-        date_to_str = to_kst_date_str(review_date_to)
-
-        if self.athena_client:
+        # Athena는 review_date 기준만 지원; rental_date/return_date는 DB에서 직접 조회
+        if date_type == "review_date" and self.athena_client:
+            date_from_str = to_kst_date_str(review_date_from)
+            date_to_str = to_kst_date_str(review_date_to)
             try:
                 return await asyncio.to_thread(
                     self.athena_client.fetch_review_counts_by_branch,
@@ -169,6 +171,7 @@ class SummaryService:
         return await self.summary_repo.get_review_counts_by_date_range(
             review_date_from=review_date_from,
             review_date_to=review_date_to,
+            date_type=date_type,
         )
 
     async def get_summary(self, branch_id: int) -> dict | None:
@@ -186,13 +189,14 @@ class SummaryService:
         self,
         review_date_from: datetime | None = None,
         review_date_to: datetime | None = None,
+        date_type: str = "review_date",
     ) -> SummaryStatsDTO:
         """통계 조회 (날짜 필터 시 Athena 우선)"""
         if not review_date_from and not review_date_to:
             return await self.summary_repo.get_stats()
 
         counts_map = await self._get_review_counts_by_date(
-            review_date_from, review_date_to
+            review_date_from, review_date_to, date_type
         )
         total_branches = len(counts_map)
         total_reviews = sum(counts_map.values())

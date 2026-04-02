@@ -45,6 +45,11 @@ async def api_summaries(
     review_date_to: str | None = Query(
         None, description="종료일 (YYYY-MM-DD) - 이 기간에 리뷰가 있는 업체만 표시"
     ),
+    date_type: str = Query(
+        "review_date",
+        pattern="^(review_date|rental_date|return_date)$",
+        description="날짜 기준 (review_date: 리뷰작성일, rental_date: 대여일, return_date: 반납일)",
+    ),
     service: SummaryService = Depends(get_summary_service),
 ) -> dict[str, Any]:
     """
@@ -53,6 +58,7 @@ async def api_summaries(
     날짜 필터 사용 시:
     - review_date_from ~ review_date_to 기간에 리뷰가 있는 업체만 반환
     - 종료일은 해당일 23:59:59까지 포함
+    - date_type으로 날짜 기준 선택 가능 (리뷰작성일/대여일/반납일)
     """
     parsed_date_from = parse_date(review_date_from)
     parsed_date_to = parse_date(review_date_to, end_of_day=True)
@@ -70,6 +76,7 @@ async def api_summaries(
         order=order,
         review_date_from=parsed_date_from,
         review_date_to=parsed_date_to,
+        date_type=date_type,
     )
     return api_list_response(summaries)
 
@@ -78,6 +85,11 @@ async def api_summaries(
 async def api_stats(
     review_date_from: str | None = Query(None, description="시작일 (YYYY-MM-DD)"),
     review_date_to: str | None = Query(None, description="종료일 (YYYY-MM-DD)"),
+    date_type: str = Query(
+        "review_date",
+        pattern="^(review_date|rental_date|return_date)$",
+        description="날짜 기준",
+    ),
     service: SummaryService = Depends(get_summary_service),
 ) -> dict[str, Any]:
     """요약 통계 (날짜 필터링 지원)"""
@@ -86,6 +98,7 @@ async def api_stats(
     result = await service.get_stats(
         review_date_from=parsed_date_from,
         review_date_to=parsed_date_to,
+        date_type=date_type,
     )
     return api_response(result.model_dump(by_alias=True))
 

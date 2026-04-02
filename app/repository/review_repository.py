@@ -120,6 +120,8 @@ class BranchReviewRepository(BaseRepository[Review]):
                         ),
                         "car_model": r.get("car_model") or r.get("차량모델") or r.get("car_type") or r.get("차종"),
                         "rent_type": r.get("rent_type") or r.get("렌트타입"),
+                        "rental_date": self._safe_datetime(r.get("rental_date")),
+                        "return_date": self._safe_datetime(r.get("return_date")),
                         "is_new": r.get("is_new", False),
                     }
                     insert_data.append(data)
@@ -136,6 +138,8 @@ class BranchReviewRepository(BaseRepository[Review]):
                         "rating_car": stmt.excluded.rating_car,
                         "rating_convenience": stmt.excluded.rating_convenience,
                         "review_date": stmt.excluded.review_date,
+                        "rental_date": stmt.excluded.rental_date,
+                        "return_date": stmt.excluded.return_date,
                         "car_model": stmt.excluded.car_model,
                         "rent_type": stmt.excluded.rent_type,
                         "updated_at": func.now(),
@@ -369,12 +373,20 @@ class BranchReviewRepository(BaseRepository[Review]):
         sentiment: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        date_type: str = "review_date",
         sort_by: str = "latest",
         limit: int = 20,
         offset: int = 0,
         is_new: bool | None = None,
     ) -> BranchReviewsDTO:
         """다중 필터 조건으로 리뷰 검색"""
+        date_col_map = {
+            "review_date": BranchReviewORM.review_date,
+            "rental_date": BranchReviewORM.rental_date,
+            "return_date": BranchReviewORM.return_date,
+        }
+        date_col = date_col_map.get(date_type, BranchReviewORM.review_date)
+
         conditions = []
 
         # 지점 ID 필터 (인덱스 활용으로 빠름)
@@ -392,26 +404,26 @@ class BranchReviewRepository(BaseRepository[Review]):
         # 날짜 범위 필터 (asyncpg는 DateTime 컬럼에 문자열 바인딩 불가)
         if date_from:
             dt_from = datetime.strptime(date_from, "%Y-%m-%d")
-            conditions.append(BranchReviewORM.review_date >= dt_from)
+            conditions.append(date_col >= dt_from)
         if date_to:
             # 종료일 전체를 포함하기 위해 다음날 00:00:00 미만으로 비교
             dt_to = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
-            conditions.append(BranchReviewORM.review_date < dt_to)
+            conditions.append(date_col < dt_to)
 
-        # 정렬
+        # 정렬 (NULL은 맨 뒤)
         sort_config = {
-            "latest": BranchReviewORM.review_date.desc(),
-            "rating_low": BranchReviewORM.rating_service.asc(),
+            "latest": (BranchReviewORM.review_date.is_(None).asc(), BranchReviewORM.review_date.desc()),
+            "rental_date": (BranchReviewORM.rental_date.is_(None).asc(), BranchReviewORM.rental_date.desc()),
+            "return_date": (BranchReviewORM.return_date.is_(None).asc(), BranchReviewORM.return_date.desc()),
+            "rating_low": (BranchReviewORM.rating_service.asc(),),
         }
-        order_clause = sort_config.get(
-            sort_by, BranchReviewORM.review_date.desc()
-        )
+        order_clauses = sort_config.get(sort_by, (BranchReviewORM.review_date.is_(None).asc(), BranchReviewORM.review_date.desc()))
 
         # 데이터 쿼리
         data_stmt = (
             select(BranchReviewORM)
             .where(*conditions)
-            .order_by(order_clause)
+            .order_by(*order_clauses)
             .offset(offset)
             .limit(limit)
         )

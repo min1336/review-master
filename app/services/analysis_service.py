@@ -170,6 +170,7 @@ class AnalysisService:
         sentiment: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        date_type: str = "review_date",
         sort_by: str = "latest",
         limit: int = DEFAULT_PAGE_SIZE,
         offset: int = 0,
@@ -242,10 +243,11 @@ class AnalysisService:
                     return new_result
                 # new_reviews가 비어있으면 branch_reviews로 폴백
 
-            # Athena 분기: is_new만 Supabase 전용 (sentiment는 평점 기반 계산 가능)
+            # Athena 분기: is_new만 Supabase 전용, rental/return_date는 DB 전용
             use_athena = (
                 self.athena_client is not None
                 and is_new is None
+                and date_type == "review_date"
             )
 
             if use_athena:
@@ -258,6 +260,7 @@ class AnalysisService:
             return await self._search_via_supabase(
                 effective_branch_ids, sentiment, date_from, date_to, sort_by, limit, offset,
                 is_new=is_new,
+                date_type=date_type,
             )
 
         except ConnectionError as e:
@@ -318,6 +321,7 @@ class AnalysisService:
         limit: int,
         offset: int,
         is_new: bool | None = None,
+        date_type: str = "review_date",
     ) -> AnalysisReviewListDTO:
         """기존 Supabase(branch_reviews) 경로로 리뷰 검색 후 DTO 변환."""
         result = await self.review_repo.search_with_filters(
@@ -325,6 +329,7 @@ class AnalysisService:
             sentiment=sentiment,
             date_from=date_from,
             date_to=date_to,
+            date_type=date_type,
             sort_by=sort_by,
             limit=limit,
             offset=offset,
