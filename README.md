@@ -58,31 +58,11 @@ GRANT ALL PRIVILEGES ON DATABASE <dbname> TO <user>;
 
 ### 5. DB 초기화
 
-**신규 DB** — 테이블 생성 후 Alembic 버전을 최신으로 기록:
-
-```bash
-uv run python -c "
-import asyncio
-from app.repository.orm_models import Base
-from app.core.config import get_settings
-from sqlalchemy.ext.asyncio import create_async_engine
-
-async def create():
-    engine = create_async_engine(get_settings().get_database_url())
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    await engine.dispose()
-
-asyncio.run(create())
-"
-uv run alembic stamp head
-```
-
-**기존 DB** — 새 마이그레이션 적용:
-
 ```bash
 uv run alembic upgrade head
 ```
+
+신규 DB든 기존 DB든 동일하게 위 명령어 하나로 처리된다.
 
 ```bash
 # 6. 개발 서버
