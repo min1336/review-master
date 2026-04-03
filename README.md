@@ -5,7 +5,7 @@ Carmore 렌트카 리뷰 자동 분석 + 운영팀 대시보드.
 ## 필요한 것
 
 - Python 3.12+
-- PostgreSQL
+- PostgreSQL 16+ (asyncpg 드라이버 사용 — MySQL, SQLite 불가)
 - [uv](https://docs.astral.sh/uv/) (없으면: `curl -LsSf https://astral.sh/uv/install.sh | sh`)
 
 ## 셋업
@@ -22,28 +22,70 @@ uv sync --extra dev
 cp .env.template .env
 ```
 
-`.env` 파일을 열고 아래 값을 채운다. DB 접속 정보와 OpenAI 키는 팀원에게 공유받는다.
+`.env` 파일을 열고 DB 접속 정보와 OpenAI 키를 채운다. 두 가지 방식 중 하나를 선택:
 
 ```bash
-# 방법 A: URL 한 줄로
-DATABASE_URL=postgresql+asyncpg://n8n_user:devpass@localhost:3306/review_summary_db
+# 방법 A: URL 한 줄로 (우선 적용됨)
+DATABASE_URL=postgresql+asyncpg://<user>:<password>@<host>:<port>/<dbname>
 
 # 방법 B: 개별 필드로
-DATABASE_USER=n8n_user
-DATABASE_PASSWORD=devpass
-DATABASE_HOST=localhost
-DATABASE_PORT=3306
-DATABASE_NAME=review_summary_db
+DATABASE_USER=<user>
+DATABASE_PASSWORD=<password>
+DATABASE_HOST=<host>
+DATABASE_PORT=<port>
+DATABASE_NAME=<dbname>
 
 # OpenAI (필수)
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=<your-openai-api-key>
+```
+
+### 4. DB 준비
+
+기존 DB에 접속하는 경우 이 단계를 건너뛰고 `.env`만 채우면 된다.
+
+**새 DB를 만들어야 하는 경우:**
+
+```bash
+# PostgreSQL 접속 (본인 환경에 맞게 포트 지정)
+sudo -u postgres psql -p <port>
+
+# 사용자 + DB 생성
+CREATE USER <user> WITH PASSWORD '<password>';
+CREATE DATABASE <dbname> OWNER <user>;
+GRANT ALL PRIVILEGES ON DATABASE <dbname> TO <user>;
+\q
+```
+
+### 5. DB 초기화
+
+**신규 DB** — 테이블 생성 후 Alembic 버전을 최신으로 기록:
+
+```bash
+uv run python -c "
+import asyncio
+from app.repository.orm_models import Base
+from app.core.config import get_settings
+from sqlalchemy.ext.asyncio import create_async_engine
+
+async def create():
+    engine = create_async_engine(get_settings().get_database_url())
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    await engine.dispose()
+
+asyncio.run(create())
+"
+uv run alembic stamp head
+```
+
+**기존 DB** — 새 마이그레이션 적용:
+
+```bash
+uv run alembic upgrade head
 ```
 
 ```bash
-# 4. DB 마이그레이션
-uv run alembic upgrade head
-
-# 5. 개발 서버
+# 6. 개발 서버
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -57,7 +99,7 @@ http://localhost:8000 에서 대시보드 확인.
 
 | 변수 | 설명 |
 |------|------|
-| `DATABASE_URL` | `postgresql+asyncpg://user:pass@host:port/dbname` |
+| `DATABASE_URL` | PostgreSQL 연결 URL (`postgresql+asyncpg://...`) |
 | `OPENAI_API_KEY` | OpenAI API 키 |
 
 ### 선택
