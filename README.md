@@ -62,7 +62,7 @@ GRANT ALL PRIVILEGES ON DATABASE <dbname> TO <user>;
 uv run alembic upgrade head
 ```
 
-신규 DB든 기존 DB든 동일하게 위 명령어 하나로 처리된다.
+신규 DB든 기존 DB든 동일하게 위 명령어 하나로 처리된다. 테이블, stored function, trigger가 모두 포함되어 있다.
 
 ```bash
 # 6. 개발 서버
