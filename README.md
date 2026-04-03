@@ -70,6 +70,10 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 http://localhost:8000 에서 대시보드 확인.
+https://n8n-cloud.carmore.kr/review/analysis # 실 사이트
+
+
+ssh carmore-n8n-cloud # EC2 접속
 
 > AWS 키(`AWS_ACCESS_KEY_ID` 등)가 없어도 대시보드, 요약, 리포트는 동작한다. Athena 리뷰 동기화만 안 됨.
 
