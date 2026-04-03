@@ -17,12 +17,13 @@
 - `created_at` 컬럼 없음 (count, positive/negative/neutral_count, updated_at만 존재)
 - 재집계: `DELETE WHERE period_type='all'` + `INSERT ... ON CONFLICT DO UPDATE`
 
-## SQL 마이그레이션
+## DB 마이그레이션 (Alembic)
 
-- 유효한 SQL만 출력할 것
-- 마크다운 주석, 'Step N' 어노테이션, 비-SQL 텍스트 포함 금지
-- `alembic upgrade head` — 적용
-- `alembic revision --autogenerate -m "설명"` — 생성
+- ORM 모델(`orm_models.py`) 변경 후 마이그레이션 생성: `alembic revision --autogenerate -m "설명"`
+- 마이그레이션 적용: `alembic upgrade head`
+- 현재 상태 확인: `alembic current`
+- ORM/DB 동기화 검증: `alembic check`
+- 과거 수동 SQL 파일은 `ddl/`에 보관 (참고용)
 
 ## DB 접속
 

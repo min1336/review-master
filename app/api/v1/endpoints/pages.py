@@ -14,7 +14,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-router = APIRouter(tags=["pages"])
+router = APIRouter(include_in_schema=False)
 settings = get_settings()
 
 # 템플릿 디렉토리 설정

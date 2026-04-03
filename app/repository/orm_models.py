@@ -16,6 +16,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -56,6 +57,9 @@ class CategoryORM(Base):
 
 class TagORM(Base):
     __tablename__ = "tags"
+    __table_args__ = (
+        Index("uq_tags_name", "name", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(50))
@@ -103,6 +107,9 @@ class KeywordMappingORM(Base):
 
 class BranchTagORM(Base):
     __tablename__ = "branch_tags"
+    __table_args__ = (
+        Index("uq_branch_tags_composite", "branch_id", "tag_id", "period_type", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     branch_id: Mapped[int] = mapped_column(Integer)
@@ -128,6 +135,11 @@ class BranchTagORM(Base):
 
 class BranchReviewORM(Base):
     __tablename__ = "branch_reviews"
+    __table_args__ = (
+        Index("uq_branch_reviews_review_id", "review_id", unique=True),
+        Index("idx_branch_reviews_rental_date", "rental_date"),
+        Index("idx_branch_reviews_return_date", "return_date"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     review_id: Mapped[int | None] = mapped_column(Integer)
@@ -159,6 +171,9 @@ class BranchReviewORM(Base):
 
 class ReviewTagMappingORM(Base):
     __tablename__ = "review_tag_mappings"
+    __table_args__ = (
+        Index("uq_review_tag_mappings_composite", "review_id", "tag_id", "sentiment", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     review_id: Mapped[int] = mapped_column(Integer, index=True)
@@ -235,6 +250,9 @@ class BranchSummaryHistoryORM(Base):
 
 class BranchReportORM(Base):
     __tablename__ = "branch_reports"
+    __table_args__ = (
+        Index("uq_branch_reports_composite", "branch_id", "period_start", "period_end", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     branch_id: Mapped[int] = mapped_column(BigInteger, index=True)
@@ -284,6 +302,9 @@ class ReportJobORM(Base):
 
 class MonthlySentimentStatsORM(Base):
     __tablename__ = "monthly_sentiment_stats"
+    __table_args__ = (
+        Index("uq_monthly_sentiment_stats_composite", "branch_id", "period", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     branch_id: Mapped[int] = mapped_column(Integer, index=True)
@@ -299,6 +320,9 @@ class MonthlySentimentStatsORM(Base):
 
 class MonthlyRatingStatsORM(Base):
     __tablename__ = "monthly_rating_stats"
+    __table_args__ = (
+        Index("uq_monthly_rating_stats_composite", "branch_id", "period", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     branch_id: Mapped[int] = mapped_column(Integer, index=True)
@@ -315,6 +339,9 @@ class MonthlyRatingStatsORM(Base):
 
 class MonthlyTagStatsORM(Base):
     __tablename__ = "monthly_tag_stats"
+    __table_args__ = (
+        Index("uq_monthly_tag_stats_composite", "branch_id", "period", "tag_id", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     branch_id: Mapped[int] = mapped_column(Integer, index=True)
@@ -379,6 +406,9 @@ class CarModelORM(Base):
 
 class CarModelsMasterORM(Base):
     __tablename__ = "car_models_master"
+    __table_args__ = (
+        Index("uq_car_models_master_model_name", "model_name", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     model_name: Mapped[str] = mapped_column(String(100))
@@ -408,6 +438,9 @@ class BranchCarModelORM(Base):
 
 class MonthlyCarModelTagStatsORM(Base):
     __tablename__ = "monthly_car_model_tag_stats"
+    __table_args__ = (
+        Index("uq_monthly_car_model_tag_stats_composite", "car_model_id", "period", "tag_id", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     car_model_id: Mapped[int] = mapped_column(
@@ -446,6 +479,9 @@ class SyncMetadataORM(Base):
 
 class BranchKeywordORM(Base):
     __tablename__ = "branch_keywords"
+    __table_args__ = (
+        Index("uq_branch_keywords_composite", "branch_id", "keyword", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     branch_id: Mapped[int] = mapped_column(Integer, index=True)
@@ -486,6 +522,9 @@ class BranchSchedulerSettingsORM(Base):
 
 class ScheduleGroupORM(Base):
     __tablename__ = "schedule_groups"
+    __table_args__ = (
+        Index("idx_schedule_groups_workflow", "workflow_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     workflow_id: Mapped[str] = mapped_column(String(50))
@@ -505,6 +544,10 @@ class ScheduleGroupORM(Base):
 
 class SchedulerTargetORM(Base):
     __tablename__ = "scheduler_targets"
+    __table_args__ = (
+        Index("idx_scheduler_targets_group", "group_id"),
+        Index("idx_scheduler_targets_workflow", "workflow_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     workflow_id: Mapped[str] = mapped_column(String(50))

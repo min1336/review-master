@@ -116,12 +116,78 @@ async def _close_http_clients():
 # ============================================================
 # App
 # ============================================================
+_openapi_tags = [
+    {
+        "name": "summaries",
+        "description": "지점별 AI 요약 조회, 수정, 재생성, 승인/거절. 기간별 요약 (1m/3m/6m/1y/all) 관리.",
+    },
+    {
+        "name": "report",
+        "description": "컨설팅 리포트 비동기 생성, 조회, PDF 다운로드. 배치 PDF(ZIP) 지원.",
+    },
+    {
+        "name": "tags",
+        "description": "태그/카테고리 CRUD. 9개 카테고리, 52개 세분화 태그 관리.",
+    },
+    {
+        "name": "sentiment",
+        "description": "지점별 감정 통계 (긍정/부정/중립 분포, 기간별 추이).",
+    },
+    {
+        "name": "analysis",
+        "description": "리뷰 필터링, 검색, Excel 내보내기. 지역/감정/차종/기간 복합 필터.",
+    },
+    {
+        "name": "sync",
+        "description": "AWS Athena 리뷰 동기화. 비동기 작업 제출/폴링/취소, Ghost 리뷰 정리.",
+    },
+    {
+        "name": "realtime",
+        "description": "단건 리뷰 실시간 분석 (키워드 추출 + 태그 분류 + 감정 판정).",
+    },
+    {
+        "name": "upload",
+        "description": "Excel/CSV 파일 업로드 -> 파이프라인 자동 처리.",
+    },
+    {
+        "name": "pipeline-console",
+        "description": "NLP 파이프라인 전체 재처리, 작업 상태 모니터링, 시간 감쇠 설정.",
+    },
+    {
+        "name": "presets",
+        "description": "LLM 프롬프트 프리셋 CRUD. 분석 관점/톤/상세 수준 커스텀.",
+    },
+    {
+        "name": "n8n",
+        "description": "n8n 웹훅 수신. 리뷰 동기화/요약 생성 트리거.",
+    },
+    {
+        "name": "n8n-scheduler",
+        "description": "n8n 워크플로우 스케줄 관리. 그룹/타겟 CRUD, cron 검증.",
+    },
+    {
+        "name": "public-summary",
+        "description": "외부 파트너용 Public API. 지점별 요약 조회 (인증 키 필요).",
+    },
+]
+
 app = FastAPI(
     title="Review Summary AI",
-    description="운영팀 모니터링 대시보드 - Carmore 리뷰 요약 시스템",
+    description=(
+        "## Carmore 렌트카 리뷰 자동 분석 시스템\n\n"
+        "22만 건 이상의 고객 리뷰를 NLP로 분석하여 태그 분류, 감정 판단, AI 요약 리포트를 생성합니다.\n\n"
+        "### 주요 기능\n"
+        "- **리뷰 분석**: 감정 분석 (긍정/부정/중립) + 52개 태그 자동 분류\n"
+        "- **AI 요약**: GPT-4o-mini 기반 지점별 기간 요약\n"
+        "- **컨설팅 리포트**: 4단계 파이프라인 생성 + PDF 다운로드\n"
+        "- **자동 동기화**: AWS Athena 리뷰 수집 + NLP 파이프라인 처리\n"
+    ),
     version="2.0.0",
     lifespan=lifespan,
     default_response_class=TZAwareJSONResponse,
+    openapi_tags=_openapi_tags,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # CORS 미들웨어
@@ -205,6 +271,16 @@ app.include_router(pages_router)
 
 # Static 파일 서빙 (/static/*) - 리뷰 상세 테스트 페이지 이미지 등
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
+
+
+# ============================================================
+# Swagger summary 자동 설정 — docstring 첫 줄을 summary로 사용
+# ============================================================
+for _route in app.routes:
+    if hasattr(_route, "endpoint") and _route.endpoint.__doc__:
+        _first_line = _route.endpoint.__doc__.strip().split("\n")[0].strip()
+        if _first_line:
+            _route.summary = _first_line
 
 
 # Favicon (404 방지)
