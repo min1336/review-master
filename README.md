@@ -56,6 +56,28 @@ GRANT ALL PRIVILEGES ON DATABASE <dbname> TO <user>;
 \q
 ```
 
+### Dev DB 생성 (prod 복사)
+
+prod DB를 템플릿으로 dev DB를 만든다. DataGrip 등에서 `postgres` DB에 연결 후 실행:
+
+```sql
+-- 1. review_summary_db 활성 연결 종료
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE datname = 'review_summary_db' AND pid <> pg_backend_pid();
+
+-- 2. prod를 템플릿으로 dev DB 생성 (스키마 + 데이터 + 인덱스 전부 복사)
+CREATE DATABASE review_summary_db_dev TEMPLATE review_summary_db;
+```
+
+앱에서 dev DB를 사용하려면 `.env`에서 DB 이름만 변경:
+
+```bash
+DATABASE_NAME=review_summary_db_dev
+```
+
+> `TEMPLATE`은 원본 DB에 활성 연결이 있으면 실패한다. `pg_terminate_backend`로 먼저 끊어야 한다.
+
 ### 5. DB 초기화
 
 ```bash
