@@ -23,10 +23,11 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # .env에서 DATABASE_URL 로드하여 Alembic에 주입
+# ConfigParser의 % interpolation 충돌 방지: %% 이스케이프
 settings = get_settings()
 database_url = settings.get_database_url()
 if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 # autogenerate 대상 메타데이터
 target_metadata = Base.metadata
